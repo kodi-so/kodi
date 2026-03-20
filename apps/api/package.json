@@ -1,0 +1,23 @@
+{
+  "name": "@kodi/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/trpc-server": "^0.3.2",
+    "@kodi/db": "*",
+    "@trpc/server": "^11.0.0",
+    "hono": "^4.3.4",
+    "zod": "^3.23.6"
+  },
+  "devDependencies": {
+    "@kodi/typescript-config": "*",
+    "@types/bun": "latest",
+    "typescript": "^5.4.5"
+  }
+}

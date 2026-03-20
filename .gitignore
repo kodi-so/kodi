@@ -1,0 +1,13 @@
+node_modules
+.pnp
+.pnp.js
+.next
+dist
+.turbo
+.env
+.env.local
+.env*.local
+bun.lockb
+.DS_Store
+*.pem
+.vercel

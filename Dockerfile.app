@@ -19,11 +19,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Build from repo root so Next.js standalone output uses monorepo-relative paths
 RUN cd apps/app && bun run build
 
 # ---- runner ----
-# Note: Next.js standalone output for monorepos puts server.js at apps/app/server.js
-# and bundles node_modules at the root of the standalone directory.
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
@@ -33,13 +32,13 @@ ENV PORT=3001
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-# Copy the full standalone output (includes bundled node_modules + server.js)
+# Standalone output from monorepo build is at apps/app/.next/standalone
+# It contains server.js at the root (not nested under apps/app)
 COPY --from=builder --chown=nextjs:nodejs /app/apps/app/.next/standalone ./
-# Copy static assets to where the standalone server expects them
-COPY --from=builder --chown=nextjs:nodejs /app/apps/app/.next/static ./apps/app/.next/static
+# Static assets
+COPY --from=builder --chown=nextjs:nodejs /app/apps/app/.next/static ./.next/static
 
 USER nextjs
 EXPOSE 3001
 
-# server.js is at apps/app/server.js inside the standalone output
-CMD ["node", "apps/app/server.js"]
+CMD ["node", "server.js"]

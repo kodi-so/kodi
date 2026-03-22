@@ -1,0 +1,5 @@
+[build]
+  builder = "DOCKERFILE"
+
+# Each service is configured individually in the Railway dashboard.
+# See README.railway.md for setup instructions.

@@ -1,23 +1,11 @@
-# ---- deps ----
-FROM oven/bun:1.1-alpine AS deps
-WORKDIR /app
-
-COPY package.json ./
-COPY apps/app/package.json ./apps/app/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/db/package.json ./packages/db/
-COPY packages/typescript-config/package.json ./packages/typescript-config/
-
-RUN bun install
-
 # ---- builder ----
 FROM oven/bun:1.1-alpine AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN bun install --frozen-lockfile 2>/dev/null || bun install
 
 RUN mkdir -p apps/app/public && cd apps/app && bun run build
 

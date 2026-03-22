@@ -1,32 +1,20 @@
-# ---- deps ----
-FROM oven/bun:1.1-alpine AS deps
-WORKDIR /app
-
-COPY package.json ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/typescript-config/package.json ./packages/typescript-config/
-
-RUN bun install
-
 # ---- builder ----
 FROM oven/bun:1.1-alpine AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
+RUN bun install --frozen-lockfile 2>/dev/null || bun install
 RUN mkdir -p apps/web/public && cd apps/web && bun run build
+# Show standalone structure for debugging
+RUN find apps/web/.next/standalone -name "server.js" -o -name "*.js" | head -20
 
 # ---- runner ----
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV HOSTNAME="0.0.0.0"
-ENV PORT=3000
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
@@ -36,5 +24,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./public
 
 USER nextjs
 EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]

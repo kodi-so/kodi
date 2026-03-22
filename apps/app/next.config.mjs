@@ -6,7 +6,6 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@kodi/ui', '@kodi/db'],
-  output: 'standalone',
   webpack: (config) => {
     config.resolve.alias['@'] = path.resolve(__dirname, 'src')
     return config

@@ -4,6 +4,11 @@ import { db } from '@kodi/db'
 import * as schema from '@kodi/db/schema'
 
 export const auth = betterAuth({
+  baseURL: process.env.BETTER_AUTH_URL!,
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL!,
+    ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(',') : []),
+  ],
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema,

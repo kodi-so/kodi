@@ -1,5 +1,8 @@
 [build]
   builder = "DOCKERFILE"
 
+[deploy]
+  preDeployCommand = "cd packages/db && bun run db:migrate"
+
 # Each service is configured individually in the Railway dashboard.
 # See README.railway.md for setup instructions.

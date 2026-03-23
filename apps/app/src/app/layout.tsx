@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Kodi App',
-  description: 'Kodi application',
+  description: 'Kodi — the platform your team deserves',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

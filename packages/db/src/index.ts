@@ -22,3 +22,4 @@ export const db = new Proxy({} as ReturnType<typeof createDb>, {
 })
 
 export * from './schema'
+export { encrypt, decrypt } from './lib/crypto'

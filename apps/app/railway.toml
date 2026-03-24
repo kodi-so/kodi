@@ -3,6 +3,6 @@
   dockerfilePath = "Dockerfile.app"
 
 [deploy]
-  healthcheckPath = "/"
+  healthcheckPath = "/login"
   healthcheckTimeout = 300
   restartPolicyType = "on_failure"

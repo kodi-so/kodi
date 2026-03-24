@@ -2,9 +2,12 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
 import path from 'path'
-import { fileURLToPath } from 'url'
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url))
+// Bun provides import.meta.dir natively; fallback for Node compatibility
+const __dirname =
+  (import.meta as any).dir ??
+  path.dirname(new URL(import.meta.url).pathname)
+
 const migrationsFolder = path.resolve(__dirname, '../drizzle')
 
 async function runMigrations(): Promise<void> {
@@ -13,7 +16,7 @@ async function runMigrations(): Promise<void> {
     throw new Error('DATABASE_URL environment variable is required')
   }
 
-  console.log('🔄 Running database migrations...')
+  console.log(`🔄 Running database migrations from ${migrationsFolder}...`)
 
   // Use a dedicated connection for migrations (not the lazy singleton)
   const client = postgres(connectionString, { prepare: false, max: 1 })

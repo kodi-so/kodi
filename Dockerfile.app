@@ -9,7 +9,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
-RUN cd apps/app && bun run build
+RUN cd apps/app && SKIP_ENV_VALIDATION=1 bun run build
 
 EXPOSE 3001
 CMD ["bun", "run", "--cwd", "apps/app", "start"]

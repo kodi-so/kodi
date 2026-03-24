@@ -6,3 +6,4 @@
 
 # Each service is configured individually in the Railway dashboard.
 # See README.railway.md for setup instructions.
+# Pre-deploy commands are in per-service railway.toml files (e.g. apps/api/railway.toml).

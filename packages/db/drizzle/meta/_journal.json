@@ -22,6 +22,13 @@
       "when": 1774224886091,
       "tag": "0002_modern_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1774310477931,
+      "tag": "0003_tan_sunfire",
+      "breakpoints": true
     }
   ]
 }

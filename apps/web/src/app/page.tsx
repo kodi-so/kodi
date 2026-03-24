@@ -487,7 +487,7 @@ export default function HomePage() {
             <span className="footer-wordmark">Kodi</span>
           </div>
           <p className="footer-copy feed-mono">
-            © {new Date().getFullYear()} Kodi. Built for small teams that want to win.
+            © <span suppressHydrationWarning>{new Date().getFullYear()}</span> Kodi. Built for small teams that want to win.
           </p>
           <div className="footer-links">
             <a href="/privacy" className="footer-link">Privacy</a>

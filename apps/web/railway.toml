@@ -1,8 +1,8 @@
 [build]
-builder = "nixpacks"
+  builder = "DOCKERFILE"
+  dockerfilePath = "Dockerfile.web"
 
 [deploy]
-startCommand = "bun run start"
-healthcheckPath = "/"
-healthcheckTimeout = 300
-restartPolicyType = "on_failure"
+  healthcheckPath = "/"
+  healthcheckTimeout = 300
+  restartPolicyType = "on_failure"

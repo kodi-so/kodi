@@ -8,5 +8,4 @@ ENV NODE_ENV=production
 
 EXPOSE 3002
 
-# Run migrations if the migrations folder exists, then start
-CMD ["sh", "-c", "if [ -d packages/db/drizzle ]; then cd packages/db && bun run db:migrate && cd /app; fi && bun run apps/api/src/index.ts"]
+CMD ["bun", "run", "apps/api/src/index.ts"]

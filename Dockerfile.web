@@ -9,6 +9,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
+# NEXT_PUBLIC_* vars must be present at build time (they get baked into the JS bundle).
+# Railway passes these as build args — declare them here so Docker makes them available.
+ARG NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN cd apps/web && bun run build
 
 EXPOSE 3000

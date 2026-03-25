@@ -8,4 +8,8 @@ ENV NODE_ENV=production
 
 EXPOSE 3002
 
-CMD ["bun", "run", "apps/api/src/index.ts"]
+# Run migrations then start the API.
+# migrate.ts exits 0 if already up-to-date, so this is safe on every boot.
+# We do this in CMD (not preDeployCommand) because Railway does not reliably
+# read per-service railway.toml files in a monorepo setup.
+CMD ["sh", "-c", "cd /app/packages/db && bun run db:migrate && cd /app && bun run apps/api/src/index.ts"]

@@ -22,4 +22,4 @@ EXPOSE 3001
 # Run DB migrations first — Railway does not reliably read per-service railway.toml in monorepos.
 RUN cp -r /app/apps/app/.next/static /app/apps/app/.next/standalone/apps/app/.next/static 2>/dev/null || true \
  && cp -r /app/apps/app/public /app/apps/app/.next/standalone/apps/app/public 2>/dev/null || true
-CMD ["sh", "-c", "cd /app/packages/db && bun run db:migrate && node /app/apps/app/.next/standalone/apps/app/server.js"]
+CMD ["sh", "-c", "cd /app/packages/db && bun run db:migrate && bun /app/apps/app/.next/standalone/apps/app/server.js"]

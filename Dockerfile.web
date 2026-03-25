@@ -25,4 +25,4 @@ EXPOSE 3000
 # Static assets and public dir need to be in place alongside the standalone bundle.
 RUN cp -r /app/apps/web/.next/static /app/apps/web/.next/standalone/apps/web/.next/static 2>/dev/null || true \
  && cp -r /app/apps/web/public /app/apps/web/.next/standalone/apps/web/public 2>/dev/null || true
-CMD ["node", "/app/apps/web/.next/standalone/apps/web/server.js"]
+CMD ["bun", "/app/apps/web/.next/standalone/apps/web/server.js"]

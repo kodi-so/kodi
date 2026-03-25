@@ -12,4 +12,4 @@ ENV HOSTNAME=0.0.0.0
 RUN cd apps/app && bun run build
 
 EXPOSE 3001
-CMD ["bun", "run", "--cwd", "apps/app", "start"]
+CMD ["sh", "-c", "cd packages/db && bun run db:migrate && cd /app && bun run --cwd apps/app start"]

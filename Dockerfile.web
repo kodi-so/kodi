@@ -20,4 +20,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN cd apps/web && bun run build
 
 EXPOSE 3000
-CMD ["bun", "run", "--cwd", "apps/web", "start"]
+
+# next.config.mjs uses output: 'standalone', so we must use node server.js (not next start).
+# Static assets and public dir need to be in place alongside the standalone bundle.
+RUN cp -r /app/apps/web/.next/static /app/apps/web/.next/standalone/apps/web/.next/static 2>/dev/null || true \
+ && cp -r /app/apps/web/public /app/apps/web/.next/standalone/apps/web/public 2>/dev/null || true
+CMD ["node", "/app/apps/web/.next/standalone/apps/web/server.js"]

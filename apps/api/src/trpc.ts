@@ -1,4 +1,4 @@
-import { initTRPC } from '@trpc/server'
+import { initTRPC, TRPCError } from '@trpc/server'
 import { ZodError } from 'zod'
 import type { TRPCContext } from './context'
 
@@ -17,3 +17,19 @@ const t = initTRPC.context<TRPCContext>().create({
 export const router = t.router
 export const publicProcedure = t.procedure
 export const middleware = t.middleware
+
+// Auth middleware — validates session cookie/header via better-auth
+const isAuthed = middleware(async ({ ctx, next }) => {
+  const session = ctx.session
+  if (!session?.user) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' })
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      session,
+    },
+  })
+})
+
+export const protectedProcedure = t.procedure.use(isAuthed)

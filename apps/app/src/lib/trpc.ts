@@ -2,11 +2,6 @@ import { createTRPCClient, httpBatchLink } from '@trpc/client'
 import type { AppRouter } from '@kodi/api'
 
 function getApiUrl() {
-  if (typeof window !== 'undefined') {
-    // Client-side: use env var or fallback to localhost
-    return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002'
-  }
-  // Server-side
   return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002'
 }
 

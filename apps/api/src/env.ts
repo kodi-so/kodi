@@ -35,12 +35,13 @@ const envSchema = z.object({
   LITELLM_PROXY_URL: z.string().url().optional(),
   LITELLM_MASTER_KEY: z.string().optional(),
 
-  // SSH (for health checks and debugging)
-  ADMIN_SSH_PUBLIC_KEY: z.string().optional(),
-  ADMIN_SSH_PRIVATE_KEY: z.string().optional(),
+  // Instance defaults (can be overridden per-org later)
+  INSTANCE_TYPE: z.string().default('t4g.small'),
+  INSTANCE_VOLUME_GB: z.coerce.number().int().positive().default(20),
+  INSTANCE_CREDITS_DOLLARS: z.coerce.number().positive().default(15),
 
-  // Domain
-  BASE_DOMAIN: z.string().optional(), // e.g. 'agent.kodi.so'
+  // Base domain for hostnames
+  BASE_DOMAIN: z.string().default('agent.kodi.so'),
 })
 
 const _env = envSchema.safeParse(process.env)

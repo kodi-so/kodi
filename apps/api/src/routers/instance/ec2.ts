@@ -5,7 +5,7 @@ import {
   RunInstancesCommand,
   TerminateInstancesCommand,
 } from '@aws-sdk/client-ec2'
-import { requireAws } from '../env'
+import { requireAws } from '../../env'
 
 let client: EC2Client | null = null
 

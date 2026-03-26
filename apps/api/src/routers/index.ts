@@ -1,5 +1,5 @@
 import { router } from '../trpc'
-import { instanceRouter } from './instance'
+import { instanceRouter } from './instance/router'
 
 export const appRouter = router({
   instance: instanceRouter,

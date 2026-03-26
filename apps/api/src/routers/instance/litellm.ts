@@ -1,4 +1,4 @@
-import { env } from '../env'
+import { env } from '../../env'
 
 function getBaseUrl(): string {
   const url = env.LITELLM_PROXY_URL

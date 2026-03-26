@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { db, encrypt, instances, type Instance } from '@kodi/db'
-import { env } from '../env'
+import { env } from '../../env'
 import { generateCloudInit } from './cloud-init'
 import * as cloudflare from './cloudflare-dns'
 import * as ec2 from './ec2'

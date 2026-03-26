@@ -2,8 +2,8 @@ import { TRPCError } from '@trpc/server'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { instances } from '@kodi/db'
-import { router, protectedProcedure } from '../trpc'
-import { checkInstanceHealth } from '../services/health'
+import { router, protectedProcedure } from '../../trpc'
+import { checkInstanceHealth } from './health'
 
 export const instanceRouter = router({
   /**

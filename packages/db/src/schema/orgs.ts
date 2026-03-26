@@ -45,7 +45,6 @@ export const instances = pgTable('instances', {
   ec2InstanceId: text('ec2_instance_id'),
   ipAddress: text('ip_address'),
   hostname: text('hostname'),
-  litellmKey: text('litellm_key'), // AES-256-GCM encrypted (legacy — use litellmVirtualKey)
   // Provisioning fields (added in KOD-46)
   gatewayToken: text('gateway_token'),         // AES-256-GCM encrypted — the OpenClaw auth token
   dnsRecordId: text('dns_record_id'),          // Cloudflare DNS record ID (for cleanup on deprovision)

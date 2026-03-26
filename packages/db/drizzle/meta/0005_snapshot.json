@@ -341,12 +341,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "litellm_key": {
-          "name": "litellm_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "gateway_token": {
           "name": "gateway_token",
           "type": "text",

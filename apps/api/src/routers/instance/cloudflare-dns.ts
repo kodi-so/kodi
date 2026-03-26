@@ -1,4 +1,4 @@
-import { env } from '../env'
+import { env } from '../../env'
 
 const CF_API = 'https://api.cloudflare.com/client/v4'
 

@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { trpcServer } from '@hono/trpc-server'
-import { appRouter } from './router'
+import { appRouter } from './routers'
 import { createContext } from './context'
 
 const app = new Hono()

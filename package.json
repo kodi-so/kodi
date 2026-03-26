@@ -17,7 +17,7 @@
     "turbo": "^2.0.0",
     "typescript": "^5.4.5"
   },
-  "packageManager": "bun@1.1.0",
+  "packageManager": "bun@1.2.0",
   "overrides": {
     "drizzle-orm": "^0.45.1"
   }

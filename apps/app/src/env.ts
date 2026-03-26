@@ -9,8 +9,8 @@ const envSchema = z.object({
   // Auth
   BETTER_AUTH_URL: z.string().url(),
   BETTER_AUTH_SECRET: z.string().min(32),
-  GOOGLE_CLIENT_ID: z.string(),
-  GOOGLE_CLIENT_SECRET: z.string(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 
   // Encryption (generate: openssl rand -hex 32)
   ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
@@ -30,7 +30,7 @@ const envSchema = z.object({
   CLOUDFLARE_ZONE_ID: z.string().optional(),
 
   // LiteLLM
-  LITELLM_PROXY_URL: z.string().url().optional(),
+  LITELLM_PROXY_URL: z.string().optional(),
   LITELLM_MASTER_KEY: z.string().optional(),
 
   // ── Required in Phase 2 (billing) ─────────────────────────────────────────

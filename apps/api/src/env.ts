@@ -32,7 +32,7 @@ const envSchema = z.object({
   ADMIN_SSH_PRIVATE_KEY: z.string().optional(),
 
   // LiteLLM
-  LITELLM_PROXY_URL: z.string().url().optional(),
+  LITELLM_PROXY_URL: z.string().optional(),
   LITELLM_MASTER_KEY: z.string().optional(),
 
   // Instance defaults (can be overridden per-org later)

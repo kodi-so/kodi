@@ -1,5 +1,5 @@
 import { Client } from 'ssh2'
-import { env } from '../env'
+import { env } from '../../env'
 
 interface SshExecResult {
   stdout: string

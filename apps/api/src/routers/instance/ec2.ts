@@ -94,7 +94,11 @@ export async function createInstance(
         console.warn(`[ec2] Poll ${attempt + 1}/12: describe failed — ${String(err)}`)
         continue
       }
-      console.log(`[ec2] Poll ${attempt + 1}/12: state=${info?.status} ip=${info?.publicIp}`)
+      if (!info) {
+        console.warn(`[ec2] Poll ${attempt + 1}/12: instance not found, skipping`)
+        continue
+      }
+      console.log(`[ec2] Poll ${attempt + 1}/12: state=${info.status} ip=${info.publicIp}`)
       if (info.publicIp) {
         publicIp = info.publicIp
         break

@@ -4,7 +4,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import * as schema from '@kodi/db/schema'
 
 // Lazy auth instance — shares the same DB as the API
-let _auth: ReturnType<typeof betterAuth> | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _auth: any = null
 
 function getAuth() {
   if (!_auth) {
@@ -16,7 +17,8 @@ function getAuth() {
       }),
     })
   }
-  return _auth
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  return _auth as ReturnType<typeof betterAuth>
 }
 
 export type Session = {

@@ -2,7 +2,10 @@
   "extends": "@kodi/typescript-config/nextjs.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@kodi/api": ["../api/src/index.ts"],
+      "@kodi/db": ["../../packages/db/src/index.ts"],
+      "@kodi/db/schema": ["../../packages/db/src/schema/index.ts"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

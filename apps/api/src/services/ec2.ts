@@ -5,7 +5,7 @@ import {
   RunInstancesCommand,
   TerminateInstancesCommand,
 } from '@aws-sdk/client-ec2'
-import { env, requireAws } from '../env'
+import { requireAws } from '../env'
 
 let client: EC2Client | null = null
 
@@ -41,7 +41,7 @@ export async function createInstance(
       InstanceType: instanceType as _InstanceType,
       MinCount: 1,
       MaxCount: 1,
-      UserData: Buffer.from(userData).toString('base64'),
+      UserData: Buffer.from(userData, 'utf8').toString('base64'),
       NetworkInterfaces: [
         {
           DeviceIndex: 0,
@@ -86,9 +86,15 @@ export async function createInstance(
   if (!publicIp) {
     console.log(`[ec2] No public IP yet, polling for up to 60s...`)
     for (let attempt = 0; attempt < 12; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 5000))
-      const info = await getInstance(ec2Instance.InstanceId)
-      console.log(`[ec2] Poll ${attempt + 1}/12: state=${info.status} ip=${info.publicIp}`)
+      await sleep(5000)
+      let info: Awaited<ReturnType<typeof getInstance>>
+      try {
+        info = await getInstance(ec2Instance.InstanceId)
+      } catch (err) {
+        console.warn(`[ec2] Poll ${attempt + 1}/12: describe failed — ${String(err)}`)
+        continue
+      }
+      console.log(`[ec2] Poll ${attempt + 1}/12: state=${info?.status} ip=${info?.publicIp}`)
       if (info.publicIp) {
         publicIp = info.publicIp
         break
@@ -112,27 +118,56 @@ export async function createInstance(
   }
 }
 
+/**
+ * Terminates an EC2 instance. Idempotent — safe to call if already terminated.
+ */
 export async function terminateInstance(instanceId: string): Promise<void> {
   const ec2 = getClient()
-  await ec2.send(new TerminateInstancesCommand({ InstanceIds: [instanceId] }))
+  try {
+    await ec2.send(new TerminateInstancesCommand({ InstanceIds: [instanceId] }))
+  } catch (err: unknown) {
+    // Ignore "instance not found" — already gone is fine
+    if (isNotFoundError(err)) {
+      console.log(`[ec2] terminateInstance: ${instanceId} already gone, ignoring`)
+      return
+    }
+    throw err
+  }
 }
 
+/**
+ * Returns instance info, or null if the instance no longer exists.
+ */
 export async function getInstance(
   instanceId: string,
-): Promise<{ instanceId: string; status: string; publicIp: string | null }> {
+): Promise<{ instanceId: string; status: string; publicIp: string | null } | null> {
   const ec2 = getClient()
-  const result = await ec2.send(
-    new DescribeInstancesCommand({ InstanceIds: [instanceId] }),
-  )
+  let result
+  try {
+    result = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] }))
+  } catch (err: unknown) {
+    if (isNotFoundError(err)) return null
+    throw err
+  }
 
   const ec2Instance = result.Reservations?.[0]?.Instances?.[0]
-  if (!ec2Instance) {
-    throw new Error(`EC2 instance ${instanceId} not found`)
-  }
+  if (!ec2Instance) return null
 
   return {
     instanceId: ec2Instance.InstanceId ?? instanceId,
     status: ec2Instance.State?.Name ?? 'unknown',
     publicIp: ec2Instance.PublicIpAddress ?? null,
   }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isNotFoundError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const code = (err as { Code?: string; name?: string }).Code ?? (err as { name?: string }).name
+  return code === 'InvalidInstanceID.NotFound'
 }

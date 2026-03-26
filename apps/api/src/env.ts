@@ -34,6 +34,13 @@ const envSchema = z.object({
   // LiteLLM
   LITELLM_PROXY_URL: z.string().url().optional(),
   LITELLM_MASTER_KEY: z.string().optional(),
+
+  // SSH (for health checks and debugging)
+  ADMIN_SSH_PUBLIC_KEY: z.string().optional(),
+  ADMIN_SSH_PRIVATE_KEY: z.string().optional(),
+
+  // Domain
+  BASE_DOMAIN: z.string().optional(), // e.g. 'agent.kodi.so'
 })
 
 const _env = envSchema.safeParse(process.env)

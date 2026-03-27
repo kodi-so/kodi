@@ -1,19 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
+import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
 import { MemberList } from '../_components/member-list'
 import { InviteForm } from '../_components/invite-form'
 import { Users } from 'lucide-react'
-
-type OrgInfo = {
-  orgId: string
-  orgName: string
-  orgSlug: string
-  role: 'owner' | 'member'
-}
 
 type Member = {
   id: string
@@ -35,15 +28,13 @@ type Session = {
 }
 
 export default function MembersPage() {
-  const router = useRouter()
-  const [orgInfo, setOrgInfo] = useState<OrgInfo | null>(null)
+  const { activeOrg } = useOrg()
   const [members, setMembers] = useState<Member[]>([])
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch session from better-auth
   const fetchSession = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/get-session', { credentials: 'include' })
@@ -56,50 +47,32 @@ export default function MembersPage() {
     }
   }, [])
 
-  const fetchData = useCallback(async (org: OrgInfo) => {
+  const fetchData = useCallback(async (orgId: string, role: string) => {
     try {
-      const membersData = await trpc.org.getMembers.query({ orgId: org.orgId })
-      setMembers(
-        membersData.map((m) => ({
-          ...m,
-          role: m.role as 'owner' | 'member',
-        }))
-      )
-
-      if (org.role === 'owner') {
-        const invitesData = await trpc.invite.getActive.query({ orgId: org.orgId })
+      const membersData = await trpc.org.getMembers.query({ orgId })
+      setMembers(membersData.map(m => ({ ...m, role: m.role as 'owner' | 'member' })))
+      if (role === 'owner') {
+        const invitesData = await trpc.invite.getActive.query({ orgId })
         setPendingInvites(invitesData)
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to load members'
-      setError(msg)
+      setError(err instanceof Error ? err.message : 'Failed to load members')
     }
   }, [])
 
   useEffect(() => {
-    void (async () => {
-      try {
-        await fetchSession()
-        const org = await trpc.org.getMyCurrent.query()
-        if (!org) {
-          router.push('/onboarding')
-          return
-        }
-        setOrgInfo(org as OrgInfo)
-        await fetchData(org as OrgInfo)
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to load page'
-        setError(msg)
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [router, fetchSession, fetchData])
+    if (!activeOrg) return
+    setLoading(true)
+    setError(null)
+    void Promise.all([fetchSession(), fetchData(activeOrg.orgId, activeOrg.role)]).finally(() =>
+      setLoading(false),
+    )
+  }, [activeOrg, fetchSession, fetchData])
 
   const refresh = useCallback(async () => {
-    if (!orgInfo) return
-    await fetchData(orgInfo)
-  }, [orgInfo, fetchData])
+    if (!activeOrg) return
+    await fetchData(activeOrg.orgId, activeOrg.role)
+  }, [activeOrg, fetchData])
 
   if (loading) {
     return (
@@ -117,7 +90,7 @@ export default function MembersPage() {
         <div className="py-10 text-center">
           <p className="text-red-400 text-sm">{error}</p>
           <button
-            onClick={() => { setError(null); setLoading(true); router.refresh() }}
+            onClick={() => { setError(null); setLoading(true); void refresh() }}
             className="mt-3 text-sm text-zinc-400 hover:text-white underline"
           >
             Retry
@@ -127,15 +100,24 @@ export default function MembersPage() {
     )
   }
 
-  if (!orgInfo) return null
+  if (!activeOrg) {
+    return (
+      <SettingsLayout>
+        <div className="max-w-2xl mx-auto py-10">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+            <p className="text-zinc-400 text-sm">No organisation found.</p>
+          </div>
+        </div>
+      </SettingsLayout>
+    )
+  }
 
-  const isOwner = orgInfo.role === 'owner'
+  const isOwner = activeOrg.role === 'owner'
   const currentUserId = session?.user?.id ?? ''
 
   return (
     <SettingsLayout>
       <div className="max-w-2xl mx-auto space-y-8">
-        {/* Header */}
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
@@ -144,16 +126,15 @@ export default function MembersPage() {
             <h1 className="text-xl font-semibold text-white">Members</h1>
           </div>
           <p className="text-zinc-500 text-sm ml-11">
-            {members.length} member{members.length !== 1 ? 's' : ''} in {orgInfo.orgName}
+            {members.length} member{members.length !== 1 ? 's' : ''} in {activeOrg.orgName}
           </p>
         </div>
 
-        {/* Invite section — owners only */}
         {isOwner && (
           <section>
             <h2 className="text-sm font-medium text-zinc-300 mb-3">Invite a teammate</h2>
             <InviteForm
-              orgId={orgInfo.orgId}
+              orgId={activeOrg.orgId}
               pendingInvites={pendingInvites}
               onInviteSent={refresh}
               onInviteRevoked={refresh}
@@ -161,7 +142,6 @@ export default function MembersPage() {
           </section>
         )}
 
-        {/* Member list */}
         <section>
           <h2 className="text-sm font-medium text-zinc-300 mb-3">
             {isOwner ? 'Current members' : 'Team members'}
@@ -169,9 +149,9 @@ export default function MembersPage() {
           <MemberList
             members={members}
             currentUserId={currentUserId}
-            currentUserRole={orgInfo.role}
-            orgId={orgInfo.orgId}
-            orgName={orgInfo.orgName}
+            currentUserRole={activeOrg.role as 'owner' | 'member'}
+            orgId={activeOrg.orgId}
+            orgName={activeOrg.orgName}
             onMemberRemoved={refresh}
           />
         </section>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import { signIn } from '@/lib/auth-client'
 import { useRouter, useSearchParams } from 'next/navigation'
 

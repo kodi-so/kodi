@@ -18,7 +18,7 @@ export default async function ChatPage() {
     with: { org: true },
   })
 
-  if (!membership) redirect('/onboarding')
+  if (!membership) redirect('/dashboard')
 
   return (
     <div className="flex flex-col h-full">

@@ -3,16 +3,28 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { db } from '@kodi/db'
 import * as schema from '@kodi/db/schema'
 
+const betterAuthUrl = process.env.BETTER_AUTH_URL!
+const trustedOrigins = [
+  betterAuthUrl,
+  ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(',') : []),
+]
+const crossSubDomainCookieDomain = process.env.AUTH_COOKIE_DOMAIN?.trim().replace(/^\./, '')
+
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL!,
-  trustedOrigins: [
-    process.env.BETTER_AUTH_URL!,
-    ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(',') : []),
-  ],
+  baseURL: betterAuthUrl,
+  trustedOrigins,
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema,
   }),
+  ...(crossSubDomainCookieDomain
+    ? {
+        crossSubDomainCookies: {
+          enabled: true,
+          domain: crossSubDomainCookieDomain,
+        },
+      }
+    : {}),
   emailAndPassword: {
     enabled: true,
   },

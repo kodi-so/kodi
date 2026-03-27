@@ -144,7 +144,7 @@ export const inviteRouter = router({
 
       if (env.RESEND_API_KEY) {
         const resend = new Resend(env.RESEND_API_KEY)
-        await resend.emails.send({
+        const { error: resendError } = await resend.emails.send({
           from: 'Kodi <invites@kodi.so>',
           to: input.email,
           subject: `You've been invited to join ${org.name} on Kodi`,
@@ -171,6 +171,13 @@ export const inviteRouter = router({
 </body>
 </html>`,
         })
+        if (resendError) {
+          console.error('[invite.send] Resend error:', resendError)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to send invite email: ${resendError.message}`,
+          })
+        }
       } else {
         console.log(`[DEV] Invite link for ${input.email}:`, inviteUrl)
       }

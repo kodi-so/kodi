@@ -12,6 +12,7 @@ export const chatRouter = router({
    * Returns the last N messages for an org, newest-last (chronological order).
    * Supports cursor pagination via `before` (a message id).
    * On first load (no messages), inserts a welcome message and returns it.
+   * Requires caller to be an org member (enforced by memberProcedure).
    */
   getHistory: memberProcedure
     .input(

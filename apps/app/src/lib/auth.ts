@@ -17,14 +17,16 @@ export const auth = betterAuth({
     provider: 'pg',
     schema,
   }),
-  ...(crossSubDomainCookieDomain
-    ? {
-        crossSubDomainCookies: {
-          enabled: true,
-          domain: crossSubDomainCookieDomain,
-        },
-      }
-    : {}),
+  advanced: {
+    ...(crossSubDomainCookieDomain
+      ? {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: crossSubDomainCookieDomain,
+          },
+        }
+      : {}),
+  },
   emailAndPassword: {
     enabled: true,
   },

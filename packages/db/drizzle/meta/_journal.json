@@ -43,6 +43,13 @@
       "when": 1774424947202,
       "tag": "0005_solid_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774570539099,
+      "tag": "0006_silent_senator_kelly",
+      "breakpoints": true
     }
   ]
 }

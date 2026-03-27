@@ -42,6 +42,17 @@ const envSchema = z.object({
 
   // Base domain for hostnames
   BASE_DOMAIN: z.string().default('agent.kodi.so'),
+
+  // ── Required in Phase 3 (invite flow) ─────────────────────────────────────
+
+  // JWT secret for signing invite tokens (generate: openssl rand -hex 32)
+  INVITE_JWT_SECRET: z.string().min(32).optional(),
+
+  // Public URL of the app (e.g. https://app.kodi.so)
+  APP_URL: z.string().url().optional(),
+
+  // Resend API key for sending invite emails (optional — logs to console in dev)
+  RESEND_API_KEY: z.string().optional(),
 })
 
 const _env = envSchema.safeParse(process.env)

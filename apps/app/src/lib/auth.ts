@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { db } from '@kodi/db'
+import { db, ensurePersonalOrganizationForUser } from '@kodi/db'
 import * as schema from '@kodi/db/schema'
 
 const betterAuthUrl = process.env.BETTER_AUTH_URL!
@@ -26,6 +26,22 @@ export const auth = betterAuth({
           },
         }
       : {}),
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        after: async user => {
+          await ensurePersonalOrganizationForUser(db, user.id)
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async session => {
+          await ensurePersonalOrganizationForUser(db, session.userId)
+        },
+      },
+    },
   },
   emailAndPassword: {
     enabled: true,

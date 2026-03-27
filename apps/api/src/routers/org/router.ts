@@ -1,10 +1,35 @@
 import { TRPCError } from '@trpc/server'
-import { eq, and } from 'drizzle-orm'
-import { orgMembers, organizations, user } from '@kodi/db'
+import { eq, and, asc } from 'drizzle-orm'
+import { ensurePersonalOrganizationForUser, orgMembers, organizations, user } from '@kodi/db'
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
 
+async function listOrganizationsForUser(database: typeof import('@kodi/db').db, userId: string) {
+  return database
+    .select({
+      orgId: organizations.id,
+      orgName: organizations.name,
+      orgSlug: organizations.slug,
+      role: orgMembers.role,
+      joinedAt: orgMembers.createdAt,
+    })
+    .from(orgMembers)
+    .innerJoin(organizations, eq(orgMembers.orgId, organizations.id))
+    .where(eq(orgMembers.userId, userId))
+    .orderBy(asc(orgMembers.createdAt), asc(organizations.createdAt))
+}
+
 export const orgRouter = router({
+  listMine: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.session?.user?.id) {
+      throw new TRPCError({ code: 'UNAUTHORIZED' })
+    }
+
+    await ensurePersonalOrganizationForUser(ctx.db, ctx.session.user.id)
+
+    return listOrganizationsForUser(ctx.db, ctx.session.user.id)
+  }),
+
   /**
    * org.getMyCurrent — returns the logged-in user's current org + role.
    * The app shell calls this once on mount to populate role-gated UI.
@@ -15,17 +40,15 @@ export const orgRouter = router({
       throw new TRPCError({ code: 'UNAUTHORIZED' })
     }
 
-    const membership = await ctx.db.query.orgMembers.findFirst({
-      where: eq(orgMembers.userId, ctx.session.user.id),
-      with: { org: true },
-    })
+    await ensurePersonalOrganizationForUser(ctx.db, ctx.session.user.id)
 
+    const [membership] = await listOrganizationsForUser(ctx.db, ctx.session.user.id)
     if (!membership) return null
 
     return {
       orgId: membership.orgId,
-      orgName: membership.org.name,
-      orgSlug: membership.org.slug,
+      orgName: membership.orgName,
+      orgSlug: membership.orgSlug,
       role: membership.role,
     }
   }),

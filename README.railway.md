@@ -59,6 +59,7 @@ NEXT_PUBLIC_API_URL=https://<your-api-domain>.railway.app
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 BETTER_AUTH_SECRET=<generate-a-random-secret>
 BETTER_AUTH_URL=https://<your-app-domain>.railway.app
+AUTH_COOKIE_DOMAIN=<your-root-domain>
 STRIPE_SECRET_KEY=<your-stripe-key>
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=<your-stripe-pub-key>
 ```

@@ -27,9 +27,32 @@ const envSchema = z.object({
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
 
+  // SSH (for health checks and debugging)
+  ADMIN_SSH_PUBLIC_KEY: z.string().optional(),
+  ADMIN_SSH_PRIVATE_KEY: z.string().optional(),
+
   // LiteLLM
-  LITELLM_PROXY_URL: z.string().url().optional(),
+  LITELLM_PROXY_URL: z.string().optional(),
   LITELLM_MASTER_KEY: z.string().optional(),
+
+  // Instance defaults (can be overridden per-org later)
+  INSTANCE_TYPE: z.string().default('t4g.small'),
+  INSTANCE_VOLUME_GB: z.coerce.number().int().positive().default(20),
+  INSTANCE_CREDITS_DOLLARS: z.coerce.number().positive().default(15),
+
+  // Base domain for hostnames
+  BASE_DOMAIN: z.string().default('agent.kodi.so'),
+
+  // ── Required in Phase 3 (invite flow) ─────────────────────────────────────
+
+  // JWT secret for signing invite tokens (generate: openssl rand -hex 32)
+  INVITE_JWT_SECRET: z.string().min(32).optional(),
+
+  // Public URL of the app (e.g. https://app.kodi.so)
+  APP_URL: z.string().url().optional(),
+
+  // Resend API key for sending invite emails (optional — logs to console in dev)
+  RESEND_API_KEY: z.string().optional(),
 })
 
 const _env = envSchema.safeParse(process.env)
@@ -58,6 +81,14 @@ export function requireCloudflare() {
     throw new Error('Cloudflare environment variables are not configured.')
   }
   return { CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID }
+}
+
+export function requireSsh() {
+  const { ADMIN_SSH_PRIVATE_KEY } = env
+  if (!ADMIN_SSH_PRIVATE_KEY) {
+    throw new Error('ADMIN_SSH_PRIVATE_KEY is not configured.')
+  }
+  return { ADMIN_SSH_PRIVATE_KEY, ADMIN_SSH_PUBLIC_KEY: env.ADMIN_SSH_PUBLIC_KEY }
 }
 
 export function requireLiteLLM() {

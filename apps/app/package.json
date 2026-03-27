@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kodi/db": "*",
+    "@kodi/api": "*",
+  "@kodi/db": "*",
     "@kodi/ui": "*",
     "@trpc/client": "^11.0.0",
     "@trpc/next": "^11.0.0",

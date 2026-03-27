@@ -3,7 +3,7 @@ import { eq, and, isNull, gt } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { Resend } from 'resend'
 import { orgInvites, orgMembers, organizations } from '@kodi/db'
-import { router, protectedProcedure, publicProcedure } from '../../trpc'
+import { router, protectedProcedure, publicProcedure, ownerProcedure } from '../../trpc'
 import { env } from '../../env'
 
 // ── JWT helpers (no external dep — use Web Crypto) ────────────────────────
@@ -294,5 +294,31 @@ export const inviteRouter = router({
           // Omit token from response for security
         },
       })
+    }),
+
+  /**
+   * invite.revoke — owner only
+   * Marks an invite as used so it can no longer be accepted.
+   * The owner must belong to the same org as the invite.
+   */
+  revoke: ownerProcedure
+    .input(z.object({ orgId: z.string(), inviteId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const invite = await ctx.db.query.orgInvites.findFirst({
+        where: and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, input.orgId)),
+      })
+      if (!invite) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found.' })
+      }
+      if (invite.usedAt !== null) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invite has already been used or revoked.' })
+      }
+
+      await ctx.db
+        .update(orgInvites)
+        .set({ usedAt: new Date() })
+        .where(eq(orgInvites.id, input.inviteId))
+
+      return { success: true }
     }),
 })

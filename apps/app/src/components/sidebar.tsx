@@ -1,17 +1,86 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, MessageSquare, Settings, Menu, X } from 'lucide-react'
-import { useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { LayoutDashboard, MessageSquare, Settings, Menu, X, ChevronDown, Check } from 'lucide-react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { signOut, useSession } from '@/lib/auth-client'
-import { useRouter } from 'next/navigation'
+import { trpc } from '@/lib/trpc'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
+
+type OrgOption = { orgId: string; orgName: string; orgSlug: string; role: string }
+
+function OrgSwitcher() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const currentOrgId = searchParams.get('org')
+
+  const [orgs, setOrgs] = useState<OrgOption[]>([])
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    trpc.org.listMine.query().then(setOrgs).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const current = (currentOrgId ? orgs.find(o => o.orgId === currentOrgId) : null) ?? orgs[0]
+
+  if (orgs.length === 0) return null
+
+  if (orgs.length === 1 && current) {
+    return (
+      <div className="px-4 py-3 border-b border-zinc-800">
+        <p className="text-xs text-zinc-500 mb-0.5">Workspace</p>
+        <p className="text-sm font-medium text-white truncate">{current.orgName}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={ref} className="relative px-3 py-2 border-b border-zinc-800">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors text-sm"
+      >
+        <span className="text-white font-medium truncate">{current?.orgName ?? 'Select workspace'}</span>
+        <ChevronDown size={14} className={`text-zinc-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl overflow-hidden">
+          {orgs.map(org => (
+            <button
+              key={org.orgId}
+              onClick={() => {
+                setOpen(false)
+                router.push(`/dashboard?org=${org.orgId}`)
+              }}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-zinc-800 transition-colors"
+            >
+              <div className="text-left min-w-0">
+                <p className="text-white font-medium truncate">{org.orgName}</p>
+                <p className="text-zinc-500 text-xs capitalize">{org.role}</p>
+              </div>
+              {org.orgId === current?.orgId && <Check size={14} className="text-indigo-400 flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -33,6 +102,11 @@ export function Sidebar() {
         </div>
         <span className="text-white font-semibold text-lg tracking-tight">Kodi</span>
       </div>
+
+      {/* Org switcher — Suspense needed for useSearchParams */}
+      <Suspense fallback={null}>
+        <OrgSwitcher />
+      </Suspense>
 
       {/* Nav links */}
       <nav className="flex-1 px-3 py-4 space-y-1">

@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
 
 type PageState = 'loading' | 'accepting' | 'success' | 'error' | 'unauthenticated'
 
-export default function InvitePage() {
+function InvitePageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = searchParams.get('token') ?? ''
@@ -112,5 +112,22 @@ export default function InvitePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrap in Suspense — required by Next.js when using useSearchParams() in a
+// client component, otherwise Next.js bails to SSR and initialises the entire
+// module graph (including auth.ts) before runtime env vars are available.
+export default function InvitePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <InvitePageInner />
+    </Suspense>
   )
 }

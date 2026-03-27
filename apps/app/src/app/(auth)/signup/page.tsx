@@ -1,11 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { signIn, signUp } from '@/lib/auth-client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function SignUpPage() {
+function SignUpForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') ?? '/dashboard'
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,7 +20,7 @@ export default function SignUpPage() {
     setGoogleLoading(true)
     setError('')
     try {
-      await signIn.social({ provider: 'google', callbackURL: '/dashboard' })
+      await signIn.social({ provider: 'google', callbackURL: redirectTo })
     } catch (e) {
       setError('Failed to sign in with Google. Please try again.')
       setGoogleLoading(false)
@@ -29,12 +32,12 @@ export default function SignUpPage() {
     setLoading(true)
     setError('')
     try {
-      const result = await signUp.email({ name, email, password, callbackURL: '/dashboard' })
+      const result = await signUp.email({ name, email, password, callbackURL: redirectTo })
       if (result?.error) {
         setError(result.error.message ?? 'Failed to create account.')
         setLoading(false)
       } else {
-        router.push('/dashboard')
+        router.push(redirectTo)
       }
     } catch (e) {
       setError('Something went wrong. Please try again.')
@@ -165,5 +168,13 @@ export default function SignUpPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f]" />}>
+      <SignUpForm />
+    </Suspense>
   )
 }

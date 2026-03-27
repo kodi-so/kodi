@@ -78,6 +78,19 @@ export const orgRouter = router({
     }),
 
   /**
+   * org.update — owner only, updates org name (and optionally slug).
+   */
+  update: ownerProcedure
+    .input(z.object({ orgId: z.string(), name: z.string().min(1).max(80) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(organizations)
+        .set({ name: input.name.trim() })
+        .where(and(eq(organizations.id, input.orgId), eq(organizations.ownerId, ctx.session!.user.id)))
+      return { success: true }
+    }),
+
+  /**
    * org.removeMember — owner only, removes a member from the org.
    * Owner cannot remove themselves.
    */

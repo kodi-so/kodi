@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { desc, lt, eq, and } from 'drizzle-orm'
-import { chatMessages, instances, orgMembers, decrypt } from '@kodi/db'
-import { router, protectedProcedure, memberProcedure } from '../../trpc'
+import { chatMessages, instances, decrypt } from '@kodi/db'
+import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
 
 const WELCOME_MESSAGE =
@@ -13,7 +13,7 @@ export const chatRouter = router({
    * Supports cursor pagination via `before` (a message id).
    * On first load (no messages), inserts a welcome message and returns it.
    */
-  getHistory: protectedProcedure
+  getHistory: memberProcedure
     .input(
       z.object({
         orgId: z.string(),
@@ -22,7 +22,7 @@ export const chatRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO: verify user is org member (add in KOD-18 after org membership check helper exists)
+      // Membership enforced by memberProcedure middleware
       const conditions = [eq(chatMessages.orgId, input.orgId)]
 
       if (input.before) {
@@ -71,18 +71,7 @@ export const chatRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // 1. Org membership already verified by memberProcedure middleware.
-      //    Double-check via DB query to be explicit and grab userId safely.
-      const membership = await ctx.db.query.orgMembers.findFirst({
-        where: and(
-          eq(orgMembers.orgId, input.orgId),
-          eq(orgMembers.userId, ctx.session.user.id)
-        ),
-      })
-      if (!membership) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a member of this org' })
-      }
-
+      // 1. Membership enforced by memberProcedure middleware (ctx.membership is available)
       // 2. Look up the org's instance
       const instance = await ctx.db.query.instances.findFirst({
         where: eq(instances.orgId, input.orgId),
@@ -114,7 +103,7 @@ export const chatRouter = router({
       }
 
       // 4. Persist user message immediately with status='sent'
-      const [userMessage] = await ctx.db
+      const userMessageRows = await ctx.db
         .insert(chatMessages)
         .values({
           orgId: input.orgId,
@@ -124,6 +113,8 @@ export const chatRouter = router({
           status: 'sent',
         })
         .returning()
+      const userMessage = userMessageRows[0]!
+
 
       // 5. Build auth header — decrypt gatewayToken if present
       const headers: Record<string, string> = {

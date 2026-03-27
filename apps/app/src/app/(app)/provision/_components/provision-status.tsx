@@ -43,7 +43,7 @@ export function ProvisionStatus({
   const checkHealth = useCallback(async () => {
     if (!instanceId) return
     try {
-      const result = await trpc.instance.checkHealth.mutate({ instanceId })
+      const result = await trpc.instance.checkHealth.mutate({ orgId, instanceId })
       setStatus(result.status as InstanceStatus)
       if (result.hostname) setHostname(result.hostname)
       if (result.errorMessage) setErrorMessage(result.errorMessage)

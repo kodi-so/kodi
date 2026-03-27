@@ -1,11 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { signIn } from '@/lib/auth-client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // Where to send the user after login — honour ?redirect= if present
+  const redirectTo = searchParams.get('redirect') ?? '/dashboard'
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -16,7 +20,7 @@ export default function LoginPage() {
     setGoogleLoading(true)
     setError('')
     try {
-      await signIn.social({ provider: 'google', callbackURL: '/dashboard' })
+      await signIn.social({ provider: 'google', callbackURL: redirectTo })
     } catch (e) {
       setError('Failed to sign in with Google. Please try again.')
       setGoogleLoading(false)
@@ -28,12 +32,12 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      const result = await signIn.email({ email, password, callbackURL: '/dashboard' })
+      const result = await signIn.email({ email, password, callbackURL: redirectTo })
       if (result?.error) {
         setError(result.error.message ?? 'Invalid email or password.')
         setLoading(false)
       } else {
-        router.push('/dashboard')
+        router.push(redirectTo)
       }
     } catch (e) {
       setError('Something went wrong. Please try again.')
@@ -172,5 +176,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }

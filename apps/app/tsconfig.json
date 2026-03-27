@@ -2,12 +2,32 @@
   "extends": "@kodi/typescript-config/nextjs.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/*"],
-      "@kodi/api": ["../api/src/index.ts"],
-      "@kodi/db": ["../../packages/db/src/index.ts"],
-      "@kodi/db/schema": ["../../packages/db/src/schema/index.ts"]
-    }
+      "@/*": [
+        "./src/*"
+      ],
+      "@kodi/api": [
+        "../api/src/index.ts"
+      ],
+      "@kodi/db": [
+        "../../packages/db/src/index.ts"
+      ],
+      "@kodi/db/schema": [
+        "../../packages/db/src/schema/index.ts"
+      ]
+    },
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ]
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
 import { activityLabel, activityIcon, relativeTime } from '@/lib/activity-labels'
+import { Suspense } from 'react'
 
 type OrgInfo = {
   orgId: string
@@ -20,16 +22,21 @@ type ActivityItem = {
   createdAt: Date | string
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
+  const searchParams = useSearchParams()
+  const orgIdParam = searchParams.get('org') ?? undefined
+
   const [orgInfo, setOrgInfo] = useState<OrgInfo | null>(null)
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    setLoading(true)
+    setError(null)
     async function load() {
       try {
-        const org = await trpc.org.getMyCurrent.query()
+        const org = await trpc.org.getMyCurrent.query(orgIdParam ? { orgId: orgIdParam } : undefined)
         if (!org) {
           setLoading(false)
           return
@@ -44,7 +51,7 @@ export default function DashboardPage() {
       }
     }
     void load()
-  }, [])
+  }, [orgIdParam])
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
@@ -119,5 +126,24 @@ export default function DashboardPage() {
         )}
       </section>
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-2xl mx-auto py-8 px-4">
+          <div className="h-8 w-48 bg-zinc-800 rounded animate-pulse mb-8" />
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-16 rounded-xl bg-zinc-900/50 border border-zinc-800 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   )
 }

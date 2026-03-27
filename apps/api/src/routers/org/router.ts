@@ -8,27 +8,98 @@ import { logActivity } from '../../lib/activity'
 export const orgRouter = router({
   /**
    * org.getMyCurrent — returns the logged-in user's current org + role.
-   * The app shell calls this once on mount to populate role-gated UI.
+   * Accepts an optional orgId to return a specific org (verifying membership).
+   * Falls back to the user's first membership if no orgId provided.
    * Returns null if the user has no org membership yet.
    */
-  getMyCurrent: protectedProcedure.query(async ({ ctx }) => {
-    if (!ctx.session?.user?.id) {
-      throw new TRPCError({ code: 'UNAUTHORIZED' })
-    }
+  getMyCurrent: protectedProcedure
+    .input(z.object({ orgId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session!.user.id
 
-    const membership = await ctx.db.query.orgMembers.findFirst({
-      where: eq(orgMembers.userId, ctx.session.user.id),
+      if (input?.orgId) {
+        const membership = await ctx.db.query.orgMembers.findFirst({
+          where: and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, input.orgId)),
+          with: { org: true },
+        })
+        if (!membership) return null
+        return {
+          orgId: membership.orgId,
+          orgName: membership.org.name,
+          orgSlug: membership.org.slug,
+          role: membership.role,
+        }
+      }
+
+      const membership = await ctx.db.query.orgMembers.findFirst({
+        where: eq(orgMembers.userId, userId),
+        with: { org: true },
+      })
+
+      if (!membership) return null
+
+      return {
+        orgId: membership.orgId,
+        orgName: membership.org.name,
+        orgSlug: membership.org.slug,
+        role: membership.role,
+      }
+    }),
+
+  /**
+   * org.getMyOrgs — returns all orgs the user belongs to (for org switcher).
+   */
+  getMyOrgs: protectedProcedure.query(async ({ ctx }) => {
+    const memberships = await ctx.db.query.orgMembers.findMany({
+      where: eq(orgMembers.userId, ctx.session!.user.id),
       with: { org: true },
     })
+    return memberships.map(m => ({
+      orgId: m.orgId,
+      orgName: m.org.name,
+      orgSlug: m.org.slug,
+      role: m.role,
+    }))
+  }),
 
-    if (!membership) return null
+  /**
+   * org.ensurePersonal — idempotent.
+   * Creates a personal org for the user if they don't have one yet.
+   * Called from the onboarding page immediately after signup.
+   */
+  ensurePersonal: protectedProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session!.user.id
+    const userName = ctx.session!.user.name ?? ctx.session!.user.email ?? 'User'
 
-    return {
-      orgId: membership.orgId,
-      orgName: membership.org.name,
-      orgSlug: membership.org.slug,
-      role: membership.role,
-    }
+    // Already has at least one org — return the first one (their personal org)
+    const existing = await ctx.db.query.orgMembers.findFirst({
+      where: and(eq(orgMembers.userId, userId), eq(orgMembers.role, 'owner')),
+      with: { org: true },
+    })
+    if (existing) return { orgId: existing.orgId, orgSlug: existing.org.slug }
+
+    // Create a personal org
+    const orgId = crypto.randomUUID()
+    const baseSlug = userName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 30) || 'personal'
+    const slug = `${baseSlug}-${orgId.slice(0, 6)}`
+
+    await ctx.db.insert(organizations).values({
+      id: orgId,
+      name: `${userName}'s Workspace`,
+      slug,
+      ownerId: userId,
+    })
+    await ctx.db.insert(orgMembers).values({
+      orgId,
+      userId,
+      role: 'owner',
+    })
+
+    return { orgId, orgSlug: slug }
   }),
 
   /**

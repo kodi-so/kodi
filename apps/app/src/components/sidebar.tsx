@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LayoutDashboard, MessageSquare, Settings, Menu, X, ChevronDown, Check } from 'lucide-react'
-import { useRef, useState, Suspense } from 'react'
+import { useRef, useState } from 'react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
 

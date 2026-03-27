@@ -1,8 +1,9 @@
 import { TRPCError } from '@trpc/server'
-import { eq, and, asc } from 'drizzle-orm'
-import { ensurePersonalOrganizationForUser, orgMembers, organizations, user } from '@kodi/db'
+import { eq, and, desc, asc } from 'drizzle-orm'
+import { ensurePersonalOrganizationForUser, orgMembers, organizations, user, activityLog } from '@kodi/db'
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
+import { logActivity } from '../../lib/activity'
 
 async function listOrganizationsForUser(database: typeof import('@kodi/db').db, userId: string) {
   return database
@@ -32,25 +33,37 @@ export const orgRouter = router({
 
   /**
    * org.getMyCurrent — returns the logged-in user's current org + role.
-   * The app shell calls this once on mount to populate role-gated UI.
+   * Ensures a personal org exists, then returns the first membership.
    * Returns null if the user has no org membership yet.
    */
-  getMyCurrent: protectedProcedure.query(async ({ ctx }) => {
-    if (!ctx.session?.user?.id) {
-      throw new TRPCError({ code: 'UNAUTHORIZED' })
-    }
+  getMyCurrent: protectedProcedure
+    .input(z.object({ orgId: z.string().optional() }).optional())
+    .query(async ({ ctx }) => {
+      await ensurePersonalOrganizationForUser(ctx.db, ctx.session!.user.id)
 
-    await ensurePersonalOrganizationForUser(ctx.db, ctx.session.user.id)
+      const [membership] = await listOrganizationsForUser(ctx.db, ctx.session!.user.id)
+      if (!membership) return null
 
-    const [membership] = await listOrganizationsForUser(ctx.db, ctx.session.user.id)
-    if (!membership) return null
+      return {
+        orgId: membership.orgId,
+        orgName: membership.orgName,
+        orgSlug: membership.orgSlug,
+        role: membership.role,
+      }
+    }),
 
-    return {
-      orgId: membership.orgId,
-      orgName: membership.orgName,
-      orgSlug: membership.orgSlug,
-      role: membership.role,
-    }
+  /**
+   * org.ensurePersonal — idempotent.
+   * Creates a personal org for the user if they don't have one yet.
+   * Called from the onboarding page immediately after signup.
+   */
+  ensurePersonal: protectedProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session!.user.id
+    const result = await ensurePersonalOrganizationForUser(ctx.db, userId)
+    const orgs = await listOrganizationsForUser(ctx.db, userId)
+    const first = orgs[0]
+    if (!first) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create personal org' })
+    return { orgId: first.orgId, orgSlug: first.orgSlug }
   }),
 
   /**
@@ -110,10 +123,39 @@ export const orgRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found in this org' })
       }
 
+      // Fetch user info before deletion for the activity log
+      const removedUser = await ctx.db.query.user.findFirst({
+        where: eq(user.id, input.userId),
+      })
+
       await ctx.db
         .delete(orgMembers)
         .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, input.userId)))
 
+      // Log activity
+      await logActivity(
+        ctx.db,
+        input.orgId,
+        'member.removed',
+        { userId: input.userId, name: removedUser?.name ?? removedUser?.email ?? 'Unknown' },
+        ctx.session!.user.id,
+      )
+
       return { success: true }
+    }),
+
+  /**
+   * org.getActivity — member procedure, returns activity log newest-first.
+   * Scoped to the caller's org via memberProcedure RBAC.
+   */
+  getActivity: memberProcedure
+    .input(z.object({ orgId: z.string(), limit: z.number().int().min(1).max(50).default(20) }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db
+        .select()
+        .from(activityLog)
+        .where(eq(activityLog.orgId, input.orgId))
+        .orderBy(desc(activityLog.createdAt))
+        .limit(input.limit)
     }),
 })

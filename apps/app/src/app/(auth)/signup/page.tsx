@@ -7,7 +7,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 function SignUpForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') ?? '/dashboard'
+  const redirectParam = searchParams.get('redirect')
+  // After onboarding creates the personal org, forward any pending redirect
+  const onboardingUrl = redirectParam
+    ? `/onboarding?redirect=${encodeURIComponent(redirectParam)}`
+    : '/onboarding'
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -20,7 +24,7 @@ function SignUpForm() {
     setGoogleLoading(true)
     setError('')
     try {
-      await signIn.social({ provider: 'google', callbackURL: redirectTo })
+      await signIn.social({ provider: 'google', callbackURL: onboardingUrl })
     } catch (e) {
       setError('Failed to sign in with Google. Please try again.')
       setGoogleLoading(false)
@@ -32,12 +36,12 @@ function SignUpForm() {
     setLoading(true)
     setError('')
     try {
-      const result = await signUp.email({ name, email, password, callbackURL: redirectTo })
+      const result = await signUp.email({ name, email, password, callbackURL: onboardingUrl })
       if (result?.error) {
         setError(result.error.message ?? 'Failed to create account.')
         setLoading(false)
       } else {
-        router.push(redirectTo)
+        router.push(onboardingUrl)
       }
     } catch (e) {
       setError('Something went wrong. Please try again.')
@@ -173,7 +177,13 @@ function SignUpForm() {
 
 export default function SignUpPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f]" />}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
       <SignUpForm />
     </Suspense>
   )

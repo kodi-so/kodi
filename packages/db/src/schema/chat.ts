@@ -16,6 +16,8 @@ export const chatMessages = pgTable(
     userId: text('user_id'), // null for assistant messages
     role: messageRoleEnum('role').notNull(),
     content: text('content').notNull(),
+    // 'pending' | 'sent' | 'error' — used to show retry UI on failure
+    status: text('status').notNull().default('sent'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [index('chat_messages_org_created_idx').on(table.orgId, table.createdAt)]

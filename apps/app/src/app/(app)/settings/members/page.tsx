@@ -81,12 +81,10 @@ export default function MembersPage() {
       try {
         await fetchSession()
         const org = await trpc.org.getMyCurrent.query()
-        if (!org) {
-          router.push('/onboarding')
-          return
+        if (org) {
+          setOrgInfo(org as OrgInfo)
+          await fetchData(org as OrgInfo)
         }
-        setOrgInfo(org as OrgInfo)
-        await fetchData(org as OrgInfo)
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Failed to load page'
         setError(msg)
@@ -127,7 +125,21 @@ export default function MembersPage() {
     )
   }
 
-  if (!orgInfo) return null
+  if (!orgInfo) {
+    return (
+      <SettingsLayout>
+        <div className="max-w-2xl mx-auto py-10">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+            <h1 className="text-xl font-semibold text-white mb-2">Members</h1>
+            <p className="text-zinc-400 text-sm">
+              Onboarding is temporarily disabled, and this account does not have an organization yet.
+              Invite and member management will become available once an organization exists.
+            </p>
+          </div>
+        </div>
+      </SettingsLayout>
+    )
+  }
 
   const isOwner = orgInfo.role === 'owner'
   const currentUserId = session?.user?.id ?? ''

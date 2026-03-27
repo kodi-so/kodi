@@ -20,7 +20,7 @@ export default async function ProvisionPage() {
   })
 
   if (!membership) {
-    redirect('/onboarding')
+    redirect('/dashboard')
   }
 
   const orgId = membership.orgId

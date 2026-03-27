@@ -17,7 +17,7 @@ export default function SignUpPage() {
     setGoogleLoading(true)
     setError('')
     try {
-      await signIn.social({ provider: 'google', callbackURL: '/onboarding' })
+      await signIn.social({ provider: 'google', callbackURL: '/dashboard' })
     } catch (e) {
       setError('Failed to sign in with Google. Please try again.')
       setGoogleLoading(false)
@@ -29,12 +29,12 @@ export default function SignUpPage() {
     setLoading(true)
     setError('')
     try {
-      const result = await signUp.email({ name, email, password, callbackURL: '/onboarding' })
+      const result = await signUp.email({ name, email, password, callbackURL: '/dashboard' })
       if (result?.error) {
         setError(result.error.message ?? 'Failed to create account.')
         setLoading(false)
       } else {
-        router.push('/onboarding')
+        router.push('/dashboard')
       }
     } catch (e) {
       setError('Something went wrong. Please try again.')

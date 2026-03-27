@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import { orgInvites, orgMembers, organizations } from '@kodi/db'
 import { router, protectedProcedure, publicProcedure, ownerProcedure } from '../../trpc'
 import { env } from '../../env'
+import { logActivity } from '../../lib/activity'
 
 // ── JWT helpers (no external dep — use Web Crypto) ────────────────────────
 
@@ -174,6 +175,9 @@ export const inviteRouter = router({
         console.log(`[DEV] Invite link for ${input.email}:`, inviteUrl)
       }
 
+      // Log activity
+      await logActivity(ctx.db, input.orgId, 'member.invited', { email: input.email.toLowerCase() }, ctx.session!.user.id)
+
       return { success: true }
     }),
 
@@ -257,6 +261,10 @@ export const inviteRouter = router({
       const org = await ctx.db.query.organizations.findFirst({
         where: eq(organizations.id, invite.orgId),
       })
+
+      // Log activity
+      await logActivity(ctx.db, invite.orgId, 'member.joined', { userId, name: ctx.session!.user.name ?? ctx.session!.user.email }, userId)
+
       return { orgId: invite.orgId, orgSlug: org?.slug ?? '' }
     }),
 
@@ -318,6 +326,9 @@ export const inviteRouter = router({
         .update(orgInvites)
         .set({ usedAt: new Date() })
         .where(eq(orgInvites.id, input.inviteId))
+
+      // Log activity
+      await logActivity(ctx.db, input.orgId, 'invite.revoked', { email: invite.email }, ctx.session!.user.id)
 
       return { success: true }
     }),

@@ -64,6 +64,13 @@
       "when": 1774571464977,
       "tag": "0008_great_preak",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774573043070,
+      "tag": "0009_giant_bug",
+      "breakpoints": true
     }
   ]
 }

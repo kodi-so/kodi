@@ -1,8 +1,9 @@
 import { TRPCError } from '@trpc/server'
-import { eq, and } from 'drizzle-orm'
-import { orgMembers, organizations, user } from '@kodi/db'
+import { eq, and, desc } from 'drizzle-orm'
+import { orgMembers, organizations, user, activityLog } from '@kodi/db'
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
+import { logActivity } from '../../lib/activity'
 
 export const orgRouter = router({
   /**
@@ -74,10 +75,39 @@ export const orgRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found in this org' })
       }
 
+      // Fetch user info before deletion for the activity log
+      const removedUser = await ctx.db.query.user.findFirst({
+        where: eq(user.id, input.userId),
+      })
+
       await ctx.db
         .delete(orgMembers)
         .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, input.userId)))
 
+      // Log activity
+      await logActivity(
+        ctx.db,
+        input.orgId,
+        'member.removed',
+        { userId: input.userId, name: removedUser?.name ?? removedUser?.email ?? 'Unknown' },
+        ctx.session!.user.id,
+      )
+
       return { success: true }
+    }),
+
+  /**
+   * org.getActivity — member procedure, returns activity log newest-first.
+   * Scoped to the caller's org via memberProcedure RBAC.
+   */
+  getActivity: memberProcedure
+    .input(z.object({ orgId: z.string(), limit: z.number().int().min(1).max(50).default(20) }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db
+        .select()
+        .from(activityLog)
+        .where(eq(activityLog.orgId, input.orgId))
+        .orderBy(desc(activityLog.createdAt))
+        .limit(input.limit)
     }),
 })

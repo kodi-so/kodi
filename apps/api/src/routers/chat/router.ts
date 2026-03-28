@@ -132,29 +132,36 @@ export const chatRouter = router({
         }
       }
 
-      // 6. Forward to OpenClaw with 60s timeout
+      // 6. Forward to OpenClaw via OpenAI-compatible /v1/chat/completions
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60_000)
 
       let responseText: string
       try {
-        const res = await fetch(`${instanceUrl}/api/chat`, {
+        const res = await fetch(`${instanceUrl}/v1/chat/completions`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ message: input.message }),
+          body: JSON.stringify({
+            model: 'openclaw:main',
+            messages: [{ role: 'user', content: input.message }],
+          }),
           signal: controller.signal,
         })
         clearTimeout(timeoutId)
 
         if (!res.ok) {
-          throw new Error(`Instance responded with HTTP ${res.status}`)
+          const body = await res.text().catch(() => '')
+          throw new Error(`Instance responded with HTTP ${res.status}: ${body}`)
         }
 
-        const data = (await res.json()) as { response?: string }
-        if (!data.response) {
+        const data = (await res.json()) as {
+          choices?: { message?: { content?: string } }[]
+        }
+        const content = data.choices?.[0]?.message?.content
+        if (!content) {
           throw new Error('Empty response from instance')
         }
-        responseText = data.response
+        responseText = content
       } catch (err) {
         clearTimeout(timeoutId)
         // Mark user message as error — do NOT delete it

@@ -1,6 +1,6 @@
 [build]
   builder = "DOCKERFILE"
-  dockerfilePath = "Dockerfile.litellm"
+  dockerfilePath = "Dockerfile"
 
 [deploy]
   healthcheckPath = "/health"

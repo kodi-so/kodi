@@ -1,6 +1,6 @@
 FROM ghcr.io/berriai/litellm:main-latest
 
-COPY apps/litellm/litellm_config.yaml /app/config.yaml
+COPY litellm_config.yaml /app/config.yaml
 
 EXPOSE 4000
 

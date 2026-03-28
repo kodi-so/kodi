@@ -1,0 +1,17 @@
+model_list:
+  # Moonshot (Kimi)
+  - model_name: "moonshot/kimi-k2.5"
+    litellm_params:
+      model: "moonshot/kimi-k2.5"
+      api_key: "os.environ/MOONSHOT_API_KEY"
+      extra_body:
+        thinking:
+          type: "disabled"
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"
+  database_url: "os.environ/DATABASE_URL"
+  store_model_in_db: true

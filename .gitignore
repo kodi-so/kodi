@@ -11,3 +11,4 @@ bun.lockb
 .DS_Store
 *.pem
 .vercel
+.mcp.json

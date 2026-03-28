@@ -21,15 +21,16 @@ export function ProvisionStatus({
   orgId: string
   initialData: StatusData | null
 }) {
-  const [status, setStatus] = useState<InstanceStatus>(
-    initialData?.status ?? 'pending',
+  const [status, setStatus] = useState<InstanceStatus | 'none'>(
+    initialData?.status ?? 'none',
   )
+  const [instanceId, setInstanceId] = useState(initialData?.id ?? '')
   const [hostname, setHostname] = useState(initialData?.hostname ?? null)
   const [errorMessage, setErrorMessage] = useState(initialData?.errorMessage ?? null)
   const [copied, setCopied] = useState(false)
   const [hostnameBlurred, setHostnameBlurred] = useState(true)
+  const [provisioning, setProvisioning] = useState(false)
 
-  const instanceId = initialData?.id ?? ''
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const handleCopy = () => {
@@ -37,6 +38,37 @@ export function ProvisionStatus({
       void navigator.clipboard.writeText(hostname)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const startProvision = async () => {
+    setProvisioning(true)
+    setErrorMessage(null)
+    try {
+      const result = await trpc.instance.provision.mutate({ orgId })
+      setInstanceId(result.id)
+      setStatus(result.status as InstanceStatus)
+      if (result.hostname) setHostname(result.hostname)
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to start provisioning')
+      setStatus('error')
+    } finally {
+      setProvisioning(false)
+    }
+  }
+
+  const retryProvision = async () => {
+    if (!instanceId) return
+    setProvisioning(true)
+    setErrorMessage(null)
+    try {
+      const result = await trpc.instance.retryProvision.mutate({ orgId, instanceId })
+      setStatus(result.status as InstanceStatus)
+      setErrorMessage(null)
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to retry provisioning')
+    } finally {
+      setProvisioning(false)
     }
   }
 
@@ -50,7 +82,7 @@ export function ProvisionStatus({
     } catch {
       // silently retry next tick
     }
-  }, [instanceId])
+  }, [instanceId, orgId])
 
   // Poll every 15s while installing
   useEffect(() => {
@@ -67,7 +99,39 @@ export function ProvisionStatus({
     }
   }, [status, checkHealth])
 
-  // ── Pending ──────────────────────────────────────────────────────────────
+  // ── No instance yet ─────────────────────────────────────────────────────
+  if (status === 'none') {
+    return (
+      <div className="max-w-lg mx-auto text-center">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-6">
+          <svg className="w-7 h-7 text-indigo-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 0 6h13.5a3 3 0 1 0 0-6m-16.5-3a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3m-19.5 0a4.5 4.5 0 0 1 .9-2.7L5.737 5.1a3.375 3.375 0 0 1 2.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 0 1 .9 2.7m0 0a3 3 0 0 1-3 3m0 3h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Zm-3 6h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Z" />
+          </svg>
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-2">Deploy your AI agent</h1>
+        <p className="text-zinc-500 text-sm mb-6">
+          Provision a dedicated OpenClaw instance for your organization. This sets up a cloud server with your own AI agent.
+        </p>
+        {errorMessage && <p className="text-red-400 text-sm mb-4">{errorMessage}</p>}
+        <button
+          onClick={() => void startProvision()}
+          disabled={provisioning}
+          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+        >
+          {provisioning ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              Provisioning...
+            </>
+          ) : (
+            'Start provisioning'
+          )}
+        </button>
+      </div>
+    )
+  }
+
+  // ── Pending / Installing ───────────────────────────────────────────────
   if (status === 'pending' || status === 'installing') {
     return (
       <div className="max-w-lg mx-auto text-center">
@@ -165,12 +229,20 @@ export function ProvisionStatus({
           </a>
           .
         </p>
-        <a
-          href="/provision"
-          className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-zinc-700"
+        <button
+          onClick={() => void retryProvision()}
+          disabled={provisioning}
+          className="inline-flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-zinc-700"
         >
-          Try again
-        </a>
+          {provisioning ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              Retrying...
+            </>
+          ) : (
+            'Try again'
+          )}
+        </button>
       </div>
     )
   }

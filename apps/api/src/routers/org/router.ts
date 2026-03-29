@@ -72,7 +72,7 @@ export const orgRouter = router({
    */
   getMembers: memberProcedure
     .input(z.object({ orgId: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx }) => {
       // Join org_members with user table to get name + email
       const members = await ctx.db
         .select({
@@ -85,7 +85,7 @@ export const orgRouter = router({
         })
         .from(orgMembers)
         .innerJoin(user, eq(orgMembers.userId, user.id))
-        .where(eq(orgMembers.orgId, input.orgId))
+        .where(eq(orgMembers.orgId, ctx.org.id))
 
       return members
     }),
@@ -99,7 +99,7 @@ export const orgRouter = router({
       await ctx.db
         .update(organizations)
         .set({ name: input.name.trim() })
-        .where(and(eq(organizations.id, input.orgId), eq(organizations.ownerId, ctx.session!.user.id)))
+        .where(and(eq(organizations.id, ctx.org.id), eq(organizations.ownerId, ctx.session!.user.id)))
       return { success: true }
     }),
 
@@ -117,7 +117,7 @@ export const orgRouter = router({
 
       // Ensure the target user is actually a member
       const existing = await ctx.db.query.orgMembers.findFirst({
-        where: and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, input.userId)),
+        where: and(eq(orgMembers.orgId, ctx.org.id), eq(orgMembers.userId, input.userId)),
       })
       if (!existing) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found in this org' })
@@ -130,12 +130,12 @@ export const orgRouter = router({
 
       await ctx.db
         .delete(orgMembers)
-        .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, input.userId)))
+        .where(and(eq(orgMembers.orgId, ctx.org.id), eq(orgMembers.userId, input.userId)))
 
       // Log activity
       await logActivity(
         ctx.db,
-        input.orgId,
+        ctx.org.id,
         'member.removed',
         { userId: input.userId, name: removedUser?.name ?? removedUser?.email ?? 'Unknown' },
         ctx.session!.user.id,
@@ -154,7 +154,7 @@ export const orgRouter = router({
       return ctx.db
         .select()
         .from(activityLog)
-        .where(eq(activityLog.orgId, input.orgId))
+        .where(eq(activityLog.orgId, ctx.org.id))
         .orderBy(desc(activityLog.createdAt))
         .limit(input.limit)
     }),

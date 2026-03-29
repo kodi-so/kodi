@@ -95,7 +95,7 @@ export const inviteRouter = router({
       const now = new Date()
       const existing = await ctx.db.query.orgInvites.findFirst({
         where: and(
-          eq(orgInvites.orgId, input.orgId),
+          eq(orgInvites.orgId, ctx.org.id),
           eq(orgInvites.email, input.email.toLowerCase()),
           isNull(orgInvites.usedAt),
           gt(orgInvites.expiresAt, now),
@@ -114,7 +114,7 @@ export const inviteRouter = router({
 
       const payload: InvitePayload = {
         inviteId,
-        orgId: input.orgId,
+        orgId: ctx.org.id,
         email: input.email.toLowerCase(),
         exp: Math.floor(expiresAt.getTime() / 1000),
       }
@@ -123,7 +123,7 @@ export const inviteRouter = router({
       // 4. Insert org_invites row
       await ctx.db.insert(orgInvites).values({
         id: inviteId,
-        orgId: input.orgId,
+        orgId: ctx.org.id,
         email: input.email.toLowerCase(),
         token,
         invitedBy: ctx.session!.user.id,
@@ -174,7 +174,7 @@ export const inviteRouter = router({
       }
 
       // Log activity
-      await logActivity(ctx.db, input.orgId, 'member.invited', { email: input.email.toLowerCase() }, ctx.session!.user.id)
+      await logActivity(ctx.db, ctx.org.id, 'member.invited', { email: input.email.toLowerCase() }, ctx.session!.user.id)
 
       return { success: true }
     }),
@@ -276,7 +276,7 @@ export const inviteRouter = router({
       const now = new Date()
       return ctx.db.query.orgInvites.findMany({
         where: and(
-          eq(orgInvites.orgId, input.orgId),
+          eq(orgInvites.orgId, ctx.org.id),
           isNull(orgInvites.usedAt),
           gt(orgInvites.expiresAt, now),
         ),
@@ -300,7 +300,7 @@ export const inviteRouter = router({
     .input(z.object({ orgId: z.string(), inviteId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const invite = await ctx.db.query.orgInvites.findFirst({
-        where: and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, input.orgId)),
+        where: and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, ctx.org.id)),
       })
       if (!invite) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found.' })
@@ -315,7 +315,7 @@ export const inviteRouter = router({
         .where(eq(orgInvites.id, input.inviteId))
 
       // Log activity
-      await logActivity(ctx.db, input.orgId, 'invite.revoked', { email: invite.email }, ctx.session!.user.id)
+      await logActivity(ctx.db, ctx.org.id, 'invite.revoked', { email: invite.email }, ctx.session!.user.id)
 
       return { success: true }
     }),

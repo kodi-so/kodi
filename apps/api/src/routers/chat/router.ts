@@ -60,7 +60,7 @@ export const chatRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Find message and verify it belongs to the org
+      // Find message and verify it belongs to the verified org
       const message = await ctx.db.query.chatMessages.findFirst({
         where: eq(chatMessages.id, input.messageId),
       })
@@ -69,10 +69,10 @@ export const chatRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Message not found' })
       }
 
-      if (message.orgId !== input.orgId) {
+      if (message.orgId !== ctx.org.id) {
         throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Cannot delete message from another org',
+          code: 'NOT_FOUND',
+          message: 'Message not found',
         })
       }
 
@@ -109,8 +109,8 @@ export const chatRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // Membership enforced by memberProcedure middleware
-      const conditions = [eq(chatMessages.orgId, input.orgId), isNull(chatMessages.deletedAt)]
+      const orgId = ctx.org.id
+      const conditions = [eq(chatMessages.orgId, orgId), isNull(chatMessages.deletedAt)]
 
       if (input.before) {
         const cursor = await ctx.db.query.chatMessages.findFirst({
@@ -133,7 +133,7 @@ export const chatRouter = router({
         const welcome = await ctx.db
           .insert(chatMessages)
           .values({
-            orgId: input.orgId,
+            orgId,
             userId: null,
             role: 'assistant',
             content: WELCOME_MESSAGE,
@@ -158,10 +158,11 @@ export const chatRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // 1. Membership enforced by memberProcedure middleware (ctx.membership is available)
-      // 2. Look up the org's instance
+      const orgId = ctx.org.id
+
+      // Look up the org's instance
       const instance = await ctx.db.query.instances.findFirst({
-        where: eq(instances.orgId, input.orgId),
+        where: eq(instances.orgId, orgId),
       })
       if (!instance) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No instance found for this org' })
@@ -173,7 +174,7 @@ export const chatRouter = router({
         })
       }
 
-      // 3. Resolve instance URL (instanceUrl → hostname fallback → OPENCLAW_DEV_URL env)
+      // Resolve instance URL (instanceUrl → hostname fallback → OPENCLAW_DEV_URL env)
       let instanceUrl: string | undefined
       if (instance.instanceUrl) {
         instanceUrl = instance.instanceUrl
@@ -189,13 +190,13 @@ export const chatRouter = router({
         })
       }
 
-      // 4. Fetch conversation history (newest-first) and persist user message in parallel
+      // Fetch conversation history (newest-first) and persist user message in parallel
       const [historyRows, userMessageRows] = await Promise.all([
         ctx.db
           .select({ role: chatMessages.role, content: chatMessages.content })
           .from(chatMessages)
           .where(and(
-            eq(chatMessages.orgId, input.orgId),
+            eq(chatMessages.orgId, orgId),
             eq(chatMessages.status, 'sent'),
             isNull(chatMessages.deletedAt),
           ))
@@ -204,7 +205,7 @@ export const chatRouter = router({
         ctx.db
           .insert(chatMessages)
           .values({
-            orgId: input.orgId,
+            orgId,
             userId: ctx.session.user.id,
             role: 'user',
             content: input.message,
@@ -217,7 +218,7 @@ export const chatRouter = router({
       // Build context-aware messages array
       const messages = buildMessagesWithHistory(historyRows, input.message)
 
-      // 5. Build auth header — decrypt gatewayToken if present
+      // Build auth header — decrypt gatewayToken if present
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       }
@@ -232,7 +233,7 @@ export const chatRouter = router({
         }
       }
 
-      // 6. Forward to OpenClaw via OpenAI-compatible /v1/chat/completions
+      // Forward to OpenClaw via OpenAI-compatible /v1/chat/completions
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60_000)
 
@@ -276,11 +277,11 @@ export const chatRouter = router({
         })
       }
 
-      // 7. Persist assistant message and return both
+      // Persist assistant message and return both
       const [assistantMessage] = await ctx.db
         .insert(chatMessages)
         .values({
-          orgId: input.orgId,
+          orgId,
           userId: null,
           role: 'assistant',
           content: responseText,

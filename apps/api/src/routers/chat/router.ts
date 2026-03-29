@@ -7,6 +7,45 @@ import { TRPCError } from '@trpc/server'
 const WELCOME_MESSAGE =
   "Hey! I'm your Kodi agent. I'm here to help you grow your business — I can research leads, draft outreach emails, track your contacts, and surface opportunities you might be missing. What are you working on?"
 
+const SYSTEM_PROMPT =
+  "You are Kodi, a business growth assistant. You help users research leads, draft outreach emails, track contacts, and surface opportunities. Be concise and actionable."
+
+// ~4 chars per token is a rough but safe estimate for English text
+const CHARS_PER_TOKEN = 4
+// Reserve tokens for the system prompt, the new user message, and the model's reply
+const MAX_HISTORY_TOKENS = 200_000
+
+/**
+ * Builds the messages array for OpenClaw, filling from newest to oldest
+ * until we approach the context window budget.
+ */
+function buildMessagesWithHistory(
+  history: { role: 'user' | 'assistant'; content: string }[],
+  newUserMessage: string,
+): { role: string; content: string }[] {
+  const systemMsg = { role: 'system', content: SYSTEM_PROMPT }
+
+  // Budget remaining after system prompt + new message
+  let budgetChars =
+    MAX_HISTORY_TOKENS * CHARS_PER_TOKEN -
+    SYSTEM_PROMPT.length -
+    newUserMessage.length
+
+  // history is already newest-first — walk backwards to fill budget
+  const included: { role: string; content: string }[] = []
+  for (const msg of history) {
+    const cost = msg.content.length
+    if (budgetChars - cost < 0) break
+    budgetChars -= cost
+    included.push({ role: msg.role, content: msg.content })
+  }
+
+  // Reverse so oldest is first (chronological order)
+  included.reverse()
+
+  return [systemMsg, ...included, { role: 'user', content: newUserMessage }]
+}
+
 export const chatRouter = router({
   /**
    * Deletes a message by ID (soft delete via deletedAt timestamp).
@@ -150,19 +189,33 @@ export const chatRouter = router({
         })
       }
 
-      // 4. Persist user message immediately with status='sent'
-      const userMessageRows = await ctx.db
-        .insert(chatMessages)
-        .values({
-          orgId: input.orgId,
-          userId: ctx.session.user.id,
-          role: 'user',
-          content: input.message,
-          status: 'sent',
-        })
-        .returning()
+      // 4. Fetch conversation history (newest-first) and persist user message in parallel
+      const [historyRows, userMessageRows] = await Promise.all([
+        ctx.db
+          .select({ role: chatMessages.role, content: chatMessages.content })
+          .from(chatMessages)
+          .where(and(
+            eq(chatMessages.orgId, input.orgId),
+            eq(chatMessages.status, 'sent'),
+            isNull(chatMessages.deletedAt),
+          ))
+          .orderBy(desc(chatMessages.createdAt))
+          .limit(200),
+        ctx.db
+          .insert(chatMessages)
+          .values({
+            orgId: input.orgId,
+            userId: ctx.session.user.id,
+            role: 'user',
+            content: input.message,
+            status: 'sent',
+          })
+          .returning(),
+      ])
       const userMessage = userMessageRows[0]!
 
+      // Build context-aware messages array
+      const messages = buildMessagesWithHistory(historyRows, input.message)
 
       // 5. Build auth header — decrypt gatewayToken if present
       const headers: Record<string, string> = {
@@ -190,7 +243,7 @@ export const chatRouter = router({
           headers,
           body: JSON.stringify({
             model: 'openclaw:main',
-            messages: [{ role: 'user', content: input.message }],
+            messages,
           }),
           signal: controller.signal,
         })

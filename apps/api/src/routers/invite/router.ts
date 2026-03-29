@@ -76,8 +76,8 @@ export const inviteRouter = router({
    * Generates a signed JWT invite token, stores it, and sends an email via Resend.
    * In dev (no RESEND_API_KEY), logs the invite link to console instead.
    */
-  send: protectedProcedure
-    .input(z.object({ orgId: z.string(), email: z.string().email() }))
+  send: ownerProcedure
+    .input(z.object({ email: z.string().email() }))
     .mutation(async ({ ctx, input }) => {
       const jwtSecret = env.INVITE_JWT_SECRET
       const appUrl = env.APP_URL ?? 'http://localhost:3000'
@@ -89,22 +89,13 @@ export const inviteRouter = router({
         })
       }
 
-      // 1. Verify caller is org owner
-      const org = await ctx.db.query.organizations.findFirst({
-        where: eq(organizations.id, input.orgId),
-      })
-      if (!org) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Organisation not found.' })
-      }
-      if (org.ownerId !== ctx.session!.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the org owner can send invites.' })
-      }
+      const org = ctx.org
 
-      // 2. Check for an existing active (unused + non-expired) invite for this email+org
+      // Check for an existing active (unused + non-expired) invite for this email+org
       const now = new Date()
       const existing = await ctx.db.query.orgInvites.findFirst({
         where: and(
-          eq(orgInvites.orgId, input.orgId),
+          eq(orgInvites.orgId, ctx.org.id),
           eq(orgInvites.email, input.email.toLowerCase()),
           isNull(orgInvites.usedAt),
           gt(orgInvites.expiresAt, now),
@@ -123,7 +114,7 @@ export const inviteRouter = router({
 
       const payload: InvitePayload = {
         inviteId,
-        orgId: input.orgId,
+        orgId: ctx.org.id,
         email: input.email.toLowerCase(),
         exp: Math.floor(expiresAt.getTime() / 1000),
       }
@@ -132,7 +123,7 @@ export const inviteRouter = router({
       // 4. Insert org_invites row
       await ctx.db.insert(orgInvites).values({
         id: inviteId,
-        orgId: input.orgId,
+        orgId: ctx.org.id,
         email: input.email.toLowerCase(),
         token,
         invitedBy: ctx.session!.user.id,
@@ -183,7 +174,7 @@ export const inviteRouter = router({
       }
 
       // Log activity
-      await logActivity(ctx.db, input.orgId, 'member.invited', { email: input.email.toLowerCase() }, ctx.session!.user.id)
+      await logActivity(ctx.db, ctx.org.id, 'member.invited', { email: input.email.toLowerCase() }, ctx.session!.user.id)
 
       return { success: true }
     }),
@@ -279,24 +270,12 @@ export const inviteRouter = router({
    * invite.getActive — owner only
    * Lists pending (unused + non-expired) invites for the member management UI.
    */
-  getActive: protectedProcedure
-    .input(z.object({ orgId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      // Verify caller is org owner
-      const org = await ctx.db.query.organizations.findFirst({
-        where: eq(organizations.id, input.orgId),
-      })
-      if (!org) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Organisation not found.' })
-      }
-      if (org.ownerId !== ctx.session!.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the org owner can view invites.' })
-      }
-
+  getActive: ownerProcedure
+    .query(async ({ ctx }) => {
       const now = new Date()
       return ctx.db.query.orgInvites.findMany({
         where: and(
-          eq(orgInvites.orgId, input.orgId),
+          eq(orgInvites.orgId, ctx.org.id),
           isNull(orgInvites.usedAt),
           gt(orgInvites.expiresAt, now),
         ),
@@ -317,10 +296,10 @@ export const inviteRouter = router({
    * The owner must belong to the same org as the invite.
    */
   revoke: ownerProcedure
-    .input(z.object({ orgId: z.string(), inviteId: z.string() }))
+    .input(z.object({ inviteId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const invite = await ctx.db.query.orgInvites.findFirst({
-        where: and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, input.orgId)),
+        where: and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, ctx.org.id)),
       })
       if (!invite) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found.' })
@@ -335,7 +314,7 @@ export const inviteRouter = router({
         .where(eq(orgInvites.id, input.inviteId))
 
       // Log activity
-      await logActivity(ctx.db, input.orgId, 'invite.revoked', { email: invite.email }, ctx.session!.user.id)
+      await logActivity(ctx.db, ctx.org.id, 'invite.revoked', { email: invite.email }, ctx.session!.user.id)
 
       return { success: true }
     }),

@@ -341,12 +341,14 @@ function MessageBubble({
   message,
   isSelected,
   onSelect,
+  onHover,
   onDelete,
   onCopy,
 }: {
   message: Message
   isSelected: boolean
   onSelect: (id: string) => void
+  onHover: (id: string | null) => void
   onDelete: (messageId: string) => void
   onCopy: (messageId: string) => void
 }) {
@@ -355,6 +357,18 @@ function MessageBubble({
   const [isHovered, setIsHovered] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+
+  // Notify parent when hover state changes
+  // Only call onHover when entering, not when leaving (parent will handle multiple hovers)
+  const handleMouseEnter = useCallback(() => {
+    setIsHovered(true)
+    onHover(message.id)
+  }, [message.id, onHover])
+
+  const handleMouseLeave = useCallback(() => {
+    setIsHovered(false)
+    // Don't call onHover(null) here — let the next message's hover take over
+  }, [])
 
   const senderName = isUser
     ? message.userName || 'You'
@@ -387,8 +401,8 @@ function MessageBubble({
         className={`flex gap-3 mb-1 group animate-in fade-in slide-in-from-bottom-2 duration-300 px-2 py-1.5 rounded-lg transition-colors ${
           isSelected ? 'bg-zinc-800/50' : 'hover:bg-zinc-900/50'
         }`}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         onContextMenu={handleContextMenu}
         onClick={() => onSelect(message.id)}
         data-message-id={message.id}
@@ -568,6 +582,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
   const [sending, setSending] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null)
   const [deletedMessages, setDeletedMessages] = useState<DeletedMessage[]>([])
 
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -810,6 +825,8 @@ export function ChatInterface({ orgId }: { orgId: string }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMod = e.metaKey || e.ctrlKey
+      // Prioritize hovered message over selected (so hover + shortcut works without clicking)
+      const targetMessageId = hoveredMessageId || selectedMessageId
 
       // ⌘Z — undo last deletion
       if (isMod && e.key === 'z' && !e.shiftKey) {
@@ -820,28 +837,29 @@ export function ChatInterface({ orgId }: { orgId: string }) {
         }
       }
 
-      // ⌘C — copy selected message (only when no text is selected)
-      if (isMod && e.key === 'c' && selectedMessageId) {
+      // ⌘C — copy hovered/selected message (only when no text is selected)
+      if (isMod && e.key === 'c' && targetMessageId) {
         const selection = window.getSelection()
         if (!selection || selection.toString().length === 0) {
           e.preventDefault()
-          handleCopyMessage(selectedMessageId)
+          handleCopyMessage(targetMessageId)
           return
         }
       }
 
-      // Delete / Backspace — delete selected message
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedMessageId) {
+      // Delete / Backspace — delete hovered/selected message
+      if ((e.key === 'Delete' || e.key === 'Backspace') && targetMessageId) {
         // Don't trigger if user is typing in textarea
         if ((e.target as HTMLElement)?.tagName === 'TEXTAREA') return
         e.preventDefault()
-        void handleDeleteMessage(selectedMessageId)
+        void handleDeleteMessage(targetMessageId)
         return
       }
 
       // Escape — deselect
       if (e.key === 'Escape') {
         setSelectedMessageId(null)
+        setHoveredMessageId(null)
       }
 
       // Arrow keys — navigate messages
@@ -851,23 +869,29 @@ export function ChatInterface({ orgId }: { orgId: string }) {
         const msgs = messagesRef.current
         if (msgs.length === 0) return
 
-        if (!selectedMessageId) {
-          setSelectedMessageId(msgs[msgs.length - 1]!.id)
+        if (!targetMessageId) {
+          const newId = msgs[msgs.length - 1]!.id
+          setSelectedMessageId(newId)
+          setHoveredMessageId(newId)
           return
         }
 
-        const idx = msgs.findIndex((m) => m.id === selectedMessageId)
+        const idx = msgs.findIndex((m) => m.id === targetMessageId)
         if (e.key === 'ArrowUp' && idx > 0) {
-          setSelectedMessageId(msgs[idx - 1]!.id)
+          const newId = msgs[idx - 1]!.id
+          setSelectedMessageId(newId)
+          setHoveredMessageId(newId)
         } else if (e.key === 'ArrowDown' && idx < msgs.length - 1) {
-          setSelectedMessageId(msgs[idx + 1]!.id)
+          const newId = msgs[idx + 1]!.id
+          setSelectedMessageId(newId)
+          setHoveredMessageId(newId)
         }
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [selectedMessageId, deletedMessages, handleDeleteMessage, handleCopyMessage, undoLastDelete])
+  }, [selectedMessageId, hoveredMessageId, deletedMessages, handleDeleteMessage, handleCopyMessage, undoLastDelete])
 
   // ── Clean up old undo entries (>30s) ────────────────────────────────────
 
@@ -909,6 +933,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
           message={m}
           isSelected={selectedMessageId === m.id}
           onSelect={setSelectedMessageId}
+          onHover={setHoveredMessageId}
           onDelete={handleDeleteMessage}
           onCopy={handleCopyMessage}
         />,
@@ -922,7 +947,10 @@ export function ChatInterface({ orgId }: { orgId: string }) {
   return (
     <div className="flex flex-col h-full bg-zinc-950" onClick={() => setSelectedMessageId(null)}>
       {/* Message thread */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8">
+      <div
+        className="flex-1 overflow-y-auto px-4 py-4 sm:px-8"
+        onMouseLeave={() => setHoveredMessageId(null)}
+      >
         <div className="max-w-3xl mx-auto">
           {loading ? (
             <div className="flex justify-center items-center h-24">

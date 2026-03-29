@@ -49,12 +49,19 @@ function useTypewriter(fullText: string, active: boolean): string {
 
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({
+  message,
+  onDelete,
+}: {
+  message: Message
+  onDelete: (messageId: string) => void
+}) {
   const isUser = message.role === 'user'
   const text = useTypewriter(message.content, message.animate === true)
+  const [showDelete, setShowDelete] = useState(false)
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 group`}>
       <div
         className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
           isUser
@@ -67,6 +74,38 @@ function MessageBubble({ message }: { message: Message }) {
           <span className="block mt-1 text-xs text-red-300">Failed to send</span>
         )}
       </div>
+      <button
+        onClick={() => setShowDelete(true)}
+        className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 text-zinc-500 hover:text-red-400 shrink-0 mt-1"
+        title="Delete message"
+        aria-label="Delete message"
+      >
+        ✕
+      </button>
+      {showDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm">
+            <p className="text-white mb-4">Delete this message?</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDelete(false)}
+                className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDelete(message.id)
+                  setShowDelete(false)
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -292,6 +331,35 @@ export function ChatInterface({ orgId }: { orgId: string }) {
     }
   }, [input, orgId, sending, addToast])
 
+  // ── Delete message ──────────────────────────────────────────────────────
+
+  const handleDeleteMessage = useCallback(
+    async (messageId: string) => {
+      // Optimistic UI update — remove immediately
+      setMessages((prev) => prev.filter((m) => m.id !== messageId))
+
+      try {
+        await trpc.chat.deleteMessage.mutate({ messageId, orgId })
+      } catch (err: unknown) {
+        // Restore message on error
+        const msg = err instanceof Error ? err.message : String(err)
+        addToast(`Failed to delete message: ${msg}`)
+        // Re-fetch to restore state
+        const history = await trpc.chat.getHistory.query({ orgId, limit: 50 })
+        setMessages(
+          history.map((r) => ({
+            id: r.id,
+            role: r.role as 'user' | 'assistant',
+            content: r.content,
+            status: r.status,
+            animate: false,
+          })),
+        )
+      }
+    },
+    [orgId, addToast],
+  )
+
   // ── Keyboard handling ────────────────────────────────────────────────────
 
   const handleKeyDown = useCallback(
@@ -317,7 +385,11 @@ export function ChatInterface({ orgId }: { orgId: string }) {
         ) : (
           <>
             {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} />
+              <MessageBubble
+                key={m.id}
+                message={m}
+                onDelete={handleDeleteMessage}
+              />
             ))}
             {sending && <TypingIndicator />}
           </>

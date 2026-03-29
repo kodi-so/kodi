@@ -354,6 +354,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
+    setMessages([])
 
     trpc.chat.getHistory
       .query({ orgId, limit: 50 })

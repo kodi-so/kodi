@@ -4,10 +4,18 @@ import { useEffect, useState } from 'react'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import { ProvisionStatus } from './_components/provision-status'
+import { Skeleton } from '@kodi/ui'
 
 type StatusData = {
   id: string
-  status: 'pending' | 'installing' | 'running' | 'error' | 'suspended' | 'deleting' | 'deleted'
+  status:
+    | 'pending'
+    | 'installing'
+    | 'running'
+    | 'error'
+    | 'suspended'
+    | 'deleting'
+    | 'deleted'
   hostname: string | null
   ipAddress: string | null
   errorMessage: string | null
@@ -46,7 +54,7 @@ export default function ProvisionPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-full p-6">
-        <div className="w-6 h-6 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+        <Skeleton className="h-6 w-6 rounded-full bg-indigo-400/40" />
       </div>
     )
   }

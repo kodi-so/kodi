@@ -5,10 +5,10 @@ import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
 
 const WELCOME_MESSAGE =
-  "Hey! I'm your Kodi agent. I'm here to help you grow your business — I can research leads, draft outreach emails, track your contacts, and surface opportunities you might be missing. What are you working on?"
+  "Hey! I'm your Kodi agent. I can join calls, help your team think through plans, answer questions with business context, track next steps, and turn decisions into work across your tools. What are you working on?"
 
 const SYSTEM_PROMPT =
-  "You are Kodi, a business growth assistant. You help users research leads, draft outreach emails, track contacts, and surface opportunities. Be concise and actionable."
+  'You are Kodi, a helpful AI teammate for employees and teams. You help users reason through discussions, answer questions using available business context, capture decisions, clarify next steps, and suggest or execute follow-up work across connected tools. Be concise, practical, and collaborative.'
 
 // ~4 chars per token is a rough but safe estimate for English text
 const CHARS_PER_TOKEN = 4
@@ -21,7 +21,7 @@ const MAX_HISTORY_TOKENS = 200_000
  */
 function buildMessagesWithHistory(
   history: { role: 'user' | 'assistant'; content: string }[],
-  newUserMessage: string,
+  newUserMessage: string
 ): { role: string; content: string }[] {
   const systemMsg = { role: 'system', content: SYSTEM_PROMPT }
 
@@ -108,7 +108,10 @@ export const chatRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const orgId = ctx.org.id
-      const conditions = [eq(chatMessages.orgId, orgId), isNull(chatMessages.deletedAt)]
+      const conditions = [
+        eq(chatMessages.orgId, orgId),
+        isNull(chatMessages.deletedAt),
+      ]
 
       if (input.before) {
         const cursor = await ctx.db.query.chatMessages.findFirst({
@@ -178,7 +181,10 @@ export const chatRouter = router({
         where: eq(instances.orgId, orgId),
       })
       if (!instance) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'No instance found for this org' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No instance found for this org',
+        })
       }
       if (instance.status !== 'running') {
         throw new TRPCError({
@@ -199,7 +205,8 @@ export const chatRouter = router({
       if (!instanceUrl) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: 'Instance has no reachable URL (instanceUrl, hostname, or OPENCLAW_DEV_URL required)',
+          message:
+            'Instance has no reachable URL (instanceUrl, hostname, or OPENCLAW_DEV_URL required)',
         })
       }
 
@@ -208,11 +215,13 @@ export const chatRouter = router({
         ctx.db
           .select({ role: chatMessages.role, content: chatMessages.content })
           .from(chatMessages)
-          .where(and(
-            eq(chatMessages.orgId, orgId),
-            eq(chatMessages.status, 'sent'),
-            isNull(chatMessages.deletedAt),
-          ))
+          .where(
+            and(
+              eq(chatMessages.orgId, orgId),
+              eq(chatMessages.status, 'sent'),
+              isNull(chatMessages.deletedAt)
+            )
+          )
           .orderBy(desc(chatMessages.createdAt))
           .limit(200),
         ctx.db
@@ -286,7 +295,8 @@ export const chatRouter = router({
 
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: err instanceof Error ? err.message : 'Failed to reach instance',
+          message:
+            err instanceof Error ? err.message : 'Failed to reach instance',
         })
       }
 

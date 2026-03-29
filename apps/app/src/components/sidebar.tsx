@@ -2,10 +2,19 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, MessageSquare, Settings, Menu, X, ChevronDown, Check } from 'lucide-react'
+import {
+  LayoutDashboard,
+  MessageSquare,
+  Settings,
+  Menu,
+  X,
+  ChevronDown,
+  Check,
+} from 'lucide-react'
 import { useRef, useState } from 'react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
+import { Button, Card } from '@kodi/ui'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -27,7 +36,9 @@ function OrgSwitcher() {
     return (
       <div className="px-4 py-3 border-b border-zinc-800">
         <p className="text-xs text-zinc-500 mb-0.5">Workspace</p>
-        <p className="text-sm font-medium text-white truncate">{activeOrg.orgName}</p>
+        <p className="text-sm font-medium text-white truncate">
+          {activeOrg.orgName}
+        </p>
       </div>
     )
   }
@@ -35,16 +46,21 @@ function OrgSwitcher() {
   return (
     <div ref={ref} className="relative px-3 py-2 border-b border-zinc-800">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         onBlur={handleBlur}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors text-sm"
+        className="w-full flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm transition-colors hover:border-zinc-700"
       >
-        <span className="text-white font-medium truncate">{activeOrg?.orgName ?? 'Select workspace'}</span>
-        <ChevronDown size={14} className={`text-zinc-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="text-white font-medium truncate">
+          {activeOrg?.orgName ?? 'Select workspace'}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`text-zinc-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
       {open && (
-        <div className="absolute left-3 right-3 top-full mt-1 z-50 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl overflow-hidden">
-          {orgs.map(org => (
+        <Card className="absolute left-3 right-3 top-full z-50 mt-1 overflow-hidden rounded-xl border-zinc-700 bg-zinc-900 shadow-xl">
+          {orgs.map((org) => (
             <button
               key={org.orgId}
               onMouseDown={() => {
@@ -57,10 +73,12 @@ function OrgSwitcher() {
                 <p className="text-white font-medium truncate">{org.orgName}</p>
                 <p className="text-zinc-500 text-xs capitalize">{org.role}</p>
               </div>
-              {org.orgId === activeOrg?.orgId && <Check size={14} className="text-indigo-400 flex-shrink-0" />}
+              {org.orgId === activeOrg?.orgId && (
+                <Check size={14} className="text-indigo-400 flex-shrink-0" />
+              )}
             </button>
           ))}
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -84,7 +102,9 @@ export function Sidebar() {
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
           <span className="text-white font-bold text-sm">K</span>
         </div>
-        <span className="text-white font-semibold text-lg tracking-tight">Kodi</span>
+        <span className="text-white font-semibold text-lg tracking-tight">
+          Kodi
+        </span>
       </div>
 
       {/* Org switcher */}
@@ -95,19 +115,21 @@ export function Sidebar() {
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
-            <Link
+            <Button
               key={href}
-              href={href}
-              onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              asChild
+              variant={active ? 'secondary' : 'ghost'}
+              className={`w-full justify-start gap-3 px-3 py-2.5 text-sm font-medium ${
                 active
-                  ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  ? 'border border-indigo-500/20 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300'
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
               }`}
             >
-              <Icon size={18} />
-              {label}
-            </Link>
+              <Link href={href} onClick={() => setMobileOpen(false)}>
+                <Icon size={18} />
+                {label}
+              </Link>
+            </Button>
           )
         })}
       </nav>
@@ -117,22 +139,27 @@ export function Sidebar() {
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
             <span className="text-white text-xs font-bold">
-              {session?.user?.name?.[0]?.toUpperCase() ?? session?.user?.email?.[0]?.toUpperCase() ?? '?'}
+              {session?.user?.name?.[0]?.toUpperCase() ??
+                session?.user?.email?.[0]?.toUpperCase() ??
+                '?'}
             </span>
           </div>
           <div className="min-w-0">
             <p className="text-white text-sm font-medium truncate">
               {session?.user?.name ?? 'User'}
             </p>
-            <p className="text-zinc-500 text-xs truncate">{session?.user?.email}</p>
+            <p className="text-zinc-500 text-xs truncate">
+              {session?.user?.email}
+            </p>
           </div>
         </div>
-        <button
+        <Button
           onClick={handleSignOut}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-zinc-400 text-sm hover:text-white hover:bg-zinc-800 transition-colors"
+          variant="ghost"
+          className="w-full justify-center gap-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
         >
           Sign out
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -145,13 +172,15 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile: hamburger button */}
-      <button
+      <Button
         onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
+        variant="outline"
+        size="icon"
+        className="fixed left-4 top-4 z-50 border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-900 hover:text-white md:hidden"
         aria-label="Open menu"
       >
         <Menu size={20} />
-      </button>
+      </Button>
 
       {/* Mobile: drawer overlay */}
       {mobileOpen && (

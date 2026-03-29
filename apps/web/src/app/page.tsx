@@ -1,9 +1,10 @@
+import { Badge, Button, Card, CardContent, Separator } from '@kodi/ui'
+
 export default function HomePage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '#'
 
   return (
     <div className="site-root">
-
       {/* ─── Noise texture overlay ─────────────────────────────── */}
       <div className="noise-overlay" aria-hidden="true" />
 
@@ -11,19 +12,27 @@ export default function HomePage() {
       <nav className="site-nav">
         <div className="nav-inner">
           <div className="nav-logo">
-            <div className="kodi-mark" aria-hidden="true">K</div>
+            <div className="kodi-mark" aria-hidden="true">
+              K
+            </div>
             <span className="nav-wordmark">Kodi</span>
           </div>
 
           <div className="nav-links">
-            <a href="#how-it-works" className="nav-link">How it works</a>
-            <a href="#features" className="nav-link">Features</a>
-            <a href="#pricing" className="nav-link">Pricing</a>
+            <a href="#how-it-works" className="nav-link">
+              How it works
+            </a>
+            <a href="#features" className="nav-link">
+              Features
+            </a>
+            <a href="#pricing" className="nav-link">
+              Pricing
+            </a>
           </div>
 
-          <a href={appUrl} className="btn-primary nav-cta">
-            Get early access
-          </a>
+          <Button asChild className="nav-cta btn-primary">
+            <a href={appUrl}>Get early access</a>
+          </Button>
         </div>
       </nav>
 
@@ -35,37 +44,46 @@ export default function HomePage() {
 
         <div className="hero-inner">
           <div className="hero-content">
-            <div className="hero-badge animate-in delay-0">
+            <Badge
+              variant="outline"
+              className="hero-badge animate-in delay-0 border-[var(--accent-border)] bg-[var(--accent-dim)] text-[var(--accent-text)]"
+            >
               <span className="pulse-dot" aria-hidden="true" />
-              <span className="hero-badge-text">Early access · Built for small sales teams</span>
-            </div>
+              <span className="hero-badge-text">
+                Early access · Built for teams that work in motion
+              </span>
+            </Badge>
 
             <h1 className="hero-heading animate-in delay-1">
-              Your team's first<br />
-              <em className="hero-serif">dedicated</em>{' '}
-              <span className="hero-accent">AI sales rep.</span>
+              Your team's first
+              <br />
+              <em className="hero-serif">in-the-room</em>{' '}
+              <span className="hero-accent">AI teammate.</span>
             </h1>
 
             <p className="hero-body animate-in delay-2">
-              Kodi gives your team a dedicated AI agent that researches leads, drafts outreach,
-              and tracks every conversation — so you can close deals, not chase admin.
+              Kodi joins calls, listens to plans and decisions, answers
+              questions with live business context, and turns every discussion
+              into tracked work your agent can carry forward.
             </p>
 
             <p className="hero-sub animate-in delay-3">
-              One click to deploy. Works with your Gmail. Your whole team, one shared agent.
+              Connect meetings, messaging, ticketing, and the rest of your
+              stack. One shared agent for your whole team.
             </p>
 
             <div className="hero-actions animate-in delay-3">
-              <a href={appUrl} className="btn-primary btn-lg">
-                Get your agent now →
-              </a>
-              <a href="#how-it-works" className="btn-ghost btn-lg">
-                See how it works
-              </a>
+              <Button asChild className="btn-primary btn-lg">
+                <a href={appUrl}>Get your agent now →</a>
+              </Button>
+              <Button asChild variant="outline" className="btn-ghost btn-lg">
+                <a href="#how-it-works">See how it works</a>
+              </Button>
             </div>
 
             <p className="hero-fine animate-in delay-4">
-              No credit card required · Live in under 5 minutes · No DevOps needed
+              No credit card required · Live in under 5 minutes · Connects to
+              the tools you already use
             </p>
           </div>
 
@@ -101,13 +119,20 @@ export default function HomePage() {
                     <span className="feed-mono priority-label">P0</span>
                   </div>
                   <div className="feed-row-body">
-                    <div className="feed-row-headline">Acme Corp hasn't heard from you in 8 days</div>
+                    <div className="feed-row-headline">
+                      Roadmap review ended with 3 decisions that still need
+                      owners
+                    </div>
                     <div className="feed-row-meta">
-                      <span className="feed-tag feed-tag-critical">TRIAL ENDS FRI</span>
-                      <span className="feed-row-sub">high churn risk</span>
+                      <span className="feed-tag feed-tag-critical">
+                        CALL SUMMARY READY
+                      </span>
+                      <span className="feed-row-sub">
+                        tickets prepared for Linear and Jira
+                      </span>
                     </div>
                   </div>
-                  <button className="feed-action-btn">Draft follow-up</button>
+                  <button className="feed-action-btn">Assign tasks</button>
                 </div>
 
                 <div className="feed-row feed-row-warn">
@@ -116,13 +141,19 @@ export default function HomePage() {
                     <span className="feed-mono priority-label">P1</span>
                   </div>
                   <div className="feed-row-body">
-                    <div className="feed-row-headline">3 leads from Tuesday's webinar — not contacted</div>
+                    <div className="feed-row-headline">
+                      Someone asked, "Can we ship by Friday?" during the Zoom
+                    </div>
                     <div className="feed-row-meta">
-                      <span className="feed-tag feed-tag-warn">UNCONTACTED</span>
-                      <span className="feed-row-sub">Sarah Chen, Marcus Bell, +1</span>
+                      <span className="feed-tag feed-tag-warn">
+                        LIVE ANSWER READY
+                      </span>
+                      <span className="feed-row-sub">
+                        backed by sprint status and support volume
+                      </span>
                     </div>
                   </div>
-                  <button className="feed-action-btn">Research all</button>
+                  <button className="feed-action-btn">Send answer</button>
                 </div>
 
                 <div className="feed-row feed-row-good">
@@ -131,24 +162,33 @@ export default function HomePage() {
                     <span className="feed-mono priority-label">P1</span>
                   </div>
                   <div className="feed-row-body">
-                    <div className="feed-row-headline">Jordan at Stripe opened your email 4 times</div>
+                    <div className="feed-row-headline">
+                      Slack thread in #launch changed tomorrow's rollout plan
+                    </div>
                     <div className="feed-row-meta">
-                      <span className="feed-tag feed-tag-good">WARM SIGNAL</span>
-                      <span className="feed-row-sub">sent 2 days ago</span>
+                      <span className="feed-tag feed-tag-good">
+                        PLAN UPDATED
+                      </span>
+                      <span className="feed-row-sub">
+                        meeting notes, docs, and tasks are in sync
+                      </span>
                     </div>
                   </div>
-                  <button className="feed-action-btn">Follow up</button>
+                  <button className="feed-action-btn">Review changes</button>
                 </div>
               </div>
 
               {/* Footer bar */}
               <div className="feed-footer-bar">
-                <span className="feed-mono feed-footer-text">↑ kodi watches your pipeline 24/7</span>
+                <span className="feed-mono feed-footer-text">
+                  ↑ kodi tracks decisions across calls, chat, and tickets
+                </span>
               </div>
             </div>
 
             <p className="mockup-caption">
-              Kodi surfaces what needs your attention — so nothing slips through.
+              Kodi turns conversations into tracked work — so nothing disappears
+              after the meeting.
             </p>
           </div>
         </div>
@@ -158,21 +198,28 @@ export default function HomePage() {
       <section id="how-it-works" className="section-bordered">
         <div className="section-inner">
           <div className="section-header">
-            <div className="section-num" aria-hidden="true">01</div>
+            <div className="section-num" aria-hidden="true">
+              01
+            </div>
             <div className="section-header-text">
               <div className="section-label">How it works</div>
-              <h2 className="section-heading">Up and running in minutes.</h2>
+              <h2 className="section-heading">
+                Bring your agent into the work fast.
+              </h2>
             </div>
           </div>
 
           <div className="steps-table">
             <div className="steps-table-row">
-              <div className="step-index"><span className="feed-mono step-index-num">01</span></div>
+              <div className="step-index">
+                <span className="feed-mono step-index-num">01</span>
+              </div>
               <div className="step-content">
                 <h3 className="step-title">Sign up &amp; launch</h3>
                 <p className="step-body">
-                  Create your account and click "Launch agent." Kodi spins up your own dedicated AI instance
-                  in under 5 minutes — no servers to manage, ever.
+                  Create your account and click "Launch agent." Kodi spins up
+                  your own dedicated AI instance in under 5 minutes — no servers
+                  to manage, ever.
                 </p>
               </div>
               <div className="step-detail">
@@ -181,30 +228,38 @@ export default function HomePage() {
             </div>
 
             <div className="steps-table-row">
-              <div className="step-index"><span className="feed-mono step-index-num">02</span></div>
+              <div className="step-index">
+                <span className="feed-mono step-index-num">02</span>
+              </div>
               <div className="step-content">
-                <h3 className="step-title">Connect your tools</h3>
+                <h3 className="step-title">Connect your stack</h3>
                 <p className="step-body">
-                  Link Gmail in one click. Kodi reads your email history, learns who you've talked to,
-                  and starts building context on your pipeline — automatically.
+                  Connect the tools your team already uses: conferencing,
+                  messaging, docs, ticketing, and internal systems. Kodi starts
+                  building shared context across all of them.
                 </p>
               </div>
               <div className="step-detail">
-                <span className="step-detail-badge feed-mono">1 click</span>
+                <span className="step-detail-badge feed-mono">fast setup</span>
               </div>
             </div>
 
             <div className="steps-table-row steps-table-row-last">
-              <div className="step-index"><span className="feed-mono step-index-num">03</span></div>
+              <div className="step-index">
+                <span className="feed-mono step-index-num">03</span>
+              </div>
               <div className="step-content">
-                <h3 className="step-title">Let the agent work</h3>
+                <h3 className="step-title">Bring Kodi into the room</h3>
                 <p className="step-body">
-                  Kodi surfaces what matters every day: stale leads, warm replies, follow-ups due.
-                  Ask it anything. It drafts, researches, and remembers — so you don't have to.
+                  Kodi joins calls, listens to the conversation, answers
+                  questions with live business data, tracks next steps, and
+                  creates the tasks or tickets needed to keep work moving.
                 </p>
               </div>
               <div className="step-detail">
-                <span className="step-detail-badge feed-mono step-detail-accent feed-mono">ongoing</span>
+                <span className="step-detail-badge feed-mono step-detail-accent feed-mono">
+                  ongoing
+                </span>
               </div>
             </div>
           </div>
@@ -215,13 +270,17 @@ export default function HomePage() {
       <section id="features" className="section-padded">
         <div className="section-inner">
           <div className="section-header">
-            <div className="section-num" aria-hidden="true">02</div>
+            <div className="section-num" aria-hidden="true">
+              02
+            </div>
             <div className="section-header-text">
               <div className="section-label">Features</div>
-              <h2 className="section-heading">Everything your pipeline needs.</h2>
+              <h2 className="section-heading">
+                Everything your team needs to turn talk into execution.
+              </h2>
               <p className="section-sub">
-                Kodi doesn't replace your team. It's the teammate that never forgets, never sleeps,
-                and never drops a follow-up.
+                Kodi doesn't replace your team. It stays in the loop, keeps the
+                context, and follows through after the meeting ends.
               </p>
             </div>
           </div>
@@ -230,15 +289,18 @@ export default function HomePage() {
             <div className="feature-row">
               <div className="feature-num feed-mono">01</div>
               <div className="feature-body">
-                <h3 className="feature-title">The Feed — Your daily action list.</h3>
+                <h3 className="feature-title">
+                  Meeting Memory — Every decision captured.
+                </h3>
                 <p className="feature-desc">
-                  Every morning, Kodi surfaces your most important actions — stale deals, warm replies,
-                  leads that need attention. No dashboards to check. Just what needs doing.
+                  Kodi remembers what was said, what was decided, and what still
+                  needs action across meetings, chats, and follow-up work. No
+                  manual note wrangling required.
                 </p>
               </div>
               <div className="feature-tags">
-                <span className="feature-tag">Prioritized</span>
-                <span className="feature-tag">Auto-updated</span>
+                <span className="feature-tag">Auto-captured</span>
+                <span className="feature-tag">Cross-tool</span>
                 <span className="feature-tag">Actionable</span>
               </div>
             </div>
@@ -246,41 +308,51 @@ export default function HomePage() {
             <div className="feature-row">
               <div className="feature-num feed-mono">02</div>
               <div className="feature-body">
-                <h3 className="feature-title">Lead Research — Company intel in seconds.</h3>
+                <h3 className="feature-title">
+                  Live Answers — Ask in the moment.
+                </h3>
                 <p className="feature-desc">
-                  Ask Kodi about any company or person. Get a sharp research card — overview, key people,
-                  recent news, funding — instantly.
+                  Ask Kodi a question during the call and get a response
+                  grounded in the business data your team already runs on, right
+                  when you need it.
                 </p>
               </div>
               <div className="feature-tags">
-                <span className="feature-tag">Company intel</span>
-                <span className="feature-tag">People search</span>
-                <span className="feature-tag">News tracking</span>
+                <span className="feature-tag">Real-time context</span>
+                <span className="feature-tag">Shared truth</span>
+                <span className="feature-tag">Decision support</span>
               </div>
             </div>
 
             <div className="feature-row">
               <div className="feature-num feed-mono">03</div>
               <div className="feature-body">
-                <h3 className="feature-title">Email Drafts — Personalized outreach, fast.</h3>
+                <h3 className="feature-title">
+                  Task Handoff — Decisions become tickets.
+                </h3>
                 <p className="feature-desc">
-                  Tell Kodi who to write to and why. It crafts a personalized email using everything it knows —
-                  past conversations, their company, your product.
+                  Kodi tracks exactly what needs to happen next and creates work
+                  in the ticketing system your team already uses, with owners,
+                  context, and follow-through intact.
                 </p>
               </div>
               <div className="feature-tags">
-                <span className="feature-tag">Cold outreach</span>
-                <span className="feature-tag">Follow-ups</span>
-                <span className="feature-tag">Personalized</span>
+                <span className="feature-tag">Ticket creation</span>
+                <span className="feature-tag">Clear owners</span>
+                <span className="feature-tag">No dropped work</span>
               </div>
             </div>
 
             <div className="feature-row">
               <div className="feature-num feed-mono">04</div>
               <div className="feature-body">
-                <h3 className="feature-title">Shared Team Brain — One agent. Whole team.</h3>
+                <h3 className="feature-title">
+                  Shared Team Brain — One agent. Whole team.
+                </h3>
                 <p className="feature-desc">
-                  Everyone works with the same agent, sees the same context. No more knowledge siloed in inboxes.
+                  Everyone works with the same agent and the same source of
+                  context. No more decisions trapped in one person's calendar,
+                  inbox, or Slack DM.
                 </p>
               </div>
               <div className="feature-tags">
@@ -292,27 +364,36 @@ export default function HomePage() {
             <div className="feature-row">
               <div className="feature-num feed-mono">05</div>
               <div className="feature-body">
-                <h3 className="feature-title">Natural Language — Ask it anything.</h3>
+                <h3 className="feature-title">
+                  Natural Language — Delegate in plain English.
+                </h3>
                 <p className="feature-desc">
-                  "What happened with the Notion deal?" "Who have I not followed up with this week?" It knows.
+                  "What changed in today's planning call?" "Create the follow-up
+                  tasks and send the recap." Kodi understands the request and
+                  carries it through connected tools.
                 </p>
               </div>
               <div className="feature-tags">
-                <span className="feature-tag">Full context</span>
-                <span className="feature-tag">Instant answers</span>
+                <span className="feature-tag">Plain English</span>
+                <span className="feature-tag">Action taking</span>
               </div>
             </div>
 
             <div className="feature-row feature-row-accent">
               <div className="feature-num feed-mono">06</div>
               <div className="feature-body">
-                <h3 className="feature-title">Your Own Instance — Private by design.</h3>
+                <h3 className="feature-title">
+                  Your Own Instance — Private by design.
+                </h3>
                 <p className="feature-desc">
-                  Every team gets a dedicated agent. Your data never touches another company's instance.
+                  Every team gets a dedicated agent. Your data never touches
+                  another company's instance.
                 </p>
               </div>
               <div className="feature-tags">
-                <span className="feature-tag feature-tag-accent">Dedicated</span>
+                <span className="feature-tag feature-tag-accent">
+                  Dedicated
+                </span>
                 <span className="feature-tag feature-tag-accent">Isolated</span>
               </div>
             </div>
@@ -324,34 +405,48 @@ export default function HomePage() {
       <section className="section-bordered">
         <div className="section-inner">
           <div className="section-header">
-            <div className="section-num" aria-hidden="true">03</div>
+            <div className="section-num" aria-hidden="true">
+              03
+            </div>
             <div className="section-header-text">
               <div className="section-label">Sound familiar?</div>
-              <h2 className="section-heading">The real cost<br />of not having Kodi.</h2>
+              <h2 className="section-heading">
+                The real cost
+                <br />
+                of work that disappears.
+              </h2>
               <p className="section-sub">
-                Every hour spent on admin is an hour not spent closing. Small teams can't afford the waste.
+                Teams move fast, but decisions still get lost between meetings,
+                chat threads, and ticket backlogs.
               </p>
             </div>
           </div>
 
           <div className="pain-grid">
             {[
-              'Spending hours researching leads that go nowhere',
-              'Follow-ups falling through the cracks',
-              'Writing the same prospecting emails over and over',
-              'Losing context when teammates change',
-              "Can't afford a bigger team, but need to grow",
-              'Switching between 5 tools to find one answer',
+              'Important decisions getting lost after the call ends',
+              'Leaving meetings without clear owners or next steps',
+              'Switching between chat, docs, tickets, and dashboards to find one answer',
+              'Re-explaining the same context in every tool and thread',
+              'Manual follow-up work piling up after every discussion',
+              'No agent that can both understand the conversation and do the work',
             ].map((pain, i) => (
               <div key={pain} className="pain-item">
                 <span className="pain-x feed-mono">✕</span>
-                <span className="pain-num feed-mono">{String(i + 1).padStart(2, '0')}</span>
+                <span className="pain-num feed-mono">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
                 <p className="pain-text">{pain}</p>
               </div>
             ))}
             <div className="pain-resolution">
-              <span className="pain-check" aria-hidden="true">→</span>
-              <p>Kodi handles all of this. You focus on closing.</p>
+              <span className="pain-check" aria-hidden="true">
+                →
+              </span>
+              <p>
+                Kodi keeps the context, answers the question, and carries the
+                work forward.
+              </p>
             </div>
           </div>
         </div>
@@ -361,72 +456,112 @@ export default function HomePage() {
       <section id="pricing" className="section-padded">
         <div className="section-inner">
           <div className="section-header">
-            <div className="section-num" aria-hidden="true">04</div>
+            <div className="section-num" aria-hidden="true">
+              04
+            </div>
             <div className="section-header-text">
               <div className="section-label">Pricing</div>
-              <h2 className="section-heading">One team. One agent.<br />One price.</h2>
+              <h2 className="section-heading">
+                One team. One agent.
+                <br />
+                One price.
+              </h2>
               <p className="section-sub">
-                Flat per-team pricing — not per seat. Your whole team uses the same agent for one monthly fee.
+                Flat per-team pricing — not per seat. Your whole team uses the
+                same agent for one monthly fee.
               </p>
             </div>
           </div>
 
           <div className="pricing-grid">
             {/* Starter */}
-            <div className="pricing-card">
-              <div className="pricing-tier-label feed-mono">STARTER</div>
-              <div className="pricing-price-row">
-                <span className="pricing-amount">$49</span>
-                <span className="pricing-period feed-mono">/mo</span>
-              </div>
-              <p className="pricing-desc">For small teams getting their first AI agent.</p>
-              <a href={appUrl} className="btn-ghost btn-block">Start free trial</a>
-              <ul className="pricing-features">
-                {[
-                  'Up to 5 team members',
-                  'Dedicated OpenClaw instance',
-                  'Gmail integration',
-                  'Lead research & email drafting',
-                  'The Feed — daily action items',
-                  'Chat with your agent',
-                  '$20 AI credits/month included',
-                ].map(f => (
-                  <li key={f} className="pricing-feature">
-                    <span className="check feed-mono" aria-hidden="true">✓</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Card className="pricing-card border-[var(--border)] bg-[var(--bg-3)] text-[var(--text)] shadow-none">
+              <CardContent className="p-0">
+                <div className="pricing-tier-label feed-mono">STARTER</div>
+                <div className="pricing-price-row">
+                  <span className="pricing-amount">$49</span>
+                  <span className="pricing-period feed-mono">/mo</span>
+                </div>
+                <p className="pricing-desc">
+                  For teams bringing an agent into calls, chat, and
+                  follow-through.
+                </p>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="btn-block btn-ghost"
+                >
+                  <a href={appUrl}>Start free trial</a>
+                </Button>
+                <Separator className="my-6 bg-[var(--border)]" />
+                <ul className="pricing-features">
+                  {[
+                    'Up to 5 team members',
+                    'Dedicated OpenClaw instance',
+                    'Meeting + messaging integrations',
+                    'Live answers with business context',
+                    'Auto-created tasks and tickets',
+                    'Chat with your agent',
+                    '$20 AI credits/month included',
+                  ].map((f) => (
+                    <li key={f} className="pricing-feature">
+                      <span className="check feed-mono" aria-hidden="true">
+                        ✓
+                      </span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
 
             {/* Pro */}
-            <div className="pricing-card pricing-card-featured">
-              <div className="pricing-popular-badge feed-mono">MOST POPULAR</div>
-              <div className="pricing-tier-label feed-mono" style={{ color: 'var(--accent)' }}>PRO</div>
-              <div className="pricing-price-row">
-                <span className="pricing-amount">$99</span>
-                <span className="pricing-period feed-mono">/mo</span>
-              </div>
-              <p className="pricing-desc">For teams serious about growing without headcount.</p>
-              <a href={appUrl} className="btn-primary btn-block">Start free trial</a>
-              <ul className="pricing-features">
-                {[
-                  'Unlimited team members',
-                  'Everything in Starter',
-                  'Priority AI (faster responses)',
-                  'Workflow automation',
-                  'HubSpot + LinkedIn integrations',
-                  'Activity audit log',
-                  '$50 AI credits/month included',
-                  'Priority support',
-                ].map(f => (
-                  <li key={f} className="pricing-feature">
-                    <span className="check check-accent feed-mono" aria-hidden="true">✓</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Card className="pricing-card pricing-card-featured border-[var(--accent-border)] bg-[var(--bg-3)] text-[var(--text)] shadow-none">
+              <CardContent className="p-0">
+                <Badge className="pricing-popular-badge feed-mono border-0 bg-[var(--accent)] text-[var(--bg)] hover:bg-[var(--accent)]">
+                  MOST POPULAR
+                </Badge>
+                <div
+                  className="pricing-tier-label feed-mono"
+                  style={{ color: 'var(--accent)' }}
+                >
+                  PRO
+                </div>
+                <div className="pricing-price-row">
+                  <span className="pricing-amount">$99</span>
+                  <span className="pricing-period feed-mono">/mo</span>
+                </div>
+                <p className="pricing-desc">
+                  For teams ready to automate work across their whole stack.
+                </p>
+                <Button asChild className="btn-block btn-primary">
+                  <a href={appUrl}>Start free trial</a>
+                </Button>
+                <Separator className="my-6 bg-[var(--accent-border)]" />
+                <ul className="pricing-features">
+                  {[
+                    'Unlimited team members',
+                    'Everything in Starter',
+                    'Priority AI (faster responses)',
+                    'Workflow automation',
+                    'Advanced tool integrations',
+                    'Activity audit log',
+                    '$50 AI credits/month included',
+                    'Priority support',
+                  ].map((f) => (
+                    <li key={f} className="pricing-feature">
+                      <span
+                        className="check check-accent feed-mono"
+                        aria-hidden="true"
+                      >
+                        ✓
+                      </span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           </div>
 
           <p className="pricing-footer">
@@ -444,19 +579,23 @@ export default function HomePage() {
           <div className="cta-layout">
             <div className="cta-text">
               <h2 className="cta-heading">
-                Stop managing leads.<br />
-                <span className="hero-accent">Start closing them.</span>
+                Stop ending meetings with loose ends.
+                <br />
+                <span className="hero-accent">
+                  Start assigning them to Kodi.
+                </span>
               </h2>
               <p className="cta-body">
-                Your team deserves an AI agent that actually understands your business.
-                Kodi is ready in under 5 minutes.
+                Give your team an agent that can join the conversation, answer
+                with real business context, and complete the follow-through
+                across the tools you already use.
               </p>
               <p className="cta-fine">
-                No engineers required. No configuration. No nonsense.
+                No engineers required. No brittle handoffs. No lost context.
               </p>
-              <a href={appUrl} className="btn-primary btn-lg">
-                Get your agent — free for 14 days →
-              </a>
+              <Button asChild className="btn-primary btn-lg">
+                <a href={appUrl}>Bring Kodi to your team →</a>
+              </Button>
             </div>
 
             <div className="cta-stats" aria-hidden="true">
@@ -483,16 +622,25 @@ export default function HomePage() {
       <footer className="site-footer">
         <div className="footer-inner">
           <div className="footer-logo">
-            <div className="kodi-mark kodi-mark-sm" aria-hidden="true">K</div>
+            <div className="kodi-mark kodi-mark-sm" aria-hidden="true">
+              K
+            </div>
             <span className="footer-wordmark">Kodi</span>
           </div>
           <p className="footer-copy feed-mono">
-            © <span suppressHydrationWarning>{new Date().getFullYear()}</span> Kodi. Built for small teams that want to win.
+            © <span suppressHydrationWarning>{new Date().getFullYear()}</span>{' '}
+            Kodi. Built for teams that want their agent in the room.
           </p>
           <div className="footer-links">
-            <a href="/privacy" className="footer-link">Privacy</a>
-            <a href="/terms" className="footer-link">Terms</a>
-            <a href="mailto:hello@kodi.so" className="footer-link">Contact</a>
+            <a href="/privacy" className="footer-link">
+              Privacy
+            </a>
+            <a href="/terms" className="footer-link">
+              Terms
+            </a>
+            <a href="mailto:hello@kodi.so" className="footer-link">
+              Contact
+            </a>
           </div>
         </div>
       </footer>

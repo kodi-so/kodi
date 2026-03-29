@@ -460,7 +460,7 @@ export default function HomePage() {
           --radius-lg: 2rem;
           --radius-md: 1.25rem;
           --radius-sm: 0.85rem;
-          --font-display: 'Gugi', sans-serif;
+          --font-display: 'Plus Jakarta Sans', sans-serif;
           --font-body: 'IBM Plex Sans', sans-serif;
         }
 

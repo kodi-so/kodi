@@ -1,5 +1,7 @@
 # Kodi
 
+A platform for teams that want an AI agent in the room. Kodi joins calls, keeps shared context across tools, answers questions with business data, and turns decisions into tracked follow-through work.
+
 A modern monorepo built with Turborepo, Bun, and deployed on Railway.
 
 ## Structure
@@ -26,11 +28,13 @@ kodi/
 ### Setup
 
 1. **Install dependencies**
+
    ```bash
    bun install
    ```
 
 2. **Set up environment variables** — copy and fill in each:
+
    ```bash
    cp apps/web/.env.example apps/web/.env.local
    cp apps/app/.env.example apps/app/.env.local
@@ -39,6 +43,7 @@ kodi/
    ```
 
 3. **Run database migrations** (requires `DATABASE_URL` to be set in `packages/db/.env`):
+
    ```bash
    cd packages/db && bun run db:push
    ```
@@ -50,11 +55,11 @@ kodi/
 
 ### Apps & Ports
 
-| App | Port | Description |
-|-----|------|-------------|
-| `web` | 3000 | Landing site |
+| App   | Port | Description     |
+| ----- | ---- | --------------- |
+| `web` | 3000 | Landing site    |
 | `app` | 3001 | Web application |
-| `api` | 3002 | API server |
+| `api` | 3002 | API server      |
 
 ## Deployment (Railway)
 

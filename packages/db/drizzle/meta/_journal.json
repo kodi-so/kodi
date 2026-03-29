@@ -71,6 +71,13 @@
       "when": 1774573043070,
       "tag": "0009_giant_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774780722345,
+      "tag": "0010_groovy_molten_man",
+      "breakpoints": true
     }
   ]
 }

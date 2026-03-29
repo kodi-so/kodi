@@ -1,1872 +1,1411 @@
-import { Badge, Button, Card, CardContent, Separator } from '@kodi/ui'
+import { Badge, Button, Card, CardContent } from '@kodi/ui'
+
+const integrations = [
+  'Zoom',
+  'Google Meet',
+  'Slack',
+  'Microsoft Teams',
+  'Linear',
+  'Jira',
+  'Notion',
+  'HubSpot',
+]
+
+const valueCards = [
+  {
+    eyebrow: 'Decision capture',
+    title: 'Leave the meeting with work already moving.',
+    body: 'Kodi tracks decisions, owners, blockers, and open questions while your team is still talking, so nothing relies on memory after the call ends.',
+  },
+  {
+    eyebrow: 'Live business context',
+    title: 'Answer the hard question before the room goes quiet.',
+    body: 'Ask Kodi about roadmap status, customer history, team capacity, or blockers and get an answer grounded in the systems your team already trusts.',
+  },
+  {
+    eyebrow: 'Execution across tools',
+    title: 'Delegate follow-through without changing your stack.',
+    body: 'Create tickets, send recaps, update docs, and push next steps into the tools your team already uses instead of adding another workflow to manage.',
+  },
+]
+
+const roleCards = [
+  {
+    role: 'Founders',
+    body: 'Stay inside the critical conversations without becoming the person who has to remember every decision afterward.',
+  },
+  {
+    role: 'Ops leaders',
+    body: 'Turn recurring meetings into reliable systems with cleaner handoffs, better visibility, and less manual cleanup.',
+  },
+  {
+    role: 'Team leads',
+    body: 'Give people instant answers, clearer ownership, and one shared source of truth across meetings, chat, and tickets.',
+  },
+]
+
+const workflowSteps = [
+  {
+    step: '01',
+    title: 'Connect the tools your team already relies on',
+    body: 'Meetings, chat, docs, ticketing, and the internal systems your people use every day all become part of the same context layer.',
+    detail: 'Fast setup',
+  },
+  {
+    step: '02',
+    title: 'Bring Kodi into the conversation',
+    body: 'Kodi joins calls, listens for decisions, and answers live questions with business context when your team needs clarity in the moment.',
+    detail: 'Live support',
+  },
+  {
+    step: '03',
+    title: 'Let the agent carry the work forward',
+    body: 'Recaps, tickets, ownership, and next steps are pushed into the right tools so the meeting actually turns into execution.',
+    detail: 'Automatic follow-through',
+  },
+]
+
+const starterFeatures = [
+  'Up to 5 team members',
+  'Dedicated Kodi instance',
+  'Meeting and messaging integrations',
+  'Live answers with business context',
+  'Auto-created tasks and recaps',
+  '14-day free trial',
+]
+
+const proFeatures = [
+  'Unlimited team members',
+  'Everything in Starter',
+  'Advanced workflow automation',
+  'Priority model capacity',
+  'Expanded tool integrations',
+  'Priority support',
+]
 
 export default function HomePage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '#'
 
   return (
     <div className="site-root">
-      {/* ─── Noise texture overlay ─────────────────────────────── */}
-      <div className="noise-overlay" aria-hidden="true" />
+      <div className="page-glow page-glow-left" aria-hidden="true" />
+      <div className="page-glow page-glow-right" aria-hidden="true" />
+      <div className="grid-overlay" aria-hidden="true" />
 
-      {/* ─── Nav ─────────────────────────────────────────────────── */}
       <nav className="site-nav">
-        <div className="nav-inner">
-          <div className="nav-logo">
-            <div className="kodi-mark" aria-hidden="true">
-              K
-            </div>
-            <span className="nav-wordmark">Kodi</span>
-          </div>
+        <div className="nav-shell">
+          <a href="#" className="brand-lockup" aria-label="Kodi home">
+            <span className="brand-mark">K</span>
+            <span className="brand-wordmark">Kodi</span>
+          </a>
 
           <div className="nav-links">
+            <a href="#features" className="nav-link">
+              Why Kodi
+            </a>
             <a href="#how-it-works" className="nav-link">
               How it works
-            </a>
-            <a href="#features" className="nav-link">
-              Features
             </a>
             <a href="#pricing" className="nav-link">
               Pricing
             </a>
           </div>
 
-          <Button asChild className="nav-cta btn-primary">
-            <a href={appUrl}>Get early access</a>
-          </Button>
+          <div className="nav-actions">
+            <a href="mailto:hello@kodi.so" className="nav-text-link">
+              Book a walkthrough
+            </a>
+            <Button asChild className="cta-button nav-cta">
+              <a href={appUrl}>Start free trial</a>
+            </Button>
+          </div>
         </div>
       </nav>
 
-      {/* ─── Hero ────────────────────────────────────────────────── */}
-      <section className="hero-section">
-        <div className="hero-grid-line hero-grid-line-v1" aria-hidden="true" />
-        <div className="hero-grid-line hero-grid-line-v2" aria-hidden="true" />
-        <div className="hero-radial" aria-hidden="true" />
+      <main>
+        <section className="hero-section">
+          <div className="section-shell hero-shell">
+            <div className="hero-copy">
+              <Badge className="hero-badge border-0">
+                Built for startups and SMB teams
+              </Badge>
 
-        <div className="hero-inner">
-          <div className="hero-content">
-            <Badge
-              variant="outline"
-              className="hero-badge animate-in delay-0 border-[var(--accent-border)] bg-[var(--accent-dim)] text-[var(--accent-text)]"
-            >
-              <span className="pulse-dot" aria-hidden="true" />
-              <span className="hero-badge-text">
-                Early access · Built for teams that work in motion
-              </span>
-            </Badge>
-
-            <h1 className="hero-heading animate-in delay-1">
-              Your team's first
-              <br />
-              <em className="hero-serif">in-the-room</em>{' '}
-              <span className="hero-accent">AI teammate.</span>
-            </h1>
-
-            <p className="hero-body animate-in delay-2">
-              Kodi joins calls, listens to plans and decisions, answers
-              questions with live business context, and turns every discussion
-              into tracked work your agent can carry forward.
-            </p>
-
-            <p className="hero-sub animate-in delay-3">
-              Connect meetings, messaging, ticketing, and the rest of your
-              stack. One shared agent for your whole team.
-            </p>
-
-            <div className="hero-actions animate-in delay-3">
-              <Button asChild className="btn-primary btn-lg">
-                <a href={appUrl}>Get your agent now →</a>
-              </Button>
-              <Button asChild variant="outline" className="btn-ghost btn-lg">
-                <a href="#how-it-works">See how it works</a>
-              </Button>
-            </div>
-
-            <p className="hero-fine animate-in delay-4">
-              No credit card required · Live in under 5 minutes · Connects to
-              the tools you already use
-            </p>
-          </div>
-
-          {/* ─── Feed Mockup ─────────────────────────── */}
-          <div className="hero-mockup animate-in-right delay-2">
-            <div className="feed-window">
-              {/* Terminal-style header */}
-              <div className="feed-header">
-                <div className="feed-header-dots" aria-hidden="true">
-                  <span style={{ background: '#ff5f57' }} />
-                  <span style={{ background: '#febc2e' }} />
-                  <span style={{ background: '#28c840' }} />
-                </div>
-                <span className="feed-header-title">kodi — agent:active</span>
-                <span className="feed-status-indicator">
-                  <span className="feed-status-dot" />
-                  <span className="feed-status-label">LIVE</span>
-                </span>
-              </div>
-
-              {/* Timestamp bar */}
-              <div className="feed-timestamp-bar">
-                <span className="feed-mono">FEED</span>
-                <span className="feed-mono feed-timestamp">TUE 21:07 UTC</span>
-                <span className="feed-mono feed-count">3 actions pending</span>
-              </div>
-
-              {/* Feed rows */}
-              <div className="feed-rows">
-                <div className="feed-row feed-row-critical">
-                  <div className="feed-row-priority">
-                    <span className="priority-dot priority-critical" />
-                    <span className="feed-mono priority-label">P0</span>
-                  </div>
-                  <div className="feed-row-body">
-                    <div className="feed-row-headline">
-                      Roadmap review ended with 3 decisions that still need
-                      owners
-                    </div>
-                    <div className="feed-row-meta">
-                      <span className="feed-tag feed-tag-critical">
-                        CALL SUMMARY READY
-                      </span>
-                      <span className="feed-row-sub">
-                        tickets prepared for Linear and Jira
-                      </span>
-                    </div>
-                  </div>
-                  <button className="feed-action-btn">Assign tasks</button>
-                </div>
-
-                <div className="feed-row feed-row-warn">
-                  <div className="feed-row-priority">
-                    <span className="priority-dot priority-warn" />
-                    <span className="feed-mono priority-label">P1</span>
-                  </div>
-                  <div className="feed-row-body">
-                    <div className="feed-row-headline">
-                      Someone asked, "Can we ship by Friday?" during the Zoom
-                    </div>
-                    <div className="feed-row-meta">
-                      <span className="feed-tag feed-tag-warn">
-                        LIVE ANSWER READY
-                      </span>
-                      <span className="feed-row-sub">
-                        backed by sprint status and support volume
-                      </span>
-                    </div>
-                  </div>
-                  <button className="feed-action-btn">Send answer</button>
-                </div>
-
-                <div className="feed-row feed-row-good">
-                  <div className="feed-row-priority">
-                    <span className="priority-dot priority-good" />
-                    <span className="feed-mono priority-label">P1</span>
-                  </div>
-                  <div className="feed-row-body">
-                    <div className="feed-row-headline">
-                      Slack thread in #launch changed tomorrow's rollout plan
-                    </div>
-                    <div className="feed-row-meta">
-                      <span className="feed-tag feed-tag-good">
-                        PLAN UPDATED
-                      </span>
-                      <span className="feed-row-sub">
-                        meeting notes, docs, and tasks are in sync
-                      </span>
-                    </div>
-                  </div>
-                  <button className="feed-action-btn">Review changes</button>
-                </div>
-              </div>
-
-              {/* Footer bar */}
-              <div className="feed-footer-bar">
-                <span className="feed-mono feed-footer-text">
-                  ↑ kodi tracks decisions across calls, chat, and tickets
-                </span>
-              </div>
-            </div>
-
-            <p className="mockup-caption">
-              Kodi turns conversations into tracked work — so nothing disappears
-              after the meeting.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── How it works ────────────────────────────────────────── */}
-      <section id="how-it-works" className="section-bordered">
-        <div className="section-inner">
-          <div className="section-header">
-            <div className="section-num" aria-hidden="true">
-              01
-            </div>
-            <div className="section-header-text">
-              <div className="section-label">How it works</div>
-              <h2 className="section-heading">
-                Bring your agent into the work fast.
-              </h2>
-            </div>
-          </div>
-
-          <div className="steps-table">
-            <div className="steps-table-row">
-              <div className="step-index">
-                <span className="feed-mono step-index-num">01</span>
-              </div>
-              <div className="step-content">
-                <h3 className="step-title">Sign up &amp; launch</h3>
-                <p className="step-body">
-                  Create your account and click "Launch agent." Kodi spins up
-                  your own dedicated AI instance in under 5 minutes — no servers
-                  to manage, ever.
-                </p>
-              </div>
-              <div className="step-detail">
-                <span className="step-detail-badge feed-mono">~5 min</span>
-              </div>
-            </div>
-
-            <div className="steps-table-row">
-              <div className="step-index">
-                <span className="feed-mono step-index-num">02</span>
-              </div>
-              <div className="step-content">
-                <h3 className="step-title">Connect your stack</h3>
-                <p className="step-body">
-                  Connect the tools your team already uses: conferencing,
-                  messaging, docs, ticketing, and internal systems. Kodi starts
-                  building shared context across all of them.
-                </p>
-              </div>
-              <div className="step-detail">
-                <span className="step-detail-badge feed-mono">fast setup</span>
-              </div>
-            </div>
-
-            <div className="steps-table-row steps-table-row-last">
-              <div className="step-index">
-                <span className="feed-mono step-index-num">03</span>
-              </div>
-              <div className="step-content">
-                <h3 className="step-title">Bring Kodi into the room</h3>
-                <p className="step-body">
-                  Kodi joins calls, listens to the conversation, answers
-                  questions with live business data, tracks next steps, and
-                  creates the tasks or tickets needed to keep work moving.
-                </p>
-              </div>
-              <div className="step-detail">
-                <span className="step-detail-badge feed-mono step-detail-accent feed-mono">
-                  ongoing
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Features ────────────────────────────────────────────── */}
-      <section id="features" className="section-padded">
-        <div className="section-inner">
-          <div className="section-header">
-            <div className="section-num" aria-hidden="true">
-              02
-            </div>
-            <div className="section-header-text">
-              <div className="section-label">Features</div>
-              <h2 className="section-heading">
-                Everything your team needs to turn talk into execution.
-              </h2>
-              <p className="section-sub">
-                Kodi doesn't replace your team. It stays in the loop, keeps the
-                context, and follows through after the meeting ends.
+              <p className="hero-kicker">
+                AI teammate for meetings and follow-through
               </p>
-            </div>
-          </div>
 
-          <div className="features-list">
-            <div className="feature-row">
-              <div className="feature-num feed-mono">01</div>
-              <div className="feature-body">
-                <h3 className="feature-title">
-                  Meeting Memory — Every decision captured.
-                </h3>
-                <p className="feature-desc">
-                  Kodi remembers what was said, what was decided, and what still
-                  needs action across meetings, chats, and follow-up work. No
-                  manual note wrangling required.
-                </p>
-              </div>
-              <div className="feature-tags">
-                <span className="feature-tag">Auto-captured</span>
-                <span className="feature-tag">Cross-tool</span>
-                <span className="feature-tag">Actionable</span>
-              </div>
-            </div>
+              <h1 className="hero-title">
+                Bring an AI teammate
+                <span className="hero-highlight"> into every call.</span>
+              </h1>
 
-            <div className="feature-row">
-              <div className="feature-num feed-mono">02</div>
-              <div className="feature-body">
-                <h3 className="feature-title">
-                  Live Answers — Ask in the moment.
-                </h3>
-                <p className="feature-desc">
-                  Ask Kodi a question during the call and get a response
-                  grounded in the business data your team already runs on, right
-                  when you need it.
-                </p>
-              </div>
-              <div className="feature-tags">
-                <span className="feature-tag">Real-time context</span>
-                <span className="feature-tag">Shared truth</span>
-                <span className="feature-tag">Decision support</span>
-              </div>
-            </div>
-
-            <div className="feature-row">
-              <div className="feature-num feed-mono">03</div>
-              <div className="feature-body">
-                <h3 className="feature-title">
-                  Task Handoff — Decisions become tickets.
-                </h3>
-                <p className="feature-desc">
-                  Kodi tracks exactly what needs to happen next and creates work
-                  in the ticketing system your team already uses, with owners,
-                  context, and follow-through intact.
-                </p>
-              </div>
-              <div className="feature-tags">
-                <span className="feature-tag">Ticket creation</span>
-                <span className="feature-tag">Clear owners</span>
-                <span className="feature-tag">No dropped work</span>
-              </div>
-            </div>
-
-            <div className="feature-row">
-              <div className="feature-num feed-mono">04</div>
-              <div className="feature-body">
-                <h3 className="feature-title">
-                  Shared Team Brain — One agent. Whole team.
-                </h3>
-                <p className="feature-desc">
-                  Everyone works with the same agent and the same source of
-                  context. No more decisions trapped in one person's calendar,
-                  inbox, or Slack DM.
-                </p>
-              </div>
-              <div className="feature-tags">
-                <span className="feature-tag">Multi-user</span>
-                <span className="feature-tag">Shared context</span>
-              </div>
-            </div>
-
-            <div className="feature-row">
-              <div className="feature-num feed-mono">05</div>
-              <div className="feature-body">
-                <h3 className="feature-title">
-                  Natural Language — Delegate in plain English.
-                </h3>
-                <p className="feature-desc">
-                  "What changed in today's planning call?" "Create the follow-up
-                  tasks and send the recap." Kodi understands the request and
-                  carries it through connected tools.
-                </p>
-              </div>
-              <div className="feature-tags">
-                <span className="feature-tag">Plain English</span>
-                <span className="feature-tag">Action taking</span>
-              </div>
-            </div>
-
-            <div className="feature-row feature-row-accent">
-              <div className="feature-num feed-mono">06</div>
-              <div className="feature-body">
-                <h3 className="feature-title">
-                  Your Own Instance — Private by design.
-                </h3>
-                <p className="feature-desc">
-                  Every team gets a dedicated agent. Your data never touches
-                  another company's instance.
-                </p>
-              </div>
-              <div className="feature-tags">
-                <span className="feature-tag feature-tag-accent">
-                  Dedicated
-                </span>
-                <span className="feature-tag feature-tag-accent">Isolated</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Pain Points ─────────────────────────────────────────── */}
-      <section className="section-bordered">
-        <div className="section-inner">
-          <div className="section-header">
-            <div className="section-num" aria-hidden="true">
-              03
-            </div>
-            <div className="section-header-text">
-              <div className="section-label">Sound familiar?</div>
-              <h2 className="section-heading">
-                The real cost
-                <br />
-                of work that disappears.
-              </h2>
-              <p className="section-sub">
-                Teams move fast, but decisions still get lost between meetings,
-                chat threads, and ticket backlogs.
+              <p className="hero-body">
+                Kodi listens, answers with live business context, and turns
+                decisions into assigned work across the tools your team already
+                uses.
               </p>
-            </div>
-          </div>
 
-          <div className="pain-grid">
-            {[
-              'Important decisions getting lost after the call ends',
-              'Leaving meetings without clear owners or next steps',
-              'Switching between chat, docs, tickets, and dashboards to find one answer',
-              'Re-explaining the same context in every tool and thread',
-              'Manual follow-up work piling up after every discussion',
-              'No agent that can both understand the conversation and do the work',
-            ].map((pain, i) => (
-              <div key={pain} className="pain-item">
-                <span className="pain-x feed-mono">✕</span>
-                <span className="pain-num feed-mono">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <p className="pain-text">{pain}</p>
-              </div>
-            ))}
-            <div className="pain-resolution">
-              <span className="pain-check" aria-hidden="true">
-                →
-              </span>
-              <p>
-                Kodi keeps the context, answers the question, and carries the
-                work forward.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Pricing ─────────────────────────────────────────────── */}
-      <section id="pricing" className="section-padded">
-        <div className="section-inner">
-          <div className="section-header">
-            <div className="section-num" aria-hidden="true">
-              04
-            </div>
-            <div className="section-header-text">
-              <div className="section-label">Pricing</div>
-              <h2 className="section-heading">
-                One team. One agent.
-                <br />
-                One price.
-              </h2>
-              <p className="section-sub">
-                Flat per-team pricing — not per seat. Your whole team uses the
-                same agent for one monthly fee.
-              </p>
-            </div>
-          </div>
-
-          <div className="pricing-grid">
-            {/* Starter */}
-            <Card className="pricing-card border-[var(--border)] bg-[var(--bg-3)] text-[var(--text)] shadow-none">
-              <CardContent className="p-0">
-                <div className="pricing-tier-label feed-mono">STARTER</div>
-                <div className="pricing-price-row">
-                  <span className="pricing-amount">$49</span>
-                  <span className="pricing-period feed-mono">/mo</span>
-                </div>
-                <p className="pricing-desc">
-                  For teams bringing an agent into calls, chat, and
-                  follow-through.
-                </p>
+              <div className="hero-actions">
+                <Button asChild className="cta-button cta-button-lg">
+                  <a href={appUrl}>Start your 14-day trial</a>
+                </Button>
                 <Button
                   asChild
                   variant="outline"
-                  className="btn-block btn-ghost"
+                  className="secondary-button cta-button-lg"
                 >
-                  <a href={appUrl}>Start free trial</a>
+                  <a href="mailto:hello@kodi.so">Book a walkthrough</a>
                 </Button>
-                <Separator className="my-6 bg-[var(--border)]" />
-                <ul className="pricing-features">
-                  {[
-                    'Up to 5 team members',
-                    'Dedicated OpenClaw instance',
-                    'Meeting + messaging integrations',
-                    'Live answers with business context',
-                    'Auto-created tasks and tickets',
-                    'Chat with your agent',
-                    '$20 AI credits/month included',
-                  ].map((f) => (
-                    <li key={f} className="pricing-feature">
-                      <span className="check feed-mono" aria-hidden="true">
-                        ✓
-                      </span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Pro */}
-            <Card className="pricing-card pricing-card-featured border-[var(--accent-border)] bg-[var(--bg-3)] text-[var(--text)] shadow-none">
-              <CardContent className="p-0">
-                <Badge className="pricing-popular-badge feed-mono border-0 bg-[var(--accent)] text-[var(--bg)] hover:bg-[var(--accent)]">
-                  MOST POPULAR
-                </Badge>
-                <div
-                  className="pricing-tier-label feed-mono"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  PRO
+              <div className="hero-proof-points">
+                <span>Launch in under 5 minutes</span>
+                <span>No credit card required</span>
+                <span>No seat-based pricing</span>
+              </div>
+            </div>
+
+            <div className="hero-panel-wrap">
+              <div className="hero-panel">
+                <div className="panel-topbar">
+                  <div>
+                    <p className="panel-label">Weekly operating review</p>
+                    <h2 className="panel-title">Kodi is in the room</h2>
+                  </div>
+                  <div className="live-pill">
+                    <span className="live-dot" />
+                    Live
+                  </div>
                 </div>
-                <div className="pricing-price-row">
-                  <span className="pricing-amount">$99</span>
-                  <span className="pricing-period feed-mono">/mo</span>
+
+                <div className="panel-summary">
+                  <div className="summary-copy">
+                    <p className="summary-label">Conversation captured</p>
+                    <p className="summary-headline">
+                      3 decisions, 2 risks, 4 follow-ups already mapped.
+                    </p>
+                  </div>
+                  <div className="summary-stats">
+                    <div className="summary-stat">
+                      <strong>Jira</strong>
+                      <span>2 drafts ready</span>
+                    </div>
+                    <div className="summary-stat">
+                      <strong>Slack</strong>
+                      <span>Recap queued</span>
+                    </div>
+                    <div className="summary-stat">
+                      <strong>Notion</strong>
+                      <span>Notes synced</span>
+                    </div>
+                  </div>
                 </div>
-                <p className="pricing-desc">
-                  For teams ready to automate work across their whole stack.
-                </p>
-                <Button asChild className="btn-block btn-primary">
-                  <a href={appUrl}>Start free trial</a>
-                </Button>
-                <Separator className="my-6 bg-[var(--accent-border)]" />
-                <ul className="pricing-features">
-                  {[
-                    'Unlimited team members',
-                    'Everything in Starter',
-                    'Priority AI (faster responses)',
-                    'Workflow automation',
-                    'Advanced tool integrations',
-                    'Activity audit log',
-                    '$50 AI credits/month included',
-                    'Priority support',
-                  ].map((f) => (
-                    <li key={f} className="pricing-feature">
-                      <span
-                        className="check check-accent feed-mono"
-                        aria-hidden="true"
-                      >
-                        ✓
-                      </span>
-                      {f}
-                    </li>
+
+                <div className="panel-grid">
+                  <div className="panel-card panel-card-ink">
+                    <p className="panel-card-label">Asked in the meeting</p>
+                    <p className="panel-card-title">
+                      Can we still ship by Friday?
+                    </p>
+                    <p className="panel-card-body">
+                      Current sprint load is at 78%. Payments QA is the blocker.
+                      Kodi recommends pushing analytics cleanup to next week.
+                    </p>
+                  </div>
+
+                  <div className="panel-card panel-card-warm">
+                    <p className="panel-card-label">What Kodi is doing next</p>
+                    <ul className="task-list">
+                      <li>Create launch tasks in Linear</li>
+                      <li>Send owner recap to Slack</li>
+                      <li>Update the rollout doc in Notion</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="tool-row">
+                  {integrations.map((tool) => (
+                    <span key={tool} className="tool-pill">
+                      {tool}
+                    </span>
                   ))}
-                </ul>
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </div>
           </div>
+        </section>
 
-          <p className="pricing-footer">
-            All plans include a 14-day free trial. No credit card required.{' '}
-            <a href="mailto:hello@kodi.so" className="accent-link">
-              Need something custom? Talk to us →
-            </a>
-          </p>
-        </div>
-      </section>
-
-      {/* ─── CTA ─────────────────────────────────────────────────── */}
-      <section className="section-bordered cta-section">
-        <div className="section-inner">
-          <div className="cta-layout">
-            <div className="cta-text">
-              <h2 className="cta-heading">
-                Stop ending meetings with loose ends.
-                <br />
-                <span className="hero-accent">
-                  Start assigning them to Kodi.
+        <section className="integration-band">
+          <div className="section-shell integration-shell">
+            <p className="band-label">
+              Connects to the stack your team already uses
+            </p>
+            <div className="integration-row">
+              {integrations.map((tool) => (
+                <span key={tool} className="integration-name">
+                  {tool}
                 </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="section-block">
+          <div className="section-shell">
+            <div className="section-head">
+              <p className="section-kicker">Why teams convert on Kodi</p>
+              <h2 className="section-title">
+                Better than another note taker. Better than another dashboard.
               </h2>
-              <p className="cta-body">
-                Give your team an agent that can join the conversation, answer
-                with real business context, and complete the follow-through
-                across the tools you already use.
+              <p className="section-body">
+                Startups and SMB teams do not need more software to maintain.
+                They need one agent that can stay in the conversation and move
+                the work forward after it ends.
               </p>
-              <p className="cta-fine">
-                No engineers required. No brittle handoffs. No lost context.
-              </p>
-              <Button asChild className="btn-primary btn-lg">
-                <a href={appUrl}>Bring Kodi to your team →</a>
-              </Button>
             </div>
 
-            <div className="cta-stats" aria-hidden="true">
-              <div className="cta-stat-row">
-                <span className="cta-stat-num">5 min</span>
-                <span className="cta-stat-label feed-mono">to go live</span>
+            <div className="value-grid">
+              {valueCards.map((card, index) => (
+                <Card
+                  key={card.title}
+                  className={`value-card ${index === 0 ? 'value-card-featured' : ''}`}
+                >
+                  <CardContent className="value-card-content">
+                    <p className="value-eyebrow">{card.eyebrow}</p>
+                    <h3 className="value-title">{card.title}</h3>
+                    <p className="value-body">{card.body}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="role-grid">
+              {roleCards.map((card) => (
+                <div key={card.role} className="role-card">
+                  <p className="role-title">{card.role}</p>
+                  <p className="role-body">{card.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="section-block section-tinted">
+          <div className="section-shell">
+            <div className="section-head section-head-slim">
+              <p className="section-kicker">How it works</p>
+              <h2 className="section-title">
+                Set it up once. Let Kodi stay on top of the work.
+              </h2>
+            </div>
+
+            <div className="workflow-grid">
+              {workflowSteps.map((step) => (
+                <div key={step.step} className="workflow-card">
+                  <div className="workflow-step">{step.step}</div>
+                  <div className="workflow-detail">{step.detail}</div>
+                  <h3 className="workflow-title">{step.title}</h3>
+                  <p className="workflow-body">{step.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="section-block">
+          <div className="section-shell">
+            <div className="section-head section-head-slim">
+              <p className="section-kicker">Pricing</p>
+              <h2 className="section-title">
+                One shared agent. One team price.
+              </h2>
+              <p className="section-body">
+                Simple pricing for lean teams that want to move faster without
+                adding seat taxes or new operational overhead.
+              </p>
+            </div>
+
+            <div className="pricing-grid">
+              <Card className="pricing-card">
+                <CardContent className="pricing-content">
+                  <div className="pricing-tier">Starter</div>
+                  <div className="pricing-amount-row">
+                    <span className="pricing-amount">$49</span>
+                    <span className="pricing-period">/month</span>
+                  </div>
+                  <p className="pricing-copy">
+                    For teams getting their first shared AI teammate into calls
+                    and follow-through.
+                  </p>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="secondary-button pricing-button"
+                  >
+                    <a href={appUrl}>Start free trial</a>
+                  </Button>
+                  <ul className="pricing-list">
+                    {starterFeatures.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="pricing-card pricing-card-featured">
+                <CardContent className="pricing-content">
+                  <Badge className="pricing-badge border-0">Most popular</Badge>
+                  <div className="pricing-tier">Pro</div>
+                  <div className="pricing-amount-row">
+                    <span className="pricing-amount">$99</span>
+                    <span className="pricing-period">/month</span>
+                  </div>
+                  <p className="pricing-copy">
+                    For teams ready to automate the handoff from conversation to
+                    execution across their stack.
+                  </p>
+                  <Button asChild className="cta-button pricing-button">
+                    <a href={appUrl}>Start free trial</a>
+                  </Button>
+                  <ul className="pricing-list">
+                    {proFeatures.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="pricing-note">
+              <span>14-day trial</span>
+              <span>No credit card required</span>
+              <span>
+                Need a custom rollout?{' '}
+                <a href="mailto:hello@kodi.so">Talk to us</a>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section className="section-block final-cta-section">
+          <div className="section-shell">
+            <div className="final-cta">
+              <div className="final-cta-copy">
+                <p className="section-kicker">
+                  Ready to try it on a real call?
+                </p>
+                <h2 className="section-title">
+                  Put Kodi in your next meeting and let it handle the aftermath.
+                </h2>
+                <p className="section-body">
+                  Give your team clearer answers, cleaner handoffs, and one
+                  shared agent that can work across the tools you already use.
+                </p>
               </div>
-              <div className="cta-stat-divider" />
-              <div className="cta-stat-row">
-                <span className="cta-stat-num">14 days</span>
-                <span className="cta-stat-label feed-mono">free trial</span>
-              </div>
-              <div className="cta-stat-divider" />
-              <div className="cta-stat-row">
-                <span className="cta-stat-num">1 price</span>
-                <span className="cta-stat-label feed-mono">for whole team</span>
+
+              <div className="final-cta-actions">
+                <Button asChild className="cta-button cta-button-lg">
+                  <a href={appUrl}>Start your 14-day trial</a>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="secondary-button cta-button-lg"
+                >
+                  <a href="mailto:hello@kodi.so">Book a walkthrough</a>
+                </Button>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* ─── Footer ──────────────────────────────────────────────── */}
       <footer className="site-footer">
-        <div className="footer-inner">
-          <div className="footer-logo">
-            <div className="kodi-mark kodi-mark-sm" aria-hidden="true">
-              K
-            </div>
-            <span className="footer-wordmark">Kodi</span>
+        <div className="section-shell footer-shell">
+          <div className="brand-lockup footer-brand">
+            <span className="brand-mark">K</span>
+            <span className="brand-wordmark">Kodi</span>
           </div>
-          <p className="footer-copy feed-mono">
+          <p className="footer-copy">
             © <span suppressHydrationWarning>{new Date().getFullYear()}</span>{' '}
-            Kodi. Built for teams that want their agent in the room.
+            Kodi. Built for teams that need an agent in the room.
           </p>
           <div className="footer-links">
-            <a href="/privacy" className="footer-link">
-              Privacy
-            </a>
-            <a href="/terms" className="footer-link">
-              Terms
-            </a>
-            <a href="mailto:hello@kodi.so" className="footer-link">
-              Contact
-            </a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="mailto:hello@kodi.so">Contact</a>
           </div>
         </div>
       </footer>
 
-      {/* ─── Design System ───────────────────────────────────────── */}
       <style>{`
-        /* ═══════════════════════════════════════════════════════
-           CUSTOM PROPERTIES
-        ═══════════════════════════════════════════════════════ */
         :root {
-          /* Colors */
-          --bg:           oklch(8% 0.005 240);
-          --bg-2:         oklch(10.5% 0.006 240);
-          --bg-3:         oklch(12.5% 0.007 240);
-          --bg-4:         oklch(14.5% 0.008 240);
-          --border:       oklch(18% 0.01 240);
-          --border-2:     oklch(22% 0.012 240);
-          --text:         oklch(96% 0.005 240);
-          --muted:        oklch(58% 0.01 240);
-          --subtle:       oklch(38% 0.008 240);
-          --accent:       oklch(65% 0.2 145);
-          --accent-dim:   oklch(65% 0.2 145 / 0.08);
-          --accent-border: oklch(65% 0.2 145 / 0.3);
-          --accent-text:  oklch(65% 0.2 145);
-
-          /* Typography */
-          --font-display: 'Syne', system-ui, sans-serif;
-          --font-body:    'Inter', system-ui, sans-serif;
-          --font-mono:    'IBM Plex Mono', 'Fira Code', monospace;
-          --font-serif:   'Instrument Serif', Georgia, serif;
+          --bg: oklch(97.6% 0.018 92);
+          --bg-soft: oklch(95.7% 0.028 92);
+          --surface: oklch(99.1% 0.008 92 / 0.88);
+          --surface-strong: oklch(93.5% 0.035 88);
+          --surface-ink: oklch(26% 0.028 255);
+          --line: oklch(87.5% 0.02 92);
+          --line-strong: oklch(79% 0.03 84);
+          --text: oklch(24% 0.03 255);
+          --text-soft: oklch(43% 0.028 255);
+          --text-faint: oklch(58% 0.02 250);
+          --accent: oklch(74% 0.16 68);
+          --accent-strong: oklch(68% 0.18 62);
+          --accent-ink: oklch(30% 0.04 48);
+          --success: oklch(63% 0.12 168);
+          --success-soft: oklch(92% 0.05 168);
+          --shadow-soft: 0 18px 50px oklch(24% 0.03 255 / 0.08);
+          --shadow-strong: 0 32px 80px oklch(24% 0.03 255 / 0.16);
+          --radius-lg: 2rem;
+          --radius-md: 1.25rem;
+          --radius-sm: 0.85rem;
+          --font-display: 'Gugi', sans-serif;
+          --font-body: 'IBM Plex Sans', sans-serif;
         }
 
-        /* ═══════════════════════════════════════════════════════
-           RESET & BASE
-        ═══════════════════════════════════════════════════════ */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
 
         body {
-          background: var(--bg);
+          background:
+            radial-gradient(circle at top left, oklch(94.2% 0.055 86) 0%, transparent 28%),
+            linear-gradient(180deg, oklch(98.1% 0.018 92) 0%, oklch(95.8% 0.025 92) 100%);
           color: var(--text);
           font-family: var(--font-body);
-          font-size: 16px;
-          line-height: 1.6;
-          font-weight: 400;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           overflow-x: hidden;
         }
 
-        a { text-decoration: none; color: inherit; }
-        button { font-family: inherit; }
+        a {
+          color: inherit;
+          text-decoration: none;
+        }
 
-        /* ═══════════════════════════════════════════════════════
-           NOISE TEXTURE
-        ═══════════════════════════════════════════════════════ */
+        button {
+          font-family: inherit;
+        }
+
         .site-root {
           position: relative;
           min-height: 100vh;
           overflow-x: hidden;
         }
 
-        .noise-overlay {
-          position: fixed;
+        .page-glow {
+          position: absolute;
+          border-radius: 999px;
+          filter: blur(48px);
+          opacity: 0.45;
+          pointer-events: none;
+        }
+
+        .page-glow-left {
+          top: 6rem;
+          left: -10rem;
+          width: 22rem;
+          height: 22rem;
+          background: oklch(88% 0.09 80 / 0.8);
+        }
+
+        .page-glow-right {
+          top: 18rem;
+          right: -10rem;
+          width: 28rem;
+          height: 28rem;
+          background: oklch(86% 0.05 185 / 0.55);
+        }
+
+        .grid-overlay {
+          position: absolute;
           inset: 0;
           pointer-events: none;
-          z-index: 100;
-          opacity: 0.035;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-          background-repeat: repeat;
-          background-size: 200px 200px;
+          background-image:
+            linear-gradient(to right, oklch(86% 0.014 92 / 0.45) 1px, transparent 1px),
+            linear-gradient(to bottom, oklch(86% 0.014 92 / 0.45) 1px, transparent 1px);
+          background-size: 72px 72px;
+          mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 82%);
         }
 
-        /* ═══════════════════════════════════════════════════════
-           TYPOGRAPHY UTILITIES
-        ═══════════════════════════════════════════════════════ */
-        .feed-mono {
-          font-family: var(--font-mono);
-          font-variant-numeric: tabular-nums;
+        .section-shell,
+        .nav-shell {
+          width: min(1120px, calc(100vw - 2rem));
+          margin: 0 auto;
         }
 
-        /* ═══════════════════════════════════════════════════════
-           NAV
-        ═══════════════════════════════════════════════════════ */
         .site-nav {
           position: sticky;
           top: 0;
           z-index: 50;
-          border-bottom: 1px solid var(--border);
-          background: oklch(8% 0.005 240 / 0.9);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          backdrop-filter: blur(18px);
+          background: oklch(98.5% 0.008 92 / 0.76);
+          border-bottom: 1px solid oklch(86% 0.02 92 / 0.8);
         }
 
-        .nav-inner {
-          max-width: 80rem;
-          margin: 0 auto;
-          padding: 0 1.5rem;
-          height: 3.5rem;
+        .nav-shell {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 2rem;
+          gap: 1rem;
+          padding: 1rem 0;
         }
 
-        .nav-logo {
-          display: flex;
+        .brand-lockup {
+          display: inline-flex;
           align-items: center;
-          gap: 0.625rem;
-          flex-shrink: 0;
+          gap: 0.8rem;
         }
 
-        .kodi-mark {
-          width: 1.875rem;
-          height: 1.875rem;
-          background: var(--accent);
-          display: flex;
+        .brand-mark {
+          display: inline-flex;
           align-items: center;
           justify-content: center;
+          width: 2.75rem;
+          height: 2.75rem;
+          border-radius: 0.95rem;
+          background: linear-gradient(135deg, var(--accent), oklch(80% 0.13 88));
+          color: var(--accent-ink);
           font-family: var(--font-display);
-          font-weight: 800;
-          font-size: 0.875rem;
-          color: oklch(8% 0.005 240);
-          flex-shrink: 0;
-          letter-spacing: -0.02em;
+          font-size: 1.1rem;
+          box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.45);
         }
 
-        .kodi-mark-sm {
-          width: 1.375rem;
-          height: 1.375rem;
-          font-size: 0.7rem;
-        }
-
-        .nav-wordmark {
+        .brand-wordmark {
           font-family: var(--font-display);
-          font-weight: 700;
-          font-size: 1rem;
-          letter-spacing: -0.03em;
+          font-size: 1.35rem;
           color: var(--text);
+        }
+
+        .nav-links,
+        .nav-actions,
+        .footer-links,
+        .hero-actions,
+        .hero-proof-points,
+        .pricing-note,
+        .integration-row,
+        .tool-row {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          flex-wrap: wrap;
         }
 
         .nav-links {
-          display: none;
-          align-items: center;
-          gap: 2rem;
-        }
-
-        @media (min-width: 768px) {
-          .nav-links { display: flex; }
-        }
-
-        .nav-link {
-          font-size: 0.8125rem;
-          font-weight: 400;
-          color: var(--muted);
-          transition: color 0.12s;
-          letter-spacing: 0.01em;
-        }
-
-        .nav-link:hover { color: var(--text); }
-
-        .nav-cta {
-          font-size: 0.8125rem;
-          padding: 0.4375rem 0.875rem;
-        }
-
-        /* ═══════════════════════════════════════════════════════
-           BUTTONS
-        ═══════════════════════════════════════════════════════ */
-        .btn-primary {
-          display: inline-flex;
-          align-items: center;
           justify-content: center;
-          padding: 0.5rem 1rem;
-          background: var(--accent);
-          color: oklch(8% 0.005 240);
-          font-family: var(--font-body);
-          font-weight: 500;
-          font-size: 0.875rem;
-          border: none;
-          cursor: pointer;
-          transition: opacity 0.12s, transform 0.12s;
-          white-space: nowrap;
-          letter-spacing: -0.01em;
         }
 
-        .btn-primary:hover {
-          opacity: 0.88;
-          transform: translateY(-1px);
+        .nav-link,
+        .nav-text-link,
+        .footer-links a {
+          font-size: 0.95rem;
+          color: var(--text-soft);
+          transition: color 160ms ease;
         }
 
-        .btn-ghost {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0.5rem 1rem;
-          background: transparent;
-          color: var(--muted);
-          font-family: var(--font-body);
-          font-weight: 400;
-          font-size: 0.875rem;
-          border: 1px solid var(--border-2);
-          cursor: pointer;
-          transition: color 0.12s, border-color 0.12s, transform 0.12s;
-          white-space: nowrap;
-        }
-
-        .btn-ghost:hover {
+        .nav-link:hover,
+        .nav-text-link:hover,
+        .footer-links a:hover {
           color: var(--text);
-          border-color: var(--muted);
-          transform: translateY(-1px);
         }
 
-        .btn-lg {
-          padding: 0.6875rem 1.5rem;
-          font-size: 0.9375rem;
+        .cta-button,
+        .secondary-button {
+          border-radius: 999px;
+          height: auto;
+          padding: 0.95rem 1.35rem;
+          font-weight: 600;
+          font-size: 0.96rem;
+          transition:
+            transform 180ms ease,
+            box-shadow 180ms ease,
+            background 180ms ease,
+            border-color 180ms ease;
         }
 
-        .btn-block {
-          display: block;
-          width: 100%;
-          text-align: center;
-          padding-top: 0.625rem;
-          padding-bottom: 0.625rem;
+        .cta-button {
+          background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+          color: var(--accent-ink);
+          box-shadow: 0 14px 30px oklch(74% 0.16 68 / 0.32);
+          border: none;
         }
 
-        /* ═══════════════════════════════════════════════════════
-           HERO
-        ═══════════════════════════════════════════════════════ */
+        .cta-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 18px 36px oklch(74% 0.16 68 / 0.36);
+        }
+
+        .secondary-button {
+          background: oklch(100% 0 0 / 0.65);
+          color: var(--text);
+          border: 1px solid var(--line-strong);
+          box-shadow: none;
+        }
+
+        .secondary-button:hover {
+          transform: translateY(-2px);
+          border-color: var(--text-faint);
+          background: oklch(100% 0 0 / 0.92);
+        }
+
+        .cta-button-lg {
+          padding: 1.05rem 1.55rem;
+          font-size: 1rem;
+        }
+
         .hero-section {
           position: relative;
-          max-width: 80rem;
-          margin: 0 auto;
-          padding: clamp(4rem, 10vw, 7rem) 1.5rem clamp(3rem, 8vw, 5rem);
-          overflow: hidden;
+          padding: clamp(4rem, 10vw, 7rem) 0 2rem;
         }
 
-        /* Vertical grid lines */
-        .hero-grid-line {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          width: 1px;
-          background: var(--border);
-          pointer-events: none;
-        }
-        .hero-grid-line-v1 { left: 33.333%; }
-        .hero-grid-line-v2 { left: 66.666%; }
-
-        /* Subtle radial accent */
-        .hero-radial {
-          position: absolute;
-          top: -20%;
-          left: -10%;
-          width: 80%;
-          height: 60%;
-          background: radial-gradient(ellipse at 30% 0%, oklch(65% 0.2 145 / 0.05) 0%, transparent 70%);
-          pointer-events: none;
+        .hero-shell {
+          display: grid;
+          grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+          gap: clamp(2.5rem, 5vw, 4.5rem);
+          align-items: center;
         }
 
-        .hero-inner {
+        .hero-copy {
           position: relative;
           z-index: 1;
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 4rem;
-          align-items: start;
-        }
-
-        @media (min-width: 1024px) {
-          .hero-inner {
-            grid-template-columns: 1fr 1fr;
-            align-items: center;
-          }
-        }
-
-        .hero-content {
-          max-width: 38rem;
         }
 
         .hero-badge {
           display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 2rem;
-          font-family: var(--font-mono);
-          font-size: 0.6875rem;
-          font-weight: 500;
-          color: var(--accent);
-          letter-spacing: 0.06em;
+          border-radius: 999px;
+          padding: 0.55rem 0.95rem;
+          background: oklch(100% 0 0 / 0.7);
+          color: var(--accent-ink);
+          box-shadow: inset 0 0 0 1px oklch(81% 0.06 74 / 0.32);
+          margin-bottom: 1.25rem;
+          font-weight: 600;
+        }
+
+        .hero-kicker,
+        .section-kicker,
+        .band-label,
+        .panel-label,
+        .summary-label,
+        .panel-card-label,
+        .value-eyebrow,
+        .pricing-tier,
+        .workflow-detail {
           text-transform: uppercase;
-          border: 1px solid var(--accent-border);
-          padding: 0.3125rem 0.75rem;
+          letter-spacing: 0.12em;
+          font-size: 0.76rem;
+          font-weight: 700;
         }
 
-        .hero-badge-text {
-          font-family: var(--font-mono);
+        .hero-kicker,
+        .section-kicker,
+        .band-label {
+          color: var(--text-faint);
         }
 
-        .pulse-dot {
-          display: inline-block;
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: var(--accent);
-          animation: pulse-anim 2.5s ease-in-out infinite;
-          flex-shrink: 0;
-        }
-
-        @keyframes pulse-anim {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50%       { opacity: 0.4; transform: scale(0.75); }
-        }
-
-        .hero-heading {
+        .hero-title,
+        .section-title,
+        .workflow-title,
+        .value-title,
+        .pricing-amount,
+        .panel-title {
           font-family: var(--font-display);
-          font-size: clamp(2.75rem, 6vw, 5rem);
-          font-weight: 800;
-          line-height: 1.0;
-          letter-spacing: -0.04em;
-          color: var(--text);
-          margin-bottom: 1.5rem;
+          line-height: 1;
         }
 
-        .hero-serif {
-          font-family: var(--font-serif);
-          font-style: italic;
-          font-weight: 400;
-          color: var(--muted);
-          letter-spacing: -0.01em;
+        .hero-title {
+          font-size: clamp(3rem, 8vw, 5.8rem);
+          letter-spacing: 0.01em;
+          margin: 0.85rem 0 1.2rem;
+          max-width: 11ch;
         }
 
-        .hero-accent {
-          color: var(--accent);
+        .hero-highlight {
+          color: var(--accent-strong);
+        }
+
+        .hero-body,
+        .section-body,
+        .value-body,
+        .role-body,
+        .workflow-body,
+        .pricing-copy,
+        .panel-card-body,
+        .footer-copy {
+          color: var(--text-soft);
+          font-size: 1.03rem;
+          line-height: 1.7;
         }
 
         .hero-body {
-          font-size: clamp(1rem, 2vw, 1.125rem);
-          font-weight: 300;
-          color: var(--muted);
-          line-height: 1.7;
-          max-width: 36rem;
-          margin-bottom: 0.75rem;
-          letter-spacing: 0.005em;
+          max-width: 34rem;
+          font-size: 1.12rem;
+          margin-bottom: 1.65rem;
         }
 
-        .hero-sub {
-          font-size: 0.875rem;
-          color: var(--subtle);
-          margin-bottom: 2.5rem;
-          line-height: 1.6;
+        .hero-proof-points {
+          margin-top: 1.25rem;
+          color: var(--text-faint);
+          font-size: 0.9rem;
         }
 
-        .hero-actions {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1.25rem;
+        .hero-proof-points span {
+          position: relative;
+          padding-left: 1rem;
         }
 
-        .hero-fine {
-          font-family: var(--font-mono);
-          font-size: 0.6875rem;
-          color: var(--subtle);
-          letter-spacing: 0.02em;
+        .hero-proof-points span::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 0.42rem;
+          width: 0.42rem;
+          height: 0.42rem;
+          border-radius: 50%;
+          background: var(--success);
         }
 
-        /* ═══════════════════════════════════════════════════════
-           HERO MOCKUP
-        ═══════════════════════════════════════════════════════ */
-        .hero-mockup {
-          animation: float 6s ease-in-out infinite;
+        .hero-panel-wrap {
+          position: relative;
         }
 
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50%       { transform: translateY(-8px); }
-        }
-
-        .feed-window {
-          border: 1px solid var(--border-2);
-          background: var(--bg-2);
+        .hero-panel {
+          position: relative;
+          padding: 1.25rem;
+          border-radius: var(--radius-lg);
+          background:
+            linear-gradient(180deg, oklch(30% 0.026 255), oklch(24% 0.024 255));
+          border: 1px solid oklch(43% 0.04 245 / 0.2);
+          box-shadow: var(--shadow-strong);
+          color: oklch(95% 0.01 95);
           overflow: hidden;
-          box-shadow:
-            0 0 0 1px oklch(65% 0.2 145 / 0.05),
-            0 32px 80px oklch(0% 0 0 / 0.6),
-            0 8px 24px oklch(0% 0 0 / 0.3);
         }
 
-        .feed-header {
+        .hero-panel::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at top right, oklch(74% 0.16 68 / 0.18), transparent 36%),
+            linear-gradient(135deg, oklch(100% 0 0 / 0.05), transparent 50%);
+          pointer-events: none;
+        }
+
+        .panel-topbar,
+        .summary-stats,
+        .summary-stat,
+        .live-pill {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          padding: 0.625rem 0.875rem;
-          border-bottom: 1px solid var(--border);
-          background: var(--bg-3);
         }
 
-        .feed-header-dots {
-          display: flex;
-          gap: 0.3125rem;
-        }
-
-        .feed-header-dots span {
-          width: 9px;
-          height: 9px;
-          border-radius: 50%;
-          display: block;
-          opacity: 0.65;
-        }
-
-        .feed-header-title {
-          font-family: var(--font-mono);
-          font-size: 0.6875rem;
-          color: var(--subtle);
-          flex: 1;
-          letter-spacing: 0.02em;
-        }
-
-        .feed-status-indicator {
-          display: flex;
-          align-items: center;
-          gap: 0.3125rem;
-        }
-
-        .feed-status-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: var(--accent);
-          animation: status-pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes status-pulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.3; }
-        }
-
-        .feed-status-label {
-          font-family: var(--font-mono);
-          font-size: 0.5625rem;
-          font-weight: 600;
-          color: var(--accent);
-          letter-spacing: 0.1em;
-        }
-
-        .feed-timestamp-bar {
-          display: flex;
-          align-items: center;
+        .panel-topbar {
+          justify-content: space-between;
           gap: 1rem;
-          padding: 0.4375rem 0.875rem;
-          background: var(--bg-3);
-          border-bottom: 1px solid var(--border);
+          position: relative;
+          z-index: 1;
         }
 
-        .feed-timestamp-bar .feed-mono {
-          font-size: 0.5625rem;
-          color: var(--subtle);
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+        .panel-label {
+          color: oklch(77% 0.02 245);
+          margin-bottom: 0.4rem;
         }
 
-        .feed-count {
-          margin-left: auto;
-          color: var(--accent) !important;
+        .panel-title {
+          font-size: clamp(1.65rem, 2vw, 2.2rem);
+          color: oklch(98% 0.01 90);
         }
 
-        .feed-rows {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .feed-row {
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          align-items: start;
-          gap: 0.75rem;
-          padding: 0.875rem;
-          border-bottom: 1px solid var(--border);
-          transition: background 0.15s;
-        }
-
-        .feed-row:last-child {
-          border-bottom: none;
-        }
-
-        .feed-row:hover { background: var(--bg-3); }
-
-        .feed-row-priority {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 0.25rem;
-          padding-top: 0.1rem;
-          flex-shrink: 0;
-        }
-
-        .priority-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .priority-label {
-          font-size: 0.5rem;
-          color: var(--subtle);
-          letter-spacing: 0.05em;
-        }
-
-        .priority-critical { background: #ef4444; animation: priority-pulse 1.5s ease-in-out infinite; }
-        .priority-warn     { background: #f59e0b; }
-        .priority-good     { background: var(--accent); }
-
-        @keyframes priority-pulse {
-          0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
-          50%       { opacity: 0.7; box-shadow: 0 0 0 4px rgba(239,68,68,0); }
-        }
-
-        .feed-row-body {
-          min-width: 0;
-        }
-
-        .feed-row-headline {
-          font-size: 0.8125rem;
-          font-weight: 500;
-          color: var(--text);
-          margin-bottom: 0.3125rem;
-          line-height: 1.3;
-          letter-spacing: -0.01em;
-        }
-
-        .feed-row-meta {
-          display: flex;
-          align-items: center;
+        .live-pill {
           gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .feed-tag {
-          font-family: var(--font-mono);
-          font-size: 0.5rem;
+          padding: 0.55rem 0.9rem;
+          border-radius: 999px;
+          background: oklch(100% 0 0 / 0.08);
+          color: oklch(92% 0.01 95);
+          font-size: 0.86rem;
           font-weight: 600;
-          letter-spacing: 0.08em;
-          padding: 0.15rem 0.4rem;
-          border: 1px solid;
         }
 
-        .feed-tag-critical { color: #ef4444; border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); }
-        .feed-tag-warn     { color: #f59e0b; border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.06); }
-        .feed-tag-good     { color: var(--accent); border-color: var(--accent-border); background: var(--accent-dim); }
-
-        .feed-row-sub {
-          font-family: var(--font-mono);
-          font-size: 0.5625rem;
-          color: var(--subtle);
-          letter-spacing: 0.02em;
+        .live-dot {
+          width: 0.55rem;
+          height: 0.55rem;
+          border-radius: 50%;
+          background: var(--success);
+          box-shadow: 0 0 0 6px oklch(63% 0.12 168 / 0.16);
+          animation: pulse 1.8s ease-in-out infinite;
         }
 
-        .feed-action-btn {
-          font-family: var(--font-mono);
-          font-size: 0.5625rem;
-          font-weight: 500;
-          padding: 0.25rem 0.5rem;
-          background: transparent;
-          color: var(--muted);
-          border: 1px solid var(--border-2);
-          cursor: pointer;
-          transition: color 0.12s, border-color 0.12s;
-          white-space: nowrap;
-          letter-spacing: 0.02em;
-          flex-shrink: 0;
-          margin-top: 0.1rem;
+        .panel-summary {
+          position: relative;
+          z-index: 1;
+          margin-top: 1.25rem;
+          padding: 1.2rem;
+          border-radius: 1.35rem;
+          background: oklch(100% 0 0 / 0.08);
+          border: 1px solid oklch(100% 0 0 / 0.08);
         }
 
-        .feed-action-btn:hover {
-          color: var(--accent);
-          border-color: var(--accent-border);
-        }
-
-        .feed-footer-bar {
-          padding: 0.5rem 0.875rem;
-          border-top: 1px solid var(--border);
-          background: var(--bg-3);
-        }
-
-        .feed-footer-text {
-          font-size: 0.5rem;
-          color: var(--subtle);
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-        }
-
-        .mockup-caption {
-          margin-top: 0.75rem;
-          font-family: var(--font-mono);
-          font-size: 0.6875rem;
-          color: var(--subtle);
-          letter-spacing: 0.02em;
-        }
-
-        /* ═══════════════════════════════════════════════════════
-           SECTION STRUCTURE
-        ═══════════════════════════════════════════════════════ */
-        .section-bordered {
-          border-top: 1px solid var(--border);
-          padding: clamp(4rem, 8vw, 6rem) 0;
-        }
-
-        .section-padded {
-          padding: clamp(4rem, 8vw, 6rem) 0;
-        }
-
-        .section-inner {
-          max-width: 80rem;
-          margin: 0 auto;
-          padding: 0 1.5rem;
-        }
-
-        .section-header {
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 2rem;
-          align-items: start;
-          margin-bottom: 4rem;
-        }
-
-        @media (max-width: 640px) {
-          .section-header { grid-template-columns: 1fr; gap: 1rem; }
-          .section-num { display: none; }
-        }
-
-        .section-num {
-          font-family: var(--font-display);
-          font-size: clamp(5rem, 10vw, 9rem);
-          font-weight: 800;
-          line-height: 0.85;
-          letter-spacing: -0.06em;
-          color: var(--border-2);
-          user-select: none;
-          margin-top: -0.5rem;
-        }
-
-        .section-label {
-          font-family: var(--font-mono);
-          font-size: 0.625rem;
-          font-weight: 600;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--accent);
-          margin-bottom: 0.75rem;
-        }
-
-        .section-heading {
-          font-family: var(--font-display);
-          font-size: clamp(1.875rem, 4vw, 3rem);
-          font-weight: 700;
-          line-height: 1.05;
-          letter-spacing: -0.04em;
-          color: var(--text);
+        .summary-copy {
           margin-bottom: 1rem;
         }
 
-        .section-sub {
-          color: var(--muted);
-          font-size: clamp(0.9375rem, 1.5vw, 1.0625rem);
-          font-weight: 300;
-          line-height: 1.7;
-          max-width: 36rem;
-          margin-bottom: 0;
+        .summary-label {
+          color: oklch(80% 0.03 88);
+          margin-bottom: 0.55rem;
         }
 
-        /* ═══════════════════════════════════════════════════════
-           HOW IT WORKS — TABLE FORMAT
-        ═══════════════════════════════════════════════════════ */
-        .steps-table {
-          border: 1px solid var(--border);
+        .summary-headline {
+          font-size: 1.3rem;
+          line-height: 1.4;
+          color: oklch(98% 0.01 90);
+          font-weight: 600;
         }
 
-        .steps-table-row {
+        .summary-stats {
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+
+        .summary-stat {
+          gap: 0.5rem;
+          padding: 0.8rem 0.95rem;
+          border-radius: 1rem;
+          background: oklch(0% 0 0 / 0.14);
+          min-width: 9rem;
+          justify-content: space-between;
+        }
+
+        .summary-stat strong {
+          font-size: 0.88rem;
+          color: oklch(98% 0.01 90);
+        }
+
+        .summary-stat span {
+          font-size: 0.78rem;
+          color: oklch(77% 0.02 245);
+        }
+
+        .panel-grid {
+          position: relative;
+          z-index: 1;
           display: grid;
-          grid-template-columns: 4rem 1fr auto;
-          gap: 2rem;
-          align-items: center;
-          padding: 2rem;
-          border-bottom: 1px solid var(--border);
-          transition: background 0.12s;
+          grid-template-columns: 1.08fr 0.92fr;
+          gap: 0.9rem;
+          margin-top: 0.95rem;
         }
 
-        .steps-table-row:hover { background: var(--bg-2); }
-
-        .steps-table-row-last {
-          border-bottom: none;
+        .panel-card {
+          border-radius: 1.35rem;
+          padding: 1.1rem;
         }
 
-        @media (max-width: 640px) {
-          .steps-table-row {
-            grid-template-columns: 2.5rem 1fr;
-            gap: 1rem;
-          }
-          .step-detail { display: none; }
+        .panel-card-ink {
+          background: oklch(0% 0 0 / 0.16);
+          border: 1px solid oklch(100% 0 0 / 0.06);
         }
 
-        .step-index {
-          display: flex;
+        .panel-card-warm {
+          background: linear-gradient(180deg, oklch(96% 0.03 90), oklch(92% 0.04 88));
+          color: var(--text);
+        }
+
+        .panel-card-label {
+          margin-bottom: 0.65rem;
+          color: inherit;
+          opacity: 0.72;
+        }
+
+        .panel-card-title {
+          font-size: 1.08rem;
+          line-height: 1.4;
+          font-weight: 600;
+          margin-bottom: 0.6rem;
+        }
+
+        .task-list {
+          list-style: none;
+          display: grid;
+          gap: 0.65rem;
+        }
+
+        .task-list li {
+          position: relative;
+          padding-left: 1rem;
+          color: var(--text-soft);
+          line-height: 1.55;
+        }
+
+        .task-list li::before,
+        .pricing-list li::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 0.62rem;
+          width: 0.42rem;
+          height: 0.42rem;
+          border-radius: 50%;
+          background: var(--accent-strong);
+        }
+
+        .tool-row {
+          position: relative;
+          z-index: 1;
+          margin-top: 1rem;
+        }
+
+        .tool-pill,
+        .integration-name {
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-        }
-
-        .step-index-num {
-          font-size: 0.75rem;
-          color: var(--subtle);
-          letter-spacing: 0.05em;
-        }
-
-        .step-title {
-          font-family: var(--font-display);
-          font-size: 1.0625rem;
+          border-radius: 999px;
+          font-size: 0.84rem;
           font-weight: 600;
-          letter-spacing: -0.025em;
-          color: var(--text);
-          margin-bottom: 0.5rem;
         }
 
-        .step-body {
-          font-size: 0.875rem;
-          font-weight: 300;
-          color: var(--muted);
-          line-height: 1.7;
-          max-width: 38rem;
+        .tool-pill {
+          padding: 0.6rem 0.85rem;
+          background: oklch(100% 0 0 / 0.08);
+          color: oklch(90% 0.01 92);
+          border: 1px solid oklch(100% 0 0 / 0.07);
         }
 
-        .step-detail-badge {
-          font-size: 0.625rem;
-          color: var(--subtle);
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          border: 1px solid var(--border);
-          padding: 0.3rem 0.625rem;
-          white-space: nowrap;
-        }
-
-        .step-detail-accent {
-          color: var(--accent) !important;
-          border-color: var(--accent-border) !important;
-        }
-
-        /* ═══════════════════════════════════════════════════════
-           FEATURES — NUMBERED LIST
-        ═══════════════════════════════════════════════════════ */
-        .features-list {
-          border: 1px solid var(--border);
-        }
-
-        .feature-row {
-          display: grid;
-          grid-template-columns: 3rem 1fr auto;
-          gap: 2rem;
-          align-items: center;
-          padding: 1.75rem 2rem;
-          border-bottom: 1px solid var(--border);
-          transition: background 0.12s;
-        }
-
-        .feature-row:last-child { border-bottom: none; }
-
-        .feature-row:hover { background: var(--bg-2); }
-
-        .feature-row-accent {
-          background: var(--accent-dim);
-        }
-
-        .feature-row-accent:hover {
-          background: oklch(65% 0.2 145 / 0.12);
-        }
-
-        @media (max-width: 768px) {
-          .feature-row {
-            grid-template-columns: 2.5rem 1fr;
-            gap: 1rem;
-          }
-          .feature-tags { display: none; }
-        }
-
-        .feature-num {
-          font-size: 0.6875rem;
-          color: var(--subtle);
-          letter-spacing: 0.05em;
-          text-align: center;
-        }
-
-        .feature-title {
-          font-family: var(--font-display);
-          font-size: 1rem;
-          font-weight: 600;
-          letter-spacing: -0.025em;
-          color: var(--text);
-          margin-bottom: 0.375rem;
-        }
-
-        .feature-desc {
-          font-size: 0.875rem;
-          font-weight: 300;
-          color: var(--muted);
-          line-height: 1.65;
-          max-width: 40rem;
-        }
-
-        .feature-tags {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          align-items: flex-end;
-        }
-
-        .feature-tag {
-          font-family: var(--font-mono);
-          font-size: 0.5625rem;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          color: var(--subtle);
-          border: 1px solid var(--border);
-          padding: 0.2rem 0.5rem;
-          white-space: nowrap;
-        }
-
-        .feature-tag-accent {
-          color: var(--accent);
-          border-color: var(--accent-border);
-        }
-
-        /* ═══════════════════════════════════════════════════════
-           PAIN POINTS
-        ═══════════════════════════════════════════════════════ */
-        .pain-grid {
-          border: 1px solid var(--border);
-        }
-
-        .pain-item {
-          display: grid;
-          grid-template-columns: 1.5rem 2.5rem 1fr;
-          gap: 1rem;
-          align-items: center;
-          padding: 1.125rem 1.5rem;
-          border-bottom: 1px solid var(--border);
-          transition: background 0.12s;
-        }
-
-        .pain-item:hover { background: var(--bg-2); }
-
-        @media (max-width: 640px) {
-          .pain-item { grid-template-columns: 1.5rem 1fr; }
-          .pain-num { display: none; }
-        }
-
-        .pain-x {
-          font-size: 0.5625rem;
-          color: #ef4444;
-          opacity: 0.7;
-          letter-spacing: 0.05em;
-        }
-
-        .pain-num {
-          font-size: 0.5625rem;
-          color: var(--subtle);
-          letter-spacing: 0.05em;
-        }
-
-        .pain-text {
-          font-size: 0.875rem;
-          font-weight: 300;
-          color: var(--muted);
-          line-height: 1.5;
-        }
-
-        .pain-resolution {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 1.25rem 1.5rem;
-          background: var(--accent-dim);
-          border-top: 1px solid var(--accent-border);
-        }
-
-        .pain-check {
-          font-family: var(--font-mono);
-          font-size: 1rem;
-          color: var(--accent);
-          flex-shrink: 0;
-        }
-
-        .pain-resolution p {
-          font-family: var(--font-display);
-          font-size: 0.9375rem;
-          font-weight: 600;
-          letter-spacing: -0.02em;
-          color: var(--text);
-        }
-
-        /* ═══════════════════════════════════════════════════════
-           PRICING
-        ═══════════════════════════════════════════════════════ */
-        .pricing-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          max-width: 48rem;
-          border: 1px solid var(--border);
-          overflow: hidden;
-          gap: 0;
-        }
-
-        @media (max-width: 640px) {
-          .pricing-grid { grid-template-columns: 1fr; }
-        }
-
-        .pricing-card {
-          background: var(--bg-2);
-          padding: 2.5rem 2rem;
+        .integration-band,
+        .section-tinted,
+        .final-cta-section {
           position: relative;
-          border-right: 1px solid var(--border);
         }
 
-        .pricing-card:last-child { border-right: none; }
-
-        @media (max-width: 640px) {
-          .pricing-card { border-right: none; border-bottom: 1px solid var(--border); }
-          .pricing-card:last-child { border-bottom: none; }
+        .integration-band {
+          padding: 0.8rem 0 2rem;
         }
 
-        .pricing-card-featured {
-          background: var(--bg-3);
+        .integration-shell {
+          border-radius: 1.6rem;
+          border: 1px solid var(--line);
+          background: oklch(100% 0 0 / 0.5);
+          padding: 1rem 1.1rem;
+          box-shadow: var(--shadow-soft);
         }
 
-        .pricing-popular-badge {
-          font-size: 0.5625rem;
-          font-weight: 600;
-          letter-spacing: 0.1em;
-          color: var(--accent);
-          margin-bottom: 0.75rem;
-          display: block;
+        .integration-row {
+          margin-top: 0.65rem;
+          gap: 0.75rem;
         }
 
-        .pricing-tier-label {
-          font-size: 0.625rem;
-          font-weight: 600;
-          letter-spacing: 0.12em;
-          color: var(--muted);
-          margin-bottom: 0.75rem;
-          display: block;
+        .integration-name {
+          padding: 0.65rem 0.85rem;
+          background: var(--bg);
+          border: 1px solid var(--line);
+          color: var(--text-soft);
         }
 
-        .pricing-price-row {
-          display: flex;
-          align-items: baseline;
-          gap: 0.25rem;
-          margin-bottom: 0.625rem;
+        .section-block {
+          padding: clamp(4rem, 10vw, 6rem) 0;
         }
 
-        .pricing-amount {
-          font-family: var(--font-display);
-          font-size: 3.25rem;
-          font-weight: 800;
-          letter-spacing: -0.05em;
-          color: var(--text);
-          line-height: 1;
+        .section-tinted::before,
+        .final-cta-section::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, oklch(98% 0.014 92 / 0), oklch(93.8% 0.035 90 / 0.7));
+          pointer-events: none;
         }
 
-        .pricing-period {
-          font-size: 0.75rem;
-          color: var(--subtle);
-          letter-spacing: 0.02em;
+        .section-head {
+          max-width: 48rem;
+          margin-bottom: 2.4rem;
         }
 
-        .pricing-desc {
-          font-size: 0.875rem;
-          font-weight: 300;
-          color: var(--muted);
-          margin-bottom: 1.5rem;
-          line-height: 1.5;
+        .section-head-slim {
+          max-width: 42rem;
         }
 
-        .pricing-features {
-          list-style: none;
-          margin-top: 1.75rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0.625rem;
-        }
-
-        .pricing-feature {
-          display: flex;
-          align-items: flex-start;
-          gap: 0.625rem;
-          font-size: 0.875rem;
-          font-weight: 300;
-          color: var(--muted);
-          line-height: 1.4;
-        }
-
-        .check {
-          font-size: 0.6875rem;
-          color: var(--subtle);
-          flex-shrink: 0;
-          margin-top: 0.15rem;
-        }
-
-        .check-accent { color: var(--accent); }
-
-        .pricing-footer {
-          margin-top: 1.5rem;
-          text-align: center;
-          font-size: 0.875rem;
-          font-weight: 300;
-          color: var(--subtle);
-        }
-
-        .accent-link {
-          color: var(--accent);
-          transition: opacity 0.12s;
-        }
-
-        .accent-link:hover { opacity: 0.75; }
-
-        /* ═══════════════════════════════════════════════════════
-           CTA
-        ═══════════════════════════════════════════════════════ */
-        .cta-layout {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 4rem;
-          align-items: center;
-        }
-
-        @media (max-width: 900px) {
-          .cta-layout { grid-template-columns: 1fr; gap: 3rem; }
-        }
-
-        .cta-heading {
-          font-family: var(--font-display);
-          font-size: clamp(2rem, 4vw, 3.5rem);
-          font-weight: 800;
-          line-height: 1.02;
-          letter-spacing: -0.04em;
-          color: var(--text);
-          margin-bottom: 1rem;
-        }
-
-        .cta-body {
-          font-size: 1rem;
-          font-weight: 300;
-          color: var(--muted);
-          line-height: 1.65;
-          max-width: 30rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .cta-fine {
-          font-family: var(--font-mono);
-          font-size: 0.6875rem;
-          color: var(--subtle);
-          letter-spacing: 0.03em;
-          margin-bottom: 2rem;
-        }
-
-        .cta-stats {
-          border: 1px solid var(--border);
-          min-width: 14rem;
-          flex-shrink: 0;
-        }
-
-        .cta-stat-row {
-          padding: 1.5rem 2rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-        }
-
-        .cta-stat-divider {
-          height: 1px;
-          background: var(--border);
-        }
-
-        .cta-stat-num {
-          font-family: var(--font-display);
-          font-size: 2rem;
-          font-weight: 800;
-          letter-spacing: -0.04em;
-          color: var(--accent);
-          line-height: 1;
-        }
-
-        .cta-stat-label {
-          font-size: 0.6875rem;
-          color: var(--subtle);
-          letter-spacing: 0.05em;
-        }
-
-        /* ═══════════════════════════════════════════════════════
-           FOOTER
-        ═══════════════════════════════════════════════════════ */
-        .site-footer {
-          border-top: 1px solid var(--border);
-          padding: 2.5rem 0;
-        }
-
-        .footer-inner {
-          max-width: 80rem;
-          margin: 0 auto;
-          padding: 0 1.5rem;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 1rem;
-        }
-
-        @media (min-width: 768px) {
-          .footer-inner {
-            flex-direction: row;
-            justify-content: space-between;
-          }
-        }
-
-        .footer-logo {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .footer-wordmark {
-          font-family: var(--font-display);
-          font-size: 0.875rem;
-          font-weight: 700;
-          letter-spacing: -0.03em;
-          color: var(--muted);
-        }
-
-        .footer-copy {
-          font-size: 0.75rem;
-          color: var(--subtle);
+        .section-title {
+          font-size: clamp(2rem, 5vw, 3.5rem);
+          margin: 0.65rem 0 1rem;
           letter-spacing: 0.01em;
         }
 
-        .footer-links {
-          display: flex;
+        .value-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 1rem;
+        }
+
+        .value-card,
+        .workflow-card,
+        .role-card,
+        .pricing-card,
+        .final-cta {
+          border-radius: var(--radius-md);
+          border: 1px solid var(--line);
+          background: oklch(100% 0 0 / 0.74);
+          box-shadow: var(--shadow-soft);
+        }
+
+        .value-card {
+          overflow: hidden;
+        }
+
+        .value-card-featured {
+          background: linear-gradient(135deg, oklch(29% 0.025 255), oklch(33% 0.03 250));
+          border-color: oklch(38% 0.04 248 / 0.35);
+        }
+
+        .value-card-content {
+          padding: 1.5rem;
+        }
+
+        .value-card-featured .value-eyebrow,
+        .value-card-featured .value-title,
+        .value-card-featured .value-body {
+          color: oklch(97% 0.01 92);
+        }
+
+        .value-card-featured .value-eyebrow {
+          opacity: 0.8;
+        }
+
+        .value-title {
+          font-size: 1.65rem;
+          margin: 0.55rem 0 0.8rem;
+          letter-spacing: 0.01em;
+        }
+
+        .role-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 1rem;
+          margin-top: 1rem;
+        }
+
+        .role-card {
+          padding: 1.35rem;
+          background: oklch(100% 0 0 / 0.56);
+        }
+
+        .role-title {
+          font-weight: 700;
+          font-size: 1rem;
+          margin-bottom: 0.55rem;
+          color: var(--text);
+        }
+
+        .workflow-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 1rem;
+          position: relative;
+          z-index: 1;
+        }
+
+        .workflow-card {
+          padding: 1.45rem;
+        }
+
+        .workflow-step {
+          display: inline-flex;
           align-items: center;
-          gap: 1.5rem;
+          justify-content: center;
+          width: 2.6rem;
+          height: 2.6rem;
+          border-radius: 999px;
+          background: var(--accent);
+          color: var(--accent-ink);
+          font-weight: 800;
+          margin-bottom: 0.9rem;
         }
 
-        .footer-link {
-          font-size: 0.8125rem;
-          color: var(--subtle);
-          transition: color 0.12s;
+        .workflow-detail {
+          color: var(--text-faint);
+          margin-bottom: 0.7rem;
         }
 
-        .footer-link:hover { color: var(--muted); }
-
-        /* ═══════════════════════════════════════════════════════
-           ENTRANCE ANIMATIONS
-        ═══════════════════════════════════════════════════════ */
-        .animate-in {
-          animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+        .workflow-title {
+          font-size: 1.48rem;
+          margin-bottom: 0.75rem;
+          letter-spacing: 0.01em;
         }
 
-        .animate-in-right {
-          animation: fade-left 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+        .pricing-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 1rem;
         }
 
-        .delay-0 { animation-delay: 0ms; }
-        .delay-1 { animation-delay: 80ms; }
-        .delay-2 { animation-delay: 180ms; }
-        .delay-3 { animation-delay: 280ms; }
-        .delay-4 { animation-delay: 380ms; }
+        .pricing-card {
+          overflow: hidden;
+        }
 
-        @keyframes fade-up {
-          from {
-            opacity: 0;
-            transform: translateY(16px);
-          }
-          to {
+        .pricing-card-featured {
+          background: linear-gradient(180deg, oklch(97% 0.03 92), oklch(93.8% 0.045 88));
+          border-color: oklch(80% 0.06 74);
+        }
+
+        .pricing-content {
+          padding: 1.5rem;
+        }
+
+        .pricing-badge {
+          display: inline-flex;
+          border-radius: 999px;
+          padding: 0.45rem 0.75rem;
+          background: var(--accent);
+          color: var(--accent-ink);
+          font-weight: 700;
+          margin-bottom: 0.85rem;
+        }
+
+        .pricing-tier {
+          color: var(--text-faint);
+        }
+
+        .pricing-amount-row {
+          display: flex;
+          align-items: flex-end;
+          gap: 0.45rem;
+          margin: 0.55rem 0 0.9rem;
+        }
+
+        .pricing-amount {
+          font-size: clamp(2.7rem, 5vw, 4rem);
+          letter-spacing: 0.01em;
+        }
+
+        .pricing-period {
+          color: var(--text-faint);
+          font-size: 0.95rem;
+          margin-bottom: 0.55rem;
+        }
+
+        .pricing-copy {
+          margin-bottom: 1.25rem;
+        }
+
+        .pricing-button {
+          width: 100%;
+          justify-content: center;
+          margin-bottom: 1.25rem;
+        }
+
+        .pricing-list {
+          list-style: none;
+          display: grid;
+          gap: 0.85rem;
+        }
+
+        .pricing-list li {
+          position: relative;
+          padding-left: 1rem;
+          color: var(--text-soft);
+          line-height: 1.5;
+        }
+
+        .pricing-note {
+          margin-top: 1rem;
+          padding: 1rem 1.1rem;
+          border-radius: 999px;
+          background: oklch(100% 0 0 / 0.58);
+          border: 1px solid var(--line);
+          color: var(--text-soft);
+          font-size: 0.94rem;
+          justify-content: space-between;
+        }
+
+        .pricing-note a {
+          color: var(--accent-ink);
+          font-weight: 600;
+        }
+
+        .final-cta {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          grid-template-columns: 1.1fr auto;
+          gap: 2rem;
+          align-items: center;
+          padding: clamp(1.5rem, 4vw, 2.4rem);
+          background:
+            linear-gradient(135deg, oklch(29% 0.024 255), oklch(22% 0.02 255));
+          border-color: oklch(38% 0.04 248 / 0.35);
+        }
+
+        .final-cta .section-kicker,
+        .final-cta .section-title,
+        .final-cta .section-body {
+          color: oklch(97% 0.01 92);
+        }
+
+        .final-cta .section-kicker,
+        .final-cta .section-body {
+          opacity: 0.82;
+        }
+
+        .final-cta-actions {
+          display: grid;
+          gap: 0.85rem;
+          min-width: min(100%, 18rem);
+        }
+
+        .site-footer {
+          padding: 0 0 2.5rem;
+        }
+
+        .footer-shell {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          gap: 1rem;
+          align-items: center;
+          padding-top: 1.5rem;
+          border-top: 1px solid var(--line);
+        }
+
+        .footer-copy {
+          font-size: 0.94rem;
+          text-align: center;
+        }
+
+        @keyframes pulse {
+          0%,
+          100% {
+            transform: scale(1);
             opacity: 1;
-            transform: translateY(0);
+          }
+          50% {
+            transform: scale(0.86);
+            opacity: 0.72;
           }
         }
 
-        @keyframes fade-left {
-          from {
-            opacity: 0;
-            transform: translateX(24px);
+        @media (max-width: 1024px) {
+          .hero-shell,
+          .workflow-grid,
+          .role-grid,
+          .pricing-grid,
+          .final-cta,
+          .footer-shell {
+            grid-template-columns: 1fr;
           }
-          to {
-            opacity: 1;
-            transform: translateX(0);
+
+          .hero-panel {
+            max-width: 42rem;
+          }
+
+          .final-cta-actions,
+          .footer-copy {
+            text-align: left;
           }
         }
 
-        /* ═══════════════════════════════════════════════════════
-           SCROLL-DRIVEN REVEALS
-        ═══════════════════════════════════════════════════════ */
-        @supports (animation-timeline: scroll()) {
-          .section-bordered,
-          .section-padded {
-            animation: section-reveal linear both;
-            animation-timeline: view();
-            animation-range: entry 0% entry 15%;
+        @media (max-width: 900px) {
+          .nav-links,
+          .nav-text-link {
+            display: none;
           }
 
-          @keyframes section-reveal {
-            from { opacity: 0.4; }
-            to   { opacity: 1; }
+          .value-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .value-card-featured {
+            order: -1;
+          }
+
+          .panel-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .pricing-note {
+            border-radius: 1.2rem;
+            align-items: flex-start;
           }
         }
 
-        /* ═══════════════════════════════════════════════════════
-           REDUCED MOTION
-        ═══════════════════════════════════════════════════════ */
-        @media (prefers-reduced-motion: reduce) {
-          *,
-          *::before,
-          *::after {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
+        @media (max-width: 640px) {
+          .section-shell,
+          .nav-shell {
+            width: min(1120px, calc(100vw - 1.25rem));
           }
 
-          .hero-mockup {
-            animation: none !important;
+          .site-nav {
+            position: static;
+          }
+
+          .nav-shell {
+            padding: 0.9rem 0;
+          }
+
+          .brand-mark {
+            width: 2.35rem;
+            height: 2.35rem;
+            border-radius: 0.8rem;
+          }
+
+          .brand-wordmark {
+            font-size: 1.15rem;
+          }
+
+          .nav-actions {
+            width: auto;
+          }
+
+          .nav-cta,
+          .cta-button-lg,
+          .secondary-button {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .hero-actions,
+          .pricing-note,
+          .footer-links {
+            display: grid;
+            gap: 0.75rem;
+          }
+
+          .hero-title {
+            max-width: 10ch;
+          }
+
+          .hero-proof-points {
+            display: grid;
+            gap: 0.55rem;
+          }
+
+          .hero-proof-points span {
+            padding-left: 1rem;
+          }
+
+          .panel-summary,
+          .panel-card,
+          .workflow-card,
+          .value-card-content,
+          .pricing-content,
+          .role-card,
+          .final-cta {
+            padding: 1.15rem;
+          }
+
+          .summary-stats {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .summary-stat {
+            width: 100%;
+          }
+
+          .tool-row,
+          .integration-row {
+            gap: 0.6rem;
+          }
+
+          .footer-shell {
+            padding-top: 1.2rem;
           }
         }
       `}</style>

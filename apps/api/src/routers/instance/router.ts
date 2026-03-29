@@ -12,10 +12,9 @@ export const instanceRouter = router({
    * Requires caller to be a member of the org (enforced by memberProcedure).
    */
   getStatus: memberProcedure
-    .input(z.object({ orgId: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx }) => {
       const inst = await ctx.db.query.instances.findFirst({
-        where: eq(instances.orgId, input.orgId),
+        where: eq(instances.orgId, ctx.org.id),
       })
       if (!inst) return null
 
@@ -35,12 +34,12 @@ export const instanceRouter = router({
    * Idempotent — safe to call repeatedly.
    */
   checkHealth: memberProcedure
-    .input(z.object({ orgId: z.string(), instanceId: z.string() }))
+    .input(z.object({ instanceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })
-      if (!inst) {
+      if (!inst || inst.orgId !== ctx.org.id) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' })
       }
 
@@ -53,11 +52,10 @@ export const instanceRouter = router({
    * Returns the new instance record.
    */
   provision: ownerProcedure
-    .input(z.object({ orgId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx }) => {
       // Check if org already has an instance
       const existing = await ctx.db.query.instances.findFirst({
-        where: eq(instances.orgId, input.orgId),
+        where: eq(instances.orgId, ctx.org.id),
       })
       if (existing && existing.status !== 'deleted') {
         throw new TRPCError({
@@ -66,7 +64,7 @@ export const instanceRouter = router({
         })
       }
 
-      const inst = await provisionInstance(input.orgId)
+      const inst = await provisionInstance(ctx.org.id)
       return {
         id: inst.id,
         status: inst.status,
@@ -82,12 +80,12 @@ export const instanceRouter = router({
    * Resets the instance to 'installing' so health check polling picks it up.
    */
   retryProvision: ownerProcedure
-    .input(z.object({ orgId: z.string(), instanceId: z.string() }))
+    .input(z.object({ instanceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })
-      if (!inst) {
+      if (!inst || inst.orgId !== ctx.org.id) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' })
       }
       if (inst.status !== 'error') {
@@ -114,12 +112,12 @@ export const instanceRouter = router({
    * Owner-only.
    */
   deprovision: ownerProcedure
-    .input(z.object({ orgId: z.string(), instanceId: z.string() }))
+    .input(z.object({ instanceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })
-      if (!inst) {
+      if (!inst || inst.orgId !== ctx.org.id) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' })
       }
 

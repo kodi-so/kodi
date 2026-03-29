@@ -47,6 +47,116 @@ function useTypewriter(fullText: string, active: boolean): string {
   return displayed
 }
 
+// ── Context Menu ──────────────────────────────────────────────────────────────
+
+function ContextMenu({
+  x,
+  y,
+  onDelete,
+  onClose,
+}: {
+  x: number
+  y: number
+  onDelete: () => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
+      style={{
+        left: `${x}px`,
+        top: `${y}px`,
+      }}
+    >
+      <button
+        onClick={() => {
+          onDelete()
+          onClose()
+        }}
+        className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-700/50 transition-colors flex items-center gap-2"
+      >
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+          />
+        </svg>
+        Delete message
+      </button>
+    </div>
+  )
+}
+
+// ── Delete Confirmation Modal ─────────────────────────────────────────────────
+
+function DeleteConfirmationModal({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-150">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm mx-4 shadow-2xl animate-in zoom-in-95 duration-150">
+        <h3 className="text-white font-semibold text-lg mb-2">Delete Message</h3>
+        <p className="text-zinc-400 text-sm mb-6">
+          Are you sure you want to delete this message? This action cannot be undone.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-600"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({
@@ -58,55 +168,93 @@ function MessageBubble({
 }) {
   const isUser = message.role === 'user'
   const text = useTypewriter(message.content, message.animate === true)
-  const [showDelete, setShowDelete] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY })
+  }, [])
+
+  const handleDelete = useCallback(() => {
+    setShowConfirmation(true)
+    setContextMenu(null)
+  }, [])
+
+  const handleConfirmDelete = useCallback(() => {
+    onDelete(message.id)
+    setShowConfirmation(false)
+  }, [message.id, onDelete])
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 group`}>
+    <>
       <div
-        className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
-          isUser
-            ? 'bg-indigo-600 text-white rounded-br-sm'
-            : 'bg-zinc-800 text-zinc-100 rounded-bl-sm'
-        } ${message.status === 'error' ? 'opacity-60' : ''}`}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 group animate-in fade-in slide-in-from-bottom-2 duration-300`}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onContextMenu={handleContextMenu}
       >
-        {text}
-        {message.status === 'error' && (
-          <span className="block mt-1 text-xs text-red-300">Failed to send</span>
-        )}
-      </div>
-      <button
-        onClick={() => setShowDelete(true)}
-        className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 text-zinc-500 hover:text-red-400 shrink-0 mt-1"
-        title="Delete message"
-        aria-label="Delete message"
-      >
-        ✕
-      </button>
-      {showDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm">
-            <p className="text-white mb-4">Delete this message?</p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowDelete(false)}
-                className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onDelete(message.id)
-                  setShowDelete(false)
-                }}
-                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
+        <div
+          className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words relative ${
+            isUser
+              ? 'bg-indigo-600 text-white rounded-br-sm'
+              : 'bg-zinc-800 text-zinc-100 rounded-bl-sm'
+          } ${message.status === 'error' ? 'opacity-60 border-2 border-red-500/30' : ''}`}
+        >
+          {text}
+          {message.status === 'error' && (
+            <span className="block mt-1 text-xs text-red-300">Failed to send</span>
+          )}
         </div>
+
+        {/* Action buttons (hover only) */}
+        <div
+          className={`flex items-center gap-1 ml-2 transition-all duration-150 ${
+            isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 pointer-events-none'
+          }`}
+        >
+          <button
+            onClick={handleDelete}
+            className="text-zinc-500 hover:text-red-400 hover:bg-zinc-800/50 rounded-lg p-1.5 transition-all shrink-0"
+            title="Delete message (Del)"
+            aria-label="Delete message"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onDelete={handleDelete}
+          onClose={() => setContextMenu(null)}
+        />
       )}
-    </div>
+
+      {/* Delete confirmation modal */}
+      {showConfirmation && (
+        <DeleteConfirmationModal
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setShowConfirmation(false)}
+        />
+      )}
+    </>
   )
 }
 
@@ -114,7 +262,7 @@ function MessageBubble({
 
 function TypingIndicator() {
   return (
-    <div className="flex justify-start mb-3">
+    <div className="flex justify-start mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1">
         {[0, 1, 2].map((i) => (
           <span
@@ -143,7 +291,7 @@ function ToastList({
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="flex items-start gap-3 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 shadow-xl text-sm text-zinc-100"
+          className="flex items-start gap-3 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 shadow-xl text-sm text-zinc-100 animate-in slide-in-from-right duration-200"
         >
           <span className="flex-1">
             {t.message}
@@ -335,7 +483,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
 
   const handleDeleteMessage = useCallback(
     async (messageId: string) => {
-      // Optimistic UI update — remove immediately
+      // Optimistic UI update — remove immediately with animation
       setMessages((prev) => prev.filter((m) => m.id !== messageId))
 
       try {

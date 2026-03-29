@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { desc, lt, eq, and, isNull } from 'drizzle-orm'
-import { chatMessages, instances, decrypt } from '@kodi/db'
+import { chatMessages, instances, decrypt, user } from '@kodi/db'
 import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
 
@@ -122,8 +122,20 @@ export const chatRouter = router({
       }
 
       const rows = await ctx.db
-        .select()
+        .select({
+          id: chatMessages.id,
+          orgId: chatMessages.orgId,
+          userId: chatMessages.userId,
+          role: chatMessages.role,
+          content: chatMessages.content,
+          status: chatMessages.status,
+          createdAt: chatMessages.createdAt,
+          deletedAt: chatMessages.deletedAt,
+          userName: user.name,
+          userImage: user.image,
+        })
         .from(chatMessages)
+        .leftJoin(user, eq(chatMessages.userId, user.id))
         .where(and(...conditions))
         .orderBy(desc(chatMessages.createdAt))
         .limit(input.limit)
@@ -139,7 +151,11 @@ export const chatRouter = router({
             content: WELCOME_MESSAGE,
           })
           .returning()
-        return welcome
+        return welcome.map((w) => ({
+          ...w,
+          userName: null as string | null,
+          userImage: null as string | null,
+        }))
       }
 
       // Return in chronological order (oldest first)

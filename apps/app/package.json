@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@kodi/api": "*",
-  "@kodi/db": "*",
+    "@kodi/db": "*",
     "@kodi/ui": "*",
     "@trpc/client": "^11.0.0",
     "@trpc/next": "^11.0.0",
@@ -24,6 +24,8 @@
     "next": "^14.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "stripe": "^15.8.0",
     "tailwind-merge": "^2.3.0",
     "zod": "^3.23.6"

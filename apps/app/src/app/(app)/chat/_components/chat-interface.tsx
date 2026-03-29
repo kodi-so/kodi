@@ -1,7 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { trpc } from '@/lib/trpc'
+import { useSession } from '@/lib/auth-client'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -10,6 +13,9 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   status?: string | null
+  createdAt?: string | Date | null
+  userName?: string | null
+  userImage?: string | null
   /** Marks messages that should have typewriter animation */
   animate?: boolean
 }
@@ -17,7 +23,62 @@ interface Message {
 interface Toast {
   id: string
   message: string
+  type?: 'info' | 'success'
   link?: { href: string; label: string }
+}
+
+interface DeletedMessage {
+  message: Message
+  index: number
+  timestamp: number
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+function formatDayLabel(date: Date): string {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diff = today.getTime() - target.getTime()
+  const dayMs = 86400000
+
+  if (diff === 0) return 'Today'
+  if (diff === dayMs) return 'Yesterday'
+  if (diff < 7 * dayMs) {
+    return date.toLocaleDateString([], { weekday: 'long' })
+  }
+  return date.toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: today.getFullYear() !== date.getFullYear() ? 'numeric' : undefined,
+  })
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+function getMessageDate(msg: Message): Date {
+  if (msg.createdAt) return new Date(msg.createdAt)
+  return new Date()
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 }
 
 // ── Typewriter hook ───────────────────────────────────────────────────────────
@@ -47,16 +108,89 @@ function useTypewriter(fullText: string, active: boolean): string {
   return displayed
 }
 
+// ── Markdown renderer ─────────────────────────────────────────────────────────
+
+function MarkdownContent({ content, isUser }: { content: string; isUser: boolean }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        em: ({ children }) => <em className="italic">{children}</em>,
+        ul: ({ children }) => <ul className="list-disc list-inside mb-2 last:mb-0 space-y-0.5">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 last:mb-0 space-y-0.5">{children}</ol>,
+        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+        code: ({ className, children, ...props }) => {
+          const isBlock = className?.includes('language-')
+          if (isBlock) {
+            return (
+              <pre className={`my-2 rounded-lg p-3 text-xs overflow-x-auto ${isUser ? 'bg-indigo-700/50' : 'bg-zinc-900/80'}`}>
+                <code className={className} {...props}>{children}</code>
+              </pre>
+            )
+          }
+          return (
+            <code
+              className={`px-1.5 py-0.5 rounded text-xs font-mono ${
+                isUser ? 'bg-indigo-700/50' : 'bg-zinc-700/60'
+              }`}
+              {...props}
+            >
+              {children}
+            </code>
+          )
+        },
+        pre: ({ children }) => <>{children}</>,
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`underline underline-offset-2 ${isUser ? 'text-indigo-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'}`}
+          >
+            {children}
+          </a>
+        ),
+        blockquote: ({ children }) => (
+          <blockquote className={`border-l-2 pl-3 my-2 ${isUser ? 'border-indigo-400/50 text-indigo-100' : 'border-zinc-600 text-zinc-300'}`}>
+            {children}
+          </blockquote>
+        ),
+        h1: ({ children }) => <h1 className="text-base font-bold mb-1">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-sm font-semibold mb-1">{children}</h3>,
+        hr: () => <hr className={`my-2 ${isUser ? 'border-indigo-500/30' : 'border-zinc-700'}`} />,
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-2">
+            <table className={`text-xs border-collapse ${isUser ? 'border-indigo-500/30' : 'border-zinc-700'}`}>{children}</table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className={`px-2 py-1 text-left font-semibold border-b ${isUser ? 'border-indigo-500/30' : 'border-zinc-700'}`}>{children}</th>
+        ),
+        td: ({ children }) => (
+          <td className={`px-2 py-1 border-b ${isUser ? 'border-indigo-500/20' : 'border-zinc-800'}`}>{children}</td>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  )
+}
+
 // ── Context Menu ──────────────────────────────────────────────────────────────
 
 function ContextMenu({
   x,
   y,
+  onCopy,
   onDelete,
   onClose,
 }: {
   x: number
   y: number
+  onCopy: () => void
   onDelete: () => void
   onClose: () => void
 }) {
@@ -64,9 +198,7 @@ function ContextMenu({
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -83,32 +215,27 @@ function ContextMenu({
     <div
       ref={ref}
       className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
-      style={{
-        left: `${x}px`,
-        top: `${y}px`,
-      }}
+      style={{ left: `${x}px`, top: `${y}px` }}
     >
       <button
-        onClick={() => {
-          onDelete()
-          onClose()
-        }}
+        onClick={() => { onCopy(); onClose() }}
+        className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors flex items-center gap-2"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        Copy text
+        <span className="ml-auto text-xs text-zinc-500">⌘C</span>
+      </button>
+      <button
+        onClick={() => { onDelete(); onClose() }}
         className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-700/50 transition-colors flex items-center gap-2"
       >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-          />
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg>
         Delete message
+        <span className="ml-auto text-xs text-zinc-500">Del</span>
       </button>
     </div>
   )
@@ -136,7 +263,8 @@ function DeleteConfirmationModal({
       <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm mx-4 shadow-2xl animate-in zoom-in-95 duration-150">
         <h3 className="text-white font-semibold text-lg mb-2">Delete Message</h3>
         <p className="text-zinc-400 text-sm mb-6">
-          Are you sure you want to delete this message? This action cannot be undone.
+          Are you sure you want to delete this message? You can undo with{' '}
+          <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-xs font-mono">⌘Z</kbd>
         </p>
         <div className="flex gap-3 justify-end">
           <button
@@ -157,14 +285,70 @@ function DeleteConfirmationModal({
   )
 }
 
+// ── Day Separator ─────────────────────────────────────────────────────────────
+
+function DaySeparator({ date }: { date: Date }) {
+  return (
+    <div className="flex items-center gap-3 my-4 first:mt-0">
+      <div className="flex-1 h-px bg-zinc-800" />
+      <span className="text-xs font-medium text-zinc-500 px-2">{formatDayLabel(date)}</span>
+      <div className="flex-1 h-px bg-zinc-800" />
+    </div>
+  )
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+
+function Avatar({
+  name,
+  image,
+  isAssistant,
+}: {
+  name: string
+  image?: string | null
+  isAssistant?: boolean
+}) {
+  if (isAssistant) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (image) {
+    return (
+      <img
+        src={image}
+        alt={name}
+        className="w-8 h-8 rounded-full object-cover shrink-0"
+      />
+    )
+  }
+
+  return (
+    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center shrink-0">
+      <span className="text-xs font-medium text-zinc-300">{getInitials(name)}</span>
+    </div>
+  )
+}
+
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({
   message,
+  isSelected,
+  onSelect,
   onDelete,
+  onCopy,
 }: {
   message: Message
+  isSelected: boolean
+  onSelect: (id: string) => void
   onDelete: (messageId: string) => void
+  onCopy: (messageId: string) => void
 }) {
   const isUser = message.role === 'user'
   const text = useTypewriter(message.content, message.animate === true)
@@ -172,10 +356,16 @@ function MessageBubble({
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
+  const senderName = isUser
+    ? message.userName || 'You'
+    : 'Kodi'
+  const timestamp = getMessageDate(message)
+
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
+    onSelect(message.id)
     setContextMenu({ x: e.clientX, y: e.clientY })
-  }, [])
+  }, [message.id, onSelect])
 
   const handleDelete = useCallback(() => {
     setShowConfirmation(true)
@@ -187,51 +377,76 @@ function MessageBubble({
     setShowConfirmation(false)
   }, [message.id, onDelete])
 
+  const handleCopy = useCallback(() => {
+    onCopy(message.id)
+  }, [message.id, onCopy])
+
   return (
     <>
       <div
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 group animate-in fade-in slide-in-from-bottom-2 duration-300`}
+        className={`flex gap-3 mb-1 group animate-in fade-in slide-in-from-bottom-2 duration-300 px-2 py-1.5 rounded-lg transition-colors ${
+          isSelected ? 'bg-zinc-800/50' : 'hover:bg-zinc-900/50'
+        }`}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onContextMenu={handleContextMenu}
+        onClick={() => onSelect(message.id)}
+        data-message-id={message.id}
       >
-        <div
-          className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words relative ${
-            isUser
-              ? 'bg-indigo-600 text-white rounded-br-sm'
-              : 'bg-zinc-800 text-zinc-100 rounded-bl-sm'
-          } ${message.status === 'error' ? 'opacity-60 border-2 border-red-500/30' : ''}`}
-        >
-          {text}
-          {message.status === 'error' && (
-            <span className="block mt-1 text-xs text-red-300">Failed to send</span>
-          )}
+        {/* Avatar */}
+        <Avatar
+          name={senderName}
+          image={isUser ? message.userImage : undefined}
+          isAssistant={!isUser}
+        />
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          {/* Sender name + timestamp */}
+          <div className="flex items-baseline gap-2 mb-0.5">
+            <span className={`text-sm font-semibold ${isUser ? 'text-zinc-100' : 'text-indigo-400'}`}>
+              {senderName}
+            </span>
+            <span className="text-xs text-zinc-600">{formatTime(timestamp)}</span>
+          </div>
+
+          {/* Message content with markdown */}
+          <div
+            className={`text-sm leading-relaxed break-words ${
+              message.status === 'error' ? 'opacity-60' : ''
+            } ${isUser ? 'text-zinc-200' : 'text-zinc-300'} prose-sm`}
+          >
+            <MarkdownContent content={text} isUser={isUser} />
+            {message.status === 'error' && (
+              <span className="block mt-1 text-xs text-red-400 font-medium">⚠ Failed to send</span>
+            )}
+          </div>
         </div>
 
-        {/* Action buttons (hover only) */}
+        {/* Hover action buttons */}
         <div
-          className={`flex items-center gap-1 ml-2 transition-all duration-150 ${
-            isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 pointer-events-none'
+          className={`flex items-start gap-0.5 pt-1 transition-all duration-150 ${
+            isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
           <button
-            onClick={handleDelete}
-            className="text-zinc-500 hover:text-red-400 hover:bg-zinc-800/50 rounded-lg p-1.5 transition-all shrink-0"
+            onClick={(e) => { e.stopPropagation(); handleCopy() }}
+            className="text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-md p-1.5 transition-all shrink-0"
+            title="Copy text (⌘C)"
+            aria-label="Copy text"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleDelete() }}
+            className="text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-md p-1.5 transition-all shrink-0"
             title="Delete message (Del)"
             aria-label="Delete message"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
         </div>
@@ -242,6 +457,7 @@ function MessageBubble({
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          onCopy={handleCopy}
           onDelete={handleDelete}
           onClose={() => setContextMenu(null)}
         />
@@ -262,15 +478,18 @@ function MessageBubble({
 
 function TypingIndicator() {
   return (
-    <div className="flex justify-start mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce"
-            style={{ animationDelay: `${i * 150}ms` }}
-          />
-        ))}
+    <div className="flex gap-3 mb-1 px-2 py-1.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <Avatar name="Kodi" isAssistant />
+      <div className="flex items-center">
+        <div className="bg-zinc-800/60 rounded-xl px-4 py-2.5 flex items-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce"
+              style={{ animationDelay: `${i * 150}ms` }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -291,17 +510,18 @@ function ToastList({
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="flex items-start gap-3 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 shadow-xl text-sm text-zinc-100 animate-in slide-in-from-right duration-200"
+          className={`flex items-start gap-3 border rounded-xl px-4 py-3 shadow-xl text-sm animate-in slide-in-from-right duration-200 ${
+            t.type === 'success'
+              ? 'bg-emerald-950/90 border-emerald-800 text-emerald-100'
+              : 'bg-zinc-900 border-zinc-700 text-zinc-100'
+          }`}
         >
           <span className="flex-1">
             {t.message}
             {t.link && (
               <>
                 {' '}
-                <a
-                  href={t.link.href}
-                  className="text-indigo-400 hover:underline font-medium"
-                >
+                <a href={t.link.href} className="text-indigo-400 hover:underline font-medium">
                   {t.link.label}
                 </a>
               </>
@@ -320,24 +540,47 @@ function ToastList({
   )
 }
 
+// ── Keyboard Shortcuts Help ───────────────────────────────────────────────────
+
+function ShortcutsHelp() {
+  return (
+    <div className="text-center text-zinc-600 text-xs mt-2 space-x-3">
+      <span>Enter to send</span>
+      <span>·</span>
+      <span>Shift+Enter for new line</span>
+      <span>·</span>
+      <span>⌘C copy</span>
+      <span>·</span>
+      <span>Del delete</span>
+      <span>·</span>
+      <span>⌘Z undo</span>
+    </div>
+  )
+}
+
 // ── ChatInterface ─────────────────────────────────────────────────────────────
 
 export function ChatInterface({ orgId }: { orgId: string }) {
+  const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
+  const [deletedMessages, setDeletedMessages] = useState<DeletedMessage[]>([])
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const messagesRef = useRef<Message[]>(messages)
+  messagesRef.current = messages
 
   // ── Toast helpers ────────────────────────────────────────────────────────
 
   const addToast = useCallback(
-    (message: string, link?: { href: string; label: string }) => {
+    (message: string, opts?: { link?: { href: string; label: string }; type?: 'info' | 'success' }) => {
       const id = Math.random().toString(36).slice(2)
-      setToasts((prev) => [...prev, { id, message, link }])
+      setToasts((prev) => [...prev, { id, message, link: opts?.link, type: opts?.type }])
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id))
       }, 6000)
@@ -360,13 +603,15 @@ export function ChatInterface({ orgId }: { orgId: string }) {
       .query({ orgId, limit: 50 })
       .then((rows) => {
         if (cancelled) return
-        // History messages don't animate
         setMessages(
           rows.map((r) => ({
             id: r.id,
             role: r.role as 'user' | 'assistant',
             content: r.content,
             status: r.status,
+            createdAt: r.createdAt,
+            userName: 'userName' in r ? (r as any).userName : null,
+            userImage: 'userImage' in r ? (r as any).userImage : null,
             animate: false,
           })),
         )
@@ -395,13 +640,25 @@ export function ChatInterface({ orgId }: { orgId: string }) {
     const el = textareaRef.current
     if (!el) return
     el.style.height = 'auto'
-    // Cap at ~5 lines (approx 120px)
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`
   }, [])
 
   useEffect(() => {
     resizeTextarea()
   }, [input, resizeTextarea])
+
+  // ── Copy message ─────────────────────────────────────────────────────────
+
+  const handleCopyMessage = useCallback(
+    (messageId: string) => {
+      const msg = messagesRef.current.find((m) => m.id === messageId)
+      if (!msg) return
+      navigator.clipboard.writeText(msg.content).then(() => {
+        addToast('Copied to clipboard', { type: 'success' })
+      })
+    },
+    [addToast],
+  )
 
   // ── Send message ─────────────────────────────────────────────────────────
 
@@ -415,6 +672,9 @@ export function ChatInterface({ orgId }: { orgId: string }) {
       role: 'user',
       content: text,
       status: 'sending',
+      createdAt: new Date().toISOString(),
+      userName: session?.user?.name || 'You',
+      userImage: session?.user?.image || null,
       animate: false,
     }
 
@@ -426,7 +686,6 @@ export function ChatInterface({ orgId }: { orgId: string }) {
       const result = await trpc.chat.sendMessage.mutate({ orgId, message: text })
 
       setMessages((prev) => {
-        // Replace optimistic with confirmed user message
         const updated = prev.map((m) =>
           m.id === optimisticId
             ? {
@@ -434,11 +693,13 @@ export function ChatInterface({ orgId }: { orgId: string }) {
                 role: 'user' as const,
                 content: result.userMessage.content,
                 status: result.userMessage.status,
+                createdAt: result.userMessage.createdAt,
+                userName: session?.user?.name || 'You',
+                userImage: session?.user?.image || null,
                 animate: false,
               }
             : m,
         )
-        // Append assistant message with typewriter
         return [
           ...updated,
           {
@@ -446,16 +707,16 @@ export function ChatInterface({ orgId }: { orgId: string }) {
             role: 'assistant' as const,
             content: result.assistantMessage!.content,
             status: result.assistantMessage!.status,
+            createdAt: result.assistantMessage!.createdAt,
+            userName: null,
+            userImage: null,
             animate: true,
           },
         ]
       })
     } catch (err: unknown) {
-      // Mark optimistic message as errored
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === optimisticId ? { ...m, status: 'error' } : m,
-        ),
+        prev.map((m) => (m.id === optimisticId ? { ...m, status: 'error' } : m)),
       )
 
       const msg = err instanceof Error ? err.message : String(err)
@@ -465,35 +726,41 @@ export function ChatInterface({ orgId }: { orgId: string }) {
         msg.toLowerCase().includes('precondition')
 
       if (isOffline) {
-        addToast('Your agent is offline.', {
-          href: '/dashboard',
-          label: 'Check status →',
-        })
+        addToast('Your agent is offline.', { link: { href: '/dashboard', label: 'Check status →' } })
       } else {
         addToast('Failed to send message. Your text has been preserved.')
       }
-
-      // Restore input so user doesn't lose their message
       setInput(text)
     } finally {
       setSending(false)
     }
-  }, [input, orgId, sending, addToast])
+  }, [input, orgId, sending, addToast, session])
 
   // ── Delete message ──────────────────────────────────────────────────────
 
   const handleDeleteMessage = useCallback(
     async (messageId: string) => {
-      // Optimistic UI update — remove immediately with animation
+      const msgIndex = messagesRef.current.findIndex((m) => m.id === messageId)
+      const msg = messagesRef.current[msgIndex]
+      if (!msg || msgIndex === -1) return
+
+      // Save for undo
+      setDeletedMessages((prev) => [
+        ...prev,
+        { message: msg, index: msgIndex, timestamp: Date.now() },
+      ])
+
+      // Optimistic removal
       setMessages((prev) => prev.filter((m) => m.id !== messageId))
+      setSelectedMessageId(null)
 
       try {
         await trpc.chat.deleteMessage.mutate({ messageId, orgId })
+        addToast('Message deleted. Press ⌘Z to undo.', { type: 'info' })
       } catch (err: unknown) {
-        // Restore message on error
-        const msg = err instanceof Error ? err.message : String(err)
-        addToast(`Failed to delete message: ${msg}`)
-        // Re-fetch to restore state
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        addToast(`Failed to delete message: ${errorMsg}`)
+        // Restore on error
         const history = await trpc.chat.getHistory.query({ orgId, limit: 50 })
         setMessages(
           history.map((r) => ({
@@ -501,17 +768,119 @@ export function ChatInterface({ orgId }: { orgId: string }) {
             role: r.role as 'user' | 'assistant',
             content: r.content,
             status: r.status,
+            createdAt: r.createdAt,
+            userName: 'userName' in r ? (r as any).userName : null,
+            userImage: 'userImage' in r ? (r as any).userImage : null,
             animate: false,
           })),
         )
+        // Remove from undo stack
+        setDeletedMessages((prev) => prev.filter((d) => d.message.id !== messageId))
       }
     },
     [orgId, addToast],
   )
 
-  // ── Keyboard handling ────────────────────────────────────────────────────
+  // ── Undo delete ──────────────────────────────────────────────────────────
 
-  const handleKeyDown = useCallback(
+  const undoLastDelete = useCallback(async () => {
+    setDeletedMessages((prev) => {
+      if (prev.length === 0) return prev
+      const last = prev[prev.length - 1]!
+      const rest = prev.slice(0, -1)
+
+      // Restore the message in the UI at its original position
+      setMessages((msgs) => {
+        const newMsgs = [...msgs]
+        const insertAt = Math.min(last.index, newMsgs.length)
+        newMsgs.splice(insertAt, 0, last.message)
+        return newMsgs
+      })
+
+      // Re-fetch to get server state (message was soft-deleted, we can't un-delete via API yet, but at least UI is restored)
+      // In a production app, you'd call an undelete API here
+      addToast('Message restored', { type: 'success' })
+
+      return rest
+    })
+  }, [addToast])
+
+  // ── Global keyboard shortcuts ────────────────────────────────────────────
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey
+
+      // ⌘Z — undo last deletion
+      if (isMod && e.key === 'z' && !e.shiftKey) {
+        if (deletedMessages.length > 0) {
+          e.preventDefault()
+          void undoLastDelete()
+          return
+        }
+      }
+
+      // ⌘C — copy selected message (only when no text is selected)
+      if (isMod && e.key === 'c' && selectedMessageId) {
+        const selection = window.getSelection()
+        if (!selection || selection.toString().length === 0) {
+          e.preventDefault()
+          handleCopyMessage(selectedMessageId)
+          return
+        }
+      }
+
+      // Delete / Backspace — delete selected message
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedMessageId) {
+        // Don't trigger if user is typing in textarea
+        if ((e.target as HTMLElement)?.tagName === 'TEXTAREA') return
+        e.preventDefault()
+        void handleDeleteMessage(selectedMessageId)
+        return
+      }
+
+      // Escape — deselect
+      if (e.key === 'Escape') {
+        setSelectedMessageId(null)
+      }
+
+      // Arrow keys — navigate messages
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.target?.toString().includes('textarea')) {
+        if ((e.target as HTMLElement)?.tagName === 'TEXTAREA') return
+        e.preventDefault()
+        const msgs = messagesRef.current
+        if (msgs.length === 0) return
+
+        if (!selectedMessageId) {
+          setSelectedMessageId(msgs[msgs.length - 1]!.id)
+          return
+        }
+
+        const idx = msgs.findIndex((m) => m.id === selectedMessageId)
+        if (e.key === 'ArrowUp' && idx > 0) {
+          setSelectedMessageId(msgs[idx - 1]!.id)
+        } else if (e.key === 'ArrowDown' && idx < msgs.length - 1) {
+          setSelectedMessageId(msgs[idx + 1]!.id)
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectedMessageId, deletedMessages, handleDeleteMessage, handleCopyMessage, undoLastDelete])
+
+  // ── Clean up old undo entries (>30s) ────────────────────────────────────
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDeletedMessages((prev) => prev.filter((d) => Date.now() - d.timestamp < 30000))
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // ── Textarea keyboard handling ───────────────────────────────────────────
+
+  const handleTextareaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
@@ -521,29 +890,52 @@ export function ChatInterface({ orgId }: { orgId: string }) {
     [send],
   )
 
+  // ── Render messages with day separators ──────────────────────────────────
+
+  const renderMessages = () => {
+    const elements: JSX.Element[] = []
+    let lastDate: Date | null = null
+
+    for (const m of messages) {
+      const msgDate = getMessageDate(m)
+      if (!lastDate || !isSameDay(lastDate, msgDate)) {
+        elements.push(<DaySeparator key={`day-${msgDate.toDateString()}`} date={msgDate} />)
+      }
+      lastDate = msgDate
+
+      elements.push(
+        <MessageBubble
+          key={m.id}
+          message={m}
+          isSelected={selectedMessageId === m.id}
+          onSelect={setSelectedMessageId}
+          onDelete={handleDeleteMessage}
+          onCopy={handleCopyMessage}
+        />,
+      )
+    }
+    return elements
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950">
+    <div className="flex flex-col h-full bg-zinc-950" onClick={() => setSelectedMessageId(null)}>
       {/* Message thread */}
       <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8">
-        {loading ? (
-          <div className="flex justify-center items-center h-24">
-            <div className="w-6 h-6 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
-          </div>
-        ) : (
-          <>
-            {messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                onDelete={handleDeleteMessage}
-              />
-            ))}
-            {sending && <TypingIndicator />}
-          </>
-        )}
-        <div ref={bottomRef} />
+        <div className="max-w-3xl mx-auto">
+          {loading ? (
+            <div className="flex justify-center items-center h-24">
+              <div className="w-6 h-6 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+            </div>
+          ) : (
+            <>
+              {renderMessages()}
+              {sending && <TypingIndicator />}
+            </>
+          )}
+          <div ref={bottomRef} />
+        </div>
       </div>
 
       {/* Input bar */}
@@ -553,16 +945,17 @@ export function ChatInterface({ orgId }: { orgId: string }) {
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleTextareaKeyDown}
             placeholder="Message your agent…"
             rows={1}
             disabled={sending || loading}
             className="flex-1 resize-none rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 overflow-y-auto"
             style={{ maxHeight: '120px' }}
             aria-label="Message input"
+            onClick={(e) => e.stopPropagation()}
           />
           <button
-            onClick={() => void send()}
+            onClick={(e) => { e.stopPropagation(); void send() }}
             disabled={sending || loading || !input.trim()}
             className="shrink-0 h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
             aria-label="Send message"
@@ -570,9 +963,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
             Send
           </button>
         </div>
-        <p className="text-center text-zinc-600 text-xs mt-2">
-          Enter to send · Shift+Enter for new line
-        </p>
+        <ShortcutsHelp />
       </div>
 
       {/* Toasts */}

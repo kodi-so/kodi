@@ -1,49 +1,59 @@
-import { headers } from 'next/headers'
-import { redirect } from 'next/navigation'
-import { auth } from '@/lib/auth'
-import { db, instances, orgMembers } from '@kodi/db'
-import { eq } from 'drizzle-orm'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useOrg } from '@/lib/org-context'
+import { trpc } from '@/lib/trpc'
 import { ProvisionStatus } from './_components/provision-status'
 
-export const metadata = {
-  title: 'Provisioning — Kodi',
+type StatusData = {
+  id: string
+  status: 'pending' | 'installing' | 'running' | 'error' | 'suspended' | 'deleting' | 'deleted'
+  hostname: string | null
+  ipAddress: string | null
+  errorMessage: string | null
+  lastHealthCheck: Date | null
 }
 
-export default async function ProvisionPage() {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session) redirect('/login')
+export default function ProvisionPage() {
+  const { activeOrg } = useOrg()
+  const [initialData, setInitialData] = useState<StatusData | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Find the user's org
-  const membership = await db.query.orgMembers.findFirst({
-    where: eq(orgMembers.userId, session.user.id),
-    with: { org: true },
-  })
+  useEffect(() => {
+    if (!activeOrg) return
+    setLoading(true)
+    setInitialData(null)
 
-  if (!membership) {
-    redirect('/dashboard')
+    trpc.instance.getStatus
+      .query({ orgId: activeOrg.orgId })
+      .then((data) => {
+        setInitialData(data as StatusData | null)
+      })
+      .catch(() => {
+        setInitialData(null)
+      })
+      .finally(() => setLoading(false))
+  }, [activeOrg?.orgId])
+
+  if (!activeOrg) {
+    return (
+      <div className="flex items-center justify-center min-h-full p-6 text-zinc-500 text-sm">
+        Select a team to manage your agent.
+      </div>
+    )
   }
 
-  const orgId = membership.orgId
-
-  // Find the org's instance
-  const instance = await db.query.instances.findFirst({
-    where: eq(instances.orgId, orgId),
-  })
-
-  const initialData = instance
-    ? {
-        id: instance.id,
-        status: instance.status as 'pending' | 'installing' | 'running' | 'error' | 'suspended' | 'deleting' | 'deleted',
-        hostname: instance.hostname ?? null,
-        ipAddress: instance.ipAddress ?? null,
-        errorMessage: instance.errorMessage ?? null,
-        lastHealthCheck: instance.lastHealthCheck ?? null,
-      }
-    : null
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-full p-6">
+        <div className="w-6 h-6 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center justify-center min-h-full p-6">
-      <ProvisionStatus orgId={orgId} initialData={initialData} />
+      <ProvisionStatus orgId={activeOrg.orgId} initialData={initialData} />
     </div>
   )
 }

@@ -56,7 +56,6 @@ export const chatRouter = router({
     .input(
       z.object({
         messageId: z.string(),
-        orgId: z.string(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -103,7 +102,6 @@ export const chatRouter = router({
   getHistory: memberProcedure
     .input(
       z.object({
-        orgId: z.string(),
         limit: z.number().int().min(1).max(100).default(50),
         before: z.string().optional(), // message id for cursor pagination
       })
@@ -153,7 +151,6 @@ export const chatRouter = router({
   sendMessage: memberProcedure
     .input(
       z.object({
-        orgId: z.string(),
         message: z.string().min(1),
       })
     )

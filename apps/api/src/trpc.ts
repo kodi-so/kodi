@@ -81,8 +81,11 @@ export const requireOwner = requireMember.unstable_pipe(async ({ ctx, next }) =>
   return next()
 })
 
-/** Drop-in replacement for protectedProcedure on org-scoped member routes */
-export const memberProcedure = t.procedure.use(requireMember)
-
-/** Drop-in replacement for protectedProcedure on org-scoped owner-only routes */
-export const ownerProcedure = t.procedure.use(requireOwner)
+/**
+ * Org-scoped procedures — bake orgId into the input schema so individual
+ * routes don't have to redeclare it. The middleware verifies membership
+ * and puts the authenticated org in ctx.org; route handlers should always
+ * use ctx.org.id, never input.orgId.
+ */
+export const memberProcedure = t.procedure.use(requireMember).input(orgScopedInput)
+export const ownerProcedure = t.procedure.use(requireOwner).input(orgScopedInput)

@@ -71,7 +71,6 @@ export const orgRouter = router({
    * Requires the caller to be a member of the org (any role).
    */
   getMembers: memberProcedure
-    .input(z.object({ orgId: z.string() }))
     .query(async ({ ctx }) => {
       // Join org_members with user table to get name + email
       const members = await ctx.db
@@ -94,7 +93,7 @@ export const orgRouter = router({
    * org.update — owner only, updates org name (and optionally slug).
    */
   update: ownerProcedure
-    .input(z.object({ orgId: z.string(), name: z.string().min(1).max(80) }))
+    .input(z.object({ name: z.string().min(1).max(80) }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .update(organizations)
@@ -108,7 +107,7 @@ export const orgRouter = router({
    * Owner cannot remove themselves.
    */
   removeMember: ownerProcedure
-    .input(z.object({ orgId: z.string(), userId: z.string() }))
+    .input(z.object({ userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Prevent owner removing themselves
       if (input.userId === ctx.session!.user.id) {
@@ -149,7 +148,7 @@ export const orgRouter = router({
    * Scoped to the caller's org via memberProcedure RBAC.
    */
   getActivity: memberProcedure
-    .input(z.object({ orgId: z.string(), limit: z.number().int().min(1).max(50).default(20) }))
+    .input(z.object({ limit: z.number().int().min(1).max(50).default(20) }))
     .query(async ({ ctx, input }) => {
       return ctx.db
         .select()

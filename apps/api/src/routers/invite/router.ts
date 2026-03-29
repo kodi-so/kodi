@@ -77,7 +77,7 @@ export const inviteRouter = router({
    * In dev (no RESEND_API_KEY), logs the invite link to console instead.
    */
   send: ownerProcedure
-    .input(z.object({ orgId: z.string(), email: z.string().email() }))
+    .input(z.object({ email: z.string().email() }))
     .mutation(async ({ ctx, input }) => {
       const jwtSecret = env.INVITE_JWT_SECRET
       const appUrl = env.APP_URL ?? 'http://localhost:3000'
@@ -271,8 +271,7 @@ export const inviteRouter = router({
    * Lists pending (unused + non-expired) invites for the member management UI.
    */
   getActive: ownerProcedure
-    .input(z.object({ orgId: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx }) => {
       const now = new Date()
       return ctx.db.query.orgInvites.findMany({
         where: and(
@@ -297,7 +296,7 @@ export const inviteRouter = router({
    * The owner must belong to the same org as the invite.
    */
   revoke: ownerProcedure
-    .input(z.object({ orgId: z.string(), inviteId: z.string() }))
+    .input(z.object({ inviteId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const invite = await ctx.db.query.orgInvites.findFirst({
         where: and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, ctx.org.id)),

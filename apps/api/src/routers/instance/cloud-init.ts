@@ -86,7 +86,7 @@ ssh_authorized_keys:
     'Group=root',
     'Environment=HOME=/root',
     'ExecStart=/usr/bin/openclaw gateway',
-    'Restart=on-failure',
+    'Restart=always',
     'RestartSec=10',
     'StandardOutput=journal',
     'StandardError=journal',

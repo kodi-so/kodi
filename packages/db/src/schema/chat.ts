@@ -19,6 +19,7 @@ export const chatMessages = pgTable(
     // 'pending' | 'sent' | 'error' — used to show retry UI on failure
     status: text('status').notNull().default('sent'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
+    deletedAt: timestamp('deleted_at'), // soft delete timestamp
   },
   (table) => [index('chat_messages_org_created_idx').on(table.orgId, table.createdAt)]
 )

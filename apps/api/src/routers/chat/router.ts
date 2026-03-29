@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { desc, lt, eq, and } from 'drizzle-orm'
+import { desc, lt, eq, and, isNull } from 'drizzle-orm'
 import { chatMessages, instances, decrypt } from '@kodi/db'
 import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
@@ -9,10 +9,57 @@ const WELCOME_MESSAGE =
 
 export const chatRouter = router({
   /**
+   * Deletes a message by ID (soft delete via deletedAt timestamp).
+   * Requires caller to be an org member.
+   * Only allows deletion of messages belonging to the org.
+   */
+  deleteMessage: memberProcedure
+    .input(
+      z.object({
+        messageId: z.string(),
+        orgId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Find message and verify it belongs to the org
+      const message = await ctx.db.query.chatMessages.findFirst({
+        where: eq(chatMessages.id, input.messageId),
+      })
+
+      if (!message) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Message not found' })
+      }
+
+      if (message.orgId !== input.orgId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Cannot delete message from another org',
+        })
+      }
+
+      if (message.deletedAt) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Message already deleted',
+        })
+      }
+
+      // Soft delete by setting deletedAt timestamp
+      const [deleted] = await ctx.db
+        .update(chatMessages)
+        .set({ deletedAt: new Date() })
+        .where(eq(chatMessages.id, input.messageId))
+        .returning()
+
+      return deleted
+    }),
+
+  /**
    * Returns the last N messages for an org, newest-last (chronological order).
    * Supports cursor pagination via `before` (a message id).
    * On first load (no messages), inserts a welcome message and returns it.
    * Requires caller to be an org member (enforced by memberProcedure).
+   * Excludes soft-deleted messages.
    */
   getHistory: memberProcedure
     .input(
@@ -24,7 +71,7 @@ export const chatRouter = router({
     )
     .query(async ({ ctx, input }) => {
       // Membership enforced by memberProcedure middleware
-      const conditions = [eq(chatMessages.orgId, input.orgId)]
+      const conditions = [eq(chatMessages.orgId, input.orgId), isNull(chatMessages.deletedAt)]
 
       if (input.before) {
         const cursor = await ctx.db.query.chatMessages.findFirst({

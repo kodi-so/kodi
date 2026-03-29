@@ -7,6 +7,7 @@ export interface InstanceConfig {
 }
 
 const DEFAULT_MODEL_ID = 'moonshot/kimi-k2.5'
+const OPENCLAW_VERSION = '2026.3.24'
 
 export function generateCloudInit(
   gatewayToken: string,
@@ -85,8 +86,9 @@ ssh_authorized_keys:
     'User=root',
     'Group=root',
     'Environment=HOME=/root',
+    'Environment=OPENCLAW_NO_AUTO_UPDATE=1',
     'ExecStart=/usr/bin/openclaw gateway',
-    'Restart=on-failure',
+    'Restart=always',
     'RestartSec=10',
     'StandardOutput=journal',
     'StandardError=journal',
@@ -133,7 +135,7 @@ ssh_authorized_keys:
 package_update: true
 ${sshBlock}
 runcmd:
-  - export HOME=/root && curl -fsSL https://openclaw.ai/install.sh | bash
+  - export HOME=/root OPENCLAW_VERSION=${OPENCLAW_VERSION} && curl -fsSL https://openclaw.ai/install.sh | bash
   - mkdir -p /root/.openclaw
   - echo '${configBase64}' | base64 -d > /root/.openclaw/openclaw.json
   - chmod 700 /root/.openclaw && chmod 600 /root/.openclaw/openclaw.json

@@ -76,7 +76,7 @@ export const inviteRouter = router({
    * Generates a signed JWT invite token, stores it, and sends an email via Resend.
    * In dev (no RESEND_API_KEY), logs the invite link to console instead.
    */
-  send: protectedProcedure
+  send: ownerProcedure
     .input(z.object({ orgId: z.string(), email: z.string().email() }))
     .mutation(async ({ ctx, input }) => {
       const jwtSecret = env.INVITE_JWT_SECRET
@@ -89,18 +89,9 @@ export const inviteRouter = router({
         })
       }
 
-      // 1. Verify caller is org owner
-      const org = await ctx.db.query.organizations.findFirst({
-        where: eq(organizations.id, input.orgId),
-      })
-      if (!org) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Organisation not found.' })
-      }
-      if (org.ownerId !== ctx.session!.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the org owner can send invites.' })
-      }
+      const org = ctx.org
 
-      // 2. Check for an existing active (unused + non-expired) invite for this email+org
+      // Check for an existing active (unused + non-expired) invite for this email+org
       const now = new Date()
       const existing = await ctx.db.query.orgInvites.findFirst({
         where: and(
@@ -279,20 +270,9 @@ export const inviteRouter = router({
    * invite.getActive — owner only
    * Lists pending (unused + non-expired) invites for the member management UI.
    */
-  getActive: protectedProcedure
+  getActive: ownerProcedure
     .input(z.object({ orgId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Verify caller is org owner
-      const org = await ctx.db.query.organizations.findFirst({
-        where: eq(organizations.id, input.orgId),
-      })
-      if (!org) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Organisation not found.' })
-      }
-      if (org.ownerId !== ctx.session!.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the org owner can view invites.' })
-      }
-
       const now = new Date()
       return ctx.db.query.orgInvites.findMany({
         where: and(

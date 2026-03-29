@@ -40,7 +40,7 @@ export const instanceRouter = router({
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })
-      if (!inst) {
+      if (!inst || inst.orgId !== input.orgId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' })
       }
 
@@ -87,7 +87,7 @@ export const instanceRouter = router({
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })
-      if (!inst) {
+      if (!inst || inst.orgId !== input.orgId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' })
       }
       if (inst.status !== 'error') {
@@ -119,7 +119,7 @@ export const instanceRouter = router({
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })
-      if (!inst) {
+      if (!inst || inst.orgId !== input.orgId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' })
       }
 

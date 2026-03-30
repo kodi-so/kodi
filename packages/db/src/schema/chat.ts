@@ -21,7 +21,12 @@ export const chatMessages = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     deletedAt: timestamp('deleted_at'), // soft delete timestamp
   },
-  (table) => [index('chat_messages_org_created_idx').on(table.orgId, table.createdAt)]
+  (table) => ({
+    orgCreatedIdx: index('chat_messages_org_created_idx').on(
+      table.orgId,
+      table.createdAt
+    ),
+  })
 )
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({

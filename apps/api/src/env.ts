@@ -11,7 +11,22 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32),
 
   // Encryption (generate: openssl rand -hex 32)
-  ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
+  ENCRYPTION_KEY: z
+    .string()
+    .length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
+
+  // Feature flags
+  KODI_FEATURE_ZOOM_COPILOT: z.coerce.boolean().default(false),
+
+  // ── Required in Phase 1 (Zoom copilot) ───────────────────────────────────
+
+  // Zoom
+  ZOOM_CLIENT_ID: z.string().optional(),
+  ZOOM_CLIENT_SECRET: z.string().optional(),
+  ZOOM_WEBHOOK_SECRET: z.string().optional(),
+  ZOOM_REDIRECT_URI: z.string().url().optional(),
+  ZOOM_APP_ID: z.string().optional(),
+  ZOOM_ACCOUNT_ID: z.string().optional(),
 
   // ── Required in Phase 1 (provisioning) ────────────────────────────────────
 
@@ -67,12 +82,61 @@ export const env = _env.data
 
 // ── Typed accessors for optional vars ─────────────────────────────────────
 
+export function requireZoom() {
+  const {
+    ZOOM_CLIENT_ID,
+    ZOOM_CLIENT_SECRET,
+    ZOOM_WEBHOOK_SECRET,
+    ZOOM_REDIRECT_URI,
+    ZOOM_APP_ID,
+    ZOOM_ACCOUNT_ID,
+  } = env
+  if (
+    !ZOOM_CLIENT_ID ||
+    !ZOOM_CLIENT_SECRET ||
+    !ZOOM_WEBHOOK_SECRET ||
+    !ZOOM_REDIRECT_URI ||
+    !ZOOM_APP_ID
+  ) {
+    throw new Error(
+      'Zoom environment variables are not configured. Set ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_WEBHOOK_SECRET, ZOOM_REDIRECT_URI, and ZOOM_APP_ID.'
+    )
+  }
+  return {
+    ZOOM_CLIENT_ID,
+    ZOOM_CLIENT_SECRET,
+    ZOOM_WEBHOOK_SECRET,
+    ZOOM_REDIRECT_URI,
+    ZOOM_APP_ID,
+    ZOOM_ACCOUNT_ID,
+  }
+}
+
 export function requireAws() {
-  const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SECURITY_GROUP_ID, AWS_SUBNET_ID, AWS_AMI_ID } = env
-  if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_SECURITY_GROUP_ID || !AWS_SUBNET_ID || !AWS_AMI_ID) {
+  const {
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_SECURITY_GROUP_ID,
+    AWS_SUBNET_ID,
+    AWS_AMI_ID,
+  } = env
+  if (
+    !AWS_ACCESS_KEY_ID ||
+    !AWS_SECRET_ACCESS_KEY ||
+    !AWS_SECURITY_GROUP_ID ||
+    !AWS_SUBNET_ID ||
+    !AWS_AMI_ID
+  ) {
     throw new Error('AWS environment variables are not configured.')
   }
-  return { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION: env.AWS_REGION, AWS_SECURITY_GROUP_ID, AWS_SUBNET_ID, AWS_AMI_ID }
+  return {
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_REGION: env.AWS_REGION,
+    AWS_SECURITY_GROUP_ID,
+    AWS_SUBNET_ID,
+    AWS_AMI_ID,
+  }
 }
 
 export function requireCloudflare() {
@@ -88,7 +152,10 @@ export function requireSsh() {
   if (!ADMIN_SSH_PRIVATE_KEY) {
     throw new Error('ADMIN_SSH_PRIVATE_KEY is not configured.')
   }
-  return { ADMIN_SSH_PRIVATE_KEY, ADMIN_SSH_PUBLIC_KEY: env.ADMIN_SSH_PUBLIC_KEY }
+  return {
+    ADMIN_SSH_PRIVATE_KEY,
+    ADMIN_SSH_PUBLIC_KEY: env.ADMIN_SSH_PUBLIC_KEY,
+  }
 }
 
 export function requireLiteLLM() {

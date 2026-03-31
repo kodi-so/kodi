@@ -4,10 +4,12 @@ import { logger } from 'hono/logger'
 import { trpcServer } from '@hono/trpc-server'
 import { appRouter } from './routers'
 import { createContext } from './context'
+import { registerZoomRoutes } from './routes/zoom'
 
 const app = new Hono()
 
 app.use('*', logger())
+registerZoomRoutes(app)
 app.use(
   '/trpc/*',
   cors({

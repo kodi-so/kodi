@@ -64,4 +64,54 @@ export const meetingRouter = router({
         orderBy: (fields, { desc }) => desc(fields.createdAt),
       })
     }),
+
+  getParticipants: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) return []
+
+      return ctx.db.query.meetingParticipants.findMany({
+        where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+        orderBy: (fields, { desc }) => desc(fields.createdAt),
+      })
+    }),
+
+  getTranscript: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        limit: z.number().int().min(1).max(500).default(200),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) return []
+
+      return ctx.db.query.transcriptSegments.findMany({
+        where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+        orderBy: (fields, { desc }) => desc(fields.createdAt),
+        limit: input.limit,
+      })
+    }),
 })

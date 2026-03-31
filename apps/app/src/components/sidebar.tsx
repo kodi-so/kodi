@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   MessageSquare,
+  Video,
   Settings,
   Menu,
   X,
@@ -19,6 +20,7 @@ import { Button, Card } from '@kodi/ui'
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
+  { href: '/meetings', label: 'Meetings', icon: Video },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 

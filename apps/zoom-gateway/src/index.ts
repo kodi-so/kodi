@@ -1,3 +1,4 @@
+import { serve } from '@hono/node-server'
 import rtms, {
   type JoinParams,
   type EventParticipantInfo,
@@ -757,6 +758,13 @@ app.post('/internal/rtms/:meetingSessionId/stop', async (c) => {
     stopped: true,
   })
 })
+
+serve({
+  fetch: app.fetch,
+  port: env.PORT,
+})
+
+console.log(`[zoom-gateway] listening on :${env.PORT}`)
 
 export default {
   port: env.PORT,

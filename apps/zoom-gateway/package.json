@@ -12,14 +12,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.12",
     "@zoom/rtms": "^1.0.3",
     "hono": "^4.3.4",
+    "tsx": "^4.21.0",
     "zod": "^3.23.6"
   },
   "devDependencies": {
     "@kodi/typescript-config": "*",
     "@types/bun": "latest",
-    "tsx": "^4.21.0",
     "typescript": "^5.4.5"
   }
 }

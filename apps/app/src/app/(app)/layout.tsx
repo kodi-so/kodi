@@ -11,7 +11,9 @@ async function getValidSession(headersList: Awaited<ReturnType<typeof headers>>)
   const tokens: string[] = []
   let match
   while ((match = tokenRegex.exec(cookieString)) !== null) {
-    tokens.push(match[1])
+    if (match[1]) {
+      tokens.push(match[1])
+    }
   }
   
   console.log('[AppLayout] DEBUG: found', tokens.length, 'session token(s) in cookie')

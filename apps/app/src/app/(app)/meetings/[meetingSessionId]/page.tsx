@@ -127,6 +127,22 @@ export default function MeetingDetailsPage() {
   const chronologicalTranscript = useMemo(() => {
     return [...transcript].reverse()
   }, [transcript])
+  const rtmsGateway = useMemo(() => {
+    if (
+      !meeting?.metadata ||
+      typeof meeting.metadata !== 'object' ||
+      Array.isArray(meeting.metadata)
+    ) {
+      return null
+    }
+
+    const candidate = (meeting.metadata as Record<string, unknown>).rtmsGateway
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      return null
+    }
+
+    return candidate as Record<string, unknown>
+  }, [meeting?.metadata])
 
   if (!activeOrg) {
     return (
@@ -307,6 +323,41 @@ export default function MeetingDetailsPage() {
                       <p className="text-zinc-500">No active topics yet.</p>
                     )}
                   </div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                    RTMS gateway
+                  </p>
+                  {rtmsGateway ? (
+                    <div className="mt-3 space-y-2 text-sm text-zinc-300">
+                      <div className="flex flex-wrap gap-2">
+                        {typeof rtmsGateway.status === 'string' && (
+                          <Badge className={statusTone(rtmsGateway.status)}>
+                            {rtmsGateway.status}
+                          </Badge>
+                        )}
+                        {typeof rtmsGateway.retryCount === 'number' && (
+                          <Badge className="border-zinc-700 bg-zinc-800 text-zinc-300">
+                            retries {rtmsGateway.retryCount}
+                          </Badge>
+                        )}
+                      </div>
+                      {typeof rtmsGateway.joinedAt === 'string' && (
+                        <p>Joined {formatDate(rtmsGateway.joinedAt)}</p>
+                      )}
+                      {typeof rtmsGateway.stoppedAt === 'string' && (
+                        <p>Stopped {formatDate(rtmsGateway.stoppedAt)}</p>
+                      )}
+                      {typeof rtmsGateway.reason === 'string' && (
+                        <p className="text-zinc-400">Reason: {rtmsGateway.reason}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-zinc-500">
+                      No RTMS runtime state has been written yet.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

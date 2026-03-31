@@ -4,8 +4,10 @@ import { db, providerInstallations } from '@kodi/db'
 import {
   appendMeetingEvent,
   appendTranscriptSegments,
+  notifyZoomGatewayOfRtmsStop,
   notifyZoomGatewayOfRtmsStart,
   processZoomWebhookEvent,
+  updateMeetingSessionRuntimeState,
   upsertMeetingParticipant,
 } from '../lib/meeting-ingestion'
 import { logActivity } from '../lib/activity'
@@ -156,9 +158,26 @@ export function registerZoomRoutes(app: Hono) {
     if (
       payload.event === 'meeting.rtms_started' &&
       'meetingSessionId' in result &&
+      result.meetingSessionId &&
+      'rtmsJoinPayload' in result &&
+      result.rtmsJoinPayload
+    ) {
+      await notifyZoomGatewayOfRtmsStart({
+        meetingSessionId: result.meetingSessionId,
+        joinPayload: result.rtmsJoinPayload,
+      })
+    }
+
+    if (
+      (payload.event === 'meeting.rtms_stopped' || payload.event === 'meeting.ended') &&
+      'meetingSessionId' in result &&
       result.meetingSessionId
     ) {
-      await notifyZoomGatewayOfRtmsStart(result.meetingSessionId)
+      await notifyZoomGatewayOfRtmsStop({
+        meetingSessionId: result.meetingSessionId,
+        reason: String(payload.event),
+        finalStatus: payload.event === 'meeting.ended' ? 'completed' : 'failed',
+      })
     }
 
     return c.json(result)
@@ -286,5 +305,47 @@ export function registerZoomRoutes(app: Hono) {
     )
 
     return c.json({ ok: true })
+  })
+
+  app.post('/internal/meetings/:meetingSessionId/state', async (c) => {
+    if (!isGatewayAuthorized(c.req.header('authorization') ?? null)) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    const meetingSessionId = c.req.param('meetingSessionId')
+    const body = (await c.req.json()) as {
+      status?: 'joining' | 'live' | 'completed' | 'failed'
+      actualStartAt?: string | null
+      endedAt?: string | null
+      metadataPatch?: Record<string, unknown> | null
+    }
+
+    const updated = await updateMeetingSessionRuntimeState(meetingSessionId, {
+      status: body.status,
+      actualStartAt:
+        typeof body.actualStartAt === 'string'
+          ? new Date(body.actualStartAt)
+          : body.actualStartAt === null
+            ? null
+            : undefined,
+      endedAt:
+        typeof body.endedAt === 'string'
+          ? new Date(body.endedAt)
+          : body.endedAt === null
+            ? null
+            : undefined,
+      metadataPatch:
+        body.metadataPatch &&
+        typeof body.metadataPatch === 'object' &&
+        !Array.isArray(body.metadataPatch)
+          ? body.metadataPatch
+          : undefined,
+    })
+
+    return c.json({
+      ok: true,
+      meetingSessionId,
+      status: updated?.status ?? null,
+    })
   })
 }

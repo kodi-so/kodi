@@ -698,7 +698,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
     setSending(true)
 
     try {
-      const result = await trpc.chat.sendMessage.mutate({ orgId, message: text })
+      const result = await trpc.chat.sendMessage.mutate({ message: text })
 
       setMessages((prev) => {
         const updated = prev.map((m) =>
@@ -770,7 +770,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
       setSelectedMessageId(null)
 
       try {
-        await trpc.chat.deleteMessage.mutate({ messageId, orgId })
+        await trpc.chat.deleteMessage.mutate({ messageId })
         addToast('Message deleted. Press ⌘Z to undo.', { type: 'info' })
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : String(err)

@@ -2,19 +2,24 @@
   "name": "@kodi/zoom-gateway",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "start": "bun run dist/index.js",
+    "prepare:rtms": "node scripts/prepare-rtms.mjs",
+    "postinstall": "node scripts/prepare-rtms.mjs",
+    "dev": "node --import tsx --watch src/index.ts",
+    "build": "tsc --noEmit",
+    "start": "node --import tsx src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@zoom/rtms": "^1.0.3",
     "hono": "^4.3.4",
     "zod": "^3.23.6"
   },
   "devDependencies": {
     "@kodi/typescript-config": "*",
     "@types/bun": "latest",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.5"
   }
 }

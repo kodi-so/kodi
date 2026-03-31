@@ -7,10 +7,12 @@ import { providerInstallations } from '@kodi/db'
 
 export const zoomRouter = router({
   getInstallStatus: memberProcedure.query(async ({ ctx }) => {
-    const installation = await ctx.db.query.providerInstallations.findFirst({
+    const rawInstallation = await ctx.db.query.providerInstallations.findFirst({
       where: (fields, { and, eq }) =>
         and(eq(fields.orgId, ctx.org.id), eq(fields.provider, 'zoom')),
     })
+    const installation =
+      rawInstallation?.status === 'revoked' ? null : rawInstallation
 
     return {
       featureFlags: getFeatureFlags(),
@@ -47,15 +49,7 @@ export const zoomRouter = router({
     if (!existing) return { success: true }
 
     await ctx.db
-      .update(providerInstallations)
-      .set({
-        status: 'revoked',
-        accessTokenEncrypted: null,
-        refreshTokenEncrypted: null,
-        tokenExpiresAt: null,
-        errorMessage: null,
-        updatedAt: new Date(),
-      })
+      .delete(providerInstallations)
       .where(
         eq(providerInstallations.id as never, existing.id as never) as never
       )

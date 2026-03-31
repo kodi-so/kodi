@@ -1,9 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
-import { AlertCircle, ArrowRight, CheckCircle2, Link2, RefreshCcw, Video } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowRight, Link2, RefreshCcw, Video } from 'lucide-react'
 import {
   Alert,
   AlertDescription,
@@ -19,7 +18,9 @@ import {
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 
-type ZoomInstallStatus = Awaited<ReturnType<typeof trpc.zoom.getInstallStatus.query>>
+type ZoomInstallStatus = Awaited<
+  ReturnType<typeof trpc.zoom.getInstallStatus.query>
+>
 type MeetingListItem = Awaited<ReturnType<typeof trpc.meeting.list.query>>
 
 function formatDate(value: Date | string | null | undefined) {
@@ -55,24 +56,14 @@ function statusTone(status: string) {
 }
 
 export default function MeetingsPage() {
-  const searchParams = useSearchParams()
-  const { orgs, activeOrg, setActiveOrg } = useOrg()
-  const [installStatus, setInstallStatus] = useState<ZoomInstallStatus | null>(null)
+  const { activeOrg } = useOrg()
+  const [installStatus, setInstallStatus] = useState<ZoomInstallStatus | null>(
+    null
+  )
   const [meetings, setMeetings] = useState<MeetingListItem>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [action, setAction] = useState<'connect' | 'disconnect' | 'refresh' | null>(null)
-
-  const callbackOrgId = searchParams.get('org')
-  const callbackStatus = searchParams.get('zoom')
-
-  useEffect(() => {
-    if (!callbackOrgId) return
-    const matchingOrg = orgs.find((org) => org.orgId === callbackOrgId)
-    if (matchingOrg && matchingOrg.orgId !== activeOrg?.orgId) {
-      setActiveOrg(matchingOrg)
-    }
-  }, [activeOrg?.orgId, callbackOrgId, orgs, setActiveOrg])
+  const [action, setAction] = useState<'refresh' | null>(null)
 
   useEffect(() => {
     if (!activeOrg) {
@@ -100,7 +91,9 @@ export default function MeetingsPage() {
       } catch (err) {
         if (cancelled) return
         setError(
-          err instanceof Error ? err.message : 'Failed to load Zoom copilot state.'
+          err instanceof Error
+            ? err.message
+            : 'Failed to load Zoom copilot state.'
         )
       } finally {
         if (!cancelled) setLoading(false)
@@ -117,24 +110,6 @@ export default function MeetingsPage() {
   const isOwner = activeOrg?.role === 'owner'
   const installation = installStatus?.installation ?? null
 
-  const callbackBanner = useMemo(() => {
-    if (callbackStatus === 'connected') {
-      return {
-        tone: 'success' as const,
-        message: 'Zoom is connected for this workspace. Kodi can now attach meeting activity as events start flowing in.',
-      }
-    }
-
-    if (callbackStatus === 'error') {
-      return {
-        tone: 'error' as const,
-        message: 'Zoom connection did not complete. Check the Zoom app setup and try again.',
-      }
-    }
-
-    return null
-  }, [callbackStatus])
-
   async function refresh() {
     if (!activeOrg) return
     const orgId = activeOrg.orgId
@@ -149,39 +124,11 @@ export default function MeetingsPage() {
       setError(null)
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Failed to refresh Zoom copilot state.'
+        err instanceof Error
+          ? err.message
+          : 'Failed to refresh Zoom copilot state.'
       )
     } finally {
-      setAction(null)
-    }
-  }
-
-  async function connectZoom() {
-    if (!activeOrg) return
-    setAction('connect')
-    try {
-      const result = await trpc.zoom.getInstallUrl.mutate({
-        orgId: activeOrg.orgId,
-      })
-      window.location.assign(result.url)
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to start Zoom install flow.'
-      )
-      setAction(null)
-    }
-  }
-
-  async function disconnectZoom() {
-    if (!activeOrg) return
-    setAction('disconnect')
-    try {
-      await trpc.zoom.disconnect.mutate({ orgId: activeOrg.orgId })
-      await refresh()
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to disconnect Zoom.'
-      )
       setAction(null)
     }
   }
@@ -207,8 +154,9 @@ export default function MeetingsPage() {
                 Zoom copilot
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                Connect Zoom for {activeOrg.orgName} so Kodi can capture meeting starts,
-                participants, transcript events, and the first live meeting state.
+                Track meeting sessions and live ingestion for{' '}
+                {activeOrg.orgName}. Workspace-level setup now lives in
+                Integrations so meetings stay focused on runtime activity.
               </p>
             </div>
           </div>
@@ -220,43 +168,23 @@ export default function MeetingsPage() {
               className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
               disabled={action !== null}
             >
-              <RefreshCcw size={16} className={action === 'refresh' ? 'animate-spin' : ''} />
+              <RefreshCcw
+                size={16}
+                className={action === 'refresh' ? 'animate-spin' : ''}
+              />
               Refresh
             </Button>
-            {isOwner && !installation && (
-              <Button
-                onClick={() => void connectZoom()}
-                className="gap-2 bg-indigo-500 text-white hover:bg-indigo-400"
-                disabled={action !== null || !installStatus?.setup.configured}
-              >
+            <Button
+              asChild
+              className="gap-2 bg-sky-500 text-white hover:bg-sky-400"
+            >
+              <Link href="/settings/integrations">
                 <Link2 size={16} />
-                Connect Zoom
-              </Button>
-            )}
-            {isOwner && installation && (
-              <Button
-                onClick={() => void disconnectZoom()}
-                variant="outline"
-                className="gap-2 border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
-                disabled={action !== null}
-              >
-                Disconnect
-              </Button>
-            )}
+                Manage integrations
+              </Link>
+            </Button>
           </div>
         </div>
-
-        {callbackBanner && (
-          <Alert
-            className={
-              callbackBanner.tone === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                : 'border-red-500/30 bg-red-500/10 text-red-200'
-            }
-          >
-            <AlertDescription>{callbackBanner.message}</AlertDescription>
-          </Alert>
-        )}
 
         {error && (
           <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
@@ -282,16 +210,71 @@ export default function MeetingsPage() {
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <Card className="border-zinc-800 bg-zinc-900/60">
+            <Card className="order-2 border-zinc-800 bg-zinc-900/60 lg:order-1">
+              <CardHeader>
+                <CardTitle className="text-xl text-white">
+                  Recent meetings
+                </CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Meeting sessions created by webhooks and RTMS lifecycle
+                  events.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {meetings.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
+                    Meeting sessions will appear here once Zoom webhooks start
+                    creating records.
+                  </div>
+                ) : (
+                  meetings.map((meeting) => (
+                    <Link
+                      key={meeting.id}
+                      href={`/meetings/${meeting.id}`}
+                      className="group block rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 transition hover:border-zinc-700 hover:bg-zinc-900"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white">
+                            {meeting.title ?? 'Untitled Zoom meeting'}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            Started{' '}
+                            {formatDate(
+                              meeting.actualStartAt ?? meeting.createdAt
+                            )}
+                          </p>
+                        </div>
+                        <Badge className={statusTone(meeting.status)}>
+                          {meeting.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
+                        <span>Open meeting console</span>
+                        <ArrowRight
+                          size={14}
+                          className="transition group-hover:translate-x-0.5"
+                        />
+                      </div>
+                    </Link>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="order-1 border-zinc-800 bg-zinc-900/60 lg:order-2">
               <CardHeader className="gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-300">
                     <Video size={20} />
                   </div>
                   <div>
-                    <CardTitle className="text-xl text-white">Zoom installation</CardTitle>
+                    <CardTitle className="text-xl text-white">
+                      Workspace connection
+                    </CardTitle>
                     <CardDescription className="text-zinc-400">
-                      Workspace-level setup and OAuth connection state.
+                      A quick read on whether Zoom is ready to create and update
+                      meeting sessions.
                     </CardDescription>
                   </div>
                 </div>
@@ -316,11 +299,13 @@ export default function MeetingsPage() {
                         : 'border-amber-500/30 bg-amber-500/15 text-amber-200'
                     }
                   >
-                    {installStatus?.setup.configured ? 'App configured' : 'Setup incomplete'}
+                    {installStatus?.setup.configured
+                      ? 'App configured'
+                      : 'Setup incomplete'}
                   </Badge>
                   {installation && (
                     <Badge className={statusTone(installation.status)}>
-                      {installation.status}
+                      Zoom {installation.status}
                     </Badge>
                   )}
                 </div>
@@ -328,7 +313,11 @@ export default function MeetingsPage() {
                 {!installStatus?.featureFlags.zoomCopilot && (
                   <Alert className="border-zinc-700 bg-zinc-950/70 text-zinc-300">
                     <AlertDescription>
-                      Enable <code className="rounded bg-zinc-800 px-1 py-0.5">KODI_FEATURE_ZOOM_COPILOT</code> before trying the live integration.
+                      Enable{' '}
+                      <code className="rounded bg-zinc-800 px-1 py-0.5">
+                        KODI_FEATURE_ZOOM_COPILOT
+                      </code>{' '}
+                      before trying the live integration.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -341,117 +330,55 @@ export default function MeetingsPage() {
                   </Alert>
                 )}
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                      Redirect URI
-                    </p>
-                    <p className="mt-2 break-all text-sm text-zinc-200">
-                      {installStatus?.setup.redirectUri ?? 'Not configured'}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                      Zoom app ID
-                    </p>
-                    <p className="mt-2 text-sm text-zinc-200">
-                      {installStatus?.setup.appId ?? 'Not configured'}
-                    </p>
-                  </div>
-                </div>
-
                 {installation ? (
-                  <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-white">
-                          {installation.externalAccountEmail ?? 'Connected Zoom account'}
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          Updated {formatDate(installation.updatedAt)}
-                        </p>
-                      </div>
-                      <CheckCircle2 size={18} className="text-emerald-300" />
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {(installation.scopes ?? []).slice(0, 5).map((scope) => (
-                        <Badge
-                          key={scope}
-                          className="border-zinc-700 bg-zinc-800 text-zinc-300"
-                        >
-                          {scope}
-                        </Badge>
-                      ))}
-                    </div>
-                    {installation.errorMessage && (
-                      <p className="mt-4 text-sm text-red-300">
-                        {installation.errorMessage}
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {installation.externalAccountEmail ??
+                          'Connected Zoom account'}
                       </p>
-                    )}
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Updated {formatDate(installation.updatedAt)}
+                      </p>
+                    </div>
+                    <p className="mt-4 text-sm text-zinc-300">
+                      Zoom is installed for this workspace. Manage OAuth
+                      details, setup requirements, and future integrations from
+                      Settings.
+                    </p>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-400">
                     {isOwner
-                      ? 'No Zoom installation has been connected yet for this workspace.'
-                      : 'An owner needs to connect Zoom before meeting ingestion can start.'}
+                      ? 'Zoom still needs to be connected in Settings before meeting ingestion can start.'
+                      : 'An owner needs to connect Zoom in Settings before meeting ingestion can start.'}
                   </div>
                 )}
-              </CardContent>
-            </Card>
 
-            <Card className="border-zinc-800 bg-zinc-900/60">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Recent meetings</CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Meeting sessions created by webhooks and RTMS lifecycle events.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {meetings.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
-                    Meeting sessions will appear here once Zoom webhooks start creating records.
-                  </div>
-                ) : (
-                  meetings.map((meeting) => (
-                    <Link
-                      key={meeting.id}
-                      href={`/meetings/${meeting.id}`}
-                      className="group block rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 transition hover:border-zinc-700 hover:bg-zinc-900"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-white">
-                            {meeting.title ?? 'Untitled Zoom meeting'}
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            Started {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
-                          </p>
-                        </div>
-                        <Badge className={statusTone(meeting.status)}>
-                          {meeting.status}
-                        </Badge>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
-                        <span>Open meeting console</span>
-                        <ArrowRight
-                          size={14}
-                          className="transition group-hover:translate-x-0.5"
-                        />
-                      </div>
-                    </Link>
-                  ))
-                )}
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="w-full justify-between border border-zinc-800 bg-zinc-950 text-zinc-200 hover:bg-zinc-900 hover:text-white"
+                >
+                  <Link href="/settings/integrations">
+                    Open Integrations
+                    <ArrowRight size={16} />
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="border-zinc-800 bg-zinc-900/60 lg:col-span-2">
+        <div className="grid gap-6">
+          <Card className="border-zinc-800 bg-zinc-900/60">
             <CardHeader>
-              <CardTitle className="text-lg text-white">Phase 1 outcome</CardTitle>
+              <CardTitle className="text-lg text-white">
+                Phase 1 outcome
+              </CardTitle>
               <CardDescription className="text-zinc-400">
-                This milestone gets Kodi attached to Zoom’s install and meeting event surface before live reasoning and execution phases.
+                This milestone gets Kodi attached to Zoom’s install and meeting
+                event surface before live reasoning and execution phases.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 text-sm text-zinc-300 md:grid-cols-3">
@@ -464,22 +391,6 @@ export default function MeetingsPage() {
               <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                 Transcript and participant console
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-zinc-800 bg-zinc-900/60">
-            <CardHeader>
-              <CardTitle className="text-lg text-white">Prerequisites</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-zinc-400">
-              {(installStatus?.setup.prerequisites ?? []).map((item) => (
-                <div
-                  key={item}
-                  className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4"
-                >
-                  {item}
-                </div>
-              ))}
             </CardContent>
           </Card>
         </div>

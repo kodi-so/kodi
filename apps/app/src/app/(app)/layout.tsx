@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Parse out the session token manually to see what better-auth is working with
   const cookieString = cookies || ''
   const tokenMatch = cookieString.match(/__Secure-better-auth\.session_token=([^;]+)/)
-  if (tokenMatch) {
+  if (tokenMatch?.[1]) {
     console.log('[AppLayout] DEBUG: first session token from cookie =', tokenMatch[1].substring(0, 20) + '...')
   }
   

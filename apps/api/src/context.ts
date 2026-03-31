@@ -33,60 +33,15 @@ export type OrgMemberWithOrg = typeof orgMembers.$inferSelect & {
   org: typeof organizations.$inferSelect
 }
 
-async function getValidSession(headers: Headers) {
-  const auth = getAuth()
-  const cookieString = headers.get('cookie') || ''
-  
-  // Extract ALL session tokens from the cookie (there may be multiple due to cross-subdomain cookies)
-  const tokenRegex = /__Secure-better-auth\.session_token=([^;]+)/g
-  const tokens: string[] = []
-  let match
-  while ((match = tokenRegex.exec(cookieString)) !== null) {
-    if (match[1]) {
-      tokens.push(match[1])
-    }
-  }
-  
-  console.log('[API Context] DEBUG: found', tokens.length, 'session token(s)')
-  tokens.forEach((token, i) => {
-    console.log(`[API Context] DEBUG: token ${i + 1} = ${token.substring(0, 20)}...`)
-  })
-  
-  // Try the first token with the full headers (better-auth's default behavior)
-  let session = await auth.api.getSession({ headers })
-  if (session) {
-    console.log('[API Context] DEBUG: ✓ session found with first token')
-    return session as Session
-  }
-  
-  console.log('[API Context] DEBUG: first token failed, trying remaining tokens...')
-  
-  // If that didn't work and we have multiple tokens, try each one individually
-  for (let i = 1; i < tokens.length; i++) {
-    console.log(`[API Context] DEBUG: trying token ${i + 1}...`)
-    const customHeaders = new Headers(headers)
-    customHeaders.set('cookie', `__Secure-better-auth.session_token=${tokens[i]}`)
-    
-    try {
-      session = await auth.api.getSession({ headers: customHeaders })
-      if (session) {
-        console.log(`[API Context] DEBUG: ✓ session found with token ${i + 1}`)
-        return session as Session
-      }
-    } catch (e) {
-      console.log(`[API Context] DEBUG: token ${i + 1} failed:`, e instanceof Error ? e.message : e)
-    }
-  }
-  
-  console.log('[API Context] DEBUG: no valid session found')
-  return null
-}
-
 export async function createContext(opts: { req: Request; resHeaders: Headers }) {
   // Try to validate the session from the incoming request
   let session: Session | null = null
   try {
-    session = await getValidSession(opts.req.headers)
+    const auth = getAuth()
+    const result = await auth.api.getSession({ headers: opts.req.headers })
+    if (result) {
+      session = result as Session
+    }
   } catch {
     // Unauthenticated or session fetch failed — session stays null
   }

@@ -3,6 +3,16 @@
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { X } from 'lucide-react'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@kodi/ui'
 
 type Member = {
   userId: string
@@ -17,7 +27,13 @@ interface RemoveMemberDialogProps {
   onRemoved: () => void
 }
 
-export function RemoveMemberDialog({ member, orgId, orgName, onClose, onRemoved }: RemoveMemberDialogProps) {
+export function RemoveMemberDialog({
+  member,
+  orgId,
+  orgName,
+  onClose,
+  onRemoved,
+}: RemoveMemberDialogProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,14 +59,15 @@ export function RemoveMemberDialog({ member, orgId, orgName, onClose, onRemoved 
       />
 
       {/* Dialog */}
-      <div className="relative z-10 w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
-        <div className="flex items-start justify-between mb-4">
+      <Card className="relative z-10 w-full max-w-md rounded-2xl border-zinc-800 bg-zinc-900 shadow-2xl">
+        <CardHeader className="mb-2 flex-row items-start justify-between space-y-0">
           <div>
-            <h2 className="text-white font-semibold text-lg">Remove member</h2>
-            <p className="text-zinc-400 text-sm mt-1">
-              Remove <span className="text-white font-medium">{member.name}</span> from{' '}
+            <CardTitle className="text-lg text-white">Remove member</CardTitle>
+            <CardDescription className="mt-1 text-zinc-400">
+              Remove{' '}
+              <span className="text-white font-medium">{member.name}</span> from{' '}
               <span className="text-white font-medium">{orgName}</span>?
-            </p>
+            </CardDescription>
           </div>
           <button
             onClick={onClose}
@@ -59,38 +76,45 @@ export function RemoveMemberDialog({ member, orgId, orgName, onClose, onRemoved 
           >
             <X size={20} />
           </button>
-        </div>
+        </CardHeader>
 
-        <p className="text-zinc-500 text-sm mb-6">
-          They will lose access immediately. This action cannot be undone.
-        </p>
+        <CardContent>
+          <p className="mb-6 text-sm text-zinc-500">
+            They will lose access immediately. This action cannot be undone.
+          </p>
 
-        {error && (
-          <div className="mb-4 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-            {error}
+          {error && (
+            <Alert
+              variant="destructive"
+              className="mb-4 border-red-500/20 bg-red-500/10 text-red-400"
+            >
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex gap-3 justify-end">
+            <Button
+              onClick={onClose}
+              disabled={loading}
+              variant="outline"
+              className="border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirm}
+              disabled={loading}
+              variant="destructive"
+              className="gap-2 bg-red-600 text-white hover:bg-red-700"
+            >
+              {loading && (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              )}
+              Remove member
+            </Button>
           </div>
-        )}
-
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-white border border-zinc-700 hover:bg-zinc-800 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            {loading && (
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            )}
-            Remove member
-          </button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

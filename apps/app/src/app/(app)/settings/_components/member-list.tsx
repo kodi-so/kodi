@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { RemoveMemberDialog } from './remove-member-dialog'
+import { Badge, Button, Card, CardContent } from '@kodi/ui'
 
 type Member = {
   id: string
@@ -33,7 +34,11 @@ function getInitials(name: string): string {
 
 function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 export function MemberList({
@@ -50,71 +55,92 @@ export function MemberList({
 
   return (
     <>
-      <div className="divide-y divide-zinc-800 rounded-xl border border-zinc-800 overflow-hidden">
-        {members.map((member) => {
-          const isSelf = member.userId === currentUserId
-          const canRemove = isOwner && !isSelf && member.role !== 'owner'
+      <Card className="overflow-hidden rounded-xl border-zinc-800 bg-zinc-900">
+        <CardContent className="divide-y divide-zinc-800 p-0">
+          {members.map((member) => {
+            const isSelf = member.userId === currentUserId
+            const canRemove = isOwner && !isSelf && member.role !== 'owner'
 
-          return (
-            <div
-              key={member.id}
-              className="flex items-center gap-4 px-5 py-4 bg-zinc-900 hover:bg-zinc-800/50 transition-colors"
-            >
-              {/* Avatar */}
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold">{getInitials(member.name)}</span>
-              </div>
+            return (
+              <div
+                key={member.id}
+                className="flex items-center gap-4 px-5 py-4 bg-zinc-900 hover:bg-zinc-800/50 transition-colors"
+              >
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-xs font-bold">
+                    {getInitials(member.name)}
+                  </span>
+                </div>
 
-              {/* Name + email */}
-              <div className="flex-1 min-w-0">
-                <p className="text-white text-sm font-medium truncate">
-                  {member.name}
-                  {isSelf && <span className="text-zinc-500 font-normal ml-1">(you)</span>}
+                {/* Name + email */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium truncate">
+                    {member.name}
+                    {isSelf && (
+                      <span className="text-zinc-500 font-normal ml-1">
+                        (you)
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-zinc-500 text-xs truncate">
+                    {member.email}
+                  </p>
+                </div>
+
+                {/* Join date */}
+                <p className="text-zinc-500 text-xs hidden sm:block flex-shrink-0">
+                  Joined {formatDate(member.joinedAt)}
                 </p>
-                <p className="text-zinc-500 text-xs truncate">{member.email}</p>
+
+                {/* Role badge */}
+                {member.role === 'owner' ? (
+                  <Badge className="flex-shrink-0 border border-indigo-500/20 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/15">
+                    Owner
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="flex-shrink-0 border-zinc-700 bg-zinc-800 text-zinc-400"
+                  >
+                    Member
+                  </Badge>
+                )}
+
+                {/* Remove button — owner only, not self */}
+                {isOwner && (
+                  <Button
+                    onClick={() => canRemove && setRemoveTarget(member)}
+                    disabled={!canRemove}
+                    title={
+                      isSelf
+                        ? 'Cannot remove yourself'
+                        : member.role === 'owner'
+                          ? 'Cannot remove org owner'
+                          : `Remove ${member.name}`
+                    }
+                    variant="outline"
+                    size="sm"
+                    className={`flex-shrink-0 text-xs ${
+                      canRemove
+                        ? 'border-zinc-700 text-zinc-400 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
+                        : 'border-zinc-800 text-zinc-600'
+                    }`}
+                  >
+                    Remove
+                  </Button>
+                )}
               </div>
+            )
+          })}
 
-              {/* Join date */}
-              <p className="text-zinc-500 text-xs hidden sm:block flex-shrink-0">
-                Joined {formatDate(member.joinedAt)}
-              </p>
-
-              {/* Role badge */}
-              {member.role === 'owner' ? (
-                <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 flex-shrink-0">
-                  Owner
-                </span>
-              ) : (
-                <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-zinc-800 text-zinc-400 border border-zinc-700 flex-shrink-0">
-                  Member
-                </span>
-              )}
-
-              {/* Remove button — owner only, not self */}
-              {isOwner && (
-                <button
-                  onClick={() => canRemove && setRemoveTarget(member)}
-                  disabled={!canRemove}
-                  title={isSelf ? 'Cannot remove yourself' : member.role === 'owner' ? 'Cannot remove org owner' : `Remove ${member.name}`}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
-                    canRemove
-                      ? 'border-zinc-700 text-zinc-400 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 cursor-pointer'
-                      : 'border-zinc-800 text-zinc-600 cursor-not-allowed'
-                  }`}
-                >
-                  Remove
-                </button>
-              )}
+          {members.length === 0 && (
+            <div className="px-5 py-10 text-center text-zinc-500 text-sm bg-zinc-900">
+              No members yet.
             </div>
-          )
-        })}
-
-        {members.length === 0 && (
-          <div className="px-5 py-10 text-center text-zinc-500 text-sm bg-zinc-900">
-            No members yet.
-          </div>
-        )}
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       {removeTarget && (
         <RemoveMemberDialog

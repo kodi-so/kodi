@@ -7,7 +7,9 @@ const AUTH_TAG_LENGTH = 16
 function getKey(): Buffer {
   const hex = process.env.ENCRYPTION_KEY
   if (!hex || hex.length !== 64) {
-    throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)')
+    throw new Error(
+      'ENCRYPTION_KEY must be a 64-character hex string (32 bytes)'
+    )
   }
   return Buffer.from(hex, 'hex')
 }
@@ -21,7 +23,10 @@ export function encrypt(plaintext: string): string {
   const iv = randomBytes(IV_LENGTH)
   const cipher = createCipheriv(ALGORITHM, key, iv)
 
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ])
   const authTag = cipher.getAuthTag()
 
   return Buffer.concat([iv, authTag, encrypted]).toString('base64')
@@ -43,4 +48,18 @@ export function decrypt(ciphertext: string): string {
   decipher.setAuthTag(authTag)
 
   return decipher.update(encrypted) + decipher.final('utf8')
+}
+
+/**
+ * Encrypts a JSON-serializable value using the same ciphertext format as encrypt().
+ */
+export function encryptJson(value: unknown): string {
+  return encrypt(JSON.stringify(value))
+}
+
+/**
+ * Decrypts a JSON payload previously produced by encryptJson().
+ */
+export function decryptJson<T>(ciphertext: string): T {
+  return JSON.parse(decrypt(ciphertext)) as T
 }

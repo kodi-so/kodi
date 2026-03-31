@@ -3,7 +3,12 @@ import { eq, and, isNull, gt } from 'drizzle-orm'
 import { TRPCError } from '@trpc/server'
 import { Resend } from 'resend'
 import { orgInvites, orgMembers, organizations } from '@kodi/db'
-import { router, protectedProcedure, publicProcedure, ownerProcedure } from '../../trpc'
+import {
+  router,
+  protectedProcedure,
+  publicProcedure,
+  ownerProcedure,
+} from '../../trpc'
 import { env } from '../../env'
 import { logActivity } from '../../lib/activity'
 
@@ -18,7 +23,9 @@ function base64url(input: ArrayBuffer): string {
 }
 
 function base64urlDecode(input: string): Buffer {
-  const padded = input.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - (input.length % 4)) % 4)
+  const padded =
+    input.replace(/-/g, '+').replace(/_/g, '/') +
+    '=='.slice(0, (4 - (input.length % 4)) % 4)
   return Buffer.from(padded, 'base64')
 }
 
@@ -28,7 +35,7 @@ async function getHmacKey(secret: string): Promise<CryptoKey> {
     new TextEncoder().encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign', 'verify'],
+    ['sign', 'verify']
   )
 }
 
@@ -39,16 +46,31 @@ interface InvitePayload {
   exp: number
 }
 
-async function signInviteJwt(payload: InvitePayload, secret: string): Promise<string> {
-  const header = base64url(new TextEncoder().encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).buffer as ArrayBuffer)
-  const body = base64url(new TextEncoder().encode(JSON.stringify(payload)).buffer as ArrayBuffer)
+async function signInviteJwt(
+  payload: InvitePayload,
+  secret: string
+): Promise<string> {
+  const header = base64url(
+    new TextEncoder().encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+      .buffer as ArrayBuffer
+  )
+  const body = base64url(
+    new TextEncoder().encode(JSON.stringify(payload)).buffer as ArrayBuffer
+  )
   const signingInput = `${header}.${body}`
   const key = await getHmacKey(secret)
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput))
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(signingInput)
+  )
   return `${signingInput}.${base64url(sig)}`
 }
 
-async function verifyInviteJwt(token: string, secret: string): Promise<InvitePayload> {
+async function verifyInviteJwt(
+  token: string,
+  secret: string
+): Promise<InvitePayload> {
   const parts = token.split('.')
   if (parts.length !== 3) throw new Error('Invalid JWT format')
   const header = parts[0]!
@@ -60,11 +82,14 @@ async function verifyInviteJwt(token: string, secret: string): Promise<InvitePay
     'HMAC',
     key,
     new Uint8Array(base64urlDecode(sig)),
-    new TextEncoder().encode(signingInput),
+    new TextEncoder().encode(signingInput)
   )
   if (!valid) throw new Error('Invalid JWT signature')
-  const payload = JSON.parse(base64urlDecode(body).toString('utf-8')) as InvitePayload
-  if (payload.exp < Math.floor(Date.now() / 1000)) throw new Error('JWT expired')
+  const payload = JSON.parse(
+    base64urlDecode(body).toString('utf-8')
+  ) as InvitePayload
+  if (payload.exp < Math.floor(Date.now() / 1000))
+    throw new Error('JWT expired')
   return payload
 }
 
@@ -98,7 +123,7 @@ export const inviteRouter = router({
           eq(orgInvites.orgId, ctx.org.id),
           eq(orgInvites.email, input.email.toLowerCase()),
           isNull(orgInvites.usedAt),
-          gt(orgInvites.expiresAt, now),
+          gt(orgInvites.expiresAt, now)
         ),
       })
       if (existing) {
@@ -148,7 +173,7 @@ export const inviteRouter = router({
       You're invited to join ${org.name}
     </h1>
     <p style="color: #a0a0b8; line-height: 1.6; margin: 0 0 32px;">
-      ${ctx.session!.user.name ?? ctx.session!.user.email} has invited you to join <strong style="color: #e5e5e5;">${org.name}</strong> on Kodi — the agentic platform for modern sales teams.
+      ${ctx.session!.user.name ?? ctx.session!.user.email} has invited you to join <strong style="color: #e5e5e5;">${org.name}</strong> on Kodi — the platform that gives teams an AI agent for calls, chat, and follow-through work.
     </p>
     <a href="${inviteUrl}"
        style="display: inline-block; background: #6366f1; color: #fff; text-decoration: none;
@@ -174,7 +199,13 @@ export const inviteRouter = router({
       }
 
       // Log activity
-      await logActivity(ctx.db, ctx.org.id, 'member.invited', { email: input.email.toLowerCase() }, ctx.session!.user.id)
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'member.invited',
+        { email: input.email.toLowerCase() },
+        ctx.session!.user.id
+      )
 
       return { success: true }
     }),
@@ -202,9 +233,15 @@ export const inviteRouter = router({
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Invalid token'
         if (message.includes('expired') || message === 'JWT expired') {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invite link has expired.' })
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This invite link has expired.',
+          })
         }
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invite link is invalid.' })
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This invite link is invalid.',
+        })
       }
 
       // 2. Look up org_invites row
@@ -215,21 +252,33 @@ export const inviteRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found.' })
       }
       if (invite.usedAt !== null) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invite has already been used.' })
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This invite has already been used.',
+        })
       }
       if (invite.expiresAt < new Date()) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This invite link has expired.' })
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This invite link has expired.',
+        })
       }
 
       // 3. Require logged-in user
       if (!ctx.session?.user) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'You must be logged in to accept this invite.' })
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'You must be logged in to accept this invite.',
+        })
       }
       const userId = ctx.session.user.id
 
       // 4. Check if user is already a member (idempotent)
       const existingMember = await ctx.db.query.orgMembers.findFirst({
-        where: and(eq(orgMembers.orgId, invite.orgId), eq(orgMembers.userId, userId)),
+        where: and(
+          eq(orgMembers.orgId, invite.orgId),
+          eq(orgMembers.userId, userId)
+        ),
       })
       if (existingMember) {
         // Already a member — mark invite used if not already and return success
@@ -253,7 +302,10 @@ export const inviteRouter = router({
       })
 
       // 6. Mark invite used
-      await ctx.db.update(orgInvites).set({ usedAt: new Date() }).where(eq(orgInvites.id, invite.id))
+      await ctx.db
+        .update(orgInvites)
+        .set({ usedAt: new Date() })
+        .where(eq(orgInvites.id, invite.id))
 
       // 7. Return org info for redirect
       const org = await ctx.db.query.organizations.findFirst({
@@ -261,7 +313,13 @@ export const inviteRouter = router({
       })
 
       // Log activity
-      await logActivity(ctx.db, invite.orgId, 'member.joined', { userId, name: ctx.session!.user.name ?? ctx.session!.user.email }, userId)
+      await logActivity(
+        ctx.db,
+        invite.orgId,
+        'member.joined',
+        { userId, name: ctx.session!.user.name ?? ctx.session!.user.email },
+        userId
+      )
 
       return { orgId: invite.orgId, orgSlug: org?.slug ?? '' }
     }),
@@ -270,25 +328,24 @@ export const inviteRouter = router({
    * invite.getActive — owner only
    * Lists pending (unused + non-expired) invites for the member management UI.
    */
-  getActive: ownerProcedure
-    .query(async ({ ctx }) => {
-      const now = new Date()
-      return ctx.db.query.orgInvites.findMany({
-        where: and(
-          eq(orgInvites.orgId, ctx.org.id),
-          isNull(orgInvites.usedAt),
-          gt(orgInvites.expiresAt, now),
-        ),
-        columns: {
-          id: true,
-          email: true,
-          invitedBy: true,
-          expiresAt: true,
-          createdAt: true,
-          // Omit token from response for security
-        },
-      })
-    }),
+  getActive: ownerProcedure.query(async ({ ctx }) => {
+    const now = new Date()
+    return ctx.db.query.orgInvites.findMany({
+      where: and(
+        eq(orgInvites.orgId, ctx.org.id),
+        isNull(orgInvites.usedAt),
+        gt(orgInvites.expiresAt, now)
+      ),
+      columns: {
+        id: true,
+        email: true,
+        invitedBy: true,
+        expiresAt: true,
+        createdAt: true,
+        // Omit token from response for security
+      },
+    })
+  }),
 
   /**
    * invite.revoke — owner only
@@ -299,13 +356,19 @@ export const inviteRouter = router({
     .input(z.object({ inviteId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const invite = await ctx.db.query.orgInvites.findFirst({
-        where: and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, ctx.org.id)),
+        where: and(
+          eq(orgInvites.id, input.inviteId),
+          eq(orgInvites.orgId, ctx.org.id)
+        ),
       })
       if (!invite) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found.' })
       }
       if (invite.usedAt !== null) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invite has already been used or revoked.' })
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Invite has already been used or revoked.',
+        })
       }
 
       await ctx.db
@@ -314,7 +377,13 @@ export const inviteRouter = router({
         .where(eq(orgInvites.id, input.inviteId))
 
       // Log activity
-      await logActivity(ctx.db, ctx.org.id, 'invite.revoked', { email: invite.email }, ctx.session!.user.id)
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'invite.revoked',
+        { email: invite.email },
+        ctx.session!.user.id
+      )
 
       return { success: true }
     }),

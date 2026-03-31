@@ -1,5 +1,7 @@
 # Kodi
 
+A platform for teams that want an AI agent in the room. Kodi joins calls, keeps shared context across tools, answers questions with business data, and turns decisions into tracked follow-through work.
+
 A modern monorepo built with Turborepo, Bun, and deployed on Railway.
 
 ## Structure
@@ -9,7 +11,8 @@ kodi/
 ├── apps/
 │   ├── web/       # Landing site (Next.js + Tailwind + ShadCN)
 │   ├── app/       # Web application (Next.js + Tailwind + ShadCN + BetterAuth + Stripe)
-│   └── api/       # API server (Hono + tRPC)
+│   ├── api/       # API server (Hono + tRPC)
+│   └── zoom-gateway/ # Zoom RTMS gateway (Node + Hono + native RTMS SDK)
 ├── packages/
 │   ├── db/        # Database (Postgres + Drizzle ORM)
 │   ├── ui/        # Shared UI components (ShadCN-style)
@@ -26,11 +29,13 @@ kodi/
 ### Setup
 
 1. **Install dependencies**
+
    ```bash
    bun install
    ```
 
 2. **Set up environment variables** — copy and fill in each:
+
    ```bash
    cp apps/web/.env.example apps/web/.env.local
    cp apps/app/.env.example apps/app/.env.local
@@ -39,6 +44,7 @@ kodi/
    ```
 
 3. **Run database migrations** (requires `DATABASE_URL` to be set in `packages/db/.env`):
+
    ```bash
    cd packages/db && bun run db:push
    ```
@@ -48,13 +54,20 @@ kodi/
    cd ../.. && bun dev
    ```
 
+   For live Zoom RTMS testing, also run:
+
+   ```bash
+   cd apps/zoom-gateway && bun run dev
+   ```
+
 ### Apps & Ports
 
-| App | Port | Description |
-|-----|------|-------------|
-| `web` | 3000 | Landing site |
+| App   | Port | Description     |
+| ----- | ---- | --------------- |
+| `web` | 3000 | Landing site    |
 | `app` | 3001 | Web application |
-| `api` | 3002 | API server |
+| `api` | 3002 | API server      |
+| `zoom-gateway` | 3010 | Zoom RTMS gateway |
 
 ## Deployment (Railway)
 

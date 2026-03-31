@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Building2, Users } from 'lucide-react'
+import { Button } from '@kodi/ui'
 
 const settingsSections = [
   { href: '/settings/general', label: 'General', icon: Building2 },
@@ -23,18 +24,21 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
           {settingsSections.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + '/')
             return (
-              <Link
+              <Button
                 key={href}
-                href={href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                asChild
+                variant={active ? 'secondary' : 'ghost'}
+                className={`w-full justify-start gap-3 px-3 py-2.5 text-sm font-medium ${
                   active
-                    ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                    ? 'border border-indigo-500/20 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300'
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
                 }`}
               >
-                <Icon size={16} />
-                {label}
-              </Link>
+                <Link href={href}>
+                  <Icon size={16} />
+                  {label}
+                </Link>
+              </Button>
             )
           })}
         </nav>

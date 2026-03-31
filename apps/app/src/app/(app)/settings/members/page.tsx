@@ -7,6 +7,14 @@ import { SettingsLayout } from '../_components/settings-layout'
 import { MemberList } from '../_components/member-list'
 import { InviteForm } from '../_components/invite-form'
 import { Users } from 'lucide-react'
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  Skeleton,
+} from '@kodi/ui'
 
 type Member = {
   id: string
@@ -37,7 +45,9 @@ export default function MembersPage() {
 
   const fetchSession = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/get-session', { credentials: 'include' })
+      const res = await fetch('/api/auth/get-session', {
+        credentials: 'include',
+      })
       if (res.ok) {
         const data = (await res.json()) as Session | null
         setSession(data)
@@ -50,7 +60,9 @@ export default function MembersPage() {
   const fetchData = useCallback(async (orgId: string, role: string) => {
     try {
       const membersData = await trpc.org.getMembers.query({ orgId })
-      setMembers(membersData.map(m => ({ ...m, role: m.role as 'owner' | 'member' })))
+      setMembers(
+        membersData.map((m) => ({ ...m, role: m.role as 'owner' | 'member' }))
+      )
       if (role === 'owner') {
         const invitesData = await trpc.invite.getActive.query({ orgId })
         setPendingInvites(invitesData)
@@ -64,9 +76,10 @@ export default function MembersPage() {
     if (!activeOrg) return
     setLoading(true)
     setError(null)
-    void Promise.all([fetchSession(), fetchData(activeOrg.orgId, activeOrg.role)]).finally(() =>
-      setLoading(false),
-    )
+    void Promise.all([
+      fetchSession(),
+      fetchData(activeOrg.orgId, activeOrg.role),
+    ]).finally(() => setLoading(false))
   }, [activeOrg, fetchSession, fetchData])
 
   const refresh = useCallback(async () => {
@@ -78,7 +91,7 @@ export default function MembersPage() {
     return (
       <SettingsLayout>
         <div className="flex items-center justify-center py-20">
-          <div className="w-6 h-6 border-2 border-zinc-600 border-t-indigo-500 rounded-full animate-spin" />
+          <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
         </div>
       </SettingsLayout>
     )
@@ -88,13 +101,23 @@ export default function MembersPage() {
     return (
       <SettingsLayout>
         <div className="py-10 text-center">
-          <p className="text-red-400 text-sm">{error}</p>
-          <button
-            onClick={() => { setError(null); setLoading(true); void refresh() }}
-            className="mt-3 text-sm text-zinc-400 hover:text-white underline"
+          <Alert
+            variant="destructive"
+            className="mx-auto max-w-md border-red-500/20 bg-red-500/10 text-red-400"
+          >
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <Button
+            onClick={() => {
+              setError(null)
+              setLoading(true)
+              void refresh()
+            }}
+            variant="link"
+            className="mt-3 text-sm text-zinc-400 hover:text-white"
           >
             Retry
-          </button>
+          </Button>
         </div>
       </SettingsLayout>
     )
@@ -104,9 +127,11 @@ export default function MembersPage() {
     return (
       <SettingsLayout>
         <div className="max-w-2xl mx-auto py-10">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <p className="text-zinc-400 text-sm">No organisation found.</p>
-          </div>
+          <Card className="rounded-2xl border-zinc-800 bg-zinc-900/60">
+            <CardContent className="p-6">
+              <p className="text-zinc-400 text-sm">No organisation found.</p>
+            </CardContent>
+          </Card>
         </div>
       </SettingsLayout>
     )
@@ -126,13 +151,16 @@ export default function MembersPage() {
             <h1 className="text-xl font-semibold text-white">Members</h1>
           </div>
           <p className="text-zinc-500 text-sm ml-11">
-            {members.length} member{members.length !== 1 ? 's' : ''} in {activeOrg.orgName}
+            {members.length} member{members.length !== 1 ? 's' : ''} in{' '}
+            {activeOrg.orgName}
           </p>
         </div>
 
         {isOwner && (
           <section>
-            <h2 className="text-sm font-medium text-zinc-300 mb-3">Invite a teammate</h2>
+            <h2 className="text-sm font-medium text-zinc-300 mb-3">
+              Invite a teammate
+            </h2>
             <InviteForm
               orgId={activeOrg.orgId}
               pendingInvites={pendingInvites}

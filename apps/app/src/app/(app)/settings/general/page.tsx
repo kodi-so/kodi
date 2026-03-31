@@ -5,6 +5,19 @@ import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
 import { Building2 } from 'lucide-react'
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Skeleton,
+} from '@kodi/ui'
 
 export default function GeneralSettingsPage() {
   const { activeOrg, refreshOrgs } = useOrg()
@@ -21,7 +34,7 @@ export default function GeneralSettingsPage() {
     return (
       <SettingsLayout>
         <div className="flex items-center justify-center py-20">
-          <div className="w-6 h-6 border-2 border-zinc-600 border-t-indigo-500 rounded-full animate-spin" />
+          <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
         </div>
       </SettingsLayout>
     )
@@ -37,7 +50,10 @@ export default function GeneralSettingsPage() {
     setError(null)
     setSaved(false)
     try {
-      await trpc.org.update.mutate({ orgId: activeOrg!.orgId, name: name.trim() })
+      await trpc.org.update.mutate({
+        orgId: activeOrg!.orgId,
+        name: name.trim(),
+      })
       await refreshOrgs()
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -58,46 +74,76 @@ export default function GeneralSettingsPage() {
             </div>
             <h1 className="text-xl font-semibold text-white">General</h1>
           </div>
-          <p className="text-zinc-500 text-sm ml-11">Workspace settings for {activeOrg.orgName}</p>
+          <p className="text-zinc-500 text-sm ml-11">
+            Workspace settings for {activeOrg.orgName}
+          </p>
         </div>
 
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-6">
-          <h2 className="text-sm font-semibold text-zinc-300">Workspace name</h2>
-
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                disabled={!isOwner || saving}
-                maxLength={80}
-                placeholder="My Workspace"
-                className="w-full px-3 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              />
+        <Card className="border-zinc-800 bg-zinc-900/60">
+          <CardHeader className="space-y-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold text-zinc-300">
+                Workspace name
+              </CardTitle>
               {!isOwner && (
-                <p className="text-zinc-600 text-xs mt-1.5">Only the workspace owner can change the name.</p>
+                <Badge
+                  variant="outline"
+                  className="border-zinc-700 text-zinc-500"
+                >
+                  Read only
+                </Badge>
               )}
             </div>
+            <CardDescription className="text-zinc-500">
+              Update how this workspace appears across Kodi.
+            </CardDescription>
+          </CardHeader>
 
-            {error && (
-              <p className="text-red-400 text-sm">{error}</p>
-            )}
-
-            {isOwner && (
-              <div className="flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={!isDirty || saving}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {saving ? 'Saving…' : 'Save changes'}
-                </button>
-                {saved && <span className="text-sm text-emerald-400">Saved ✓</span>}
+          <CardContent>
+            <form onSubmit={handleSave} className="space-y-4">
+              <div>
+                <Input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={!isOwner || saving}
+                  maxLength={80}
+                  placeholder="My Workspace"
+                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                />
+                {!isOwner && (
+                  <p className="text-zinc-600 text-xs mt-1.5">
+                    Only the workspace owner can change the name.
+                  </p>
+                )}
               </div>
-            )}
-          </form>
-        </section>
+
+              {error && (
+                <Alert
+                  variant="destructive"
+                  className="border-red-500/20 bg-red-500/10 text-red-400"
+                >
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {isOwner && (
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="submit"
+                    disabled={!isDirty || saving}
+                    className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
+                  >
+                    {saving ? 'Saving…' : 'Save changes'}
+                  </Button>
+                  {saved && (
+                    <span className="text-sm text-emerald-400">Saved ✓</span>
+                  )}
+                </div>
+              )}
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </SettingsLayout>
   )

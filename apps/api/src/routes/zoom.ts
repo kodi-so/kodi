@@ -23,8 +23,20 @@ import {
 } from '../lib/zoom'
 import { env } from '../env'
 
-function redirectToMeetings(orgId: string, status: 'connected' | 'error') {
-  const url = new URL(`${resolveAppUrl()}/meetings`)
+function resolveReturnPath(returnPath: string | null | undefined) {
+  if (!returnPath || !returnPath.startsWith('/')) {
+    return '/settings/integrations'
+  }
+
+  return returnPath
+}
+
+function redirectToAppPath(
+  orgId: string,
+  status: 'connected' | 'error',
+  returnPath?: string | null
+) {
+  const url = new URL(`${resolveAppUrl()}${resolveReturnPath(returnPath)}`)
   url.searchParams.set('org', orgId)
   url.searchParams.set('zoom', status)
   return url.toString()
@@ -33,6 +45,18 @@ function redirectToMeetings(orgId: string, status: 'connected' | 'error') {
 function isGatewayAuthorized(headerValue: string | null) {
   if (!env.ZOOM_GATEWAY_INTERNAL_TOKEN) return true
   return headerValue === `Bearer ${env.ZOOM_GATEWAY_INTERNAL_TOKEN}`
+}
+
+function isRtmsStartedEvent(eventName: unknown) {
+  return (
+    eventName === 'meeting.rtms_started' || eventName === 'meeting.rtms.started'
+  )
+}
+
+function isRtmsStoppedEvent(eventName: unknown) {
+  return (
+    eventName === 'meeting.rtms_stopped' || eventName === 'meeting.rtms.stopped'
+  )
 }
 
 export function registerZoomRoutes(app: Hono) {
@@ -54,12 +78,14 @@ export function registerZoomRoutes(app: Hono) {
 
     if (error || !code || !state) {
       const fallbackOrg = c.req.query('org') ?? ''
-      return c.redirect(redirectToMeetings(fallbackOrg, 'error'))
+      return c.redirect(redirectToAppPath(fallbackOrg, 'error'))
     }
 
     const parsedState = verifyZoomOAuthState(state)
     if (!parsedState) {
-      return c.redirect(`${resolveAppUrl()}/meetings?zoom=error`)
+      return c.redirect(
+        `${resolveAppUrl()}${resolveReturnPath('/settings/integrations')}?zoom=error`
+      )
     }
 
     try {
@@ -68,10 +94,7 @@ export function registerZoomRoutes(app: Hono) {
 
       const existing = await db.query.providerInstallations.findFirst({
         where: (fields, { and, eq }) =>
-          and(
-            eq(fields.orgId, parsedState.orgId),
-            eq(fields.provider, 'zoom')
-          ),
+          and(eq(fields.orgId, parsedState.orgId), eq(fields.provider, 'zoom')),
       })
 
       const values = buildPersistedZoomInstallationUpdate({
@@ -91,10 +114,7 @@ export function registerZoomRoutes(app: Hono) {
           .update(providerInstallations)
           .set(values)
           .where(
-            eq(
-              providerInstallations.id as never,
-              existing.id as never
-            ) as never
+            eq(providerInstallations.id as never, existing.id as never) as never
           )
       } else {
         await db.insert(providerInstallations).values({
@@ -115,9 +135,17 @@ export function registerZoomRoutes(app: Hono) {
         parsedState.userId
       )
 
-      return c.redirect(redirectToMeetings(parsedState.orgId, 'connected'))
+      return c.redirect(
+        redirectToAppPath(
+          parsedState.orgId,
+          'connected',
+          parsedState.returnPath
+        )
+      )
     } catch {
-      return c.redirect(redirectToMeetings(parsedState.orgId, 'error'))
+      return c.redirect(
+        redirectToAppPath(parsedState.orgId, 'error', parsedState.returnPath)
+      )
     }
   })
 
@@ -156,7 +184,7 @@ export function registerZoomRoutes(app: Hono) {
     const result = await processZoomWebhookEvent(payload as never)
 
     if (
-      payload.event === 'meeting.rtms_started' &&
+      isRtmsStartedEvent(payload.event) &&
       'meetingSessionId' in result &&
       result.meetingSessionId &&
       'rtmsJoinPayload' in result &&
@@ -169,7 +197,8 @@ export function registerZoomRoutes(app: Hono) {
     }
 
     if (
-      (payload.event === 'meeting.rtms_stopped' || payload.event === 'meeting.ended') &&
+      (isRtmsStoppedEvent(payload.event) ||
+        payload.event === 'meeting.ended') &&
       'meetingSessionId' in result &&
       result.meetingSessionId
     ) {
@@ -189,7 +218,9 @@ export function registerZoomRoutes(app: Hono) {
     }
 
     const meetingSessionId = c.req.param('meetingSessionId')
-    const body = (await c.req.json()) as { participants?: Array<Record<string, unknown>> }
+    const body = (await c.req.json()) as {
+      participants?: Array<Record<string, unknown>>
+    }
     const participants = body.participants ?? []
 
     const persisted = []

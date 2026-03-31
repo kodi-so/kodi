@@ -36,13 +36,17 @@ export function resolveAppUrl() {
   return env.APP_URL ?? env.BETTER_AUTH_URL
 }
 
-export function createZoomInstallUrl(orgId: string, userId: string) {
+export function createZoomInstallUrl(
+  orgId: string,
+  userId: string,
+  returnPath = '/settings/integrations'
+) {
   const { ZOOM_CLIENT_ID, ZOOM_REDIRECT_URI } = requireZoom()
 
   const payload: ZoomOAuthStatePayload = {
     orgId,
     userId,
-    returnPath: '/meetings',
+    returnPath,
     createdAt: Date.now(),
   }
 
@@ -93,11 +97,8 @@ export function verifyZoomOAuthState(
 }
 
 export async function exchangeZoomAuthorizationCode(code: string) {
-  const {
-    ZOOM_CLIENT_ID,
-    ZOOM_CLIENT_SECRET,
-    ZOOM_REDIRECT_URI,
-  } = requireZoom()
+  const { ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_REDIRECT_URI } =
+    requireZoom()
 
   const url = new URL('https://zoom.us/oauth/token')
   url.searchParams.set('grant_type', 'authorization_code')

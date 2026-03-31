@@ -27,6 +27,8 @@ const envSchema = z.object({
   ZOOM_REDIRECT_URI: z.string().url().optional(),
   ZOOM_APP_ID: z.string().optional(),
   ZOOM_ACCOUNT_ID: z.string().optional(),
+  ZOOM_GATEWAY_URL: z.string().url().optional(),
+  ZOOM_GATEWAY_INTERNAL_TOKEN: z.string().optional(),
 
   // ── Required in Phase 1 (provisioning) ────────────────────────────────────
 
@@ -90,6 +92,8 @@ export function requireZoom() {
     ZOOM_REDIRECT_URI,
     ZOOM_APP_ID,
     ZOOM_ACCOUNT_ID,
+    ZOOM_GATEWAY_URL,
+    ZOOM_GATEWAY_INTERNAL_TOKEN,
   } = env
   if (
     !ZOOM_CLIENT_ID ||
@@ -109,6 +113,8 @@ export function requireZoom() {
     ZOOM_REDIRECT_URI,
     ZOOM_APP_ID,
     ZOOM_ACCOUNT_ID,
+    ZOOM_GATEWAY_URL,
+    ZOOM_GATEWAY_INTERNAL_TOKEN,
   }
 }
 

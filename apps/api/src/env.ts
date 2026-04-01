@@ -1,5 +1,22 @@
 import { z } from 'zod'
 
+function envBoolean(name: string) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value === 'boolean') return value
+
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase()
+        if (normalized === 'true') return true
+        if (normalized === 'false') return false
+      }
+
+      return value
+    },
+    z.boolean({ invalid_type_error: `${name} must be "true" or "false".` })
+  )
+}
+
 const envSchema = z.object({
   // ── Required now ──────────────────────────────────────────────────────────
 
@@ -16,8 +33,12 @@ const envSchema = z.object({
     .length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
 
   // Feature flags
-  KODI_FEATURE_ZOOM_COPILOT: z.coerce.boolean().default(false),
-  KODI_FEATURE_TOOL_ACCESS: z.coerce.boolean().default(false),
+  KODI_FEATURE_ZOOM_COPILOT: envBoolean('KODI_FEATURE_ZOOM_COPILOT').default(
+    false
+  ),
+  KODI_FEATURE_TOOL_ACCESS: envBoolean('KODI_FEATURE_TOOL_ACCESS').default(
+    false
+  ),
 
   // ── Required in Phase 1 (Zoom copilot) ───────────────────────────────────
 
@@ -37,7 +58,9 @@ const envSchema = z.object({
   COMPOSIO_BASE_URL: z.string().url().optional(),
   COMPOSIO_OAUTH_REDIRECT_URL: z.string().url().optional(),
   COMPOSIO_AUTH_CALLBACK_URL: z.string().url().optional(),
-  COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT: z.coerce.boolean().default(false),
+  COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT: envBoolean(
+    'COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT'
+  ).default(false),
   COMPOSIO_AUTH_CONFIG_GOOGLE: z.string().optional(),
   COMPOSIO_AUTH_CONFIG_SLACK: z.string().optional(),
   COMPOSIO_AUTH_CONFIG_GITHUB: z.string().optional(),

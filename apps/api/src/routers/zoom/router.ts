@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { getFeatureFlags } from '../../lib/features'
 import { getZoomSetupStatus } from '../../lib/zoom-config'
@@ -33,11 +34,21 @@ export const zoomRouter = router({
     }
   }),
 
-  getInstallUrl: ownerProcedure.mutation(async ({ ctx }) => {
-    return {
-      url: createZoomInstallUrl(ctx.org.id, ctx.session.user.id),
-    }
-  }),
+  getInstallUrl: ownerProcedure
+    .input(
+      z.object({
+        returnPath: z.string().startsWith('/').optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return {
+        url: createZoomInstallUrl(
+          ctx.org.id,
+          ctx.session.user.id,
+          input.returnPath
+        ),
+      }
+    }),
 
   disconnect: ownerProcedure.mutation(async ({ ctx }) => {
     const existing = await ctx.db.query.providerInstallations.findFirst({

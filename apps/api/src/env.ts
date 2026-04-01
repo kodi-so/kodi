@@ -1,5 +1,22 @@
 import { z } from 'zod'
 
+function envBoolean(name: string) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value === 'boolean') return value
+
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase()
+        if (normalized === 'true') return true
+        if (normalized === 'false') return false
+      }
+
+      return value
+    },
+    z.boolean({ invalid_type_error: `${name} must be "true" or "false".` })
+  )
+}
+
 const envSchema = z.object({
   // ── Required now ──────────────────────────────────────────────────────────
 
@@ -16,7 +33,12 @@ const envSchema = z.object({
     .length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
 
   // Feature flags
-  KODI_FEATURE_ZOOM_COPILOT: z.coerce.boolean().default(false),
+  KODI_FEATURE_ZOOM_COPILOT: envBoolean('KODI_FEATURE_ZOOM_COPILOT').default(
+    false
+  ),
+  KODI_FEATURE_TOOL_ACCESS: envBoolean('KODI_FEATURE_TOOL_ACCESS').default(
+    false
+  ),
 
   // ── Required in Phase 1 (Zoom copilot) ───────────────────────────────────
 
@@ -29,6 +51,31 @@ const envSchema = z.object({
   ZOOM_ACCOUNT_ID: z.string().optional(),
   ZOOM_GATEWAY_URL: z.string().url().optional(),
   ZOOM_GATEWAY_INTERNAL_TOKEN: z.string().optional(),
+
+  // Composio tool access
+  COMPOSIO_API_KEY: z.string().optional(),
+  COMPOSIO_WEBHOOK_SECRET: z.string().optional(),
+  COMPOSIO_BASE_URL: z.string().url().optional(),
+  COMPOSIO_OAUTH_REDIRECT_URL: z.string().url().optional(),
+  COMPOSIO_AUTH_CALLBACK_URL: z.string().url().optional(),
+  COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT: envBoolean(
+    'COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT'
+  ).default(false),
+  COMPOSIO_AUTH_CONFIG_GOOGLE: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_SLACK: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_GITHUB: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_LINEAR: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_NOTION: z.string().optional(),
+
+  // Optional provider credentials for Kodi-owned OAuth apps used via
+  // Composio custom auth configs. These remain optional until the
+  // corresponding toolkit is enabled in a given environment.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  SLACK_CLIENT_ID: z.string().optional(),
+  SLACK_CLIENT_SECRET: z.string().optional(),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
 
   // ── Required in Phase 1 (provisioning) ────────────────────────────────────
 
@@ -115,6 +162,44 @@ export function requireZoom() {
     ZOOM_ACCOUNT_ID,
     ZOOM_GATEWAY_URL,
     ZOOM_GATEWAY_INTERNAL_TOKEN,
+  }
+}
+
+export function requireComposio() {
+  const {
+    COMPOSIO_API_KEY,
+    COMPOSIO_WEBHOOK_SECRET,
+    COMPOSIO_BASE_URL,
+    COMPOSIO_OAUTH_REDIRECT_URL,
+    COMPOSIO_AUTH_CALLBACK_URL,
+    COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT,
+    COMPOSIO_AUTH_CONFIG_GOOGLE,
+    COMPOSIO_AUTH_CONFIG_SLACK,
+    COMPOSIO_AUTH_CONFIG_GITHUB,
+    COMPOSIO_AUTH_CONFIG_LINEAR,
+    COMPOSIO_AUTH_CONFIG_NOTION,
+  } = env
+
+  if (!COMPOSIO_API_KEY || !COMPOSIO_WEBHOOK_SECRET) {
+    throw new Error(
+      'Composio environment variables are not configured. Set COMPOSIO_API_KEY and COMPOSIO_WEBHOOK_SECRET.'
+    )
+  }
+
+  return {
+    COMPOSIO_API_KEY,
+    COMPOSIO_WEBHOOK_SECRET,
+    COMPOSIO_BASE_URL,
+    COMPOSIO_OAUTH_REDIRECT_URL,
+    COMPOSIO_AUTH_CALLBACK_URL,
+    COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT,
+    authConfigs: {
+      google: COMPOSIO_AUTH_CONFIG_GOOGLE,
+      slack: COMPOSIO_AUTH_CONFIG_SLACK,
+      github: COMPOSIO_AUTH_CONFIG_GITHUB,
+      linear: COMPOSIO_AUTH_CONFIG_LINEAR,
+      notion: COMPOSIO_AUTH_CONFIG_NOTION,
+    },
   }
 }
 

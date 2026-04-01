@@ -10,8 +10,10 @@ import { trpc } from '@/lib/trpc'
 import { SettingsLayout } from '../_components/settings-layout'
 import {
   getIntegrationStatusTone,
+  getToolAccessCardStatus,
   getZoomCardStatus,
   integrationCards,
+  type ToolAccessStatus,
   type ZoomInstallStatus,
 } from './_lib/integrations'
 
@@ -21,6 +23,8 @@ export default function IntegrationsSettingsPage() {
   const [installStatus, setInstallStatus] = useState<ZoomInstallStatus | null>(
     null
   )
+  const [toolAccessStatus, setToolAccessStatus] =
+    useState<ToolAccessStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -39,6 +43,7 @@ export default function IntegrationsSettingsPage() {
   useEffect(() => {
     if (!activeOrg) {
       setInstallStatus(null)
+      setToolAccessStatus(null)
       setLoading(false)
       return
     }
@@ -50,10 +55,14 @@ export default function IntegrationsSettingsPage() {
 
     async function load() {
       try {
-        const status = await trpc.zoom.getInstallStatus.query({ orgId })
+        const [zoomStatus, nextToolAccessStatus] = await Promise.all([
+          trpc.zoom.getInstallStatus.query({ orgId }),
+          trpc.toolAccess.getStatus.query({ orgId }),
+        ])
 
         if (cancelled) return
-        setInstallStatus(status)
+        setInstallStatus(zoomStatus)
+        setToolAccessStatus(nextToolAccessStatus)
       } catch (err) {
         if (cancelled) return
         setError(
@@ -95,9 +104,11 @@ export default function IntegrationsSettingsPage() {
       status:
         integration.id === 'zoom'
           ? getZoomCardStatus(installStatus)
-          : 'Coming next',
+          : integration.id === 'tool-access'
+            ? getToolAccessCardStatus(toolAccessStatus)
+            : 'Coming next',
     }))
-  }, [installStatus])
+  }, [installStatus, toolAccessStatus])
 
   const filteredCards = useMemo(() => {
     const query = search.trim().toLowerCase()

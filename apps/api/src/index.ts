@@ -5,11 +5,13 @@ import { trpcServer } from '@hono/trpc-server'
 import { appRouter } from './routers'
 import { createContext } from './context'
 import { registerZoomRoutes } from './routes/zoom'
+import { registerComposioRoutes } from './routes/composio'
 
 const app = new Hono()
 
 app.use('*', logger())
 registerZoomRoutes(app)
+registerComposioRoutes(app)
 app.use(
   '/trpc/*',
   cors({

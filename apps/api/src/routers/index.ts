@@ -6,6 +6,7 @@ import { orgRouter } from './org/router'
 import { zoomRouter } from './zoom/router'
 import { meetingRouter } from './meeting/router'
 import { workRouter } from './work/router'
+import { toolAccessRouter } from './tool-access/router'
 
 export const appRouter = router({
   instance: instanceRouter,
@@ -15,6 +16,7 @@ export const appRouter = router({
   zoom: zoomRouter,
   meeting: meetingRouter,
   work: workRouter,
+  toolAccess: toolAccessRouter,
 })
 
 export type AppRouter = typeof appRouter

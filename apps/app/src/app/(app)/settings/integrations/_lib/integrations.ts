@@ -1,13 +1,17 @@
 'use client'
 
-import { Mail, Video, type LucideIcon } from 'lucide-react'
+import { Link2, Mail, Video, type LucideIcon } from 'lucide-react'
 import { trpc } from '@/lib/trpc'
 
 export type ZoomInstallStatus = Awaited<
   ReturnType<typeof trpc.zoom.getInstallStatus.query>
 >
 
-export type IntegrationId = 'zoom' | 'google-workspace'
+export type ToolAccessStatus = Awaited<
+  ReturnType<typeof trpc.toolAccess.getStatus.query>
+>
+
+export type IntegrationId = 'zoom' | 'google-workspace' | 'tool-access'
 
 export type IntegrationCard = {
   id: IntegrationId
@@ -35,6 +39,14 @@ export const integrationCards: IntegrationCard[] = [
     searchText: 'google gmail calendar drive workspace',
     icon: Mail,
   },
+  {
+    id: 'tool-access',
+    href: '/settings/integrations/tool-access',
+    name: 'Tool Access',
+    description: 'Browse Composio integrations and connect your accounts.',
+    searchText: 'composio tools github slack linear notion crm integrations',
+    icon: Link2,
+  },
 ]
 
 export function getZoomCardStatus(installStatus: ZoomInstallStatus | null) {
@@ -47,18 +59,43 @@ export function getZoomCardStatus(installStatus: ZoomInstallStatus | null) {
   return 'Not connected'
 }
 
-export function getIntegrationStatusTone(status: string) {
-  switch (status) {
-    case 'Connected':
-      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
-    case 'Needs setup':
-    case 'Coming next':
-      return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
-    case 'Attention needed':
-      return 'border-red-500/20 bg-red-500/10 text-red-200'
-    default:
-      return 'border-zinc-700 bg-zinc-900 text-zinc-300'
+export function getToolAccessCardStatus(
+  toolAccessStatus: ToolAccessStatus | null
+) {
+  if (!toolAccessStatus) return 'Not available'
+  if (!toolAccessStatus?.featureFlags.toolAccess) return 'Feature off'
+  if (!toolAccessStatus?.setup.apiConfigured) return 'Needs setup'
+  if (toolAccessStatus.summary.attentionCount > 0) return 'Attention needed'
+  if (toolAccessStatus.summary.activeCount > 0) {
+    return `${toolAccessStatus.summary.activeCount} connected`
   }
+  return 'Ready to browse'
+}
+
+export function getIntegrationStatusTone(status: string) {
+  const normalized = status.trim().toLowerCase()
+
+  if (normalized === 'connected' || normalized.endsWith(' connected')) {
+    return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+  }
+
+  if (normalized.includes('ready')) {
+    return 'border-sky-500/20 bg-sky-500/10 text-sky-200'
+  }
+
+  if (normalized.includes('connecting')) {
+    return 'border-sky-500/20 bg-sky-500/10 text-sky-200'
+  }
+
+  if (normalized.includes('needs') || normalized.includes('coming next')) {
+    return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+  }
+
+  if (normalized.includes('attention') || normalized.includes('error')) {
+    return 'border-red-500/20 bg-red-500/10 text-red-200'
+  }
+
+  return 'border-zinc-700 bg-zinc-900 text-zinc-300'
 }
 
 export function formatIntegrationDate(value: Date | string | null | undefined) {

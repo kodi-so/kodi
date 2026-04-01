@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.1016.0",
+    "@composio/core": "^0.6.7",
     "@hono/trpc-server": "^0.3.2",
     "@kodi/db": "*",
     "@trpc/server": "^11.0.0",

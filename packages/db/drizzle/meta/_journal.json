@@ -85,6 +85,13 @@
       "when": 1774890000000,
       "tag": "0011_phase_0_zoom_foundations",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1774990800000,
+      "tag": "0012_phase_1_tool_access_foundations",
+      "breakpoints": true
     }
   ]
 }

@@ -174,9 +174,9 @@ export const toolSessionRuns = pgTable(
     expiredAt: timestamp('expired_at'),
   },
   (table) => ({
-    composioSessionIdUidx: uniqueIndex(
-      'tool_session_runs_composio_session_id_uidx'
-    ).on(table.composioSessionId),
+    composioSessionIdIdx: index('tool_session_runs_composio_session_id_idx').on(
+      table.composioSessionId
+    ),
     orgUserCreatedIdx: index('tool_session_runs_org_user_created_idx').on(
       table.orgId,
       table.userId,

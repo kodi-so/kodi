@@ -15,7 +15,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@aws-sdk/client-ec2": "^3.1016.0",
-        "@composio/core": "^0.6.7",
+        "@composio/core": "^0.6.8",
         "@hono/trpc-server": "^0.3.2",
         "@kodi/db": "*",
         "@trpc/server": "^11.0.0",
@@ -230,7 +230,7 @@
 
     "@composio/client": ["@composio/client@0.1.0-alpha.62", "", {}, "sha512-MUBawDp6Uw85m3T0ZtPUSTe9v4SPa0K/Ey3ADZQ/k1NkWsin0oGWhrB/i9hMzndRobijHmBw6xgnFCwjU1B9MQ=="],
 
-    "@composio/core": ["@composio/core@0.6.7", "", { "dependencies": { "@composio/client": "0.1.0-alpha.62", "@composio/json-schema-to-zod": "0.1.20", "@types/json-schema": "^7.0.15", "chalk": "^4.1.2", "openai": "^6.16.0", "pusher-js": "^8.4.0", "semver": "^7.7.2", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "zod": "^3.25 || ^4" } }, "sha512-nWveoUAoCSVTVwOEBaBiRAHu2fVy1nMH7kTICgSaFTaYJYYvpiD8tjCClYRBnp1W4QN3HoRDH4dBWCBdCe9D6A=="],
+    "@composio/core": ["@composio/core@0.6.8", "", { "dependencies": { "@composio/client": "0.1.0-alpha.62", "@composio/json-schema-to-zod": "0.1.20", "@types/json-schema": "^7.0.15", "chalk": "^4.1.2", "openai": "^6.16.0", "pusher-js": "^8.4.0", "semver": "^7.7.2", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "zod": "^3.25 || ^4" } }, "sha512-kqRD/XxON4FJoerf5ccleNsiJgB/wxE21hz3b1w8v/fb1yIoSZ9edRoWjTJ+UihO7HtdL1bbsf6DuLUp6W+e4g=="],
 
     "@composio/json-schema-to-zod": ["@composio/json-schema-to-zod@0.1.20", "", { "peerDependencies": { "zod": ">=3.25.76 <5" } }, "sha512-d4V34itLrUWG/VBh7ciznKcxF/T22MBLHmuEzHoX0zsBOHsUmjYz5qtDh20S2p3FE+HHvLZxpXiv8yfdd4yI+Q=="],
 

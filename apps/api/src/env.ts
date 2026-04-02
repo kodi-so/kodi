@@ -51,6 +51,7 @@ const envSchema = z.object({
   ZOOM_ACCOUNT_ID: z.string().optional(),
   ZOOM_GATEWAY_URL: z.string().url().optional(),
   ZOOM_GATEWAY_INTERNAL_TOKEN: z.string().optional(),
+  MEETING_INTERNAL_TOKEN: z.string().optional(),
 
   // Composio tool access
   COMPOSIO_API_KEY: z.string().optional(),

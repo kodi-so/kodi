@@ -8,6 +8,13 @@ import {
 } from '@kodi/db'
 import { logActivity } from './activity'
 import { env } from '../env'
+import type {
+  MeetingHealthEvent,
+  MeetingLifecycleEvent,
+  MeetingParticipantEvent,
+  MeetingProviderEvent,
+  MeetingTranscriptEvent,
+} from './meeting-events'
 
 type ZoomWebhookEnvelope = {
   event?: string
@@ -50,6 +57,13 @@ type TranscriptSegmentInput = {
   isPartial?: boolean
 }
 
+export type MeetingIngestionSource =
+  | 'zoom_webhook'
+  | 'rtms'
+  | 'kodi_ui'
+  | 'agent'
+  | 'worker'
+
 export type ZoomRtmsJoinPayload = {
   meeting_uuid?: string
   webinar_uuid?: string
@@ -83,6 +97,13 @@ function extractMeetingObject(event: ZoomWebhookEnvelope) {
   return {
     providerMeetingId,
     providerMeetingUuid,
+    providerMeetingInstanceId: providerMeetingUuid,
+    providerBotSessionId:
+      typeof payload.session_id === 'string'
+        ? payload.session_id
+        : typeof payload.rtms_stream_id === 'string'
+          ? payload.rtms_stream_id
+          : null,
     title: typeof object.topic === 'string' ? object.topic : null,
     actualStartAt:
       asDate(object.start_time) ??
@@ -234,8 +255,16 @@ export async function upsertMeetingSessionFromZoomEvent(
   installation: NonNullable<Awaited<ReturnType<typeof resolveZoomInstallation>>>,
   event: ZoomWebhookEnvelope
 ) {
-  const { providerMeetingId, providerMeetingUuid, title, actualStartAt, endedAt, metadata } =
-    extractMeetingObject(event)
+  const {
+    providerMeetingId,
+    providerMeetingUuid,
+    providerMeetingInstanceId,
+    providerBotSessionId,
+    title,
+    actualStartAt,
+    endedAt,
+    metadata,
+  } = extractMeetingObject(event)
 
   if (!providerMeetingId && !providerMeetingUuid) return null
 
@@ -266,6 +295,10 @@ export async function upsertMeetingSessionFromZoomEvent(
       .set({
         providerMeetingId: providerMeetingId ?? existing.providerMeetingId,
         providerMeetingUuid: providerMeetingUuid ?? existing.providerMeetingUuid,
+        providerMeetingInstanceId:
+          providerMeetingInstanceId ?? existing.providerMeetingInstanceId,
+        providerBotSessionId:
+          providerBotSessionId ?? existing.providerBotSessionId,
         title: title ?? existing.title,
         actualStartAt: actualStartAt ?? existing.actualStartAt,
         endedAt: endedAt ?? existing.endedAt,
@@ -288,6 +321,8 @@ export async function upsertMeetingSessionFromZoomEvent(
       providerInstallationId: installation.id,
       providerMeetingId,
       providerMeetingUuid,
+      providerMeetingInstanceId,
+      providerBotSessionId,
       title,
       actualStartAt: actualStartAt ?? new Date(),
       endedAt,
@@ -318,7 +353,7 @@ export async function upsertMeetingSessionFromZoomEvent(
 export async function appendMeetingEvent(
   meetingSessionId: string,
   eventType: string,
-  source: 'zoom_webhook' | 'rtms' | 'kodi_ui' | 'agent' | 'worker',
+  source: MeetingIngestionSource,
   payload?: Record<string, unknown> | null
 ) {
   const lastEvent = await db.query.meetingEvents.findFirst({
@@ -441,6 +476,146 @@ export async function appendTranscriptSegments(
   }
 
   return persisted
+}
+
+function mapLifecycleEventToStatus(event: MeetingLifecycleEvent) {
+  if (event.action === 'meeting.failed' || event.state === 'failed') {
+    return 'failed' as const
+  }
+
+  if (
+    event.action === 'meeting.ended' ||
+    event.action === 'meeting.stopped' ||
+    event.state === 'stopped'
+  ) {
+    return 'completed' as const
+  }
+
+  if (
+    event.action === 'meeting.joined' ||
+    event.action === 'meeting.admitted' ||
+    event.action === 'meeting.started' ||
+    event.state === 'listening'
+  ) {
+    return 'live' as const
+  }
+
+  if (
+    event.action === 'meeting.prepared' ||
+    event.action === 'meeting.joining' ||
+    event.state === 'preparing' ||
+    event.state === 'joining' ||
+    event.state === 'waiting_for_admission'
+  ) {
+    return 'joining' as const
+  }
+
+  return undefined
+}
+
+function normalizedEventType(event: MeetingProviderEvent) {
+  if (event.kind === 'transcript') return 'meeting.transcript.segment_received'
+  if (event.kind === 'participant') return event.action
+  if (event.kind === 'lifecycle') return event.action
+  return 'meeting.health.updated'
+}
+
+function normalizedEventPayload(event: MeetingProviderEvent) {
+  if (event.kind === 'transcript') {
+    const transcriptEvent: MeetingTranscriptEvent = event
+    return {
+      occurredAt: transcriptEvent.occurredAt.toISOString(),
+      transcriptEventId: transcriptEvent.transcriptEventId ?? null,
+      transcript: transcriptEvent.transcript,
+      session: transcriptEvent.session ?? null,
+      metadata: transcriptEvent.metadata ?? null,
+    }
+  }
+
+  if (event.kind === 'participant') {
+    const participantEvent: MeetingParticipantEvent = event
+    return {
+      occurredAt: participantEvent.occurredAt.toISOString(),
+      participant: participantEvent.participant,
+      session: participantEvent.session ?? null,
+      metadata: participantEvent.metadata ?? null,
+    }
+  }
+
+  if (event.kind === 'lifecycle') {
+    const lifecycleEvent: MeetingLifecycleEvent = event
+    return {
+      occurredAt: lifecycleEvent.occurredAt.toISOString(),
+      state: lifecycleEvent.state,
+      errorCode: lifecycleEvent.errorCode ?? null,
+      errorMessage: lifecycleEvent.errorMessage ?? null,
+      session: lifecycleEvent.session ?? null,
+      metadata: lifecycleEvent.metadata ?? null,
+    }
+  }
+
+  const healthEvent: MeetingHealthEvent = event
+  return {
+    occurredAt: healthEvent.occurredAt.toISOString(),
+    health: healthEvent.health,
+    session: healthEvent.session ?? null,
+    metadata: healthEvent.metadata ?? null,
+  }
+}
+
+export async function appendNormalizedMeetingEvent(
+  meetingSessionId: string,
+  event: MeetingProviderEvent,
+  source: MeetingIngestionSource = 'worker'
+) {
+  if (event.kind === 'participant') {
+    await upsertMeetingParticipant(meetingSessionId, {
+      providerParticipantId: event.participant.providerParticipantId ?? null,
+      displayName: event.participant.displayName ?? null,
+      email: event.participant.email ?? null,
+      joinedAt: event.action === 'participant.joined' ? event.occurredAt : null,
+      leftAt: event.action === 'participant.left' ? event.occurredAt : null,
+      metadata: event.metadata ?? null,
+    })
+  }
+
+  if (event.kind === 'transcript') {
+    await appendTranscriptSegments(meetingSessionId, [
+      {
+        providerParticipantId:
+          event.transcript.speaker?.providerParticipantId ?? null,
+        speakerName: event.transcript.speaker?.displayName ?? null,
+        content: event.transcript.content,
+        startOffsetMs: event.transcript.startOffsetMs ?? null,
+        endOffsetMs: event.transcript.endOffsetMs ?? null,
+        confidence: event.transcript.confidence ?? null,
+        isPartial: event.transcript.isPartial ?? false,
+      },
+    ])
+  }
+
+  if (event.kind === 'lifecycle') {
+    const nextStatus = mapLifecycleEventToStatus(event)
+    if (nextStatus) {
+      await updateMeetingSessionRuntimeState(meetingSessionId, {
+        status: nextStatus,
+        actualStartAt:
+          event.action === 'meeting.started' ? event.occurredAt : undefined,
+        endedAt:
+          event.action === 'meeting.ended' || event.action === 'meeting.stopped'
+            ? event.occurredAt
+            : undefined,
+        metadataPatch: event.metadata ?? undefined,
+      })
+    }
+  }
+
+  return appendMeetingEvent(
+    meetingSessionId,
+    normalizedEventType(event),
+    source,
+    normalizedEventPayload(event)
+  )
 }
 
 export async function processZoomWebhookEvent(event: ZoomWebhookEnvelope) {

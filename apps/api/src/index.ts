@@ -4,12 +4,14 @@ import { logger } from 'hono/logger'
 import { trpcServer } from '@hono/trpc-server'
 import { appRouter } from './routers'
 import { createContext } from './context'
+import { registerMeetingRoutes } from './routes/meeting'
 import { registerZoomRoutes } from './routes/zoom'
 import { registerComposioRoutes } from './routes/composio'
 
 const app = new Hono()
 
 app.use('*', logger())
+registerMeetingRoutes(app)
 registerZoomRoutes(app)
 registerComposioRoutes(app)
 app.use(

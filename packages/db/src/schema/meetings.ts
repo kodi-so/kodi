@@ -61,6 +61,8 @@ export const meetingSessions = pgTable(
     ),
     providerMeetingId: text('provider_meeting_id'),
     providerMeetingUuid: text('provider_meeting_uuid'),
+    providerMeetingInstanceId: text('provider_meeting_instance_id'),
+    providerBotSessionId: text('provider_bot_session_id'),
     hostUserId: text('host_user_id').references(() => user.id, {
       onDelete: 'set null',
     }),
@@ -93,6 +95,12 @@ export const meetingSessions = pgTable(
     providerMeetingIdx: index('meeting_sessions_provider_meeting_idx').on(
       table.provider,
       table.providerMeetingId
+    ),
+    providerMeetingInstanceIdx: index(
+      'meeting_sessions_provider_instance_idx'
+    ).on(table.provider, table.providerMeetingInstanceId),
+    providerBotSessionIdx: index('meeting_sessions_provider_bot_session_idx').on(
+      table.providerBotSessionId
     ),
   })
 )
@@ -199,16 +207,23 @@ export const meetingStateSnapshots = pgTable(
       .notNull()
       .references(() => meetingSessions.id, { onDelete: 'cascade' }),
     summary: text('summary'),
+    rollingNotes: text('rolling_notes'),
     activeTopics: jsonb('active_topics').$type<string[] | null>(),
     decisions: jsonb('decisions').$type<Record<string, unknown>[] | null>(),
     openQuestions: jsonb('open_questions').$type<
       Record<string, unknown>[] | null
     >(),
     risks: jsonb('risks').$type<Record<string, unknown>[] | null>(),
+    candidateTasks: jsonb('candidate_tasks').$type<
+      Record<string, unknown>[] | null
+    >(),
     candidateActionItems: jsonb('candidate_action_items').$type<
       Record<string, unknown>[] | null
     >(),
+    draftActions: jsonb('draft_actions').$type<Record<string, unknown>[] | null>(),
     lastEventSequence: integer('last_event_sequence'),
+    lastProcessedAt: timestamp('last_processed_at'),
+    lastClassifiedAt: timestamp('last_classified_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({

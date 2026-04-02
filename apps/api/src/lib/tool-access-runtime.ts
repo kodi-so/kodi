@@ -92,10 +92,6 @@ const ADMIN_KEYWORDS = [
   'SCIM',
   'PERMISSION',
   'ROLE',
-  'WORKSPACE',
-  'ORGANIZATION',
-  'TEAM',
-  'MEMBER',
   'INSTALL',
   'UNINSTALL',
   'WEBHOOK',
@@ -271,6 +267,13 @@ type AutomaticToolExecutionPlan = {
   tool: SessionTool
 }
 
+type AutomaticToolExecutionResult = {
+  assistantToolCalls: OpenAIToolCall[]
+  summaryMessage: OpenAIMessage
+  toolMessages: OpenAIMessage[]
+  usedToolSlugs: string[]
+}
+
 function uniqueStrings(values: Array<string | null | undefined>) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))]
 }
@@ -361,6 +364,101 @@ function shouldRequireToolUse(
     /\bwhat\b.*\b(do we have|exists|left|open|assigned)\b/.test(message)
 
   return mentionsToolkit || asksForLiveData
+}
+
+function shouldAnswerFromRuntimeState(
+  userMessage: string,
+  runtime: Pick<ScopedToolRuntime, 'enabledToolkits' | 'allowedTools'>
+) {
+  if (runtime.enabledToolkits.length === 0) return false
+
+  const message = userMessage.trim().toLowerCase()
+
+  return /\b(do you have access|can you access|are you connected|what tools|what integrations|what do you have access to|do you have linear|do you have github|do you have slack|do you have notion)\b/.test(
+    message
+  )
+}
+
+function getMentionedRuntimeToolkit(
+  userMessage: string,
+  runtime: Pick<ScopedToolRuntime, 'enabledToolkits' | 'allowedTools'>
+) {
+  const message = userMessage.toLowerCase()
+  const toolkitTerms = new Map<string, string>()
+
+  for (const toolkitSlug of runtime.enabledToolkits) {
+    toolkitTerms.set(toolkitSlug.toLowerCase(), toolkitSlug)
+  }
+
+  for (const tool of runtime.allowedTools) {
+    toolkitTerms.set(tool.toolkit.slug.toLowerCase(), tool.toolkit.slug)
+    toolkitTerms.set(tool.toolkit.name.toLowerCase(), tool.toolkit.slug)
+  }
+
+  for (const [term, toolkitSlug] of toolkitTerms) {
+    if (term.length > 0 && message.includes(term)) {
+      return toolkitSlug
+    }
+  }
+
+  return null
+}
+
+function buildRuntimeAvailabilityAnswer(
+  userMessage: string,
+  runtime: Pick<
+    ScopedToolRuntime,
+    'allowedTools' | 'enabledToolkits' | 'allowedDecisions'
+  >
+) {
+  const mentionedToolkit = getMentionedRuntimeToolkit(userMessage, runtime)
+
+  if (mentionedToolkit) {
+    const toolsForToolkit = runtime.allowedTools.filter(
+      (tool) => tool.toolkit.slug === mentionedToolkit
+    )
+
+    if (toolsForToolkit.length === 0) {
+      if (runtime.enabledToolkits.includes(mentionedToolkit)) {
+        return [
+          `Yes. ${mentionedToolkit} is connected for this request through Kodi's request-scoped tool runtime.`,
+          'No specific executable actions were surfaced for this exact prompt yet, but the connected toolkit is available to Kodi in this request.',
+          'Kodi attaches these tools at request time, so they may not appear as permanent OpenClaw gateway plugins.',
+        ].join(' ')
+      }
+
+      return `No. ${mentionedToolkit} is not connected in this request scope right now.`
+    }
+
+    const readableTools = toolsForToolkit
+      .filter(
+        (tool) => runtime.allowedDecisions.get(tool.slug)?.category === 'read'
+      )
+      .map((tool) => tool.slug)
+      .slice(0, 6)
+
+    return [
+      `Yes. ${mentionedToolkit} is connected for this request through Kodi's request-scoped tool runtime.`,
+      readableTools.length > 0
+        ? `Readable tools available right now: ${readableTools.join(', ')}.`
+        : `Executable tools available right now: ${toolsForToolkit
+            .map((tool) => tool.slug)
+            .slice(0, 6)
+            .join(', ')}.`,
+      'Kodi attaches these tools at request time, so they may not appear as permanent OpenClaw gateway plugins.',
+    ].join(' ')
+  }
+
+  return [
+    `Connected toolkits in scope for this request: ${runtime.enabledToolkits.join(', ')}.`,
+    runtime.allowedTools.length > 0
+      ? `Executable tools surfaced right now: ${runtime.allowedTools
+          .map((tool) => tool.slug)
+          .slice(0, MAX_RELEVANT_TOOLS)
+          .join(', ')}.`
+      : 'No specific executable tools were surfaced for this exact prompt yet.',
+    'Kodi brokers this access per request, so the gateway/plugin list is not the source of truth for tool availability.',
+  ].join(' ')
 }
 
 function getAutomaticToolScore(tool: SessionTool, userMessage: string) {
@@ -612,20 +710,26 @@ function getToolCategory(tool: SessionTool): ToolActionCategory {
     .toUpperCase()
     .split(/[^A-Z0-9]+/)
     .filter(Boolean)
-  const signature = [tool.slug, tool.name, tool.description]
-    .join(' ')
-    .toUpperCase()
+  const toolSignature = [tool.slug, tool.name].join(' ').toUpperCase()
+  const description = tool.description.toUpperCase()
 
   if (
-    ADMIN_KEYWORDS.some((keyword) => signature.includes(keyword)) ||
-    signature.includes('DELETE_USER') ||
-    signature.includes('MANAGE_')
+    ADMIN_KEYWORDS.some((keyword) => toolSignature.includes(keyword)) ||
+    toolSignature.includes('DELETE_USER') ||
+    toolSignature.includes('MANAGE_') ||
+    (description.includes('ADMIN') &&
+      (description.includes('PERMISSION') ||
+        description.includes('ROLE') ||
+        description.includes('WEBHOOK') ||
+        description.includes('TOKEN') ||
+        description.includes('SECRET') ||
+        description.includes('AUTH CONFIG')))
   ) {
     return 'admin'
   }
 
   if (
-    signature.includes('DRAFT') ||
+    toolSignature.includes('DRAFT') ||
     slugTokens.some((token) => DRAFT_VERBS.has(token))
   ) {
     return 'draft'
@@ -744,6 +848,9 @@ function buildRuntimeSystemPrompt(
     )
     lines.push(
       'When the user asks for live external data from one of these systems, return a tool call directly. Kodi executes tool calls for you; do not claim you need another channel, manual lookup, or a different environment while an executable tool is available.'
+    )
+    lines.push(
+      'Do not inspect gateway config, plugin lists, or OpenClaw setup details to infer tool availability. Kodi is the source of truth for which request-scoped tools are available right now.'
     )
   }
 
@@ -1323,7 +1430,7 @@ async function executeAutomaticToolPlans(params: {
   orgId: string
   plans: AutomaticToolExecutionPlan[]
   sessionRunId: string
-}) {
+}): Promise<AutomaticToolExecutionResult> {
   const assistantToolCalls = params.plans.map((plan, index) => ({
     id: `auto-${Date.now()}-${index}-${plan.tool.slug.toLowerCase()}`,
     type: 'function' as const,
@@ -1353,6 +1460,10 @@ async function executeAutomaticToolPlans(params: {
 
   return {
     assistantToolCalls,
+    summaryMessage: {
+      role: 'system',
+      content: `Kodi auto-executed ${usedToolSlugs.join(', ')} because this request required live tool data. Treat the tool results above as the source of truth and answer directly from them.`,
+    },
     toolMessages,
     usedToolSlugs,
   }
@@ -1595,6 +1706,60 @@ export async function runChatCompletionWithToolAccess(params: {
   let automaticExecutionUsed = false
 
   try {
+    if (
+      scopedRuntime &&
+      shouldAnswerFromRuntimeState(params.userMessage, scopedRuntime)
+    ) {
+      return {
+        content: buildRuntimeAvailabilityAnswer(
+          params.userMessage,
+          scopedRuntime
+        ),
+        toolRuntime: {
+          sessionRunId: scopedRuntime.sessionRunId,
+          composioSessionId: scopedRuntime.composioSessionId,
+          usedToolSlugs: [],
+          gatedToolCount: scopedRuntime.gatedDecisions.length,
+          availableToolCount: scopedRuntime.allowedTools.length,
+        },
+      }
+    }
+
+    if (
+      scopedRuntime &&
+      mustUseTools &&
+      scopedRuntime.allowedTools.length > 0 &&
+      scopedRuntime.composioSessionId &&
+      scopedRuntime.sessionRunId
+    ) {
+      const plans = selectAutomaticToolExecutionPlans(
+        params.userMessage,
+        scopedRuntime
+      )
+
+      if (plans.length > 0) {
+        automaticExecutionUsed = true
+
+        const automaticExecution = await executeAutomaticToolPlans({
+          actorUserId: params.actorUserId,
+          composioSessionId: scopedRuntime.composioSessionId,
+          db: params.db,
+          orgId: params.orgId,
+          plans,
+          sessionRunId: scopedRuntime.sessionRunId,
+        })
+
+        conversation.push({
+          role: 'assistant',
+          content: null,
+          tool_calls: automaticExecution.assistantToolCalls,
+        })
+        conversation.push(...automaticExecution.toolMessages)
+        conversation.push(automaticExecution.summaryMessage)
+        usedToolSlugs.push(...automaticExecution.usedToolSlugs)
+      }
+    }
+
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
       const response = await requestOpenClawChatCompletion({
         instanceUrl: params.instanceUrl,
@@ -1669,10 +1834,7 @@ export async function runChatCompletionWithToolAccess(params: {
               tool_calls: automaticExecution.assistantToolCalls,
             })
             conversation.push(...automaticExecution.toolMessages)
-            conversation.push({
-              role: 'system',
-              content: `Kodi auto-executed ${automaticExecution.usedToolSlugs.join(', ')} because this request required live tool data and the draft assistant response did not call an available tool. Use the tool results above as the source of truth and answer directly.`,
-            })
+            conversation.push(automaticExecution.summaryMessage)
             usedToolSlugs.push(...automaticExecution.usedToolSlugs)
             continue
           }

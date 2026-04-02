@@ -124,7 +124,9 @@ export const toolAccessRouter = router({
                 connectedAccountLabel: primaryConnection.connectedAccountLabel,
                 externalUserEmail: primaryConnection.externalUserEmail,
                 externalUserId: primaryConnection.externalUserId,
+                scopes: primaryConnection.scopes ?? [],
                 errorMessage: primaryConnection.errorMessage,
+                lastValidatedAt: primaryConnection.lastValidatedAt,
                 updatedAt: primaryConnection.updatedAt,
               }
             : null,

@@ -324,7 +324,13 @@ export function registerZoomRoutes(app: Hono) {
     const meetingSessionId = c.req.param('meetingSessionId')
     const body = (await c.req.json()) as {
       eventType?: string
-      source?: 'zoom_webhook' | 'rtms' | 'kodi_ui' | 'agent' | 'worker'
+      source?:
+        | 'zoom_webhook'
+        | 'recall_webhook'
+        | 'rtms'
+        | 'kodi_ui'
+        | 'agent'
+        | 'worker'
       payload?: Record<string, unknown>
     }
 

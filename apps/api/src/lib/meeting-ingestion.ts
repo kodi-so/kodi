@@ -59,6 +59,7 @@ type TranscriptSegmentInput = {
 
 export type MeetingIngestionSource =
   | 'zoom_webhook'
+  | 'recall_webhook'
   | 'rtms'
   | 'kodi_ui'
   | 'agent'
@@ -437,7 +438,8 @@ export async function upsertMeetingParticipant(
 
 export async function appendTranscriptSegments(
   meetingSessionId: string,
-  segments: TranscriptSegmentInput[]
+  segments: TranscriptSegmentInput[],
+  source: MeetingIngestionSource = 'rtms'
 ) {
   if (segments.length === 0) return []
 
@@ -468,7 +470,7 @@ export async function appendTranscriptSegments(
         endOffsetMs: segment.endOffsetMs ?? null,
         confidence: segment.confidence ?? null,
         isPartial: segment.isPartial ?? false,
-        source: 'rtms',
+        source,
       })
       .returning()
 
@@ -591,7 +593,7 @@ export async function appendNormalizedMeetingEvent(
         confidence: event.transcript.confidence ?? null,
         isPartial: event.transcript.isPartial ?? false,
       },
-    ])
+    ], source)
   }
 
   if (event.kind === 'lifecycle') {

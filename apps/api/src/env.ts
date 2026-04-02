@@ -36,9 +36,25 @@ const envSchema = z.object({
   KODI_FEATURE_ZOOM_COPILOT: envBoolean('KODI_FEATURE_ZOOM_COPILOT').default(
     false
   ),
+  KODI_FEATURE_MEETING_INTELLIGENCE: envBoolean(
+    'KODI_FEATURE_MEETING_INTELLIGENCE'
+  ).default(false),
   KODI_FEATURE_TOOL_ACCESS: envBoolean('KODI_FEATURE_TOOL_ACCESS').default(
     false
   ),
+
+  // ── Required in Phase 1 (meeting intelligence) ───────────────────────────
+
+  // Recall.ai
+  RECALL_API_KEY: z.string().optional(),
+  RECALL_API_REGION: z
+    .enum(['us-east-1', 'us-west-2', 'eu-central-1', 'ap-northeast-1'])
+    .default('us-east-1'),
+  RECALL_API_BASE_URL: z.string().url().optional(),
+  RECALL_REALTIME_WEBHOOK_URL: z.string().url().optional(),
+  RECALL_REALTIME_AUTH_TOKEN: z.string().optional(),
+  RECALL_WEBHOOK_SECRET: z.string().optional(),
+  RECALL_BOT_STATUS_WEBHOOK_SECRET: z.string().optional(),
 
   // ── Required in Phase 1 (Zoom copilot) ───────────────────────────────────
 
@@ -163,6 +179,34 @@ export function requireZoom() {
     ZOOM_ACCOUNT_ID,
     ZOOM_GATEWAY_URL,
     ZOOM_GATEWAY_INTERNAL_TOKEN,
+  }
+}
+
+export function requireRecall() {
+  const {
+    RECALL_API_KEY,
+    RECALL_API_REGION,
+    RECALL_API_BASE_URL,
+    RECALL_REALTIME_WEBHOOK_URL,
+    RECALL_REALTIME_AUTH_TOKEN,
+    RECALL_WEBHOOK_SECRET,
+    RECALL_BOT_STATUS_WEBHOOK_SECRET,
+  } = env
+
+  if (!RECALL_API_KEY) {
+    throw new Error(
+      'Recall environment variables are not configured. Set RECALL_API_KEY.'
+    )
+  }
+
+  return {
+    RECALL_API_KEY,
+    RECALL_API_REGION,
+    RECALL_API_BASE_URL,
+    RECALL_REALTIME_WEBHOOK_URL,
+    RECALL_REALTIME_AUTH_TOKEN,
+    RECALL_WEBHOOK_SECRET,
+    RECALL_BOT_STATUS_WEBHOOK_SECRET,
   }
 }
 

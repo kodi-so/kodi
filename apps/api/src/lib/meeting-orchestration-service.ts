@@ -5,7 +5,13 @@ import {
   type MeetingIngestionSource,
   updateMeetingSessionRuntimeState,
 } from './meeting-ingestion'
+import type {
+  MeetingBotIdentity,
+  MeetingProviderActorIdentity,
+  MeetingProviderJoinTarget,
+} from './meeting-provider-adapter'
 import { MeetingProviderGateway } from './meeting-provider-gateway'
+import { RecallMeetingJoinError } from './recall'
 import type {
   MeetingAdapterLifecycleState,
   MeetingProviderEvent,
@@ -37,6 +43,17 @@ type IngestNormalizedEventInput = Omit<EnsureMeetingSessionInput, 'provider'> & 
 type IngestProviderEnvelopeInput = EnsureMeetingSessionInput & {
   envelope: MeetingProviderEventEnvelope
   source?: MeetingIngestionSource
+}
+
+type RequestBotJoinInput = {
+  orgId: string
+  provider: MeetingProviderSlug
+  actor?: MeetingProviderActorIdentity | null
+  meeting: MeetingProviderJoinTarget
+  botIdentity?: MeetingBotIdentity | null
+  providerInstallationId?: string | null
+  hostUserId?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 function lifecycleStateToMeetingStatus(
@@ -205,6 +222,81 @@ export class MeetingOrchestrationService {
     }
 
     return updated
+  }
+
+  async requestBotJoin(input: RequestBotJoinInput) {
+    const preparedSession = await this.createOrUpdateMeetingSession({
+      orgId: input.orgId,
+      provider: input.provider,
+      session: {
+        externalMeetingId: input.meeting.externalMeetingId ?? null,
+      },
+      providerInstallationId: input.providerInstallationId,
+      hostUserId: input.hostUserId,
+      title: input.meeting.title ?? null,
+      status: 'joining',
+      metadata: {
+        transportRequestedAt: new Date().toISOString(),
+        ...(input.metadata ?? {}),
+      },
+    })
+
+    let joinResult
+    try {
+      joinResult = await this.gateway.join({
+        orgId: input.orgId,
+        provider: input.provider,
+        actor: input.actor ?? null,
+        meeting: input.meeting,
+        botIdentity: input.botIdentity ?? null,
+        session: {
+          internalMeetingSessionId: preparedSession.id,
+          externalMeetingId:
+            preparedSession.providerMeetingId ??
+            input.meeting.externalMeetingId ??
+            null,
+          externalMeetingInstanceId:
+            preparedSession.providerMeetingInstanceId ?? null,
+          externalBotSessionId: preparedSession.providerBotSessionId ?? null,
+        },
+        metadata: input.metadata ?? null,
+      })
+    } catch (error) {
+      if (error instanceof RecallMeetingJoinError) {
+        await updateMeetingSessionRuntimeState(preparedSession.id, {
+          status: 'failed',
+          metadataPatch: {
+            transport: 'recall',
+            failure: error.failure,
+            lastErrorMessage: error.message,
+          },
+        })
+      }
+
+      throw error
+    }
+
+    const meetingSession = await this.createOrUpdateMeetingSession({
+      orgId: input.orgId,
+      provider: input.provider,
+      session: joinResult.session,
+      providerInstallationId: input.providerInstallationId,
+      hostUserId: input.hostUserId,
+      title: input.meeting.title ?? null,
+      status:
+        lifecycleStateToMeetingStatus(joinResult.lifecycleState) ?? 'joining',
+      metadata: {
+        transport: 'recall',
+        transportRequestedAt: new Date().toISOString(),
+        ...(joinResult.metadata ?? {}),
+        ...(input.metadata ?? {}),
+      },
+    })
+
+    return {
+      meetingSession,
+      joinResult,
+    }
   }
 
   async ingestNormalizedEvent(input: IngestNormalizedEventInput) {

@@ -30,6 +30,7 @@ export const meetingSessionStatusEnum = pgEnum('meeting_session_status', [
 
 export const meetingEventSourceEnum = pgEnum('meeting_event_source', [
   'zoom_webhook',
+  'recall_webhook',
   'rtms',
   'kodi_ui',
   'agent',

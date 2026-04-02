@@ -194,6 +194,51 @@ type SessionTool = {
   }
 }
 
+type RawSearchResult = {
+  error?: string | null
+  primary_tool_slugs?: unknown
+  related_tool_slugs?: unknown
+}
+
+type RawSearchToolSchema = {
+  tool_slug?: unknown
+  toolkit?: unknown
+  description?: unknown
+  input_schema?: unknown
+  output_schema?: unknown
+  scopes?: unknown
+  tags?: unknown
+}
+
+type RawSearchResponse = {
+  error?: string | null
+  results?: unknown
+  tool_schemas?: unknown
+}
+
+type SearchResponse = {
+  error: string | null
+  results: RawSearchResult[]
+  toolSchemas: Record<string, RawSearchToolSchema>
+}
+
+type RawSearchSession = {
+  sessionId: string
+  client: {
+    toolRouter: {
+      session: {
+        search: (
+          sessionId: string,
+          params: {
+            queries: Array<{ use_case: string }>
+            toolkits?: string[]
+          }
+        ) => Promise<RawSearchResponse>
+      }
+    }
+  }
+}
+
 type ToolPermissionDecision = {
   toolSlug: string
   toolkitSlug: string
@@ -220,6 +265,16 @@ type ScopedToolRuntime = {
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))]
+}
+
+function toStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+function normalizeToolkitSlug(value: unknown) {
+  return typeof value === 'string' ? value.toLowerCase() : 'unknown'
 }
 
 function escapeRegex(value: string) {
@@ -525,6 +580,47 @@ function parseToolCallArguments(toolCall: OpenAIToolCall) {
   }
 }
 
+async function searchScopedSessionTools(
+  session: { sessionId: string },
+  params: { query: string; toolkits: string[] }
+) {
+  const rawSession = session as unknown as RawSearchSession
+  const raw = await rawSession.client.toolRouter.session.search(
+    rawSession.sessionId,
+    {
+      queries: [{ use_case: params.query }],
+      ...(params.toolkits.length > 0 ? { toolkits: params.toolkits } : {}),
+    }
+  )
+
+  const toolSchemasSource =
+    raw.tool_schemas && typeof raw.tool_schemas === 'object'
+      ? (raw.tool_schemas as Record<string, unknown>)
+      : {}
+
+  const toolSchemas = Object.entries(toolSchemasSource).reduce<
+    Record<string, RawSearchToolSchema>
+  >((items, [slug, value]) => {
+    if (!value || typeof value !== 'object') {
+      return items
+    }
+
+    items[slug] = value as RawSearchToolSchema
+    return items
+  }, {})
+
+  return {
+    error: typeof raw.error === 'string' ? raw.error : null,
+    results: Array.isArray(raw.results)
+      ? raw.results.filter(
+          (value): value is RawSearchResult =>
+            Boolean(value) && typeof value === 'object'
+        )
+      : [],
+    toolSchemas,
+  } satisfies SearchResponse
+}
+
 async function requestOpenClawChatCompletion(params: {
   instanceUrl: string
   headers: Record<string, string>
@@ -567,6 +663,15 @@ async function requestOpenClawChatCompletion(params: {
   } finally {
     clearTimeout(timeoutId)
   }
+}
+
+function getAssistantContent(response: ChatCompletionResponse) {
+  const content = response.choices?.[0]?.message?.content?.trim()
+  if (!content) {
+    throw new Error('Empty response from instance')
+  }
+
+  return content
 }
 
 async function loadRuntimeState(params: {
@@ -769,57 +874,62 @@ async function createScopedToolRuntime(params: {
   let relevantTools: SessionTool[] = []
 
   try {
-    const searchResponse = (await session.search({
+    const searchResponse = await searchScopedSessionTools(session, {
       query: params.userMessage,
       toolkits: activeToolkitState.enabledToolkits,
-    })) as {
-      error?: string | null
-      results?: Array<{
-        error?: string | null
-        primaryToolSlugs?: string[]
-        relatedToolSlugs?: string[]
-      }>
-      toolSchemas?: Record<
-        string,
-        {
-          toolSlug: string
-          toolkit: string
-          description?: string
-          inputSchema?: Record<string, unknown>
-          outputSchema?: Record<string, unknown>
-        }
-      >
-    }
+    })
 
     const primaryResult = searchResponse.results?.[0]
     relevantToolSlugs = uniqueStrings([
-      ...(primaryResult?.primaryToolSlugs ?? []),
-      ...(primaryResult?.relatedToolSlugs ?? []),
+      ...toStringArray(primaryResult?.primary_tool_slugs),
+      ...toStringArray(primaryResult?.related_tool_slugs),
     ]).slice(0, MAX_RELEVANT_TOOLS)
 
-    searchError = primaryResult?.error ?? searchResponse.error ?? null
+    searchError =
+      (typeof primaryResult?.error === 'string' ? primaryResult.error : null) ??
+      searchResponse.error ??
+      null
 
     relevantTools = relevantToolSlugs.reduce<SessionTool[]>((items, slug) => {
       const schema = searchResponse.toolSchemas?.[slug]
       if (!schema) return items
 
+      const toolkitSlug = normalizeToolkitSlug(schema.toolkit)
       const connection =
-        activeToolkitState.primaryConnections.get(schema.toolkit) ?? null
+        activeToolkitState.primaryConnections.get(toolkitSlug) ?? null
 
       items.push({
-        slug: schema.toolSlug,
-        name: schema.toolSlug,
-        description: schema.description ?? schema.toolSlug,
-        inputParameters: schema.inputSchema ?? {
-          type: 'object',
-          properties: {},
-        },
-        outputParameters: schema.outputSchema ?? {},
-        scopes: [] as string[],
-        tags: [] as string[],
+        slug: typeof schema.tool_slug === 'string' ? schema.tool_slug : slug,
+        name: typeof schema.tool_slug === 'string' ? schema.tool_slug : slug,
+        description:
+          typeof schema.description === 'string'
+            ? schema.description
+            : typeof schema.tool_slug === 'string'
+              ? schema.tool_slug
+              : slug,
+        inputParameters:
+          schema.input_schema &&
+          typeof schema.input_schema === 'object' &&
+          !Array.isArray(schema.input_schema)
+            ? (schema.input_schema as Record<string, unknown>)
+            : {
+                type: 'object',
+                properties: {},
+              },
+        outputParameters:
+          schema.output_schema &&
+          typeof schema.output_schema === 'object' &&
+          !Array.isArray(schema.output_schema)
+            ? (schema.output_schema as Record<string, unknown>)
+            : {},
+        scopes: toStringArray(schema.scopes),
+        tags: toStringArray(schema.tags),
         toolkit: {
-          slug: schema.toolkit,
-          name: connection?.toolkitName ?? schema.toolkit,
+          slug: toolkitSlug,
+          name:
+            connection?.toolkitName && connection.toolkitName.trim().length > 0
+              ? connection.toolkitName
+              : toolkitSlug,
           logo: null,
         },
       } satisfies SessionTool)
@@ -923,7 +1033,7 @@ async function createScopedToolRuntime(params: {
   await params.db
     .update(toolSessionRuns)
     .set({ metadata })
-    .where(eq(toolSessionRuns.id, sessionRun.id))
+    .where(eq(toolSessionRuns.id as never, sessionRun.id as never) as never)
 
   return {
     sessionRunId: sessionRun.id,
@@ -936,6 +1046,23 @@ async function createScopedToolRuntime(params: {
     assistivePrompt: session.experimental?.assistivePrompt ?? null,
     metadata,
   } satisfies ScopedToolRuntime
+}
+
+async function runPlainChatCompletion(params: {
+  instanceUrl: string
+  headers: Record<string, string>
+  messages: OpenAIMessage[]
+}) {
+  const response = await requestOpenClawChatCompletion({
+    instanceUrl: params.instanceUrl,
+    headers: params.headers,
+    messages: params.messages,
+  })
+
+  return {
+    content: getAssistantContent(response),
+    toolRuntime: null,
+  }
 }
 
 async function recordToolActionRunStart(params: {
@@ -986,7 +1113,9 @@ async function finishToolActionRun(params: {
       error: params.error ?? null,
       completedAt: new Date(),
     })
-    .where(eq(toolActionRuns.id, params.toolActionRunId))
+    .where(
+      eq(toolActionRuns.id as never, params.toolActionRunId as never) as never
+    )
 }
 
 async function executeAllowedToolCall(params: {
@@ -1101,7 +1230,7 @@ async function expireToolSessionRun(
       expiredAt: new Date(),
       ...(metadata ? { metadata } : {}),
     })
-    .where(eq(toolSessionRuns.id, sessionRunId))
+    .where(eq(toolSessionRuns.id as never, sessionRunId as never) as never)
 }
 
 export async function runChatCompletionWithToolAccess(params: {
@@ -1114,15 +1243,6 @@ export async function runChatCompletionWithToolAccess(params: {
   headers: Record<string, string>
   messages: Array<{ role: string; content: string }>
 }) {
-  const scopedRuntime = await createScopedToolRuntime({
-    db: params.db,
-    orgId: params.orgId,
-    userId: params.actorUserId,
-    sourceType: 'chat',
-    sourceId: params.sourceId,
-    userMessage: params.userMessage,
-  })
-
   const baseMessages = params.messages.map((message) => ({
     role:
       message.role === 'system' || message.role === 'assistant'
@@ -1130,6 +1250,32 @@ export async function runChatCompletionWithToolAccess(params: {
         : 'user',
     content: message.content,
   })) as OpenAIMessage[]
+
+  let scopedRuntime: ScopedToolRuntime | null = null
+
+  try {
+    scopedRuntime = await createScopedToolRuntime({
+      db: params.db,
+      orgId: params.orgId,
+      userId: params.actorUserId,
+      sourceType: 'chat',
+      sourceId: params.sourceId,
+      userMessage: params.userMessage,
+    })
+  } catch (error) {
+    console.error('Tool access bootstrap failed; falling back to plain chat.', {
+      orgId: params.orgId,
+      actorUserId: params.actorUserId,
+      sourceId: params.sourceId ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    })
+
+    return runPlainChatCompletion({
+      instanceUrl: params.instanceUrl,
+      headers: params.headers,
+      messages: baseMessages,
+    })
+  }
 
   const runtimePrompt = scopedRuntime
     ? buildRuntimeSystemPrompt(scopedRuntime)

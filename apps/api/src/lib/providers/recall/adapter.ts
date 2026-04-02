@@ -18,6 +18,7 @@ import {
   createRecallBot,
   leaveRecallBot,
   RecallApiError,
+  type RecallJoinAttempt,
   RecallMeetingJoinError,
   type RecallCreateBotRequest,
 } from './client'
@@ -213,19 +214,37 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
     request: MeetingProviderJoinRequest
   ): Promise<MeetingProviderControlResult> {
     const payload = buildRecallJoinPayload(request)
+    const attempts: RecallJoinAttempt[] = []
     let response
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const startedAt = new Date()
       try {
         response = await createRecallBot(payload)
+        attempts.push({
+          attempt: attempt + 1,
+          startedAt: startedAt.toISOString(),
+          completedAt: new Date().toISOString(),
+          status: 'succeeded',
+        })
         break
       } catch (error) {
         if (error instanceof RecallApiError) {
           const failure = classifyRecallFailure({ status: error.status })
+          attempts.push({
+            attempt: attempt + 1,
+            startedAt: startedAt.toISOString(),
+            completedAt: new Date().toISOString(),
+            status: 'failed',
+            httpStatus: error.status,
+            failureKind: failure.kind,
+            retryable: failure.retryable,
+            message: error.message,
+          })
           if (failure.retryable && attempt === 0) {
             continue
           }
 
-          throw new RecallMeetingJoinError(error.message, failure, error)
+          throw new RecallMeetingJoinError(error.message, failure, attempts, error)
         }
 
         throw error
@@ -261,6 +280,8 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
         transport: 'recall',
         recallBotId: response.id,
         recallBotMetadata: response.metadata ?? null,
+        retryCount: Math.max(0, attempts.length - 1),
+        retryHistory: attempts,
       },
     }
   }

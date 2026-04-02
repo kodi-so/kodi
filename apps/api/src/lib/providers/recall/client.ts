@@ -49,6 +49,17 @@ export type RecallFailureClassification = {
   retryable: boolean
 }
 
+export type RecallJoinAttempt = {
+  attempt: number
+  startedAt: string
+  completedAt: string
+  status: 'succeeded' | 'failed'
+  httpStatus?: number | null
+  failureKind?: RecallFailureKind | null
+  retryable?: boolean | null
+  message?: string | null
+}
+
 type RecallApiErrorBody = {
   detail?: string
   message?: string
@@ -70,6 +81,7 @@ export class RecallMeetingJoinError extends Error {
   constructor(
     message: string,
     readonly failure: RecallFailureClassification,
+    readonly attempts: RecallJoinAttempt[],
     readonly cause?: unknown
   ) {
     super(message)

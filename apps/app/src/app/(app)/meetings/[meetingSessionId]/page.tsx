@@ -47,6 +47,13 @@ function asRecord(value: unknown) {
     : null
 }
 
+function asRecordArray(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+}
+
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return 'Not available'
   const parsed = new Date(value)
@@ -432,6 +439,10 @@ export default function MeetingDetailsPage() {
     return [...new Set(events.map((event) => formatSourceLabel(event.source)))]
   }, [events])
 
+  const retryHistory = useMemo(() => {
+    return asRecordArray(meetingMetadata?.retryHistory)
+  }, [meetingMetadata])
+
   const inCallParticipants = useMemo(() => {
     return participants.filter((participant) => !participant.leftAt)
   }, [participants])
@@ -451,6 +462,43 @@ export default function MeetingDetailsPage() {
 
     return candidates.sort((left, right) => right.getTime() - left.getTime())[0]
   }, [events, transcript, liveState?.createdAt, meeting?.updatedAt])
+
+  const diagnosticsTimeline = useMemo(() => {
+    const lifecycleEvent = events.find((event) =>
+      [
+        'meeting.prepared',
+        'meeting.joining',
+        'meeting.joined',
+        'meeting.admitted',
+        'meeting.started',
+        'meeting.ended',
+        'meeting.failed',
+      ].includes(event.eventType)
+    )
+    const participantEvent = events.find((event) =>
+      ['participant.joined', 'participant.updated', 'participant.left'].includes(
+        event.eventType
+      )
+    )
+    const transcriptEvent = events.find(
+      (event) => event.eventType === 'meeting.transcript.segment_received'
+    )
+
+    return {
+      transportRequestedAt:
+        typeof meetingMetadata?.transportRequestedAt === 'string'
+          ? meetingMetadata.transportRequestedAt
+          : null,
+      lastJoinAttemptAt:
+        typeof meetingMetadata?.lastJoinAttemptAt === 'string'
+          ? meetingMetadata.lastJoinAttemptAt
+          : null,
+      lifecycleEventAt: lifecycleEvent?.occurredAt ?? null,
+      participantEventAt: participantEvent?.occurredAt ?? null,
+      transcriptEventAt:
+        transcriptEvent?.occurredAt ?? transcript[0]?.createdAt ?? null,
+    }
+  }, [events, meetingMetadata, transcript])
 
   const runtimeDetails = useMemo(() => {
     if (!meeting) return []
@@ -476,6 +524,33 @@ export default function MeetingDetailsPage() {
       },
     ]
   }, [meeting, providerRuntimeSource])
+
+  const diagnosticsDetails = useMemo(() => {
+    if (!meeting) return []
+
+    return [
+      {
+        label: 'Recall bot ID',
+        value: truncateMiddle(
+          typeof meetingMetadata?.recallBotId === 'string'
+            ? meetingMetadata.recallBotId
+            : null
+        ),
+      },
+      {
+        label: 'Provider bot session',
+        value: truncateMiddle(meeting.providerBotSessionId),
+      },
+      {
+        label: 'Failure reason',
+        value: failureReason ?? 'No provider failure recorded',
+      },
+      {
+        label: 'Retry count',
+        value: `${typeof meetingMetadata?.retryCount === 'number' ? meetingMetadata.retryCount : retryHistory.length > 0 ? Math.max(0, retryHistory.length - 1) : 0}`,
+      },
+    ]
+  }, [failureReason, meeting, meetingMetadata, retryHistory.length])
 
   if (!activeOrg) {
     return (
@@ -899,6 +974,154 @@ export default function MeetingDetailsPage() {
                     <p className="mt-3 text-zinc-500">
                       No RTMS runtime state has been written yet.
                     </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-zinc-800 bg-zinc-900/60">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.15rem] border border-amber-500/20 bg-amber-500/10 text-amber-300">
+                    <Bot size={18} />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-white">
+                      Admin diagnostics
+                    </CardTitle>
+                    <CardDescription className="text-zinc-400">
+                      Provider timestamps, bot identity, failure context, and retry history for debugging live joins.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-zinc-300">
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 px-4 py-3">
+                  <ConsoleDetail
+                    label="Transport requested"
+                    value={formatDate(diagnosticsTimeline.transportRequestedAt)}
+                    tone="accent"
+                  />
+                  <Separator className="bg-zinc-800" />
+                  <ConsoleDetail
+                    label="Last join attempt"
+                    value={formatDate(diagnosticsTimeline.lastJoinAttemptAt)}
+                  />
+                  <Separator className="bg-zinc-800" />
+                  <ConsoleDetail
+                    label="Lifecycle event"
+                    value={formatDate(diagnosticsTimeline.lifecycleEventAt)}
+                  />
+                  <Separator className="bg-zinc-800" />
+                  <ConsoleDetail
+                    label="Participant event"
+                    value={formatDate(diagnosticsTimeline.participantEventAt)}
+                  />
+                  <Separator className="bg-zinc-800" />
+                  <ConsoleDetail
+                    label="Transcript event"
+                    value={formatDate(diagnosticsTimeline.transcriptEventAt)}
+                  />
+                </div>
+
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 px-4 py-3">
+                  {diagnosticsDetails.map((detail, index) => (
+                    <div key={detail.label}>
+                      {index > 0 && <Separator className="bg-zinc-800" />}
+                      <ConsoleDetail
+                        label={detail.label}
+                        value={detail.value}
+                        tone={index < 2 ? 'accent' : 'default'}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                      Retry history
+                    </p>
+                    <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                      {retryHistory.length} attempts
+                    </UiBadge>
+                  </div>
+
+                  {retryHistory.length === 0 ? (
+                    <p className="mt-3 text-zinc-500">
+                      No join retries have been recorded for this meeting.
+                    </p>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      {retryHistory.map((attempt, index) => {
+                        const attemptNumber =
+                          typeof attempt.attempt === 'number'
+                            ? attempt.attempt
+                            : index + 1
+                        const status =
+                          typeof attempt.status === 'string'
+                            ? attempt.status
+                            : 'unknown'
+                        const failureKind =
+                          typeof attempt.failureKind === 'string'
+                            ? attempt.failureKind
+                            : null
+                        const message =
+                          typeof attempt.message === 'string'
+                            ? attempt.message
+                            : null
+                        const retryable =
+                          typeof attempt.retryable === 'boolean'
+                            ? attempt.retryable
+                              ? 'retryable'
+                              : 'terminal'
+                            : null
+
+                        return (
+                          <div
+                            key={`${attemptNumber}-${attempt.completedAt ?? index}`}
+                            className="rounded-[1.25rem] border border-zinc-800 bg-zinc-900/60 p-3"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                              <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                                attempt {attemptNumber}
+                              </UiBadge>
+                              <UiBadge
+                                className={
+                                  status === 'succeeded'
+                                    ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+                                    : 'border-amber-500/30 bg-amber-500/15 text-amber-200'
+                                }
+                              >
+                                {status}
+                              </UiBadge>
+                              {failureKind && (
+                                <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-400">
+                                  {failureKind}
+                                </UiBadge>
+                              )}
+                              {retryable && (
+                                <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-400">
+                                  {retryable}
+                                </UiBadge>
+                              )}
+                              <span>
+                                {formatDate(
+                                  typeof attempt.completedAt === 'string'
+                                    ? attempt.completedAt
+                                    : null
+                                )}
+                              </span>
+                            </div>
+                            {message && (
+                              <p className="mt-3 text-sm leading-6 text-zinc-300">
+                                {message}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   )}
                 </div>
               </CardContent>

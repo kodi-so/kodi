@@ -267,12 +267,17 @@ export class MeetingOrchestrationService {
       })
     } catch (error) {
       if (error instanceof RecallMeetingJoinError) {
+        const lastAttempt = error.attempts[error.attempts.length - 1] ?? null
         await updateMeetingSessionRuntimeState(preparedSession.id, {
           status: 'failed',
           metadataPatch: {
             transport: 'recall',
             failure: error.failure,
             lastErrorMessage: error.message,
+            retryCount: Math.max(0, error.attempts.length - 1),
+            retryHistory: error.attempts,
+            lastJoinAttemptAt:
+              lastAttempt?.completedAt ?? new Date().toISOString(),
           },
         })
       }

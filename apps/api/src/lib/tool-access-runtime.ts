@@ -263,6 +263,14 @@ type ScopedToolRuntime = {
   metadata: Record<string, unknown>
 }
 
+type AutomaticToolExecutionPlan = {
+  argumentsPayload: Record<string, unknown>
+  decision: ToolPermissionDecision
+  family: string
+  score: number
+  tool: SessionTool
+}
+
 function uniqueStrings(values: Array<string | null | undefined>) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))]
 }
@@ -279,6 +287,237 @@ function normalizeToolkitSlug(value: unknown) {
 
 function escapeRegex(value: string) {
   return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+}
+
+function getToolSchemaProperties(tool: SessionTool) {
+  const normalized = normalizeToolParameters(tool.inputParameters)
+  const properties =
+    normalized.properties && typeof normalized.properties === 'object'
+      ? (normalized.properties as Record<string, Record<string, unknown>>)
+      : {}
+
+  const required = Array.isArray(normalized.required)
+    ? normalized.required.filter(
+        (value): value is string => typeof value === 'string'
+      )
+    : []
+
+  return { properties, required }
+}
+
+function inferToolFamily(tool: SessionTool) {
+  const slug = tool.slug.toUpperCase()
+
+  if (slug.includes('PROJECT')) return 'projects'
+  if (slug.includes('ISSUE') || slug.includes('TICKET')) return 'issues'
+  if (slug.includes('TEAM')) return 'teams'
+  if (slug.includes('STATE')) return 'states'
+  if (slug.includes('LABEL')) return 'labels'
+  if (slug.includes('USER')) return 'users'
+  if (slug.includes('CYCLE')) return 'cycles'
+  if (slug.includes('COMMENT')) return 'comments'
+  return tool.slug.toLowerCase()
+}
+
+function shouldRequireToolUse(
+  userMessage: string,
+  runtime: Pick<ScopedToolRuntime, 'allowedTools' | 'enabledToolkits'>
+) {
+  if (runtime.allowedTools.length === 0) return false
+
+  const message = userMessage.trim().toLowerCase()
+
+  if (
+    /^(hi|hello|hey|yo|sup|ping|thanks|thank you|ok|okay)[.!?]*$/i.test(message)
+  ) {
+    return false
+  }
+
+  if (
+    /\b(do you have access|can you access|are you connected|what can you do|what tools|what integrations|available actions|what do you have access to)\b/.test(
+      message
+    )
+  ) {
+    return false
+  }
+
+  const toolkitTerms = uniqueStrings([
+    ...runtime.enabledToolkits,
+    ...runtime.allowedTools.map((tool) => tool.toolkit.slug),
+    ...runtime.allowedTools.map((tool) => tool.toolkit.name.toLowerCase()),
+  ]).map((term) => term.toLowerCase())
+
+  const mentionsToolkit = toolkitTerms.some(
+    (term) => term.length > 0 && message.includes(term)
+  )
+
+  const asksForLiveData =
+    /\b(list|show|find|search|lookup|look up|check|fetch|get|which)\b/.test(
+      message
+    ) ||
+    /\b(project|projects|issue|issues|ticket|tickets|team|teams|state|states|label|labels|cycle|cycles)\b/.test(
+      message
+    ) ||
+    /\bwhat\b.*\b(do we have|exists|left|open|assigned)\b/.test(message)
+
+  return mentionsToolkit || asksForLiveData
+}
+
+function getAutomaticToolScore(tool: SessionTool, userMessage: string) {
+  const message = userMessage.toLowerCase()
+  const slug = tool.slug.toUpperCase()
+  const family = inferToolFamily(tool)
+  const { required } = getToolSchemaProperties(tool)
+
+  let score = 5
+
+  if (slug.includes('LIST')) score += 20
+  if (slug.includes('SEARCH')) score += 18
+  if (slug.includes('GET')) score += 10
+  if (slug.includes('RUN_QUERY_OR_MUTATION')) score -= 35
+
+  if (message.includes('project') && slug.includes('PROJECT')) score += 55
+  if (
+    (message.includes('issue') || message.includes('ticket')) &&
+    slug.includes('ISSUE')
+  ) {
+    score += 55
+  }
+  if (message.includes('team') && slug.includes('TEAM')) score += 45
+  if (message.includes('state') && slug.includes('STATE')) score += 35
+  if (
+    /\b(my|me|current user|who am i)\b/.test(message) &&
+    slug.includes('CURRENT_USER')
+  ) {
+    score += 45
+  }
+
+  if (required.length === 0) score += 15
+  score -= required.length * 25
+
+  if (
+    family === 'users' &&
+    !/\b(my|me|current user|who am i)\b/.test(message)
+  ) {
+    score -= 10
+  }
+
+  return score
+}
+
+function buildAutomaticToolArguments(tool: SessionTool) {
+  const { properties, required } = getToolSchemaProperties(tool)
+  const args: Record<string, unknown> = {}
+
+  const buildValue = (name: string) => {
+    const normalized = name.toLowerCase()
+    const schema = properties[name] ?? {}
+
+    if (
+      [
+        'first',
+        'limit',
+        'page_size',
+        'pagesize',
+        'max_results',
+        'maxresults',
+      ].includes(normalized)
+    ) {
+      return 10
+    }
+
+    if (
+      [
+        'include_archived',
+        'includearchived',
+        'archived',
+        'include_completed',
+        'includecompleted',
+      ].includes(normalized)
+    ) {
+      return false
+    }
+
+    if (schema.default !== undefined) {
+      return schema.default
+    }
+
+    return undefined
+  }
+
+  for (const key of required) {
+    const value = buildValue(key)
+    if (value === undefined) {
+      return null
+    }
+
+    args[key] = value
+  }
+
+  for (const key of Object.keys(properties)) {
+    if (key in args) continue
+
+    const value = buildValue(key)
+    if (value !== undefined) {
+      args[key] = value
+    }
+  }
+
+  return args
+}
+
+function selectAutomaticToolExecutionPlans(
+  userMessage: string,
+  runtime: Pick<
+    ScopedToolRuntime,
+    'allowedTools' | 'allowedDecisions' | 'composioSessionId' | 'sessionRunId'
+  >
+) {
+  if (!runtime.composioSessionId || !runtime.sessionRunId) {
+    return []
+  }
+
+  const plans = runtime.allowedTools
+    .map((tool) => {
+      const decision = runtime.allowedDecisions.get(tool.slug)
+      if (!decision || decision.category !== 'read') {
+        return null
+      }
+
+      const argumentsPayload = buildAutomaticToolArguments(tool)
+      if (!argumentsPayload) {
+        return null
+      }
+
+      return {
+        argumentsPayload,
+        decision,
+        family: inferToolFamily(tool),
+        score: getAutomaticToolScore(tool, userMessage),
+        tool,
+      } satisfies AutomaticToolExecutionPlan
+    })
+    .filter(
+      (plan): plan is AutomaticToolExecutionPlan =>
+        plan !== null && plan.score > 0
+    )
+    .sort((left, right) => right.score - left.score)
+
+  const selected: AutomaticToolExecutionPlan[] = []
+  const usedFamilies = new Set<string>()
+
+  for (const plan of plans) {
+    if (usedFamilies.has(plan.family)) continue
+
+    selected.push(plan)
+    usedFamilies.add(plan.family)
+
+    if (selected.length >= 2) {
+      break
+    }
+  }
+
+  return selected
 }
 
 function matchesPolicyPattern(
@@ -478,7 +717,10 @@ function resolveChatAccessAllowed(
       }
 }
 
-function buildRuntimeSystemPrompt(runtime: ScopedToolRuntime) {
+function buildRuntimeSystemPrompt(
+  runtime: ScopedToolRuntime,
+  options?: { mustUseTools?: boolean }
+) {
   const lines = [
     'Tool access for this response is temporary and request-scoped. Only use tools that are exposed in this request.',
   ]
@@ -499,6 +741,9 @@ function buildRuntimeSystemPrompt(runtime: ScopedToolRuntime) {
         .map((tool) => tool.slug)
         .slice(0, MAX_RELEVANT_TOOLS)
         .join(', ')}.`
+    )
+    lines.push(
+      'When the user asks for live external data from one of these systems, return a tool call directly. Kodi executes tool calls for you; do not claim you need another channel, manual lookup, or a different environment while an executable tool is available.'
     )
   }
 
@@ -529,6 +774,12 @@ function buildRuntimeSystemPrompt(runtime: ScopedToolRuntime) {
   lines.push(
     'If the user asks for a gated action, explain the constraint clearly and offer a draft or guidance instead of claiming the action was completed.'
   )
+
+  if (options?.mustUseTools) {
+    lines.push(
+      'This request requires live tool data. You must use at least one relevant executable tool before answering unless every relevant tool call fails.'
+    )
+  }
 
   return lines.join('\n')
 }
@@ -1065,6 +1316,48 @@ async function runPlainChatCompletion(params: {
   }
 }
 
+async function executeAutomaticToolPlans(params: {
+  actorUserId: string
+  composioSessionId: string
+  db: AnyDb
+  orgId: string
+  plans: AutomaticToolExecutionPlan[]
+  sessionRunId: string
+}) {
+  const assistantToolCalls = params.plans.map((plan, index) => ({
+    id: `auto-${Date.now()}-${index}-${plan.tool.slug.toLowerCase()}`,
+    type: 'function' as const,
+    function: {
+      name: plan.tool.slug,
+      arguments: JSON.stringify(plan.argumentsPayload),
+    },
+  }))
+
+  const toolMessages: OpenAIMessage[] = []
+  const usedToolSlugs: string[] = []
+
+  for (const [index, plan] of params.plans.entries()) {
+    const result = await executeAllowedToolCall({
+      db: params.db,
+      orgId: params.orgId,
+      actorUserId: params.actorUserId,
+      sessionRunId: params.sessionRunId,
+      composioSessionId: params.composioSessionId,
+      toolCall: assistantToolCalls[index]!,
+      decision: plan.decision,
+    })
+
+    toolMessages.push(result.toolMessage)
+    usedToolSlugs.push(result.toolSlug)
+  }
+
+  return {
+    assistantToolCalls,
+    toolMessages,
+    usedToolSlugs,
+  }
+}
+
 async function recordToolActionRunStart(params: {
   db: AnyDb
   orgId: string
@@ -1278,7 +1571,9 @@ export async function runChatCompletionWithToolAccess(params: {
   }
 
   const runtimePrompt = scopedRuntime
-    ? buildRuntimeSystemPrompt(scopedRuntime)
+    ? buildRuntimeSystemPrompt(scopedRuntime, {
+        mustUseTools: shouldRequireToolUse(params.userMessage, scopedRuntime),
+      })
     : null
 
   const requestMessages =
@@ -1294,6 +1589,10 @@ export async function runChatCompletionWithToolAccess(params: {
 
   const conversation = [...requestMessages]
   const usedToolSlugs: string[] = []
+  const mustUseTools = scopedRuntime
+    ? shouldRequireToolUse(params.userMessage, scopedRuntime)
+    : false
+  let automaticExecutionUsed = false
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
@@ -1339,6 +1638,46 @@ export async function runChatCompletionWithToolAccess(params: {
         .filter((toolCall): toolCall is OpenAIToolCall => toolCall !== null)
 
       if (toolCalls.length === 0) {
+        if (
+          scopedRuntime &&
+          mustUseTools &&
+          !automaticExecutionUsed &&
+          scopedRuntime.allowedTools.length > 0 &&
+          scopedRuntime.composioSessionId &&
+          scopedRuntime.sessionRunId
+        ) {
+          const plans = selectAutomaticToolExecutionPlans(
+            params.userMessage,
+            scopedRuntime
+          )
+
+          if (plans.length > 0) {
+            automaticExecutionUsed = true
+
+            const automaticExecution = await executeAutomaticToolPlans({
+              actorUserId: params.actorUserId,
+              composioSessionId: scopedRuntime.composioSessionId,
+              db: params.db,
+              orgId: params.orgId,
+              plans,
+              sessionRunId: scopedRuntime.sessionRunId,
+            })
+
+            conversation.push({
+              role: 'assistant',
+              content: null,
+              tool_calls: automaticExecution.assistantToolCalls,
+            })
+            conversation.push(...automaticExecution.toolMessages)
+            conversation.push({
+              role: 'system',
+              content: `Kodi auto-executed ${automaticExecution.usedToolSlugs.join(', ')} because this request required live tool data and the draft assistant response did not call an available tool. Use the tool results above as the source of truth and answer directly.`,
+            })
+            usedToolSlugs.push(...automaticExecution.usedToolSlugs)
+            continue
+          }
+        }
+
         const content = rawMessage.content?.trim()
         if (!content) {
           throw new Error('Empty response from instance')

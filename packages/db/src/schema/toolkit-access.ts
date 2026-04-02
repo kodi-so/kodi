@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   jsonb,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -139,6 +140,55 @@ export const toolkitAccountPreferences = pgTable(
   })
 )
 
+export const toolSessionSourceTypeEnum = pgEnum('tool_session_source_type', [
+  'chat',
+  'meeting',
+  'system',
+])
+
+export const toolSessionRuns = pgTable(
+  'tool_session_runs',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    composioSessionId: text('composio_session_id').notNull(),
+    sourceType: toolSessionSourceTypeEnum('source_type').notNull(),
+    sourceId: text('source_id'),
+    enabledToolkits: text('enabled_toolkits').array().notNull(),
+    connectedAccountOverrides: jsonb(
+      'connected_account_overrides'
+    ).$type<Record<string, string> | null>(),
+    manageConnectionsInChat: boolean('manage_connections_in_chat')
+      .notNull()
+      .default(false),
+    workbenchEnabled: boolean('workbench_enabled').notNull().default(false),
+    metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    expiredAt: timestamp('expired_at'),
+  },
+  (table) => ({
+    composioSessionIdUidx: uniqueIndex(
+      'tool_session_runs_composio_session_id_uidx'
+    ).on(table.composioSessionId),
+    orgUserCreatedIdx: index('tool_session_runs_org_user_created_idx').on(
+      table.orgId,
+      table.userId,
+      table.createdAt
+    ),
+    sourceIdx: index('tool_session_runs_source_idx').on(
+      table.sourceType,
+      table.sourceId
+    ),
+  })
+)
+
 export const toolkitConnectionsRelations = relations(
   toolkitConnections,
   ({ one }) => ({
@@ -185,6 +235,20 @@ export const toolkitAccountPreferencesRelations = relations(
   })
 )
 
+export const toolSessionRunsRelations = relations(
+  toolSessionRuns,
+  ({ one }) => ({
+    org: one(organizations, {
+      fields: [toolSessionRuns.orgId],
+      references: [organizations.id],
+    }),
+    user: one(user, {
+      fields: [toolSessionRuns.userId],
+      references: [user.id],
+    }),
+  })
+)
+
 export type ToolkitConnection = typeof toolkitConnections.$inferSelect
 export type NewToolkitConnection = typeof toolkitConnections.$inferInsert
 export type ToolkitPolicy = typeof toolkitPolicies.$inferSelect
@@ -193,3 +257,5 @@ export type ToolkitAccountPreference =
   typeof toolkitAccountPreferences.$inferSelect
 export type NewToolkitAccountPreference =
   typeof toolkitAccountPreferences.$inferInsert
+export type ToolSessionRun = typeof toolSessionRuns.$inferSelect
+export type NewToolSessionRun = typeof toolSessionRuns.$inferInsert

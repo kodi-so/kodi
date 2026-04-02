@@ -1,13 +1,12 @@
-import {
-  AuthConfigTypes,
-  Composio,
-} from '@composio/core'
-import { eq } from 'drizzle-orm'
+import { AuthConfigTypes, Composio } from '@composio/core'
+import { and, eq } from 'drizzle-orm'
 import {
   db,
+  toolkitAccountPreferences,
   toolkitConnections,
   toolkitPolicies,
   type ToolkitConnection,
+  type ToolkitPolicy,
 } from '@kodi/db'
 import { env } from '../env'
 
@@ -68,6 +67,67 @@ type ConnectionSummary = {
 }
 
 const ACCOUNT_ATTENTION_STATUSES = new Set(['FAILED', 'EXPIRED'])
+
+export type EffectiveToolkitPolicy = {
+  id: string | null
+  toolkitSlug: string
+  enabled: boolean
+  chatReadsEnabled: boolean
+  meetingReadsEnabled: boolean
+  draftsEnabled: boolean
+  writesRequireApproval: boolean
+  adminActionsEnabled: boolean
+  allowedActionPatterns: string[]
+  source: 'default' | 'saved'
+  createdByUserId: string | null
+  updatedByUserId: string | null
+  updatedAt: Date | null
+}
+
+export function getDefaultToolkitPolicy(
+  toolkitSlug: string
+): EffectiveToolkitPolicy {
+  return {
+    id: null,
+    toolkitSlug,
+    enabled: true,
+    chatReadsEnabled: true,
+    meetingReadsEnabled: true,
+    draftsEnabled: true,
+    writesRequireApproval: true,
+    adminActionsEnabled: false,
+    allowedActionPatterns: [],
+    source: 'default',
+    createdByUserId: null,
+    updatedByUserId: null,
+    updatedAt: null,
+  }
+}
+
+export function getEffectiveToolkitPolicy(
+  policy: ToolkitPolicy | null | undefined,
+  toolkitSlug: string
+): EffectiveToolkitPolicy {
+  if (!policy) {
+    return getDefaultToolkitPolicy(toolkitSlug)
+  }
+
+  return {
+    id: policy.id,
+    toolkitSlug,
+    enabled: policy.enabled,
+    chatReadsEnabled: policy.chatReadsEnabled,
+    meetingReadsEnabled: policy.meetingReadsEnabled,
+    draftsEnabled: policy.draftsEnabled,
+    writesRequireApproval: policy.writesRequireApproval,
+    adminActionsEnabled: policy.adminActionsEnabled,
+    allowedActionPatterns: policy.allowedActionPatterns ?? [],
+    source: 'saved',
+    createdByUserId: policy.createdByUserId,
+    updatedByUserId: policy.updatedByUserId,
+    updatedAt: policy.updatedAt,
+  }
+}
 
 export function getComposioClient() {
   if (!env.COMPOSIO_API_KEY) {
@@ -419,6 +479,90 @@ async function ensureToolkitPolicyRow(
   return created
 }
 
+export async function listToolkitPolicies(dbInstance: AnyDb, orgId: string) {
+  return dbInstance.query.toolkitPolicies.findMany({
+    where: (fields, { eq }) => eq(fields.orgId, orgId),
+  })
+}
+
+export async function listToolkitAccountPreferences(
+  dbInstance: AnyDb,
+  orgId: string,
+  userId: string
+) {
+  return dbInstance.query.toolkitAccountPreferences.findMany({
+    where: (fields, operators) =>
+      operators.and(
+        operators.eq(fields.orgId, orgId),
+        operators.eq(fields.userId, userId)
+      ),
+  })
+}
+
+export async function upsertToolkitAccountPreference(
+  dbInstance: AnyDb,
+  params: {
+    orgId: string
+    userId: string
+    toolkitSlug: string
+    preferredConnectedAccountId: string
+  }
+) {
+  const [saved] = await dbInstance
+    .insert(toolkitAccountPreferences)
+    .values({
+      orgId: params.orgId,
+      userId: params.userId,
+      toolkitSlug: params.toolkitSlug,
+      preferredConnectedAccountId: params.preferredConnectedAccountId,
+    })
+    .onConflictDoUpdate({
+      target: [
+        toolkitAccountPreferences.orgId,
+        toolkitAccountPreferences.userId,
+        toolkitAccountPreferences.toolkitSlug,
+      ],
+      set: {
+        preferredConnectedAccountId: params.preferredConnectedAccountId,
+        updatedAt: new Date(),
+      },
+    })
+    .returning()
+
+  return saved ?? null
+}
+
+export async function clearToolkitAccountPreference(
+  dbInstance: AnyDb,
+  params: {
+    orgId: string
+    userId: string
+    toolkitSlug: string
+  }
+) {
+  const existing = await dbInstance.query.toolkitAccountPreferences.findFirst({
+    where: (fields, operators) =>
+      operators.and(
+        operators.eq(fields.orgId, params.orgId),
+        operators.eq(fields.userId, params.userId),
+        operators.eq(fields.toolkitSlug, params.toolkitSlug)
+      ),
+  })
+
+  if (!existing) {
+    return null
+  }
+
+  const [deleted] = await dbInstance
+    .delete(toolkitAccountPreferences)
+    .where(
+      eq(toolkitAccountPreferences.id as never, existing.id as never) as never
+    )
+    .returning()
+
+  return deleted ?? null
+}
+
 export async function syncConnectedAccounts(
   dbInstance: AnyDb,
   orgId: string,
@@ -477,9 +621,19 @@ export async function listPersistedConnections(
 }
 
 export function choosePrimaryConnection(
-  connections: ToolkitConnection[]
+  connections: ToolkitConnection[],
+  preferredConnectedAccountId?: string | null
 ): ToolkitConnection | null {
   if (connections.length === 0) return null
+
+  if (preferredConnectedAccountId) {
+    const preferred = connections.find(
+      (connection) =>
+        connection.connectedAccountId === preferredConnectedAccountId
+    )
+
+    if (preferred) return preferred
+  }
 
   return (
     connections.find(

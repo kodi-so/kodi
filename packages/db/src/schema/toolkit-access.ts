@@ -107,6 +107,38 @@ export const toolkitPolicies = pgTable(
   })
 )
 
+export const toolkitAccountPreferences = pgTable(
+  'toolkit_account_preferences',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    toolkitSlug: text('toolkit_slug').notNull(),
+    preferredConnectedAccountId: text(
+      'preferred_connected_account_id'
+    ).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => ({
+    orgUserToolkitUidx: uniqueIndex(
+      'toolkit_account_preferences_org_user_toolkit_uidx'
+    ).on(table.orgId, table.userId, table.toolkitSlug),
+    orgUserAccountIdx: index(
+      'toolkit_account_preferences_org_user_account_idx'
+    ).on(table.orgId, table.userId, table.preferredConnectedAccountId),
+  })
+)
+
 export const toolkitConnectionsRelations = relations(
   toolkitConnections,
   ({ one }) => ({
@@ -139,7 +171,25 @@ export const toolkitPoliciesRelations = relations(
   })
 )
 
+export const toolkitAccountPreferencesRelations = relations(
+  toolkitAccountPreferences,
+  ({ one }) => ({
+    org: one(organizations, {
+      fields: [toolkitAccountPreferences.orgId],
+      references: [organizations.id],
+    }),
+    user: one(user, {
+      fields: [toolkitAccountPreferences.userId],
+      references: [user.id],
+    }),
+  })
+)
+
 export type ToolkitConnection = typeof toolkitConnections.$inferSelect
 export type NewToolkitConnection = typeof toolkitConnections.$inferInsert
 export type ToolkitPolicy = typeof toolkitPolicies.$inferSelect
 export type NewToolkitPolicy = typeof toolkitPolicies.$inferInsert
+export type ToolkitAccountPreference =
+  typeof toolkitAccountPreferences.$inferSelect
+export type NewToolkitAccountPreference =
+  typeof toolkitAccountPreferences.$inferInsert

@@ -83,43 +83,46 @@ Exit criteria:
 2. `KOD-91`: deepen the per-tool detail and multi-identity UX
 3. `KOD-92`: add owner controls once the user connection surface is stable
 
-## What this first Phase 2 branch covers
+## What this Phase 2 branch covers
 
-This first branch is the `KOD-90` slice with a small amount of `KOD-91`
-groundwork.
+This branch completes `KOD-90`, `KOD-91`, and `KOD-92`.
 
 Included:
 
-- redesigned Tool Access settings page
-- richer state framing for feature gate, missing env setup, and sync problems
-- filterable catalog sections for first-wave tools, connected tools, and
-  attention-needed items
-- richer card content for connection identity, scopes, tool count, and trigger
-  count
+- redesigned Tool Access settings page with stronger browse, filter, and status
+  framing
+- dedicated toolkit detail panel with identity metadata, scopes, health, and
+  disconnect actions
+- user-scoped preferred connected-account selection when multiple identities
+  exist for one toolkit
+- owner-only workspace policy controls for enablement, reads, drafts, write
+  approval, and admin actions
+- persisted toolkit account preference storage separate from workspace policy
+- policy-aware catalog and detail messaging so members can tell whether a limit
+  comes from missing auth or workspace governance
 
-Groundwork for later:
+Still intentionally out of scope:
 
-- surfaced scope data from the API so the detail UX can use real values
-- clearer connection-count handling so multi-account selection can layer in
-  without reworking the catalog page
+- runtime session assembly for OpenClaw
+- approval execution plumbing in the agent runtime
+- broad trigger automation beyond connection and catalog management
 
-Not included yet:
-
-- dedicated toolkit detail route or drawer
-- account selection controls
-- workspace policy editing
-- runtime session assembly or approval enforcement
-
-## Testing checklist for this slice
+## Testing checklist for Phase 2
 
 - feature enabled, Composio configured:
-  the catalog loads and sections render correctly
-- feature enabled, search active:
-  filters and search work together without breaking layout
+  the catalog loads, sections render, and detail state follows the selected
+  toolkit
+- feature enabled, multiple connected accounts for one toolkit:
+  users can choose a preferred identity and return to automatic selection
 - feature enabled, connected account present:
-  connected state, identity info, and disconnect action render correctly
+  scopes, identity info, validation timestamps, and disconnect actions render
+  correctly
 - feature enabled, failed or expired account present:
-  attention state is obvious and actionable
+  attention state is obvious in both the catalog and detail panel
+- owner user:
+  workspace policy changes save and immediately affect the visible policy state
+- non-owner user:
+  policy is visible but not editable
 - feature disabled:
   page becomes browse-only and explains why
 - Composio env missing:

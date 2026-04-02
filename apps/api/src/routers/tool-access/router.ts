@@ -1,25 +1,38 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { router, memberProcedure } from '../../trpc'
+import { toolkitPolicies } from '@kodi/db'
+import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { getFeatureFlags } from '../../lib/features'
 import {
   choosePrimaryConnection,
+  clearToolkitAccountPreference,
   createConnectLink,
   disableConnectedAccount,
+  getEffectiveToolkitPolicy,
+  getToolkit,
   getToolAccessPresentation,
   getToolAccessSetupStatus,
   listPersistedConnections,
+  listToolkitAccountPreferences,
+  listToolkitPolicies,
   listToolkits,
   markPersistedConnectionInactive,
   syncUserConnectionsForOrg,
+  upsertToolkitAccountPreference,
 } from '../../lib/composio'
 import { logActivity } from '../../lib/activity'
 
 const attentionStatuses = new Set(['FAILED', 'EXPIRED'])
 
-function buildConnectionSummary(
-  connections: Awaited<ReturnType<typeof listPersistedConnections>>
-) {
+type PersistedConnection = Awaited<
+  ReturnType<typeof listPersistedConnections>
+>[number]
+type PersistedPolicy = Awaited<ReturnType<typeof listToolkitPolicies>>[number]
+type PersistedPreference = Awaited<
+  ReturnType<typeof listToolkitAccountPreferences>
+>[number]
+
+function buildConnectionSummary(connections: PersistedConnection[]) {
   const activeCount = connections.filter(
     (connection) => connection.connectedAccountStatus === 'ACTIVE'
   ).length
@@ -34,17 +47,66 @@ function buildConnectionSummary(
   }
 }
 
+function serializeConnection(
+  connection: PersistedConnection,
+  preferredConnectedAccountId: string | null
+) {
+  return {
+    id: connection.id,
+    connectedAccountId: connection.connectedAccountId,
+    status: connection.connectedAccountStatus ?? 'UNKNOWN',
+    connectedAccountLabel: connection.connectedAccountLabel,
+    externalUserEmail: connection.externalUserEmail,
+    externalUserId: connection.externalUserId,
+    scopes: connection.scopes ?? [],
+    errorMessage: connection.errorMessage,
+    lastValidatedAt: connection.lastValidatedAt,
+    lastErrorAt: connection.lastErrorAt,
+    updatedAt: connection.updatedAt,
+    isPreferred: preferredConnectedAccountId === connection.connectedAccountId,
+  }
+}
+
+function sortConnectionsForDetail(
+  connections: PersistedConnection[],
+  preferredConnectedAccountId: string | null
+) {
+  return [...connections].sort((left, right) => {
+    const leftPreferred =
+      preferredConnectedAccountId === left.connectedAccountId ? 1 : 0
+    const rightPreferred =
+      preferredConnectedAccountId === right.connectedAccountId ? 1 : 0
+    if (leftPreferred !== rightPreferred) {
+      return rightPreferred - leftPreferred
+    }
+
+    const leftActive = left.connectedAccountStatus === 'ACTIVE' ? 1 : 0
+    const rightActive = right.connectedAccountStatus === 'ACTIVE' ? 1 : 0
+    if (leftActive !== rightActive) {
+      return rightActive - leftActive
+    }
+
+    return right.updatedAt.getTime() - left.updatedAt.getTime()
+  })
+}
+
 async function loadConnectionsForCurrentUser(params: {
   db: Parameters<typeof listPersistedConnections>[0]
   orgId: string
   userId: string
+  toolkitSlugs?: string[]
 }) {
   const setup = getToolAccessSetupStatus()
   let syncError: string | null = null
 
   if (setup.apiConfigured) {
     try {
-      await syncUserConnectionsForOrg(params.db, params.orgId, params.userId)
+      await syncUserConnectionsForOrg(
+        params.db,
+        params.orgId,
+        params.userId,
+        params.toolkitSlugs
+      )
     } catch (error) {
       syncError =
         error instanceof Error
@@ -53,19 +115,31 @@ async function loadConnectionsForCurrentUser(params: {
     }
   }
 
-  const connections = await listPersistedConnections(
-    params.db,
-    params.orgId,
-    params.userId
-  )
+  const [connections, policies, preferences] = await Promise.all([
+    listPersistedConnections(params.db, params.orgId, params.userId),
+    listToolkitPolicies(params.db, params.orgId),
+    listToolkitAccountPreferences(params.db, params.orgId, params.userId),
+  ])
 
   return {
     connections,
+    policies,
+    preferences,
     setup,
     syncError,
     summary: buildConnectionSummary(connections),
   }
 }
+
+const policyInput = z.object({
+  toolkitSlug: z.string().min(1),
+  enabled: z.boolean(),
+  chatReadsEnabled: z.boolean(),
+  meetingReadsEnabled: z.boolean(),
+  draftsEnabled: z.boolean(),
+  writesRequireApproval: z.boolean(),
+  adminActionsEnabled: z.boolean(),
+})
 
 export const toolAccessRouter = router({
   getStatus: memberProcedure.query(async ({ ctx }) => {
@@ -98,12 +172,22 @@ export const toolAccessRouter = router({
         userId: ctx.session.user.id,
       })
 
-      const connectionsByToolkit = new Map<string, typeof result.connections>()
+      const connectionsByToolkit = new Map<string, PersistedConnection[]>()
       for (const connection of result.connections) {
         const existing = connectionsByToolkit.get(connection.toolkitSlug) ?? []
         existing.push(connection)
         connectionsByToolkit.set(connection.toolkitSlug, existing)
       }
+
+      const policiesByToolkit = new Map<string, PersistedPolicy>(
+        result.policies.map((policy) => [policy.toolkitSlug, policy])
+      )
+      const preferencesByToolkit = new Map<string, PersistedPreference>(
+        result.preferences.map((preference) => [
+          preference.toolkitSlug,
+          preference,
+        ])
+      )
 
       const toolkits = result.setup.apiConfigured
         ? await listToolkits(input.search, input.limit)
@@ -111,23 +195,29 @@ export const toolAccessRouter = router({
 
       const items = toolkits.map((toolkit) => {
         const connections = connectionsByToolkit.get(toolkit.slug) ?? []
-        const primaryConnection = choosePrimaryConnection(connections)
+        const preference = preferencesByToolkit.get(toolkit.slug) ?? null
+        const effectivePolicy = getEffectiveToolkitPolicy(
+          policiesByToolkit.get(toolkit.slug) ?? null,
+          toolkit.slug
+        )
+        const primaryConnection = choosePrimaryConnection(
+          connections,
+          preference?.preferredConnectedAccountId ?? null
+        )
 
         return {
           ...toolkit,
           ...getToolAccessPresentation(toolkit),
+          policy: effectivePolicy,
+          selectedConnectedAccountId:
+            preference?.preferredConnectedAccountId ?? null,
           connection: primaryConnection
             ? {
-                id: primaryConnection.id,
-                connectedAccountId: primaryConnection.connectedAccountId,
-                status: primaryConnection.connectedAccountStatus ?? 'UNKNOWN',
-                connectedAccountLabel: primaryConnection.connectedAccountLabel,
-                externalUserEmail: primaryConnection.externalUserEmail,
-                externalUserId: primaryConnection.externalUserId,
-                scopes: primaryConnection.scopes ?? [],
-                errorMessage: primaryConnection.errorMessage,
-                lastValidatedAt: primaryConnection.lastValidatedAt,
-                updatedAt: primaryConnection.updatedAt,
+                ...serializeConnection(
+                  primaryConnection,
+                  preference?.preferredConnectedAccountId ?? null
+                ),
+                selectionMode: preference ? 'preferred' : 'automatic',
               }
             : null,
           connectionCount: connections.length,
@@ -140,6 +230,73 @@ export const toolAccessRouter = router({
         summary: result.summary,
         syncError: result.syncError,
         items,
+      }
+    }),
+
+  getToolkitDetail: memberProcedure
+    .input(
+      z.object({
+        toolkitSlug: z.string().min(1),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const featureFlags = getFeatureFlags()
+      const result = await loadConnectionsForCurrentUser({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        userId: ctx.session.user.id,
+        toolkitSlugs: [input.toolkitSlug],
+      })
+
+      if (!result.setup.apiConfigured) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Composio is not configured in this environment.',
+        })
+      }
+
+      const toolkit = await getToolkit(input.toolkitSlug).catch((error) => {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Toolkit not found in the Composio catalog.',
+        })
+      })
+
+      const connections = result.connections.filter(
+        (connection) => connection.toolkitSlug === toolkit.slug
+      )
+      const preference =
+        result.preferences.find((item) => item.toolkitSlug === toolkit.slug) ??
+        null
+      const policy =
+        result.policies.find((item) => item.toolkitSlug === toolkit.slug) ??
+        null
+      const sortedConnections = sortConnectionsForDetail(
+        connections,
+        preference?.preferredConnectedAccountId ?? null
+      )
+
+      return {
+        featureFlags,
+        setup: result.setup,
+        syncError: result.syncError,
+        toolkit: {
+          ...toolkit,
+          ...getToolAccessPresentation(toolkit),
+        },
+        connectionSummary: buildConnectionSummary(connections),
+        selectedConnectedAccountId:
+          preference?.preferredConnectedAccountId ?? null,
+        connections: sortedConnections.map((connection) =>
+          serializeConnection(
+            connection,
+            preference?.preferredConnectedAccountId ?? null
+          )
+        ),
+        policy: getEffectiveToolkitPolicy(policy, toolkit.slug),
       }
     }),
 
@@ -189,6 +346,139 @@ export const toolAccessRouter = router({
       return result
     }),
 
+  setPreferredConnection: memberProcedure
+    .input(
+      z.object({
+        toolkitSlug: z.string().min(1),
+        connectedAccountId: z.string().min(1).nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const connectedAccountId = input.connectedAccountId
+
+      if (!connectedAccountId) {
+        await clearToolkitAccountPreference(ctx.db, {
+          orgId: ctx.org.id,
+          userId: ctx.session.user.id,
+          toolkitSlug: input.toolkitSlug,
+        })
+
+        await logActivity(
+          ctx.db,
+          ctx.org.id,
+          'tool_access.connection_selection_cleared',
+          {
+            toolkitSlug: input.toolkitSlug,
+          },
+          ctx.session.user.id
+        )
+
+        return { preferredConnectedAccountId: null }
+      }
+
+      const connection = await ctx.db.query.toolkitConnections.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.userId, ctx.session.user.id),
+            eq(fields.toolkitSlug, input.toolkitSlug),
+            eq(fields.connectedAccountId, connectedAccountId)
+          ),
+      })
+
+      if (!connection) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Connected account not found for this toolkit.',
+        })
+      }
+
+      if (connection.connectedAccountStatus === 'INACTIVE') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Reconnect this account before selecting it again.',
+        })
+      }
+
+      await upsertToolkitAccountPreference(ctx.db, {
+        orgId: ctx.org.id,
+        userId: ctx.session.user.id,
+        toolkitSlug: input.toolkitSlug,
+        preferredConnectedAccountId: connectedAccountId,
+      })
+
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'tool_access.connection_selected',
+        {
+          toolkitSlug: input.toolkitSlug,
+          connectedAccountId,
+        },
+        ctx.session.user.id
+      )
+
+      return { preferredConnectedAccountId: connectedAccountId }
+    }),
+
+  updatePolicy: ownerProcedure
+    .input(policyInput)
+    .mutation(async ({ ctx, input }) => {
+      const [saved] = await ctx.db
+        .insert(toolkitPolicies)
+        .values({
+          orgId: ctx.org.id,
+          toolkitSlug: input.toolkitSlug,
+          enabled: input.enabled,
+          chatReadsEnabled: input.chatReadsEnabled,
+          meetingReadsEnabled: input.meetingReadsEnabled,
+          draftsEnabled: input.draftsEnabled,
+          writesRequireApproval: input.writesRequireApproval,
+          adminActionsEnabled: input.adminActionsEnabled,
+          allowedActionPatterns: [],
+          createdByUserId: ctx.session.user.id,
+          updatedByUserId: ctx.session.user.id,
+          metadata: {
+            managedIn: 'phase-2-settings',
+          },
+        })
+        .onConflictDoUpdate({
+          target: [toolkitPolicies.orgId, toolkitPolicies.toolkitSlug],
+          set: {
+            enabled: input.enabled,
+            chatReadsEnabled: input.chatReadsEnabled,
+            meetingReadsEnabled: input.meetingReadsEnabled,
+            draftsEnabled: input.draftsEnabled,
+            writesRequireApproval: input.writesRequireApproval,
+            adminActionsEnabled: input.adminActionsEnabled,
+            updatedByUserId: ctx.session.user.id,
+            updatedAt: new Date(),
+            metadata: {
+              managedIn: 'phase-2-settings',
+            },
+          },
+        })
+        .returning()
+
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'tool_access.policy_updated',
+        {
+          toolkitSlug: input.toolkitSlug,
+          enabled: input.enabled,
+          chatReadsEnabled: input.chatReadsEnabled,
+          meetingReadsEnabled: input.meetingReadsEnabled,
+          draftsEnabled: input.draftsEnabled,
+          writesRequireApproval: input.writesRequireApproval,
+          adminActionsEnabled: input.adminActionsEnabled,
+        },
+        ctx.session.user.id
+      )
+
+      return getEffectiveToolkitPolicy(saved ?? null, input.toolkitSlug)
+    }),
+
   disconnect: memberProcedure
     .input(
       z.object({
@@ -214,6 +504,28 @@ export const toolAccessRouter = router({
 
       await disableConnectedAccount(existing.connectedAccountId)
       await markPersistedConnectionInactive(ctx.db, existing.id)
+
+      const existingPreference =
+        (
+          await listToolkitAccountPreferences(
+            ctx.db,
+            ctx.org.id,
+            ctx.session.user.id
+          )
+        ).find(
+          (preference) => preference.toolkitSlug === existing.toolkitSlug
+        ) ?? null
+
+      if (
+        existingPreference?.preferredConnectedAccountId ===
+        existing.connectedAccountId
+      ) {
+        await clearToolkitAccountPreference(ctx.db, {
+          orgId: ctx.org.id,
+          userId: ctx.session.user.id,
+          toolkitSlug: existing.toolkitSlug,
+        })
+      }
 
       await logActivity(
         ctx.db,

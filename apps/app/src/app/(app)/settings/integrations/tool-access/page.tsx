@@ -4,13 +4,13 @@ import Link from 'next/link'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
-  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   ExternalLink,
   KeyRound,
   Layers3,
   Link2,
+  LockKeyhole,
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -24,6 +24,7 @@ import {
   Button,
   Input,
   Skeleton,
+  cn,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
@@ -37,6 +38,9 @@ type ToolAccessCatalog = Awaited<
   ReturnType<typeof trpc.toolAccess.getCatalog.query>
 >
 type ToolAccessItem = ToolAccessCatalog['items'][number]
+type ToolAccessToolkitDetail = Awaited<
+  ReturnType<typeof trpc.toolAccess.getToolkitDetail.query>
+>
 type ToolAccessFilter = 'all' | 'priority' | 'connected' | 'attention' | 'setup'
 type ToolkitSection = {
   key: string
@@ -44,6 +48,15 @@ type ToolkitSection = {
   description: string
   items: ToolAccessItem[]
 }
+type PolicyDraft = Pick<
+  ToolAccessToolkitDetail['policy'],
+  | 'enabled'
+  | 'chatReadsEnabled'
+  | 'meetingReadsEnabled'
+  | 'draftsEnabled'
+  | 'writesRequireApproval'
+  | 'adminActionsEnabled'
+>
 
 const attentionStatuses = new Set(['FAILED', 'EXPIRED'])
 
@@ -66,10 +79,57 @@ function getToolkitMonogram(name: string) {
   return letters.toUpperCase() || name.slice(0, 2).toUpperCase()
 }
 
+function getPolicyState(policy: ToolAccessItem['policy']) {
+  if (!policy.enabled) {
+    return {
+      label: 'Workspace blocked',
+      tone: 'border-red-500/20 bg-red-500/10 text-red-200',
+      detail:
+        'This toolkit is disabled for the workspace, even if a user has connected it.',
+    }
+  }
+
+  if (!policy.chatReadsEnabled || !policy.meetingReadsEnabled) {
+    return {
+      label: 'Limited reads',
+      tone: 'border-amber-500/20 bg-amber-500/10 text-amber-100',
+      detail:
+        'Some read contexts are disabled, so availability will depend on where Kodi is acting.',
+    }
+  }
+
+  if (policy.adminActionsEnabled) {
+    return {
+      label: 'Admin enabled',
+      tone: 'border-red-500/20 bg-red-500/10 text-red-200',
+      detail:
+        'Admin-class actions are enabled for this toolkit and should be treated carefully.',
+    }
+  }
+
+  if (policy.writesRequireApproval) {
+    return {
+      label: 'Writes reviewed',
+      tone: 'border-sky-500/20 bg-sky-500/10 text-sky-200',
+      detail: 'Writes stay guarded by approval before execution.',
+    }
+  }
+
+  return {
+    label: 'Direct writes allowed',
+    tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    detail:
+      'Writes can proceed without approval once runtime enforcement is wired in later phases.',
+  }
+}
+
 function getToolkitStatus(
   item: ToolAccessItem,
   catalog: ToolAccessCatalog | null
 ) {
+  if (!catalog?.featureFlags.toolAccess) return 'Feature off'
+  if (!catalog?.setup.apiConfigured) return 'Needs setup'
+  if (!item.policy.enabled) return 'Blocked by workspace'
   if (item.connection?.status === 'ACTIVE') return 'Connected'
   if (item.connection && attentionStatuses.has(item.connection.status)) {
     return 'Attention needed'
@@ -80,8 +140,6 @@ function getToolkitStatus(
   ) {
     return 'Connecting'
   }
-  if (!catalog?.featureFlags.toolAccess) return 'Feature off'
-  if (!catalog?.setup.apiConfigured) return 'Needs setup'
   if (item.authMode === 'no_auth') return 'No auth needed'
   if (item.authMode === 'custom' && !item.canConnect) return 'Needs auth config'
   return 'Not connected'
@@ -110,7 +168,7 @@ function canRunConnect(
   return item.canConnect
 }
 
-function formatAuthMode(item: ToolAccessItem) {
+function formatAuthMode(item: Pick<ToolAccessItem, 'authMode'>) {
   switch (item.authMode) {
     case 'custom':
       return 'Custom auth'
@@ -123,7 +181,7 @@ function formatAuthMode(item: ToolAccessItem) {
   }
 }
 
-function formatSupportTier(item: ToolAccessItem) {
+function formatSupportTier(item: Pick<ToolAccessItem, 'supportTier'>) {
   switch (item.supportTier) {
     case 'tier_1':
       return 'First wave'
@@ -136,11 +194,20 @@ function formatSupportTier(item: ToolAccessItem) {
 
 function formatScope(scope: string) {
   const withoutOrigin = scope.replace(/^https?:\/\/[^/]+\//, '')
-  if (withoutOrigin.length <= 26) return withoutOrigin
-  return `${withoutOrigin.slice(0, 26)}…`
+  if (withoutOrigin.length <= 28) return withoutOrigin
+  return `${withoutOrigin.slice(0, 28)}…`
 }
 
-function getCapabilitySummary(item: ToolAccessItem) {
+function getCapabilitySummary(
+  item:
+    | ToolAccessItem
+    | ToolAccessToolkitDetail['toolkit']
+    | {
+        toolsCount: number
+        triggersCount: number
+        categories: Array<{ slug: string; name: string }>
+      }
+) {
   const inventory =
     item.triggersCount > 0
       ? `${item.toolsCount} tools and ${item.triggersCount} triggers`
@@ -154,6 +221,35 @@ function getCapabilitySummary(item: ToolAccessItem) {
     .slice(0, 3)
     .map((category) => category.name)
     .join(', ')}.`
+}
+
+function createPolicyDraft(
+  policy: ToolAccessToolkitDetail['policy'] | ToolAccessItem['policy']
+): PolicyDraft {
+  return {
+    enabled: policy.enabled,
+    chatReadsEnabled: policy.chatReadsEnabled,
+    meetingReadsEnabled: policy.meetingReadsEnabled,
+    draftsEnabled: policy.draftsEnabled,
+    writesRequireApproval: policy.writesRequireApproval,
+    adminActionsEnabled: policy.adminActionsEnabled,
+  }
+}
+
+function isPolicyDraftDirty(
+  draft: PolicyDraft | null,
+  policy: ToolAccessToolkitDetail['policy'] | null
+) {
+  if (!draft || !policy) return false
+
+  return (
+    draft.enabled !== policy.enabled ||
+    draft.chatReadsEnabled !== policy.chatReadsEnabled ||
+    draft.meetingReadsEnabled !== policy.meetingReadsEnabled ||
+    draft.draftsEnabled !== policy.draftsEnabled ||
+    draft.writesRequireApproval !== policy.writesRequireApproval ||
+    draft.adminActionsEnabled !== policy.adminActionsEnabled
+  )
 }
 
 function matchesFilter(
@@ -177,7 +273,8 @@ function matchesFilter(
       return (
         status === 'Needs setup' ||
         status === 'Needs auth config' ||
-        status === 'Feature off'
+        status === 'Feature off' ||
+        status === 'Blocked by workspace'
       )
     default:
       return true
@@ -189,24 +286,26 @@ function getStatusRank(
   catalog: ToolAccessCatalog | null
 ) {
   switch (getToolkitStatus(item, catalog)) {
-    case 'Connected':
+    case 'Blocked by workspace':
       return 0
-    case 'Attention needed':
+    case 'Connected':
       return 1
-    case 'Connecting':
+    case 'Attention needed':
       return 2
-    case 'Not connected':
+    case 'Connecting':
       return 3
-    case 'No auth needed':
+    case 'Not connected':
       return 4
-    case 'Needs auth config':
+    case 'No auth needed':
       return 5
-    case 'Needs setup':
+    case 'Needs auth config':
       return 6
-    case 'Feature off':
+    case 'Needs setup':
       return 7
-    default:
+    case 'Feature off':
       return 8
+    default:
+      return 9
   }
 }
 
@@ -230,7 +329,7 @@ function buildSections(
       attention:
         'Connections that need review before they should be trusted again.',
       setup:
-        'Toolkits blocked on environment setup, auth config, or feature gating.',
+        'Toolkits blocked on workspace policy, environment setup, or auth config.',
     }
 
     return items.length === 0
@@ -245,6 +344,7 @@ function buildSections(
         ]
   }
 
+  const blocked = items.filter((item) => !item.policy.enabled)
   const attention = items.filter(
     (item) =>
       item.connection?.status && attentionStatuses.has(item.connection.status)
@@ -252,20 +352,31 @@ function buildSections(
   const priority = items.filter(
     (item) =>
       item.supportTier === 'tier_1' &&
+      !blocked.some((candidate) => candidate.slug === item.slug) &&
       !attention.some((candidate) => candidate.slug === item.slug)
   )
   const catalog = items.filter(
     (item) =>
       item.supportTier !== 'tier_1' &&
+      !blocked.some((candidate) => candidate.slug === item.slug) &&
       !attention.some((candidate) => candidate.slug === item.slug)
   )
 
   return [
     {
+      key: 'blocked',
+      title: 'Blocked or governed',
+      description:
+        'These tools need a policy or connection decision before they will behave predictably.',
+      items: blocked,
+    },
+    {
       key: 'attention',
       title: 'Needs attention',
       description: 'Fix these accounts first so the runtime stays trustworthy.',
-      items: attention,
+      items: attention.filter(
+        (item) => !blocked.some((candidate) => candidate.slug === item.slug)
+      ),
     },
     {
       key: 'priority',
@@ -311,6 +422,19 @@ function getHeroState(catalog: ToolAccessCatalog | null) {
     }
   }
 
+  const blockedCount = catalog.items.filter(
+    (item) => !item.policy.enabled
+  ).length
+
+  if (blockedCount > 0) {
+    return {
+      label: 'Policy review needed',
+      tone: 'border-red-500/20 bg-red-500/10 text-red-200',
+      detail:
+        'Some tools are already connected but blocked or constrained at the workspace level.',
+    }
+  }
+
   if (catalog.summary.attentionCount > 0) {
     return {
       label: 'Review connections',
@@ -337,16 +461,64 @@ function getHeroState(catalog: ToolAccessCatalog | null) {
   }
 }
 
+function PolicyToggleRow({
+  title,
+  description,
+  value,
+  onToggle,
+  trueLabel,
+  falseLabel,
+  disabled,
+}: {
+  title: string
+  description: string
+  value: boolean
+  onToggle: () => void
+  trueLabel: string
+  falseLabel: string
+  disabled?: boolean
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-white">{title}</p>
+          <p className="text-sm leading-6 text-zinc-400">{description}</p>
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn(
+            'w-full justify-center border sm:w-auto',
+            value
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:text-emerald-200'
+              : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white'
+          )}
+          disabled={disabled}
+          onClick={onToggle}
+        >
+          {value ? trueLabel : falseLabel}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function ToolkitCard({
   item,
   catalog,
   actionKey,
+  isSelected,
+  onInspect,
   onConnect,
   onDisconnect,
 }: {
   item: ToolAccessItem
   catalog: ToolAccessCatalog | null
   actionKey: string | null
+  isSelected: boolean
+  onInspect: (toolkitSlug: string) => void
   onConnect: (toolkitSlug: string) => Promise<void>
   onDisconnect: (connectedAccountId: string) => Promise<void>
 }) {
@@ -361,9 +533,17 @@ function ToolkitCard({
     (item.connection?.scopes.length ?? 0) - scopePreview.length,
     0
   )
+  const policyState = getPolicyState(item.policy)
 
   return (
-    <article className="group overflow-hidden rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(21,23,31,0.98),rgba(10,11,17,1))] p-6 transition hover:-translate-y-0.5 hover:border-zinc-700">
+    <article
+      className={cn(
+        'group overflow-hidden rounded-[1.75rem] border bg-[linear-gradient(180deg,rgba(21,23,31,0.98),rgba(10,11,17,1))] p-6 transition hover:-translate-y-0.5',
+        isSelected
+          ? 'border-sky-400/40 shadow-[0_0_0_1px_rgba(56,189,248,0.18)]'
+          : 'border-zinc-800 hover:border-zinc-700'
+      )}
+    >
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="space-y-4">
@@ -395,7 +575,8 @@ function ToolkitCard({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 xl:max-w-[14rem] xl:justify-end">
+          <div className="flex flex-wrap gap-2 xl:max-w-[16rem] xl:justify-end">
+            <Badge className={policyState.tone}>{policyState.label}</Badge>
             <Badge className="border-zinc-700 bg-zinc-950 text-zinc-300">
               {formatSupportTier(item)}
             </Badge>
@@ -425,6 +606,11 @@ function ToolkitCard({
               {item.connectionCount > 1 && (
                 <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
                   {item.connectionCount} identities on file
+                </Badge>
+              )}
+              {item.connection?.selectionMode === 'preferred' && (
+                <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                  Preferred identity
                 </Badge>
               )}
               {scopePreview.map((scope) => (
@@ -468,22 +654,9 @@ function ToolkitCard({
             <p className="mt-3 text-sm leading-6 text-zinc-300">
               {getCapabilitySummary(item)}
             </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-400">
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1">
-                {item.toolsCount} tools
-              </span>
-              <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1">
-                {item.triggersCount} triggers
-              </span>
-              {item.categories.slice(0, 3).map((category) => (
-                <span
-                  key={category.slug}
-                  className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1"
-                >
-                  {category.name}
-                </span>
-              ))}
-            </div>
+            <p className="mt-3 text-xs leading-6 text-zinc-500">
+              {policyState.detail}
+            </p>
           </div>
         </div>
 
@@ -501,6 +674,15 @@ function ToolkitCard({
           </p>
 
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+              onClick={() => onInspect(item.slug)}
+            >
+              Review details
+            </Button>
+
             {item.connection?.status === 'ACTIVE' ? (
               <Button
                 onClick={() =>
@@ -542,6 +724,506 @@ function ToolkitCard({
   )
 }
 
+function ToolAccessDetailPanel({
+  catalog,
+  selectedItem,
+  detail,
+  loading,
+  error,
+  isOwner,
+  actionKey,
+  preferenceActionKey,
+  policyDraft,
+  policySaving,
+  onConnect,
+  onDisconnect,
+  onSelectConnection,
+  onPolicyDraftChange,
+  onSavePolicy,
+  onResetPolicy,
+}: {
+  catalog: ToolAccessCatalog | null
+  selectedItem: ToolAccessItem | null
+  detail: ToolAccessToolkitDetail | null
+  loading: boolean
+  error: string | null
+  isOwner: boolean
+  actionKey: string | null
+  preferenceActionKey: string | null
+  policyDraft: PolicyDraft | null
+  policySaving: boolean
+  onConnect: (toolkitSlug: string) => Promise<void>
+  onDisconnect: (connectedAccountId: string) => Promise<void>
+  onSelectConnection: (
+    toolkitSlug: string,
+    connectedAccountId: string | null
+  ) => Promise<void>
+  onPolicyDraftChange: (draft: PolicyDraft) => void
+  onSavePolicy: (toolkitSlug: string) => Promise<void>
+  onResetPolicy: () => void
+}) {
+  if (!selectedItem) {
+    return (
+      <div className="rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(18,20,28,0.96),rgba(11,12,18,0.98))] p-6">
+        <p className="text-sm font-medium text-white">Toolkit detail</p>
+        <p className="mt-3 text-sm leading-7 text-zinc-400">
+          Pick a toolkit from the catalog to inspect its identities, granted
+          scopes, connection health, and workspace policy.
+        </p>
+      </div>
+    )
+  }
+
+  const status = getToolkitStatus(selectedItem, catalog)
+  const connectLabel =
+    selectedItem.connectionCount > 0
+      ? 'Connect another identity'
+      : getConnectButtonLabel(selectedItem, catalog)
+  const canRunPrimaryAction = canRunConnect(selectedItem, catalog)
+  const policyState = getPolicyState(selectedItem.policy)
+  const policyDirty = isPolicyDraftDirty(policyDraft, detail?.policy ?? null)
+  const automaticCandidateId =
+    !detail?.selectedConnectedAccountId && detail?.connections.length
+      ? detail.connections[0]?.connectedAccountId
+      : null
+
+  return (
+    <div
+      id="tool-access-detail"
+      className="space-y-4 rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(18,20,28,0.98),rgba(11,12,18,1))] p-5 xl:sticky xl:top-6"
+    >
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950 text-zinc-200">
+            <span className="text-sm font-semibold uppercase tracking-[0.18em]">
+              {getToolkitMonogram(selectedItem.name)}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+              Toolkit detail
+            </p>
+            <h2 className="truncate text-lg font-medium text-white">
+              {selectedItem.name}
+            </h2>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge className={getIntegrationStatusTone(status)}>{status}</Badge>
+          <Badge className={policyState.tone}>{policyState.label}</Badge>
+          <Badge className="border-zinc-700 bg-zinc-950 text-zinc-300">
+            {formatSupportTier(selectedItem)}
+          </Badge>
+        </div>
+
+        <p className="text-sm leading-7 text-zinc-400">
+          {detail?.toolkit.description ?? selectedItem.description ?? ''}
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-6 w-40 bg-zinc-800" />
+          <Skeleton className="h-20 w-full bg-zinc-800" />
+          <Skeleton className="h-20 w-full bg-zinc-800" />
+          <Skeleton className="h-28 w-full bg-zinc-800" />
+        </div>
+      ) : error ? (
+        <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : !detail ? null : (
+        <>
+          <div className="rounded-[1.25rem] border border-zinc-800 bg-zinc-950/70 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                  Catalog capability
+                </p>
+                <p className="mt-2 text-sm leading-6 text-zinc-300">
+                  {getCapabilitySummary(detail.toolkit)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                  Current selection
+                </p>
+                <p className="mt-2 text-sm leading-6 text-zinc-300">
+                  {detail.selectedConnectedAccountId
+                    ? 'Kodi will prefer the selected identity for this toolkit later.'
+                    : detail.connections.length > 0
+                      ? 'Kodi is in automatic mode and will choose the healthiest available account.'
+                      : 'No account is connected yet for this toolkit.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {detail.syncError && (
+            <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-100">
+              <AlertDescription>{detail.syncError}</AlertDescription>
+            </Alert>
+          )}
+
+          <section className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-white">
+                  Connected identities
+                </p>
+                <p className="text-sm text-zinc-400">
+                  Pick the identity Kodi should prefer when more than one is
+                  available.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {detail.selectedConnectedAccountId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                    disabled={preferenceActionKey !== null}
+                    onClick={() =>
+                      void onSelectConnection(detail.toolkit.slug, null)
+                    }
+                  >
+                    Use automatic selection
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  className="gap-2 bg-sky-500 text-white hover:bg-sky-400"
+                  disabled={!canRunPrimaryAction || actionKey !== null}
+                  onClick={() => void onConnect(detail.toolkit.slug)}
+                >
+                  <Link2 size={16} />
+                  {connectLabel}
+                </Button>
+              </div>
+            </div>
+
+            {detail.connections.length === 0 ? (
+              <div className="rounded-[1.25rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-5">
+                <p className="text-sm font-medium text-white">
+                  No identities connected yet.
+                </p>
+                <p className="mt-2 text-sm leading-7 text-zinc-400">
+                  Connect an account first so Kodi can later scope runtime tool
+                  access to the right identity.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {detail.connections.map((connection) => {
+                  const canPrefer = connection.status !== 'INACTIVE'
+                  const isDisconnecting =
+                    actionKey === `disconnect:${connection.connectedAccountId}`
+                  const isSelecting =
+                    preferenceActionKey === connection.connectedAccountId
+                  const isAutomaticCandidate =
+                    automaticCandidateId === connection.connectedAccountId
+
+                  return (
+                    <div
+                      key={connection.connectedAccountId}
+                      className={cn(
+                        'rounded-[1.25rem] border p-4',
+                        connection.isPreferred
+                          ? 'border-emerald-500/25 bg-emerald-500/10'
+                          : isAutomaticCandidate
+                            ? 'border-sky-500/20 bg-sky-500/10'
+                            : 'border-zinc-800 bg-zinc-950/70'
+                      )}
+                    >
+                      <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium text-white">
+                                {connection.externalUserEmail ||
+                                  connection.connectedAccountLabel ||
+                                  'Connected account'}
+                              </p>
+                              <Badge
+                                className={getIntegrationStatusTone(
+                                  connection.status
+                                )}
+                              >
+                                {connection.status}
+                              </Badge>
+                              {connection.isPreferred && (
+                                <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                                  Preferred
+                                </Badge>
+                              )}
+                              {!connection.isPreferred &&
+                                isAutomaticCandidate && (
+                                  <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-200">
+                                    Automatic candidate
+                                  </Badge>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
+                              {connection.connectedAccountLabel && (
+                                <span>{connection.connectedAccountLabel}</span>
+                              )}
+                              {connection.lastValidatedAt && (
+                                <span>
+                                  Validated{' '}
+                                  {formatIntegrationDate(
+                                    connection.lastValidatedAt
+                                  )}
+                                </span>
+                              )}
+                              {connection.updatedAt && (
+                                <span>
+                                  Updated{' '}
+                                  {formatIntegrationDate(connection.updatedAt)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {!connection.isPreferred && canPrefer && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                                disabled={preferenceActionKey !== null}
+                                onClick={() =>
+                                  void onSelectConnection(
+                                    detail.toolkit.slug,
+                                    connection.connectedAccountId
+                                  )
+                                }
+                              >
+                                {isSelecting
+                                  ? 'Saving...'
+                                  : 'Prefer this identity'}
+                              </Button>
+                            )}
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+                              disabled={actionKey !== null}
+                              onClick={() =>
+                                void onDisconnect(connection.connectedAccountId)
+                              }
+                            >
+                              {isDisconnecting
+                                ? 'Disconnecting...'
+                                : 'Disconnect'}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {connection.scopes.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {connection.scopes.slice(0, 6).map((scope) => (
+                              <Badge
+                                key={scope}
+                                className="border-zinc-700 bg-zinc-900 text-zinc-300"
+                              >
+                                {formatScope(scope)}
+                              </Badge>
+                            ))}
+                            {connection.scopes.length > 6 && (
+                              <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                                +{connection.scopes.length - 6} more scopes
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+
+                        {connection.errorMessage && (
+                          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+                            <AlertDescription>
+                              {connection.errorMessage}
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <LockKeyhole size={16} className="text-zinc-400" />
+              <p className="text-sm font-medium text-white">Workspace policy</p>
+            </div>
+
+            <p className="text-sm leading-7 text-zinc-400">
+              {isOwner
+                ? 'Owners decide whether this toolkit is available, which read contexts are allowed, and whether writes need approval by default.'
+                : 'This is the workspace default policy. Owners can change it from this page.'}
+            </p>
+
+            {policyDraft && (
+              <div className="space-y-3">
+                <PolicyToggleRow
+                  title="Toolkit enabled"
+                  description="When disabled, Kodi should not use this toolkit even if users have connected it."
+                  value={policyDraft.enabled}
+                  trueLabel="Enabled"
+                  falseLabel="Blocked"
+                  disabled={!isOwner || policySaving}
+                  onToggle={() =>
+                    onPolicyDraftChange({
+                      ...policyDraft,
+                      enabled: !policyDraft.enabled,
+                    })
+                  }
+                />
+
+                <PolicyToggleRow
+                  title="Chat reads"
+                  description="Allow read-class actions from chat and general task flows."
+                  value={policyDraft.chatReadsEnabled}
+                  trueLabel="Allowed"
+                  falseLabel="Off"
+                  disabled={!isOwner || policySaving || !policyDraft.enabled}
+                  onToggle={() =>
+                    onPolicyDraftChange({
+                      ...policyDraft,
+                      chatReadsEnabled: !policyDraft.chatReadsEnabled,
+                    })
+                  }
+                />
+
+                <PolicyToggleRow
+                  title="Meeting reads"
+                  description="Allow meeting-time reads so Kodi can consult this tool while following calls."
+                  value={policyDraft.meetingReadsEnabled}
+                  trueLabel="Allowed"
+                  falseLabel="Off"
+                  disabled={!isOwner || policySaving || !policyDraft.enabled}
+                  onToggle={() =>
+                    onPolicyDraftChange({
+                      ...policyDraft,
+                      meetingReadsEnabled: !policyDraft.meetingReadsEnabled,
+                    })
+                  }
+                />
+
+                <PolicyToggleRow
+                  title="Draft creation"
+                  description="Allow Kodi to prepare drafts without making an external side effect."
+                  value={policyDraft.draftsEnabled}
+                  trueLabel="Allowed"
+                  falseLabel="Off"
+                  disabled={!isOwner || policySaving || !policyDraft.enabled}
+                  onToggle={() =>
+                    onPolicyDraftChange({
+                      ...policyDraft,
+                      draftsEnabled: !policyDraft.draftsEnabled,
+                    })
+                  }
+                />
+
+                <PolicyToggleRow
+                  title="External writes"
+                  description="Keep write-class actions behind approval unless your workspace explicitly wants direct execution."
+                  value={policyDraft.writesRequireApproval}
+                  trueLabel="Approval required"
+                  falseLabel="Direct writes"
+                  disabled={!isOwner || policySaving || !policyDraft.enabled}
+                  onToggle={() =>
+                    onPolicyDraftChange({
+                      ...policyDraft,
+                      writesRequireApproval: !policyDraft.writesRequireApproval,
+                    })
+                  }
+                />
+
+                <PolicyToggleRow
+                  title="Admin actions"
+                  description="Reserve high-risk admin actions for the rare cases where the workspace intentionally opts in."
+                  value={policyDraft.adminActionsEnabled}
+                  trueLabel="Enabled"
+                  falseLabel="Disabled"
+                  disabled={!isOwner || policySaving || !policyDraft.enabled}
+                  onToggle={() =>
+                    onPolicyDraftChange({
+                      ...policyDraft,
+                      adminActionsEnabled: !policyDraft.adminActionsEnabled,
+                    })
+                  }
+                />
+              </div>
+            )}
+
+            {isOwner ? (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  type="button"
+                  className="bg-sky-500 text-white hover:bg-sky-400"
+                  disabled={!policyDirty || policySaving}
+                  onClick={() => void onSavePolicy(detail.toolkit.slug)}
+                >
+                  {policySaving ? 'Saving policy...' : 'Save policy'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                  disabled={!policyDirty || policySaving}
+                  onClick={onResetPolicy}
+                >
+                  Reset changes
+                </Button>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 text-sm leading-7 text-zinc-400">
+                Only workspace owners can update these defaults. Members can
+                still connect their own accounts and see the current policy
+                state from this page.
+              </div>
+            )}
+          </section>
+
+          <div className="flex flex-wrap gap-2 border-t border-zinc-800/80 pt-4">
+            {detail.toolkit.appUrl && (
+              <Button
+                asChild
+                variant="ghost"
+                className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+              >
+                <a
+                  href={detail.toolkit.appUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open app
+                  <ExternalLink size={16} />
+                </a>
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+              onClick={() => void onConnect(detail.toolkit.slug)}
+              disabled={!canRunPrimaryAction || actionKey !== null}
+            >
+              <Link2 size={16} />
+              Connect another identity
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function ToolAccessIntegrationPage() {
   const searchParams = useSearchParams()
   const { activeOrg } = useOrg()
@@ -551,10 +1233,23 @@ export default function ToolAccessIntegrationPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ToolAccessFilter>('all')
   const [actionKey, setActionKey] = useState<string | null>(null)
+  const [selectedToolkitSlug, setSelectedToolkitSlug] = useState<string | null>(
+    searchParams.get('toolkit')
+  )
+  const [detail, setDetail] = useState<ToolAccessToolkitDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const [preferenceActionKey, setPreferenceActionKey] = useState<string | null>(
+    null
+  )
+  const [policyDraft, setPolicyDraft] = useState<PolicyDraft | null>(null)
+  const [policySaving, setPolicySaving] = useState(false)
   const deferredSearch = useDeferredValue(search)
 
   const callbackStatus = searchParams.get('connectionStatus')
   const callbackAppName = searchParams.get('appName')
+  const callbackToolkit = searchParams.get('toolkit')
+  const isOwner = activeOrg?.role === 'owner'
 
   async function loadCatalog(orgId: string, searchValue: string) {
     const result = await trpc.toolAccess.getCatalog.query({
@@ -565,6 +1260,22 @@ export default function ToolAccessIntegrationPage() {
     setCatalog(result)
     return result
   }
+
+  async function loadToolkitDetail(orgId: string, toolkitSlug: string) {
+    const result = await trpc.toolAccess.getToolkitDetail.query({
+      orgId,
+      toolkitSlug,
+    })
+
+    setDetail(result)
+    setPolicyDraft(createPolicyDraft(result.policy))
+    return result
+  }
+
+  useEffect(() => {
+    if (!callbackToolkit) return
+    setSelectedToolkitSlug(callbackToolkit)
+  }, [callbackToolkit])
 
   useEffect(() => {
     if (!activeOrg) {
@@ -665,19 +1376,107 @@ export default function ToolAccessIntegrationPage() {
     }
   }, [catalog])
 
-  async function refreshCatalog() {
+  const selectedItem = useMemo(
+    () =>
+      catalog?.items.find((item) => item.slug === selectedToolkitSlug) ?? null,
+    [catalog, selectedToolkitSlug]
+  )
+
+  useEffect(() => {
+    if (loading) return
+
+    if (!catalog || catalog.items.length === 0) {
+      setSelectedToolkitSlug(null)
+      setDetail(null)
+      setPolicyDraft(null)
+      return
+    }
+
+    if (
+      selectedToolkitSlug &&
+      catalog.items.some((item) => item.slug === selectedToolkitSlug)
+    ) {
+      return
+    }
+
+    setSelectedToolkitSlug(catalog.items[0]?.slug ?? null)
+  }, [catalog, loading, selectedToolkitSlug])
+
+  useEffect(() => {
+    if (!activeOrg || !selectedToolkitSlug || loading) {
+      if (!selectedToolkitSlug) {
+        setDetail(null)
+        setPolicyDraft(null)
+        setDetailError(null)
+      }
+      return
+    }
+
+    if (!catalog?.setup.apiConfigured) {
+      setDetail(null)
+      setPolicyDraft(null)
+      setDetailError(null)
+      return
+    }
+
+    const orgId = activeOrg.orgId
+    const toolkitSlug = selectedToolkitSlug
+    let cancelled = false
+    setDetailLoading(true)
+    setDetailError(null)
+
+    async function load() {
+      try {
+        const result = await trpc.toolAccess.getToolkitDetail.query({
+          orgId,
+          toolkitSlug,
+        })
+
+        if (cancelled) return
+        setDetail(result)
+        setPolicyDraft(createPolicyDraft(result.policy))
+      } catch (err) {
+        if (cancelled) return
+        setDetail(null)
+        setPolicyDraft(null)
+        setDetailError(
+          err instanceof Error ? err.message : 'Failed to load toolkit details.'
+        )
+      } finally {
+        if (!cancelled) setDetailLoading(false)
+      }
+    }
+
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeOrg?.orgId,
+    catalog?.setup.apiConfigured,
+    loading,
+    selectedToolkitSlug,
+  ])
+
+  async function refreshAll(toolkitSlugOverride?: string | null) {
     if (!activeOrg) return
+
+    const nextSelectedToolkit = toolkitSlugOverride ?? selectedToolkitSlug
     setActionKey('refresh')
     setError(null)
 
     try {
       await loadCatalog(activeOrg.orgId, deferredSearch)
+      if (nextSelectedToolkit && catalog?.setup.apiConfigured !== false) {
+        await loadToolkitDetail(activeOrg.orgId, nextSelectedToolkit)
+      }
+      setDetailError(null)
     } catch (err) {
-      setError(
+      const message =
         err instanceof Error
           ? err.message
           : 'Failed to refresh tool access integrations.'
-      )
+      setError(message)
     } finally {
       setActionKey(null)
     }
@@ -692,7 +1491,7 @@ export default function ToolAccessIntegrationPage() {
       const result = await trpc.toolAccess.createConnectLink.mutate({
         orgId: activeOrg.orgId,
         toolkitSlug,
-        returnPath: '/settings/integrations/tool-access',
+        returnPath: `/settings/integrations/tool-access?toolkit=${encodeURIComponent(toolkitSlug)}`,
       })
 
       if (!result.redirectUrl) {
@@ -714,19 +1513,80 @@ export default function ToolAccessIntegrationPage() {
     if (!activeOrg) return
     setActionKey(`disconnect:${connectedAccountId}`)
     setError(null)
+    setDetailError(null)
 
     try {
       await trpc.toolAccess.disconnect.mutate({
         orgId: activeOrg.orgId,
         connectedAccountId,
       })
-      await refreshCatalog()
+      await refreshAll(selectedToolkitSlug)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to disconnect account.'
       )
       setActionKey(null)
     }
+  }
+
+  async function selectPreferredConnection(
+    toolkitSlug: string,
+    connectedAccountId: string | null
+  ) {
+    if (!activeOrg) return
+    setPreferenceActionKey(connectedAccountId ?? 'automatic')
+    setError(null)
+    setDetailError(null)
+
+    try {
+      await trpc.toolAccess.setPreferredConnection.mutate({
+        orgId: activeOrg.orgId,
+        toolkitSlug,
+        connectedAccountId,
+      })
+      await refreshAll(toolkitSlug)
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Failed to update the preferred account.'
+      setDetailError(message)
+    } finally {
+      setPreferenceActionKey(null)
+    }
+  }
+
+  async function savePolicy(toolkitSlug: string) {
+    if (!activeOrg || !policyDraft) return
+    setPolicySaving(true)
+    setError(null)
+    setDetailError(null)
+
+    try {
+      await trpc.toolAccess.updatePolicy.mutate({
+        orgId: activeOrg.orgId,
+        toolkitSlug,
+        ...policyDraft,
+      })
+      await refreshAll(toolkitSlug)
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to save toolkit policy.'
+      setDetailError(message)
+    } finally {
+      setPolicySaving(false)
+    }
+  }
+
+  function handleInspect(toolkitSlug: string) {
+    setSelectedToolkitSlug(toolkitSlug)
+    const detailElement = document.getElementById('tool-access-detail')
+    detailElement?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function resetPolicyDraft() {
+    if (!detail) return
+    setPolicyDraft(createPolicyDraft(detail.policy))
   }
 
   if (!activeOrg) {
@@ -741,7 +1601,7 @@ export default function ToolAccessIntegrationPage() {
 
   return (
     <SettingsLayout>
-      <div className="mx-auto max-w-6xl space-y-6 pb-8">
+      <div className="mx-auto max-w-7xl space-y-6 pb-8">
         <Button
           asChild
           variant="ghost"
@@ -776,7 +1636,8 @@ export default function ToolAccessIntegrationPage() {
                 <p className="max-w-2xl text-sm leading-7 text-zinc-300">
                   Search the Composio catalog, link the identities you actually
                   use, and keep a clean line between discovery, connection
-                  state, and later runtime access for {activeOrg.orgName}.
+                  state, identity preference, and workspace policy for{' '}
+                  {activeOrg.orgName}.
                 </p>
               </div>
 
@@ -795,7 +1656,7 @@ export default function ToolAccessIntegrationPage() {
                 </div>
                 <div className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-2">
                   <KeyRound size={15} className="text-amber-300" />
-                  Org policy comes next in Phase 2
+                  Owners define workspace defaults here
                 </div>
               </div>
             </div>
@@ -858,6 +1719,17 @@ export default function ToolAccessIntegrationPage() {
                         {catalog?.setup.apiConfigured
                           ? 'Configured and ready to return the live catalog.'
                           : 'Missing required API environment variables.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <LockKeyhole size={16} className="mt-0.5 text-zinc-500" />
+                    <div>
+                      <p className="text-white">Policy surface</p>
+                      <p className="text-zinc-400">
+                        {isOwner
+                          ? 'This workspace can change tool defaults directly from the detail panel.'
+                          : 'Workspace policy is visible here even when you cannot change it.'}
                       </p>
                     </div>
                   </div>
@@ -934,7 +1806,7 @@ export default function ToolAccessIntegrationPage() {
                 </div>
 
                 <Button
-                  onClick={() => void refreshCatalog()}
+                  onClick={() => void refreshAll()}
                   variant="ghost"
                   className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
                   disabled={loading || actionKey === 'refresh'}
@@ -953,11 +1825,12 @@ export default function ToolAccessIntegrationPage() {
                     <button
                       key={value}
                       onClick={() => setFilter(value)}
-                      className={`rounded-full border px-3 py-2 text-sm transition ${
+                      className={cn(
+                        'rounded-full border px-3 py-2 text-sm transition',
                         filter === value
                           ? 'border-zinc-600 bg-zinc-100 text-zinc-950'
                           : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-zinc-700 hover:text-white'
-                      }`}
+                      )}
                     >
                       {filterLabels[value]}{' '}
                       <span
@@ -976,18 +1849,21 @@ export default function ToolAccessIntegrationPage() {
         </section>
 
         {loading ? (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {[0, 1, 2, 3].map((item) => (
-              <div
-                key={item}
-                className="rounded-[1.75rem] border border-zinc-800 bg-zinc-900/60 p-6"
-              >
-                <Skeleton className="h-6 w-40 bg-zinc-800" />
-                <Skeleton className="mt-3 h-4 w-48 bg-zinc-800" />
-                <Skeleton className="mt-6 h-24 w-full bg-zinc-800" />
-                <Skeleton className="mt-3 h-10 w-40 bg-zinc-800" />
-              </div>
-            ))}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_23rem]">
+            <div className="space-y-4">
+              {[0, 1, 2].map((item) => (
+                <div
+                  key={item}
+                  className="rounded-[1.75rem] border border-zinc-800 bg-zinc-900/60 p-6"
+                >
+                  <Skeleton className="h-6 w-40 bg-zinc-800" />
+                  <Skeleton className="mt-3 h-4 w-48 bg-zinc-800" />
+                  <Skeleton className="mt-6 h-24 w-full bg-zinc-800" />
+                  <Skeleton className="mt-3 h-10 w-40 bg-zinc-800" />
+                </div>
+              ))}
+            </div>
+            <Skeleton className="min-h-[28rem] rounded-[1.75rem] bg-zinc-900/70" />
           </div>
         ) : catalog && !catalog.setup.apiConfigured ? (
           <section className="rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(33,25,12,0.55),rgba(15,12,7,0.98))] p-6 sm:p-7">
@@ -1044,37 +1920,62 @@ export default function ToolAccessIntegrationPage() {
             </p>
           </section>
         ) : (
-          <div className="space-y-8">
-            {sections.map((section) => (
-              <section key={section.key} className="space-y-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="space-y-1">
-                    <h2 className="text-lg font-medium text-white">
-                      {section.title}
-                    </h2>
-                    <p className="text-sm text-zinc-400">
-                      {section.description}
-                    </p>
-                  </div>
-                  <Badge className="w-fit border-zinc-700 bg-zinc-950 text-zinc-300">
-                    {section.items.length} tools
-                  </Badge>
-                </div>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
+            <aside className="order-1 xl:order-2">
+              <ToolAccessDetailPanel
+                catalog={catalog}
+                selectedItem={selectedItem}
+                detail={detail}
+                loading={detailLoading}
+                error={detailError}
+                isOwner={isOwner}
+                actionKey={actionKey}
+                preferenceActionKey={preferenceActionKey}
+                policyDraft={policyDraft}
+                policySaving={policySaving}
+                onConnect={connectToolkit}
+                onDisconnect={disconnectToolkit}
+                onSelectConnection={selectPreferredConnection}
+                onPolicyDraftChange={setPolicyDraft}
+                onSavePolicy={savePolicy}
+                onResetPolicy={resetPolicyDraft}
+              />
+            </aside>
 
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {section.items.map((item) => (
-                    <ToolkitCard
-                      key={item.slug}
-                      item={item}
-                      catalog={catalog}
-                      actionKey={actionKey}
-                      onConnect={connectToolkit}
-                      onDisconnect={disconnectToolkit}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+            <div className="order-2 space-y-8 xl:order-1">
+              {sections.map((section) => (
+                <section key={section.key} className="space-y-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="space-y-1">
+                      <h2 className="text-lg font-medium text-white">
+                        {section.title}
+                      </h2>
+                      <p className="text-sm text-zinc-400">
+                        {section.description}
+                      </p>
+                    </div>
+                    <Badge className="w-fit border-zinc-700 bg-zinc-950 text-zinc-300">
+                      {section.items.length} tools
+                    </Badge>
+                  </div>
+
+                  <div className="grid gap-4">
+                    {section.items.map((item) => (
+                      <ToolkitCard
+                        key={item.slug}
+                        item={item}
+                        catalog={catalog}
+                        actionKey={actionKey}
+                        isSelected={selectedToolkitSlug === item.slug}
+                        onInspect={handleInspect}
+                        onConnect={connectToolkit}
+                        onDisconnect={disconnectToolkit}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
         )}
       </div>

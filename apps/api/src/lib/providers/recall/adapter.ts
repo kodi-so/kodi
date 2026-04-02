@@ -5,13 +5,13 @@ import type {
   MeetingProviderJoinRequest,
   MeetingProviderPrepareRequest,
   MeetingProviderStopRequest,
-} from './meeting-provider-adapter'
+} from '../../meetings/provider-adapter'
 import type {
   MeetingProviderEvent,
   MeetingProviderEventEnvelope,
   MeetingProviderHealthSnapshot,
   MeetingProviderSessionRef,
-} from './meeting-events'
+} from '../../meetings/events'
 import {
   buildRecallRealtimeWebhookUrl,
   classifyRecallFailure,
@@ -20,8 +20,8 @@ import {
   RecallApiError,
   RecallMeetingJoinError,
   type RecallCreateBotRequest,
-} from './recall'
-import { getRecallClientConfig } from './recall-config'
+} from './client'
+import { getRecallClientConfig } from './config'
 
 function parseGoogleMeetId(joinUrl: string) {
   try {

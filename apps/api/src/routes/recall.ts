@@ -1,8 +1,8 @@
 import type { Hono } from 'hono'
-import { MeetingOrchestrationService } from '../lib/meeting-orchestration-service'
-import { createDefaultMeetingProviderGateway } from '../lib/meeting-provider-runtime'
+import { MeetingOrchestrationService } from '../lib/meetings/orchestration-service'
+import { createDefaultMeetingProviderGateway } from '../lib/meetings/provider-runtime'
 import { env } from '../env'
-import { RecallMeetingJoinError } from '../lib/recall'
+import { RecallMeetingJoinError } from '../lib/providers/recall/client'
 
 function isRecallRouteAuthorized(headerValue: string | null) {
   const token = env.MEETING_INTERNAL_TOKEN ?? env.RECALL_REALTIME_AUTH_TOKEN

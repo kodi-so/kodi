@@ -1,7 +1,7 @@
 import type { Hono } from 'hono'
-import { appendNormalizedMeetingEvent } from '../lib/meeting-ingestion'
+import { appendNormalizedMeetingEvent } from '../lib/meetings/ingestion'
 import { env } from '../env'
-import type { MeetingProviderEvent } from '../lib/meeting-events'
+import type { MeetingProviderEvent } from '../lib/meetings/events'
 
 function isMeetingRouteAuthorized(headerValue: string | null) {
   const token = env.MEETING_INTERNAL_TOKEN ?? env.ZOOM_GATEWAY_INTERNAL_TOKEN

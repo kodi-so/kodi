@@ -38,13 +38,18 @@ function formatDate(value: Date | string | null | undefined) {
 function statusTone(status: string) {
   switch (status) {
     case 'active':
-    case 'live':
+    case 'listening':
       return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+    case 'admitted':
+      return 'border-cyan-500/30 bg-cyan-500/15 text-cyan-200'
+    case 'processing':
+      return 'border-violet-500/30 bg-violet-500/15 text-violet-200'
     case 'joining':
     case 'pending':
     case 'scheduled':
+    case 'preparing':
       return 'border-amber-500/30 bg-amber-500/15 text-amber-200'
-    case 'completed':
+    case 'ended':
       return 'border-sky-500/30 bg-sky-500/15 text-sky-200'
     case 'revoked':
     case 'failed':
@@ -52,6 +57,23 @@ function statusTone(status: string) {
       return 'border-red-500/30 bg-red-500/15 text-red-200'
     default:
       return 'border-zinc-700 bg-zinc-800/80 text-zinc-300'
+  }
+}
+
+function statusLabel(status: string) {
+  switch (status) {
+    case 'listening':
+      return 'listening'
+    case 'admitted':
+      return 'admitted'
+    case 'processing':
+      return 'processing'
+    case 'preparing':
+      return 'preparing'
+    case 'ended':
+      return 'ended'
+    default:
+      return status
   }
 }
 
@@ -246,7 +268,7 @@ export default function MeetingsPage() {
                           </p>
                         </div>
                         <Badge className={statusTone(meeting.status)}>
-                          {meeting.status}
+                          {statusLabel(meeting.status)}
                         </Badge>
                       </div>
                       <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">

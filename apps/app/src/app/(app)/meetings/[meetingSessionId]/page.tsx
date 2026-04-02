@@ -39,17 +39,73 @@ function formatDate(value: Date | string | null | undefined) {
 
 function statusTone(status: string) {
   switch (status) {
-    case 'live':
+    case 'listening':
       return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+    case 'admitted':
+      return 'border-cyan-500/30 bg-cyan-500/15 text-cyan-200'
+    case 'processing':
+      return 'border-violet-500/30 bg-violet-500/15 text-violet-200'
     case 'joining':
     case 'scheduled':
+    case 'preparing':
       return 'border-amber-500/30 bg-amber-500/15 text-amber-200'
-    case 'completed':
+    case 'ended':
       return 'border-sky-500/30 bg-sky-500/15 text-sky-200'
     case 'failed':
       return 'border-red-500/30 bg-red-500/15 text-red-200'
     default:
       return 'border-zinc-700 bg-zinc-800 text-zinc-300'
+  }
+}
+
+function statusLabel(status: string) {
+  switch (status) {
+    case 'listening':
+      return 'listening'
+    case 'admitted':
+      return 'admitted'
+    case 'processing':
+      return 'processing'
+    case 'preparing':
+      return 'preparing'
+    case 'ended':
+      return 'ended'
+    default:
+      return status
+  }
+}
+
+function statusDescription(status: string) {
+  switch (status) {
+    case 'scheduled':
+      return 'Kodi has a meeting record but has not started preparing a live bot session yet.'
+    case 'preparing':
+      return 'Kodi is preparing the provider session and assembling the meeting bot request.'
+    case 'joining':
+      return 'The meeting bot is trying to join the call and may still be waiting on provider setup.'
+    case 'admitted':
+      return 'The bot has reached the call and is waiting to begin active listening.'
+    case 'listening':
+      return 'The bot is in the meeting and Kodi should be receiving realtime participant or transcript updates.'
+    case 'processing':
+      return 'The live session has moved into downstream processing or review work.'
+    case 'ended':
+      return 'The meeting session has ended and no further live updates are expected.'
+    case 'failed':
+      return 'The live meeting session failed and likely needs a retry or setup fix before it can continue.'
+    default:
+      return 'Kodi has recorded this meeting session but has not attached a richer runtime explanation yet.'
+  }
+}
+
+function formatProviderLabel(provider: string) {
+  switch (provider) {
+    case 'google_meet':
+      return 'Google Meet'
+    case 'zoom':
+      return 'Zoom'
+    default:
+      return provider.replace(/_/g, ' ')
   }
 }
 
@@ -143,6 +199,57 @@ export default function MeetingDetailsPage() {
 
     return candidate as Record<string, unknown>
   }, [meeting?.metadata])
+  const meetingMetadata = useMemo(() => {
+    if (
+      !meeting?.metadata ||
+      typeof meeting.metadata !== 'object' ||
+      Array.isArray(meeting.metadata)
+    ) {
+      return null
+    }
+
+    return meeting.metadata as Record<string, unknown>
+  }, [meeting?.metadata])
+  const failureReason = useMemo(() => {
+    const failure =
+      meetingMetadata?.failure &&
+      typeof meetingMetadata.failure === 'object' &&
+      !Array.isArray(meetingMetadata.failure)
+        ? (meetingMetadata.failure as Record<string, unknown>)
+        : null
+
+    const kind =
+      failure && typeof failure.kind === 'string' ? failure.kind : null
+    const retryable =
+      failure && typeof failure.retryable === 'boolean'
+        ? failure.retryable
+        : null
+    const message =
+      typeof meetingMetadata?.lastErrorMessage === 'string'
+        ? meetingMetadata.lastErrorMessage
+        : typeof failure?.message === 'string'
+          ? failure.message
+          : null
+
+    if (!kind && !message) return null
+
+    const retryText =
+      retryable === null ? null : retryable ? 'Retryable' : 'Needs manual fix'
+
+    return [kind, retryText, message].filter(Boolean).join(' · ')
+  }, [meetingMetadata])
+  const providerRuntimeSource = useMemo(() => {
+    const transport =
+      typeof meetingMetadata?.transport === 'string'
+        ? meetingMetadata.transport
+        : rtmsGateway && typeof rtmsGateway.status === 'string'
+          ? 'rtms'
+          : null
+
+    if (!transport) return formatProviderLabel(meeting.provider)
+
+    return `${formatProviderLabel(meeting.provider)} via ${transport}`
+  }, [meeting.provider, meetingMetadata, rtmsGateway])
 
   if (!activeOrg) {
     return (
@@ -201,14 +308,16 @@ export default function MeetingDetailsPage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className={statusTone(meeting.status)}>{meeting.status}</Badge>
+                <Badge className={statusTone(meeting.status)}>
+                  {statusLabel(meeting.status)}
+                </Badge>
                 <Badge className="border-zinc-700 bg-zinc-800 text-zinc-300">
-                  {meeting.provider}
+                  {formatProviderLabel(meeting.provider)}
                 </Badge>
               </div>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white">
-                  {meeting.title ?? 'Untitled Zoom meeting'}
+                  {meeting.title ?? 'Untitled meeting'}
                 </h1>
                 <p className="mt-2 text-sm text-zinc-400">
                   Meeting session {meeting.id}
@@ -279,6 +388,38 @@ export default function MeetingDetailsPage() {
           </Card>
 
           <div className="flex flex-col gap-6">
+            <Card className="border-zinc-800 bg-zinc-900/60">
+              <CardHeader>
+                <CardTitle className="text-xl text-white">Live status</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  Current meeting runtime state and provider delivery context.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-zinc-300">
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={statusTone(meeting.status)}>
+                      {statusLabel(meeting.status)}
+                    </Badge>
+                    <Badge className="border-zinc-700 bg-zinc-800 text-zinc-300">
+                      {providerRuntimeSource}
+                    </Badge>
+                  </div>
+                  <p className="mt-3 leading-6 text-zinc-200">
+                    {statusDescription(meeting.status)}
+                  </p>
+                  {failureReason && (
+                    <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-red-100">
+                      <p className="text-xs uppercase tracking-[0.18em] text-red-200/80">
+                        Failure reason
+                      </p>
+                      <p className="mt-2 leading-6">{failureReason}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-zinc-800 bg-zinc-900/60">
               <CardHeader>
                 <div className="flex items-center gap-3">

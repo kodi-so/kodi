@@ -4,23 +4,26 @@ import {
   appendNormalizedMeetingEvent,
   type MeetingIngestionSource,
   updateMeetingSessionRuntimeState,
-} from './meeting-ingestion'
+} from './ingestion'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
   MeetingProviderJoinTarget,
-} from './meeting-provider-adapter'
-import { MeetingProviderGateway } from './meeting-provider-gateway'
-import { RecallMeetingJoinError } from './recall'
+} from './provider-adapter'
+import { MeetingProviderGateway } from './provider-gateway'
+import { RecallMeetingJoinError } from '../providers/recall/client'
 import type {
   MeetingAdapterLifecycleState,
   MeetingProviderEvent,
   MeetingProviderEventEnvelope,
   MeetingProviderSessionRef,
   MeetingProviderSlug,
-} from './meeting-events'
-
-type MeetingSessionStatus = 'scheduled' | 'joining' | 'live' | 'completed' | 'failed'
+} from './events'
+import {
+  normalizeMeetingStatus,
+  transitionMeetingStatus,
+  type MeetingSessionStatus,
+} from './status'
 
 type MeetingSessionRecord = typeof meetingSessions.$inferSelect
 
@@ -60,15 +63,11 @@ function lifecycleStateToMeetingStatus(
   state: MeetingAdapterLifecycleState
 ): MeetingSessionStatus | undefined {
   if (state === 'failed') return 'failed'
-  if (state === 'stopped') return 'completed'
-  if (state === 'listening') return 'live'
-  if (
-    state === 'preparing' ||
-    state === 'joining' ||
-    state === 'waiting_for_admission'
-  ) {
-    return 'joining'
-  }
+  if (state === 'stopped') return 'ended'
+  if (state === 'listening') return 'listening'
+  if (state === 'waiting_for_admission') return 'admitted'
+  if (state === 'joining') return 'joining'
+  if (state === 'preparing') return 'preparing'
 
   return undefined
 }
@@ -150,7 +149,12 @@ export class MeetingOrchestrationService {
             input.session?.externalBotSessionId ?? existing.providerBotSessionId,
           hostUserId: input.hostUserId ?? existing.hostUserId,
           title: input.title ?? existing.title,
-          status: input.status ?? existing.status,
+          status: input.status
+            ? transitionMeetingStatus(
+                existing.status as MeetingSessionStatus,
+                input.status
+              )
+            : existing.status,
           metadata:
             input.metadata === undefined
               ? existing.metadata
@@ -179,7 +183,7 @@ export class MeetingOrchestrationService {
         providerBotSessionId: input.session?.externalBotSessionId ?? null,
         hostUserId: input.hostUserId ?? null,
         title: input.title ?? null,
-        status: input.status ?? 'scheduled',
+        status: normalizeMeetingStatus(input.status ?? 'scheduled'),
         metadata: input.metadata ?? null,
       })
       .returning()
@@ -195,7 +199,7 @@ export class MeetingOrchestrationService {
     orgId: string
     provider: MeetingProviderSlug
     session?: MeetingProviderSessionRef | null
-    status?: Extract<MeetingSessionStatus, 'completed' | 'failed'>
+    status?: Extract<MeetingSessionStatus, 'ended' | 'failed'>
     endedAt?: Date
     metadata?: Record<string, unknown> | null
   }) {
@@ -203,12 +207,12 @@ export class MeetingOrchestrationService {
       orgId: input.orgId,
       provider: input.provider,
       session: input.session,
-      status: input.status ?? 'completed',
+      status: input.status ?? 'ended',
       metadata: input.metadata ?? null,
     })
 
     await updateMeetingSessionRuntimeState(meetingSession.id, {
-      status: input.status ?? 'completed',
+      status: input.status ?? 'ended',
       endedAt: input.endedAt ?? new Date(),
       metadataPatch: input.metadata ?? undefined,
     })
@@ -234,7 +238,7 @@ export class MeetingOrchestrationService {
       providerInstallationId: input.providerInstallationId,
       hostUserId: input.hostUserId,
       title: input.meeting.title ?? null,
-      status: 'joining',
+      status: 'preparing',
       metadata: {
         transportRequestedAt: new Date().toISOString(),
         ...(input.metadata ?? {}),

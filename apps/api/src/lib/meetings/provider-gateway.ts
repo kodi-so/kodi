@@ -5,14 +5,14 @@ import type {
   MeetingProviderJoinRequest,
   MeetingProviderPrepareRequest,
   MeetingProviderStopRequest,
-} from './meeting-provider-adapter'
+} from './provider-adapter'
 import type {
   MeetingProviderEvent,
   MeetingProviderEventEnvelope,
   MeetingProviderHealthSnapshot,
   MeetingProviderSlug,
-} from './meeting-events'
-import { MeetingProviderRegistry } from './meeting-provider-registry'
+} from './events'
+import { MeetingProviderRegistry } from './provider-registry'
 
 export class MeetingProviderCapabilityError extends Error {
   constructor(provider: MeetingProviderSlug, capability: 'prepare' | 'health') {

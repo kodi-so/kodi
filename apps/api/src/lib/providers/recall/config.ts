@@ -1,4 +1,4 @@
-import { env, requireRecall } from '../env'
+import { env, requireRecall } from '../../../env'
 
 const recallRequiredEnvKeys = ['RECALL_API_KEY'] as const
 

@@ -19,7 +19,12 @@ import {
 
 export const meetingSessionStatusEnum = pgEnum('meeting_session_status', [
   'scheduled',
+  'preparing',
   'joining',
+  'admitted',
+  'listening',
+  'processing',
+  'ended',
   'live',
   'summarizing',
   'awaiting_approval',

@@ -1,5 +1,5 @@
-import type { MeetingProviderAdapter } from './meeting-provider-adapter'
-import type { MeetingProviderSlug } from './meeting-events'
+import type { MeetingProviderAdapter } from './provider-adapter'
+import type { MeetingProviderSlug } from './events'
 
 export class UnsupportedMeetingProviderError extends Error {
   constructor(provider: MeetingProviderSlug) {

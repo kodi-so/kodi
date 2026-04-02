@@ -5,7 +5,7 @@ import type {
   MeetingProviderHealthSnapshot,
   MeetingProviderSessionRef,
   MeetingProviderSlug,
-} from './meeting-events'
+} from './events'
 
 export type MeetingProviderActorIdentity = {
   installerUserId?: string | null

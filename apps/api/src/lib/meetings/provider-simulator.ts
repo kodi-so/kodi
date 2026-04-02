@@ -5,9 +5,9 @@ import type {
   MeetingProviderJoinRequest,
   MeetingProviderPrepareRequest,
   MeetingProviderStopRequest,
-} from './meeting-provider-adapter'
-import { MeetingProviderGateway } from './meeting-provider-gateway'
-import { MeetingProviderRegistry } from './meeting-provider-registry'
+} from './provider-adapter'
+import { MeetingProviderGateway } from './provider-gateway'
+import { MeetingProviderRegistry } from './provider-registry'
 import type {
   MeetingAdapterLifecycleState,
   MeetingProviderEvent,
@@ -15,7 +15,7 @@ import type {
   MeetingProviderHealthSnapshot,
   MeetingProviderSlug,
   MeetingProviderTransport,
-} from './meeting-events'
+} from './events'
 
 export type SimulatedProviderPayload = {
   normalizedEvents?: MeetingProviderEvent[]

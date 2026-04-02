@@ -1,4 +1,4 @@
-import { getRecallClientConfig } from './recall-config'
+import { getRecallClientConfig } from './config'
 
 export type RecallCreateBotRequest = {
   meeting_url: string

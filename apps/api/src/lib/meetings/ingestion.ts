@@ -6,15 +6,20 @@ import {
   meetingSessions,
   transcriptSegments,
 } from '@kodi/db'
-import { logActivity } from './activity'
-import { env } from '../env'
+import { logActivity } from '../activity'
+import { env } from '../../env'
 import type {
   MeetingHealthEvent,
   MeetingLifecycleEvent,
   MeetingParticipantEvent,
   MeetingProviderEvent,
   MeetingTranscriptEvent,
-} from './meeting-events'
+} from './events'
+import {
+  meetingStatusFromLifecycleEvent,
+  transitionMeetingStatus,
+  type MeetingSessionStatus,
+} from './status'
 
 type ZoomWebhookEnvelope = {
   event?: string
@@ -205,7 +210,7 @@ export async function resolveZoomInstallation(
 export async function updateMeetingSessionRuntimeState(
   meetingSessionId: string,
   input: {
-    status?: 'joining' | 'live' | 'completed' | 'failed'
+    status?: MeetingSessionStatus
     actualStartAt?: Date | null
     endedAt?: Date | null
     metadataPatch?: Record<string, unknown> | null
@@ -235,7 +240,12 @@ export async function updateMeetingSessionRuntimeState(
   await db
     .update(meetingSessions)
     .set({
-      status: input.status ?? existing.status,
+      status: input.status
+        ? transitionMeetingStatus(
+            existing.status as MeetingSessionStatus,
+            input.status
+          )
+        : existing.status,
       actualStartAt:
         input.actualStartAt === undefined
           ? existing.actualStartAt
@@ -283,12 +293,12 @@ export async function upsertMeetingSessionFromZoomEvent(
 
   const nextStatus =
     event.event === 'meeting.ended'
-      ? 'completed'
+      ? 'ended'
       : event.event === 'meeting.rtms_started'
         ? 'joining'
         : event.event === 'meeting.rtms_stopped'
           ? 'failed'
-          : 'live'
+          : 'listening'
 
   if (existing) {
     await db
@@ -480,41 +490,6 @@ export async function appendTranscriptSegments(
   return persisted
 }
 
-function mapLifecycleEventToStatus(event: MeetingLifecycleEvent) {
-  if (event.action === 'meeting.failed' || event.state === 'failed') {
-    return 'failed' as const
-  }
-
-  if (
-    event.action === 'meeting.ended' ||
-    event.action === 'meeting.stopped' ||
-    event.state === 'stopped'
-  ) {
-    return 'completed' as const
-  }
-
-  if (
-    event.action === 'meeting.joined' ||
-    event.action === 'meeting.admitted' ||
-    event.action === 'meeting.started' ||
-    event.state === 'listening'
-  ) {
-    return 'live' as const
-  }
-
-  if (
-    event.action === 'meeting.prepared' ||
-    event.action === 'meeting.joining' ||
-    event.state === 'preparing' ||
-    event.state === 'joining' ||
-    event.state === 'waiting_for_admission'
-  ) {
-    return 'joining' as const
-  }
-
-  return undefined
-}
-
 function normalizedEventType(event: MeetingProviderEvent) {
   if (event.kind === 'transcript') return 'meeting.transcript.segment_received'
   if (event.kind === 'participant') return event.action
@@ -597,7 +572,7 @@ export async function appendNormalizedMeetingEvent(
   }
 
   if (event.kind === 'lifecycle') {
-    const nextStatus = mapLifecycleEventToStatus(event)
+    const nextStatus = meetingStatusFromLifecycleEvent(event)
     if (nextStatus) {
       await updateMeetingSessionRuntimeState(meetingSessionId, {
         status: nextStatus,
@@ -703,7 +678,7 @@ export async function notifyZoomGatewayOfRtmsStart(input: {
 export async function notifyZoomGatewayOfRtmsStop(input: {
   meetingSessionId: string
   reason: string
-  finalStatus?: 'completed' | 'failed'
+  finalStatus?: 'ended' | 'failed'
 }) {
   if (!env.ZOOM_GATEWAY_URL) return
 
@@ -719,7 +694,7 @@ export async function notifyZoomGatewayOfRtmsStop(input: {
     },
     body: JSON.stringify({
       reason: input.reason,
-      finalStatus: input.finalStatus ?? 'completed',
+      finalStatus: input.finalStatus ?? 'ended',
     }),
   }).catch(() => null)
 }

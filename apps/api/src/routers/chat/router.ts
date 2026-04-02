@@ -3,6 +3,7 @@ import { desc, lt, eq, and, isNull } from 'drizzle-orm'
 import { chatMessages, instances, decrypt, user } from '@kodi/db'
 import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
+import { runChatCompletionWithToolAccess } from '../../lib/tool-access-runtime'
 
 const WELCOME_MESSAGE =
   "Hey! I'm your Kodi agent. I can join calls, help your team think through plans, answer questions with business context, track next steps, and turn decisions into work across your tools. What are you working on?"
@@ -21,14 +22,15 @@ const MAX_HISTORY_TOKENS = 200_000
  */
 function buildMessagesWithHistory(
   history: { role: 'user' | 'assistant'; content: string }[],
-  newUserMessage: string
+  newUserMessage: string,
+  systemPrompt = SYSTEM_PROMPT
 ): { role: string; content: string }[] {
-  const systemMsg = { role: 'system', content: SYSTEM_PROMPT }
+  const systemMsg = { role: 'system', content: systemPrompt }
 
   // Budget remaining after system prompt + new message
   let budgetChars =
     MAX_HISTORY_TOKENS * CHARS_PER_TOKEN -
-    SYSTEM_PROMPT.length -
+    systemPrompt.length -
     newUserMessage.length
 
   // history is already newest-first — walk backwards to fill budget
@@ -255,38 +257,21 @@ export const chatRouter = router({
         }
       }
 
-      // Forward to OpenClaw via OpenAI-compatible /v1/chat/completions
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60_000)
-
       let responseText: string
       try {
-        const res = await fetch(`${instanceUrl}/v1/chat/completions`, {
-          method: 'POST',
+        const result = await runChatCompletionWithToolAccess({
+          db: ctx.db,
+          orgId,
+          actorUserId: ctx.session.user.id,
+          sourceId: userMessage.id,
+          userMessage: input.message,
+          instanceUrl,
           headers,
-          body: JSON.stringify({
-            model: 'openclaw:main',
-            messages,
-          }),
-          signal: controller.signal,
+          messages,
         })
-        clearTimeout(timeoutId)
 
-        if (!res.ok) {
-          const body = await res.text().catch(() => '')
-          throw new Error(`Instance responded with HTTP ${res.status}: ${body}`)
-        }
-
-        const data = (await res.json()) as {
-          choices?: { message?: { content?: string } }[]
-        }
-        const content = data.choices?.[0]?.message?.content
-        if (!content) {
-          throw new Error('Empty response from instance')
-        }
-        responseText = content
+        responseText = result.content
       } catch (err) {
-        clearTimeout(timeoutId)
         // Mark user message as error — do NOT delete it
         await ctx.db
           .update(chatMessages)

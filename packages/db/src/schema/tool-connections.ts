@@ -6,10 +6,13 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core'
+import { approvalRequests } from './approvals'
 import { user } from './auth'
 import { meetingSessions } from './meetings'
 import { organizations } from './orgs'
+import { toolSessionRuns } from './toolkit-access'
 import { workItems } from './work-items'
 
 export const toolProviderEnum = pgEnum('tool_provider', [
@@ -34,6 +37,13 @@ export const toolActionRunStatusEnum = pgEnum('tool_action_run_status', [
   'succeeded',
   'failed',
   'cancelled',
+])
+
+export const toolActionCategoryEnum = pgEnum('tool_action_category', [
+  'read',
+  'draft',
+  'write',
+  'admin',
 ])
 
 export const toolConnections = pgTable(
@@ -91,12 +101,27 @@ export const toolActionRuns = pgTable(
     workItemId: text('work_item_id').references(() => workItems.id, {
       onDelete: 'set null',
     }),
+    actorUserId: text('actor_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    approvalRequestId: text('approval_request_id').references(
+      () => approvalRequests.id,
+      { onDelete: 'set null' }
+    ),
     toolConnectionId: text('tool_connection_id').references(
       () => toolConnections.id,
       { onDelete: 'set null' }
     ),
-    tool: toolProviderEnum('tool').notNull(),
+    tool: toolProviderEnum('tool'),
+    toolkitSlug: text('toolkit_slug'),
+    connectedAccountId: text('connected_account_id'),
+    toolSessionRunId: text('tool_session_run_id').references(
+      () => toolSessionRuns.id,
+      { onDelete: 'set null' }
+    ),
     action: text('action').notNull(),
+    actionCategory: toolActionCategoryEnum('action_category'),
+    idempotencyKey: text('idempotency_key'),
     status: toolActionRunStatusEnum('status').notNull().default('pending'),
     requestPayload: jsonb('request_payload').$type<Record<
       string,
@@ -119,6 +144,22 @@ export const toolActionRuns = pgTable(
     workItemIdx: index('tool_action_runs_work_item_idx').on(table.workItemId),
     meetingSessionIdx: index('tool_action_runs_meeting_session_idx').on(
       table.meetingSessionId
+    ),
+    actorUserIdx: index('tool_action_runs_actor_user_idx').on(
+      table.actorUserId
+    ),
+    approvalRequestIdx: index('tool_action_runs_approval_request_idx').on(
+      table.approvalRequestId
+    ),
+    toolkitSlugIdx: index('tool_action_runs_toolkit_slug_idx').on(
+      table.toolkitSlug
+    ),
+    toolSessionRunIdx: index('tool_action_runs_tool_session_run_idx').on(
+      table.toolSessionRunId
+    ),
+    orgIdempotencyUidx: uniqueIndex('tool_action_runs_org_idempotency_uidx').on(
+      table.orgId,
+      table.idempotencyKey
     ),
   })
 )
@@ -150,9 +191,21 @@ export const toolActionRunsRelations = relations(toolActionRuns, ({ one }) => ({
     fields: [toolActionRuns.workItemId],
     references: [workItems.id],
   }),
+  actorUser: one(user, {
+    fields: [toolActionRuns.actorUserId],
+    references: [user.id],
+  }),
+  approvalRequest: one(approvalRequests, {
+    fields: [toolActionRuns.approvalRequestId],
+    references: [approvalRequests.id],
+  }),
   toolConnection: one(toolConnections, {
     fields: [toolActionRuns.toolConnectionId],
     references: [toolConnections.id],
+  }),
+  toolSessionRun: one(toolSessionRuns, {
+    fields: [toolActionRuns.toolSessionRunId],
+    references: [toolSessionRuns.id],
   }),
 }))
 

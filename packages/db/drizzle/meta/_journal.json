@@ -99,6 +99,13 @@
       "when": 1775070000000,
       "tag": "0013_phase_2_tool_access_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1775077200000,
+      "tag": "0014_phase_3_tool_access_runtime",
+      "breakpoints": true
     }
   ]
 }

@@ -107,23 +107,35 @@ export class MeetingOrchestrationService {
       if (byId) return byId
     }
 
+    const externalMeetingInstanceId = session?.externalMeetingInstanceId
+    const externalMeetingId = session?.externalMeetingId
+    const externalBotSessionId = session?.externalBotSessionId
+
+    if (
+      !externalMeetingInstanceId &&
+      !externalMeetingId &&
+      !externalBotSessionId
+    ) {
+      return null
+    }
+
     return this.database.query.meetingSessions.findFirst({
       where: (fields, { and, eq, or }) =>
         and(
           eq(fields.orgId, orgId),
           eq(fields.provider, provider as never),
           or(
-            session?.externalMeetingInstanceId
+            externalMeetingInstanceId
               ? eq(
                   fields.providerMeetingInstanceId,
-                  session.externalMeetingInstanceId
+                  externalMeetingInstanceId
                 )
               : undefined,
-            session?.externalMeetingId
-              ? eq(fields.providerMeetingId, session.externalMeetingId)
+            externalMeetingId
+              ? eq(fields.providerMeetingId, externalMeetingId)
               : undefined,
-            session?.externalBotSessionId
-              ? eq(fields.providerBotSessionId, session.externalBotSessionId)
+            externalBotSessionId
+              ? eq(fields.providerBotSessionId, externalBotSessionId)
               : undefined
           )
         ),

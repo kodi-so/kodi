@@ -93,11 +93,13 @@ export class MeetingOrchestrationService {
     provider: MeetingProviderSlug,
     session?: MeetingProviderSessionRef | null
   ) {
-    if (session?.internalMeetingSessionId) {
+    const internalMeetingSessionId = session?.internalMeetingSessionId
+
+    if (internalMeetingSessionId) {
       const byId = await this.database.query.meetingSessions.findFirst({
         where: (fields, { and, eq }) =>
           and(
-            eq(fields.id, session.internalMeetingSessionId),
+            eq(fields.id, internalMeetingSessionId),
             eq(fields.orgId, orgId)
           ),
       })

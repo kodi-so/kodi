@@ -1,7 +1,8 @@
-UPDATE "meeting_sessions"
-SET "status" = CASE
-  WHEN "status" = 'live' THEN 'listening'::meeting_session_status
-  WHEN "status" IN ('summarizing', 'awaiting_approval', 'executing') THEN 'processing'::meeting_session_status
-  WHEN "status" = 'completed' THEN 'ended'::meeting_session_status
-  ELSE "status"
-END;
+-- Intentionally left as a no-op.
+--
+-- PostgreSQL does not allow newly added enum values to be used safely within
+-- the same migration transaction batch that introduces them. The application
+-- already normalizes legacy statuses (`live`, `summarizing`,
+-- `awaiting_approval`, `executing`, `completed`) at read/write time, so we do
+-- not need a blocking startup-time data rewrite here.
+SELECT 1;

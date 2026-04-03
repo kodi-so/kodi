@@ -159,7 +159,10 @@ export function getToolkitCatalogStatus(
 }
 
 export function getPrimaryDetailConnection(detail: ToolAccessToolkitDetail) {
-  return detail.connections[0] ?? null
+  return (
+    detail.connections.find((connection) => connection.status !== 'INACTIVE') ??
+    null
+  )
 }
 
 export function getToolkitDetailStatus(detail: ToolAccessToolkitDetail) {

@@ -41,6 +41,55 @@ export const meetingRouter = router({
       })
     }),
 
+  getConsole: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        transcriptLimit: z.number().int().min(1).max(500).default(200),
+        eventLimit: z.number().int().min(1).max(200).default(50),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+      })
+
+      if (!meeting) return null
+
+      const [participants, transcript, liveState, events] = await Promise.all([
+        ctx.db.query.meetingParticipants.findMany({
+          where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+          orderBy: (fields, { desc }) => desc(fields.createdAt),
+        }),
+        ctx.db.query.transcriptSegments.findMany({
+          where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+          orderBy: (fields, { desc }) => desc(fields.createdAt),
+          limit: input.transcriptLimit,
+        }),
+        ctx.db.query.meetingStateSnapshots.findFirst({
+          where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+          orderBy: (fields, { desc }) => desc(fields.createdAt),
+        }),
+        ctx.db.query.meetingEvents.findMany({
+          where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+          orderBy: (fields, { desc }) => desc(fields.sequence),
+          limit: input.eventLimit,
+        }),
+      ])
+
+      return {
+        meeting,
+        participants,
+        transcript,
+        liveState,
+        events,
+      }
+    }),
+
   getLiveState: memberProcedure
     .input(
       z.object({

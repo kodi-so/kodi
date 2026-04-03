@@ -9,7 +9,7 @@ import {
   processZoomWebhookEvent,
   updateMeetingSessionRuntimeState,
   upsertMeetingParticipant,
-} from '../lib/meeting-ingestion'
+} from '../lib/meetings/ingestion'
 import { logActivity } from '../lib/activity'
 import {
   buildPersistedZoomInstallationUpdate,
@@ -205,7 +205,7 @@ export function registerZoomRoutes(app: Hono) {
       await notifyZoomGatewayOfRtmsStop({
         meetingSessionId: result.meetingSessionId,
         reason: String(payload.event),
-        finalStatus: payload.event === 'meeting.ended' ? 'completed' : 'failed',
+        finalStatus: payload.event === 'meeting.ended' ? 'ended' : 'failed',
       })
     }
 
@@ -324,7 +324,13 @@ export function registerZoomRoutes(app: Hono) {
     const meetingSessionId = c.req.param('meetingSessionId')
     const body = (await c.req.json()) as {
       eventType?: string
-      source?: 'zoom_webhook' | 'rtms' | 'kodi_ui' | 'agent' | 'worker'
+      source?:
+        | 'zoom_webhook'
+        | 'recall_webhook'
+        | 'rtms'
+        | 'kodi_ui'
+        | 'agent'
+        | 'worker'
       payload?: Record<string, unknown>
     }
 
@@ -345,7 +351,15 @@ export function registerZoomRoutes(app: Hono) {
 
     const meetingSessionId = c.req.param('meetingSessionId')
     const body = (await c.req.json()) as {
-      status?: 'joining' | 'live' | 'completed' | 'failed'
+      status?:
+        | 'scheduled'
+        | 'preparing'
+        | 'joining'
+        | 'admitted'
+        | 'listening'
+        | 'processing'
+        | 'ended'
+        | 'failed'
       actualStartAt?: string | null
       endedAt?: string | null
       metadataPatch?: Record<string, unknown> | null

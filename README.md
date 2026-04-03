@@ -50,6 +50,7 @@ kodi/
    ```
 
 4. **Start development servers**
+
    ```bash
    cd ../.. && bun dev
    ```
@@ -62,11 +63,11 @@ kodi/
 
 ### Apps & Ports
 
-| App   | Port | Description     |
-| ----- | ---- | --------------- |
-| `web` | 3000 | Landing site    |
-| `app` | 3001 | Web application |
-| `api` | 3002 | API server      |
+| App            | Port | Description       |
+| -------------- | ---- | ----------------- |
+| `web`          | 3000 | Landing site      |
+| `app`          | 3001 | Web application   |
+| `api`          | 3002 | API server        |
 | `zoom-gateway` | 3010 | Zoom RTMS gateway |
 
 ## Deployment (Railway)

@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
+  ChevronDown,
   ExternalLink,
   Link2,
   RefreshCcw,
@@ -77,6 +78,89 @@ function PolicyToggleRow({
   )
 }
 
+function CollapsibleSection({
+  title,
+  description,
+  badges = [],
+  actions,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string
+  description: string
+  badges?: Array<{ label: string; className: string }>
+  actions?: React.ReactNode
+  expanded: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))]">
+      <div className="p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="group inline-flex items-center gap-3 text-left"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 text-zinc-400 transition group-hover:border-zinc-700 group-hover:text-white">
+                <ChevronDown
+                  size={16}
+                  className={cn(
+                    'transition duration-200',
+                    expanded ? 'rotate-0' : '-rotate-90'
+                  )}
+                />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold text-white">{title}</h2>
+                <p className="text-sm text-zinc-400">{description}</p>
+              </div>
+            </button>
+
+            {badges.length > 0 && (
+              <div className="flex flex-wrap gap-2 pl-12">
+                {badges.map((badge) => (
+                  <Badge key={badge.label} className={badge.className}>
+                    {badge.label}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {actions}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onToggle}
+              className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+            >
+              {expanded ? 'Collapse' : 'Expand'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows] duration-300 ease-out',
+          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-zinc-800 px-6 pb-6 pt-2">
+            {children}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function IntegrationDetailPage() {
   const params = useParams<{ toolkitSlug: string }>()
   const searchParams = useSearchParams()
@@ -91,6 +175,8 @@ export default function IntegrationDetailPage() {
   )
   const [policyDraft, setPolicyDraft] = useState<PolicyDraft | null>(null)
   const [policySaving, setPolicySaving] = useState(false)
+  const [identitiesExpanded, setIdentitiesExpanded] = useState(true)
+  const [defaultsExpanded, setDefaultsExpanded] = useState(true)
 
   const callbackStatus = searchParams.get('connectionStatus')
   const callbackAppName = searchParams.get('appName')
@@ -432,11 +518,9 @@ export default function IntegrationDetailPage() {
         )}
 
         {loading ? (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="space-y-4">
-              <Skeleton className="h-44 rounded-[1.6rem] bg-zinc-900/70" />
-              <Skeleton className="h-72 rounded-[1.6rem] bg-zinc-900/70" />
-            </div>
+          <div className="space-y-4">
+            <Skeleton className="h-44 rounded-[1.6rem] bg-zinc-900/70" />
+            <Skeleton className="h-72 rounded-[1.6rem] bg-zinc-900/70" />
             <Skeleton className="h-[28rem] rounded-[1.6rem] bg-zinc-900/70" />
           </div>
         ) : !detail ? (
@@ -450,7 +534,7 @@ export default function IntegrationDetailPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="space-y-6">
             <div className="space-y-6">
               <section className="rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))] p-6">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -523,19 +607,55 @@ export default function IntegrationDetailPage() {
                 </div>
               </section>
 
-              <section className="rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))] p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="space-y-1">
-                    <h2 className="text-xl font-semibold text-white">
-                      Connected identities
-                    </h2>
-                    <p className="text-sm text-zinc-400">
-                      Pick the identity Kodi should prefer when more than one is
-                      available.
-                    </p>
-                  </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                  onClick={() => {
+                    setIdentitiesExpanded(true)
+                    setDefaultsExpanded(true)
+                  }}
+                >
+                  Expand all
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                  onClick={() => {
+                    setIdentitiesExpanded(false)
+                    setDefaultsExpanded(false)
+                  }}
+                >
+                  Collapse all
+                </Button>
+              </div>
 
-                  <div className="flex flex-wrap gap-2">
+              <CollapsibleSection
+                title="Connected identities"
+                description="Pick the identity Kodi should prefer when more than one is available."
+                badges={[
+                  {
+                    label: `${detail.connectionSummary.activeCount} ${
+                      detail.connectionSummary.activeCount === 1
+                        ? 'active identity'
+                        : 'active identities'
+                    }`,
+                    className: 'border-zinc-700 bg-zinc-900 text-zinc-300',
+                  },
+                  ...(detail.selectedConnectedAccountId
+                    ? [
+                        {
+                          label: 'Preferred identity set',
+                          className:
+                            'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+                        },
+                      ]
+                    : []),
+                ]}
+                actions={
+                  <>
                     {detail.selectedConnectedAccountId && (
                       <Button
                         type="button"
@@ -558,11 +678,13 @@ export default function IntegrationDetailPage() {
                         ? 'Connect another identity'
                         : connectLabel}
                     </Button>
-                  </div>
-                </div>
-
+                  </>
+                }
+                expanded={identitiesExpanded}
+                onToggle={() => setIdentitiesExpanded((current) => !current)}
+              >
                 {detail.connections.length === 0 ? (
-                  <div className="mt-5 rounded-[1.2rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-5">
+                  <div className="mt-4 rounded-[1.2rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-5">
                     <p className="text-sm font-medium text-white">
                       No identities connected yet.
                     </p>
@@ -572,7 +694,7 @@ export default function IntegrationDetailPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="mt-5 space-y-3">
+                  <div className="mt-4 space-y-3">
                     {detail.connections.map(
                       (
                         connection: ToolAccessToolkitDetail['connections'][number]
@@ -707,181 +829,185 @@ export default function IntegrationDetailPage() {
                     )}
                   </div>
                 )}
-              </section>
-            </div>
+              </CollapsibleSection>
 
-            <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-              <section className="rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))] p-5">
-                <div className="flex items-center gap-2 text-sm font-medium text-white">
-                  <ShieldCheck size={16} className="text-zinc-400" />
-                  Workspace defaults
-                </div>
-                <p className="mt-3 text-sm leading-7 text-zinc-400">
-                  {isOwner
+              <CollapsibleSection
+                title="Workspace defaults"
+                description={
+                  isOwner
                     ? 'Set the workspace defaults Kodi should respect whenever this integration is available.'
-                    : 'You can review the current workspace defaults here. Only owners can change them.'}
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Badge
-                    className={
+                    : 'You can review the current workspace defaults here. Only owners can change them.'
+                }
+                badges={[
+                  {
+                    label: policyState?.label ?? 'Policy',
+                    className:
                       policyState?.tone ??
-                      'border-zinc-700 bg-zinc-900 text-zinc-300'
-                    }
-                  >
-                    {policyState?.label ?? 'Policy'}
-                  </Badge>
-                  <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
-                    {detail.connectionSummary.activeCount}{' '}
-                    {detail.connectionSummary.activeCount === 1
-                      ? 'active identity'
-                      : 'active identities'}
-                  </Badge>
-                </div>
-              </section>
-
-              {isOwner && policyDraft ? (
-                <section className="space-y-3 rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))] p-5">
-                  <PolicyToggleRow
-                    title="Workspace access"
-                    description="Turn this integration on or off for the workspace."
-                    value={policyDraft.enabled}
-                    onToggle={() =>
-                      setPolicyDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              enabled: !current.enabled,
-                            }
-                          : current
-                      )
-                    }
-                    trueLabel="Enabled"
-                    falseLabel="Disabled"
-                    disabled={policySaving}
-                  />
-                  <PolicyToggleRow
-                    title="Chat reads"
-                    description="Allow Kodi to read from this integration during chat."
-                    value={policyDraft.chatReadsEnabled}
-                    onToggle={() =>
-                      setPolicyDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              chatReadsEnabled: !current.chatReadsEnabled,
-                            }
-                          : current
-                      )
-                    }
-                    trueLabel="Allowed"
-                    falseLabel="Blocked"
-                    disabled={policySaving}
-                  />
-                  <PolicyToggleRow
-                    title="Meeting reads"
-                    description="Allow this integration to be read during meeting workflows."
-                    value={policyDraft.meetingReadsEnabled}
-                    onToggle={() =>
-                      setPolicyDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              meetingReadsEnabled: !current.meetingReadsEnabled,
-                            }
-                          : current
-                      )
-                    }
-                    trueLabel="Allowed"
-                    falseLabel="Blocked"
-                    disabled={policySaving}
-                  />
-                  <PolicyToggleRow
-                    title="Draft support"
-                    description="Allow Kodi to prepare drafts before a write is executed."
-                    value={policyDraft.draftsEnabled}
-                    onToggle={() =>
-                      setPolicyDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              draftsEnabled: !current.draftsEnabled,
-                            }
-                          : current
-                      )
-                    }
-                    trueLabel="On"
-                    falseLabel="Off"
-                    disabled={policySaving}
-                  />
-                  <PolicyToggleRow
-                    title="Approval for writes"
-                    description="Keep writes behind approval before they execute."
-                    value={policyDraft.writesRequireApproval}
-                    onToggle={() =>
-                      setPolicyDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              writesRequireApproval:
-                                !current.writesRequireApproval,
-                            }
-                          : current
-                      )
-                    }
-                    trueLabel="Required"
-                    falseLabel="Direct"
-                    disabled={policySaving}
-                  />
-                  <PolicyToggleRow
-                    title="Admin actions"
-                    description="Allow high-risk administrative actions for this integration."
-                    value={policyDraft.adminActionsEnabled}
-                    onToggle={() =>
-                      setPolicyDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              adminActionsEnabled: !current.adminActionsEnabled,
-                            }
-                          : current
-                      )
-                    }
-                    trueLabel="Enabled"
-                    falseLabel="Disabled"
-                    disabled={policySaving}
-                  />
-
-                  <div className="flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
-                    <Button
-                      onClick={() => void savePolicy()}
-                      className="bg-teal-500 text-zinc-950 hover:bg-teal-400"
-                      disabled={!policyDirty || policySaving}
-                    >
-                      {policySaving ? 'Saving...' : 'Save defaults'}
-                    </Button>
-                    <Button
-                      onClick={resetPolicyDraft}
-                      variant="ghost"
-                      className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
-                      disabled={!policyDirty || policySaving}
-                    >
-                      Reset
-                    </Button>
+                      'border-zinc-700 bg-zinc-900 text-zinc-300',
+                  },
+                  {
+                    label: `${detail.connectionSummary.activeCount} ${
+                      detail.connectionSummary.activeCount === 1
+                        ? 'active identity'
+                        : 'active identities'
+                    }`,
+                    className: 'border-zinc-700 bg-zinc-900 text-zinc-300',
+                  },
+                ]}
+                actions={
+                  <div className="flex items-center gap-2 text-sm text-zinc-400">
+                    <ShieldCheck size={16} className="text-zinc-500" />
+                    {isOwner ? 'Owner controls' : 'View only'}
                   </div>
-                </section>
-              ) : (
-                <section className="rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))] p-5">
-                  <p className="text-sm font-medium text-white">
-                    Workspace policy is view-only here.
-                  </p>
-                  <p className="mt-2 text-sm leading-7 text-zinc-400">
-                    Owners can change defaults for chat reads, meeting reads,
-                    drafts, approval gating, and administrative actions.
-                  </p>
-                </section>
-              )}
-            </aside>
+                }
+                expanded={defaultsExpanded}
+                onToggle={() => setDefaultsExpanded((current) => !current)}
+              >
+                {isOwner && policyDraft ? (
+                  <div className="mt-4 space-y-3">
+                    <PolicyToggleRow
+                      title="Workspace access"
+                      description="Turn this integration on or off for the workspace."
+                      value={policyDraft.enabled}
+                      onToggle={() =>
+                        setPolicyDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                enabled: !current.enabled,
+                              }
+                            : current
+                        )
+                      }
+                      trueLabel="Enabled"
+                      falseLabel="Disabled"
+                      disabled={policySaving}
+                    />
+                    <PolicyToggleRow
+                      title="Chat reads"
+                      description="Allow Kodi to read from this integration during chat."
+                      value={policyDraft.chatReadsEnabled}
+                      onToggle={() =>
+                        setPolicyDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                chatReadsEnabled: !current.chatReadsEnabled,
+                              }
+                            : current
+                        )
+                      }
+                      trueLabel="Allowed"
+                      falseLabel="Blocked"
+                      disabled={policySaving}
+                    />
+                    <PolicyToggleRow
+                      title="Meeting reads"
+                      description="Allow this integration to be read during meeting workflows."
+                      value={policyDraft.meetingReadsEnabled}
+                      onToggle={() =>
+                        setPolicyDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                meetingReadsEnabled:
+                                  !current.meetingReadsEnabled,
+                              }
+                            : current
+                        )
+                      }
+                      trueLabel="Allowed"
+                      falseLabel="Blocked"
+                      disabled={policySaving}
+                    />
+                    <PolicyToggleRow
+                      title="Draft support"
+                      description="Allow Kodi to prepare drafts before a write is executed."
+                      value={policyDraft.draftsEnabled}
+                      onToggle={() =>
+                        setPolicyDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                draftsEnabled: !current.draftsEnabled,
+                              }
+                            : current
+                        )
+                      }
+                      trueLabel="On"
+                      falseLabel="Off"
+                      disabled={policySaving}
+                    />
+                    <PolicyToggleRow
+                      title="Approval for writes"
+                      description="Keep writes behind approval before they execute."
+                      value={policyDraft.writesRequireApproval}
+                      onToggle={() =>
+                        setPolicyDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                writesRequireApproval:
+                                  !current.writesRequireApproval,
+                              }
+                            : current
+                        )
+                      }
+                      trueLabel="Required"
+                      falseLabel="Direct"
+                      disabled={policySaving}
+                    />
+                    <PolicyToggleRow
+                      title="Admin actions"
+                      description="Allow high-risk administrative actions for this integration."
+                      value={policyDraft.adminActionsEnabled}
+                      onToggle={() =>
+                        setPolicyDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                adminActionsEnabled:
+                                  !current.adminActionsEnabled,
+                              }
+                            : current
+                        )
+                      }
+                      trueLabel="Enabled"
+                      falseLabel="Disabled"
+                      disabled={policySaving}
+                    />
+
+                    <div className="flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
+                      <Button
+                        onClick={() => void savePolicy()}
+                        className="bg-teal-500 text-zinc-950 hover:bg-teal-400"
+                        disabled={!policyDirty || policySaving}
+                      >
+                        {policySaving ? 'Saving...' : 'Save defaults'}
+                      </Button>
+                      <Button
+                        onClick={resetPolicyDraft}
+                        variant="ghost"
+                        className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                        disabled={!policyDirty || policySaving}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 p-5">
+                    <p className="text-sm font-medium text-white">
+                      Workspace policy is view-only here.
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-zinc-400">
+                      Owners can change defaults for chat reads, meeting reads,
+                      drafts, approval gating, and administrative actions.
+                    </p>
+                  </div>
+                )}
+              </CollapsibleSection>
+            </div>
           </div>
         )}
       </div>

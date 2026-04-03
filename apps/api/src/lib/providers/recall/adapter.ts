@@ -15,6 +15,7 @@ import type {
 import {
   buildRecallRealtimeWebhookUrl,
   classifyRecallFailure,
+  classifyUnexpectedRecallError,
   createRecallBot,
   leaveRecallBot,
   RecallApiError,
@@ -247,7 +248,27 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
           throw new RecallMeetingJoinError(error.message, failure, attempts, error)
         }
 
-        throw error
+        const failure = classifyUnexpectedRecallError(error)
+        attempts.push({
+          attempt: attempt + 1,
+          startedAt: startedAt.toISOString(),
+          completedAt: new Date().toISOString(),
+          status: 'failed',
+          failureKind: failure.kind,
+          retryable: failure.retryable,
+          message: error instanceof Error ? error.message : 'Unknown Recall error',
+        })
+
+        if (failure.retryable && attempt === 0) {
+          continue
+        }
+
+        throw new RecallMeetingJoinError(
+          error instanceof Error ? error.message : 'Unknown Recall error',
+          failure,
+          attempts,
+          error
+        )
       }
     }
 

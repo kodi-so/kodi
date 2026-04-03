@@ -198,6 +198,13 @@ export function registerRecallRoutes(app: Hono) {
       })
     } catch (error) {
       if (error instanceof RecallMeetingJoinError) {
+        console.error('[recall] internal join failed', {
+          orgId: body.orgId,
+          meetingUrl: body.meetingUrl,
+          error: error.message,
+          failure: error.failure,
+          attempts: error.attempts,
+        })
         return c.json(
           {
             error: error.message,
@@ -207,7 +214,25 @@ export function registerRecallRoutes(app: Hono) {
         )
       }
 
-      throw error
+      console.error('[recall] internal join crashed', {
+        orgId: body.orgId,
+        meetingUrl: body.meetingUrl,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : error,
+      })
+
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Unexpected recall error',
+        },
+        500
+      )
     }
   })
 }

@@ -89,6 +89,35 @@ export class RecallMeetingJoinError extends Error {
   }
 }
 
+export function classifyUnexpectedRecallError(
+  error: unknown
+): RecallFailureClassification {
+  if (error instanceof RecallApiError) {
+    return classifyRecallFailure({ status: error.status })
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    if (
+      error.name === 'AbortError' ||
+      message.includes('timeout') ||
+      message.includes('timed out')
+    ) {
+      return {
+        kind: 'provider_timeout',
+        subCode: null,
+        retryable: true,
+      }
+    }
+  }
+
+  return {
+    kind: 'provider_failure',
+    subCode: null,
+    retryable: true,
+  }
+}
+
 export function classifyRecallFailure(input: {
   subCode?: string | null
   status?: number | null

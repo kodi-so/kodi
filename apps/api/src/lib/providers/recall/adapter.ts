@@ -159,17 +159,10 @@ function buildRecallJoinPayload(
       ...(request.metadata ?? {}),
     },
     recording_config: {
-      meeting_metadata: {},
-      participant_events: {},
       transcript: realtimeWebhookUrl
         ? {
             provider: {
-              recallai_streaming: {
-                mode: 'prioritize_low_latency',
-              },
-            },
-            diarization: {
-              use_separate_streams_when_available: true,
+              recallai_streaming: {},
             },
           }
         : undefined,

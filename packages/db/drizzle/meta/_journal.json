@@ -120,6 +120,13 @@
       "when": 1775169600000,
       "tag": "0017_phase_1_meeting_schema_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1775170200000,
+      "tag": "0018_phase_1_meeting_status_backfill",
+      "breakpoints": true
     }
   ]
 }

@@ -262,8 +262,12 @@ export default function IntegrationDetailPage() {
   const status = detail ? getToolkitDetailStatus(detail) : 'Loading'
   const primaryConnection = detail ? getPrimaryDetailConnection(detail) : null
   const policyState = detail ? getPolicyState(detail.policy) : null
+  const visibleConnections =
+    detail?.connections.filter(
+      (connection) => connection.status !== 'INACTIVE'
+    ) ?? []
   const connectLabel = detail
-    ? detail.connections.length > 0
+    ? visibleConnections.length > 0
       ? 'Connect another identity'
       : getConnectButtonLabel({
           status,
@@ -674,7 +678,7 @@ export default function IntegrationDetailPage() {
                       onClick={() => void connectToolkit()}
                     >
                       <Link2 size={16} />
-                      {detail.connections.length > 0
+                      {visibleConnections.length > 0
                         ? 'Connect another identity'
                         : connectLabel}
                     </Button>
@@ -683,7 +687,7 @@ export default function IntegrationDetailPage() {
                 expanded={identitiesExpanded}
                 onToggle={() => setIdentitiesExpanded((current) => !current)}
               >
-                {detail.connections.length === 0 ? (
+                {visibleConnections.length === 0 ? (
                   <div className="mt-4 rounded-[1.2rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-5">
                     <p className="text-sm font-medium text-white">
                       No identities connected yet.
@@ -695,7 +699,7 @@ export default function IntegrationDetailPage() {
                   </div>
                 ) : (
                   <div className="mt-4 space-y-3">
-                    {detail.connections.map(
+                    {visibleConnections.map(
                       (
                         connection: ToolAccessToolkitDetail['connections'][number]
                       ) => {

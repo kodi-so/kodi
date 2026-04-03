@@ -32,16 +32,25 @@ type PersistedPreference = Awaited<
   ReturnType<typeof listToolkitAccountPreferences>
 >[number]
 
+function getDisplayableConnections<
+  T extends { connectedAccountStatus?: string | null },
+>(connections: T[]) {
+  return connections.filter(
+    (connection) => connection.connectedAccountStatus !== 'INACTIVE'
+  )
+}
+
 function buildConnectionSummary(connections: PersistedConnection[]) {
-  const activeCount = connections.filter(
+  const displayableConnections = getDisplayableConnections(connections)
+  const activeCount = displayableConnections.filter(
     (connection) => connection.connectedAccountStatus === 'ACTIVE'
   ).length
-  const attentionCount = connections.filter((connection) =>
+  const attentionCount = displayableConnections.filter((connection) =>
     attentionStatuses.has(connection.connectedAccountStatus ?? 'UNKNOWN')
   ).length
 
   return {
-    totalCount: connections.length,
+    totalCount: displayableConnections.length,
     activeCount,
     attentionCount,
   }
@@ -194,7 +203,9 @@ export const toolAccessRouter = router({
         : []
 
       const items = toolkits.map((toolkit) => {
-        const connections = connectionsByToolkit.get(toolkit.slug) ?? []
+        const connections = getDisplayableConnections(
+          connectionsByToolkit.get(toolkit.slug) ?? []
+        )
         const preference = preferencesByToolkit.get(toolkit.slug) ?? null
         const effectivePolicy = getEffectiveToolkitPolicy(
           policiesByToolkit.get(toolkit.slug) ?? null,
@@ -268,6 +279,7 @@ export const toolAccessRouter = router({
       const connections = result.connections.filter(
         (connection) => connection.toolkitSlug === toolkit.slug
       )
+      const displayableConnections = getDisplayableConnections(connections)
       const preference =
         result.preferences.find((item) => item.toolkitSlug === toolkit.slug) ??
         null
@@ -275,7 +287,7 @@ export const toolAccessRouter = router({
         result.policies.find((item) => item.toolkitSlug === toolkit.slug) ??
         null
       const sortedConnections = sortConnectionsForDetail(
-        connections,
+        displayableConnections,
         preference?.preferredConnectedAccountId ?? null
       )
 
@@ -287,7 +299,7 @@ export const toolAccessRouter = router({
           ...toolkit,
           ...getToolAccessPresentation(toolkit),
         },
-        connectionSummary: buildConnectionSummary(connections),
+        connectionSummary: buildConnectionSummary(displayableConnections),
         selectedConnectedAccountId:
           preference?.preferredConnectedAccountId ?? null,
         connections: sortedConnections.map((connection) =>

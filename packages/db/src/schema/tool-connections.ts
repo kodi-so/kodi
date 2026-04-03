@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm'
 import {
+  integer,
   index,
   jsonb,
   pgEnum,
@@ -12,7 +13,7 @@ import { approvalRequests } from './approvals'
 import { user } from './auth'
 import { meetingSessions } from './meetings'
 import { organizations } from './orgs'
-import { toolSessionRuns } from './toolkit-access'
+import { toolSessionRuns, toolSessionSourceTypeEnum } from './toolkit-access'
 import { workItems } from './work-items'
 
 export const toolProviderEnum = pgEnum('tool_provider', [
@@ -119,9 +120,13 @@ export const toolActionRuns = pgTable(
       () => toolSessionRuns.id,
       { onDelete: 'set null' }
     ),
+    sourceType: toolSessionSourceTypeEnum('source_type'),
+    sourceId: text('source_id'),
     action: text('action').notNull(),
     actionCategory: toolActionCategoryEnum('action_category'),
+    targetText: text('target_text'),
     idempotencyKey: text('idempotency_key'),
+    attemptCount: integer('attempt_count').notNull().default(0),
     status: toolActionRunStatusEnum('status').notNull().default('pending'),
     requestPayload: jsonb('request_payload').$type<Record<
       string,
@@ -131,6 +136,10 @@ export const toolActionRuns = pgTable(
       string,
       unknown
     > | null>(),
+    transitionHistory: jsonb('transition_history').$type<
+      Array<Record<string, unknown>> | null
+    >(),
+    externalLogId: text('external_log_id'),
     error: text('error'),
     startedAt: timestamp('started_at'),
     completedAt: timestamp('completed_at'),
@@ -156,6 +165,10 @@ export const toolActionRuns = pgTable(
     ),
     toolSessionRunIdx: index('tool_action_runs_tool_session_run_idx').on(
       table.toolSessionRunId
+    ),
+    sourceIdx: index('tool_action_runs_source_idx').on(
+      table.sourceType,
+      table.sourceId
     ),
     orgIdempotencyUidx: uniqueIndex('tool_action_runs_org_idempotency_uidx').on(
       table.orgId,

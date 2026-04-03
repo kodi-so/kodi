@@ -17,6 +17,7 @@ import {
   listToolkitPolicies,
   listToolkits,
   markPersistedConnectionInactive,
+  revalidatePersistedConnection,
   syncUserConnectionsForOrg,
   upsertToolkitAccountPreference,
 } from '../../lib/composio'
@@ -551,5 +552,49 @@ export const toolAccessRouter = router({
       )
 
       return { success: true }
+    }),
+
+  revalidateConnection: memberProcedure
+    .input(
+      z.object({
+        connectedAccountId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.toolkitConnections.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.userId, ctx.session.user.id),
+            eq(fields.connectedAccountId, input.connectedAccountId)
+          ),
+      })
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tool connection not found for this workspace.',
+        })
+      }
+
+      const refreshed = await revalidatePersistedConnection(ctx.db, existing)
+
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'tool_access.connection_revalidated',
+        {
+          toolkitSlug: existing.toolkitSlug,
+          connectedAccountId: existing.connectedAccountId,
+          resultingStatus: refreshed?.connectedAccountStatus ?? 'INACTIVE',
+        },
+        ctx.session.user.id
+      )
+
+      return {
+        connection: refreshed
+          ? serializeConnection(refreshed, null)
+          : null,
+      }
     }),
 })

@@ -7,10 +7,12 @@ import { zoomRouter } from './zoom/router'
 import { meetingRouter } from './meeting/router'
 import { workRouter } from './work/router'
 import { toolAccessRouter } from './tool-access/router'
+import { approvalRouter } from './approval/router'
 
 export const appRouter = router({
   instance: instanceRouter,
   chat: chatRouter,
+  approval: approvalRouter,
   invite: inviteRouter,
   org: orgRouter,
   zoom: zoomRouter,

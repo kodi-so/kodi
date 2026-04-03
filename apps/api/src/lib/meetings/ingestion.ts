@@ -385,6 +385,10 @@ export async function appendMeetingEvent(
     })
     .returning()
 
+  if (!created) {
+    throw new Error('Failed to append meeting event')
+  }
+
   return created
 }
 

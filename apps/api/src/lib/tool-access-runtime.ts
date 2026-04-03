@@ -20,6 +20,10 @@ const MAX_RELEVANT_TOOLS = 12
 const MAX_TOOL_ROUNDS = 6
 const MAX_TOOL_CALLS_PER_ROUND = 4
 const OPENCLAW_REQUEST_TIMEOUT_MS = 60_000
+const MAX_TOOL_MESSAGE_CHARS = 16_000
+const MAX_TOOL_STRING_CHARS = 1_200
+const MAX_TOOL_OBJECT_KEYS = 20
+const MAX_TOOL_ARRAY_ITEMS = 8
 
 const READ_VERBS = new Set([
   'GET',
@@ -275,6 +279,15 @@ type ToolExecutionPayload = {
   error: string | null
   data: Record<string, unknown> | null
   logId: string | null
+}
+
+type ModelSafeToolExecutionPayload = {
+  success: boolean
+  error: string | null
+  data: unknown
+  logId: string | null
+  truncated: boolean
+  summary?: string
 }
 
 type AutomaticToolExecutionResult = {
@@ -688,6 +701,11 @@ function buildAutomaticToolArguments(tool: SessionTool, userMessage: string) {
   const prefersRecent = /\b(latest|recent|newest|today|upcoming|unread)\b/.test(
     loweredMessage
   )
+  const prefersSingleResult =
+    /\b(most recent|latest|newest|last|top|first)\b/.test(loweredMessage) ||
+    /\bemail\b/.test(loweredMessage) ||
+    /\bmessage\b/.test(loweredMessage) ||
+    /\bwhat was\b/.test(loweredMessage)
 
   const buildValue = (name: string) => {
     const normalized = name.toLowerCase()
@@ -723,6 +741,7 @@ function buildAutomaticToolArguments(tool: SessionTool, userMessage: string) {
         'maxresults',
       ].includes(normalized)
     ) {
+      if (prefersSingleResult) return 1
       return prefersRecent ? 5 : 10
     }
 
@@ -803,6 +822,20 @@ function buildAutomaticToolArguments(tool: SessionTool, userMessage: string) {
   }
 
   return args
+}
+
+function getAutomaticExecutionPlanLimit(userMessage: string) {
+  const message = userMessage.trim().toLowerCase()
+
+  if (
+    /\b(most recent|latest|newest|last|top|first)\b/.test(message) ||
+    /\bwhat was\b/.test(message) ||
+    /\bwhich one\b/.test(message)
+  ) {
+    return 1
+  }
+
+  return 2
 }
 
 function shouldBrokerLinearIssueCreation(
@@ -1175,6 +1208,8 @@ function selectAutomaticToolExecutionPlans(
     return []
   }
 
+  const selectionLimit = getAutomaticExecutionPlanLimit(userMessage)
+
   const plans = runtime.allowedTools
     .map((tool) => {
       const decision = runtime.allowedDecisions.get(tool.slug)
@@ -1210,7 +1245,7 @@ function selectAutomaticToolExecutionPlans(
     selected.push(plan)
     usedFamilies.add(plan.family)
 
-    if (selected.length >= 2) {
+    if (selected.length >= selectionLimit) {
       break
     }
   }
@@ -1505,6 +1540,175 @@ function looksLikeInvalidIntegrationNarration(content: string) {
     /(?:gateway config|plugin list|plugin configuration|openclaw setup|current environment|different mechanism|different channel)/,
     /(?:would need|need to).{0,50}(?:set up|configure|enable|connect|install)/,
   ].some((pattern) => pattern.test(normalized))
+}
+
+function summarizeToolResult(
+  toolkitSlug: string,
+  toolSlug: string,
+  data: Record<string, unknown> | null
+) {
+  if (!data) return null
+
+  if (toolkitSlug === 'gmail') {
+    if (
+      toolSlug === 'GMAIL_FETCH_EMAILS' ||
+      toolSlug === 'GMAIL_LIST_MESSAGES'
+    ) {
+      const messages = Array.isArray((data as Record<string, unknown>).messages)
+        ? ((data as Record<string, unknown>).messages as unknown[])
+        : Array.isArray((data as Record<string, unknown>).emails)
+          ? ((data as Record<string, unknown>).emails as unknown[])
+          : []
+
+      if (messages.length > 0) {
+        return `Returned ${messages.length} Gmail messages. Prefer the most recent message metadata and snippet over full MIME payloads.`
+      }
+    }
+
+    if (toolSlug === 'GMAIL_LIST_THREADS') {
+      const threads = Array.isArray((data as Record<string, unknown>).threads)
+        ? ((data as Record<string, unknown>).threads as unknown[])
+        : []
+
+      if (threads.length > 0) {
+        return `Returned ${threads.length} Gmail threads. Prefer the newest thread summary and snippet.`
+      }
+    }
+  }
+
+  const topLevelKeys = Object.keys(data)
+  if (topLevelKeys.length === 0) return null
+
+  return `Tool result keys: ${topLevelKeys.slice(0, 8).join(', ')}${topLevelKeys.length > 8 ? ', ...' : ''}.`
+}
+
+function compactToolValue(
+  value: unknown,
+  depth = 0
+): { value: unknown; truncated: boolean } {
+  if (value == null) {
+    return { value, truncated: false }
+  }
+
+  if (typeof value === 'string') {
+    if (value.length <= MAX_TOOL_STRING_CHARS) {
+      return { value, truncated: false }
+    }
+
+    return {
+      value: `${value.slice(0, MAX_TOOL_STRING_CHARS)}…`,
+      truncated: true,
+    }
+  }
+
+  if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return { value, truncated: false }
+  }
+
+  if (Array.isArray(value)) {
+    const sliced = value.slice(0, MAX_TOOL_ARRAY_ITEMS)
+    let truncated = value.length > sliced.length
+    const compacted = sliced.map((item) => {
+      const result = compactToolValue(item, depth + 1)
+      truncated ||= result.truncated
+      return result.value
+    })
+
+    return {
+      value:
+        value.length > sliced.length
+          ? [...compacted, { _truncatedItems: value.length - sliced.length }]
+          : compacted,
+      truncated,
+    }
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const entries = Object.entries(record)
+
+    if (depth >= 4) {
+      return {
+        value: {
+          _summary: `Object with ${entries.length} keys omitted at depth limit.`,
+        },
+        truncated: entries.length > 0,
+      }
+    }
+
+    const selectedEntries = entries.slice(0, MAX_TOOL_OBJECT_KEYS)
+    let truncated = entries.length > selectedEntries.length
+    const compacted = Object.fromEntries(
+      selectedEntries.map(([key, item]) => {
+        const result = compactToolValue(item, depth + 1)
+        truncated ||= result.truncated
+        return [key, result.value]
+      })
+    )
+
+    if (entries.length > selectedEntries.length) {
+      compacted._truncatedKeys = entries.length - selectedEntries.length
+    }
+
+    return { value: compacted, truncated }
+  }
+
+  return { value: String(value), truncated: true }
+}
+
+function buildModelSafeToolPayload(params: {
+  toolkitSlug: string
+  toolSlug: string
+  payload: ToolExecutionPayload
+}): ModelSafeToolExecutionPayload {
+  const compacted = compactToolValue(params.payload.data)
+  const summary = summarizeToolResult(
+    params.toolkitSlug,
+    params.toolSlug,
+    params.payload.data
+  )
+
+  let modelPayload: ModelSafeToolExecutionPayload = {
+    success: params.payload.success,
+    error: params.payload.error,
+    data: compacted.value,
+    logId: params.payload.logId,
+    truncated: compacted.truncated,
+    ...(summary ? { summary } : {}),
+  }
+
+  let content = JSON.stringify(modelPayload)
+  if (content.length > MAX_TOOL_MESSAGE_CHARS) {
+    const compactedAgain = compactToolValue(modelPayload.data, 2)
+    modelPayload = {
+      ...modelPayload,
+      data: compactedAgain.value,
+      truncated: true,
+      summary:
+        modelPayload.summary ??
+        'Tool result was truncated before being returned to the model.',
+    }
+    content = JSON.stringify(modelPayload)
+  }
+
+  if (content.length > MAX_TOOL_MESSAGE_CHARS) {
+    modelPayload = {
+      success: params.payload.success,
+      error: params.payload.error,
+      data: null,
+      logId: params.payload.logId,
+      truncated: true,
+      summary:
+        modelPayload.summary ??
+        'Tool result was too large to include fully in model context.',
+    }
+  }
+
+  return modelPayload
 }
 
 function toOpenAITool(tool: SessionTool): OpenAIToolDefinition {
@@ -2162,12 +2366,17 @@ async function executeAllowedToolCall(params: {
       data: null,
       logId: null,
     } satisfies ToolExecutionPayload
+    const modelToolPayload = buildModelSafeToolPayload({
+      toolkitSlug: params.decision.toolkitSlug,
+      toolSlug: params.decision.toolSlug,
+      payload: toolPayload,
+    })
 
     return {
       toolMessage: {
         role: 'tool',
         tool_call_id: params.toolCall.id,
-        content: JSON.stringify(toolPayload),
+        content: JSON.stringify(modelToolPayload),
       } satisfies OpenAIMessage,
       toolSlug: params.decision.toolSlug,
       toolPayload,
@@ -2202,6 +2411,11 @@ async function executeAllowedToolCall(params: {
       data: response.data ?? null,
       logId: response.logId ?? null,
     } satisfies ToolExecutionPayload
+    const modelToolPayload = buildModelSafeToolPayload({
+      toolkitSlug: params.decision.toolkitSlug,
+      toolSlug: params.decision.toolSlug,
+      payload: toolPayload,
+    })
 
     await finishToolActionRun({
       db: params.db,
@@ -2215,7 +2429,7 @@ async function executeAllowedToolCall(params: {
       toolMessage: {
         role: 'tool',
         tool_call_id: params.toolCall.id,
-        content: JSON.stringify(toolPayload),
+        content: JSON.stringify(modelToolPayload),
       } satisfies OpenAIMessage,
       toolSlug: params.decision.toolSlug,
       toolPayload,
@@ -2230,6 +2444,11 @@ async function executeAllowedToolCall(params: {
       data: null,
       logId: null,
     } satisfies ToolExecutionPayload
+    const modelToolPayload = buildModelSafeToolPayload({
+      toolkitSlug: params.decision.toolkitSlug,
+      toolSlug: params.decision.toolSlug,
+      payload: toolPayload,
+    })
 
     await finishToolActionRun({
       db: params.db,
@@ -2243,7 +2462,7 @@ async function executeAllowedToolCall(params: {
       toolMessage: {
         role: 'tool',
         tool_call_id: params.toolCall.id,
-        content: JSON.stringify(toolPayload),
+        content: JSON.stringify(modelToolPayload),
       } satisfies OpenAIMessage,
       toolSlug: params.decision.toolSlug,
       toolPayload,

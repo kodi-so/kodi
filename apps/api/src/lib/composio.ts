@@ -1,5 +1,5 @@
 import { AuthConfigTypes, Composio } from '@composio/core'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import {
   db,
   toolkitAccountPreferences,
@@ -567,9 +567,29 @@ export async function syncConnectedAccounts(
   dbInstance: AnyDb,
   orgId: string,
   userId: string,
-  accounts: ConnectionSummary[]
+  accounts: ConnectionSummary[],
+  toolkitSlugs?: string[]
 ) {
+  const existingConnections =
+    await dbInstance.query.toolkitConnections.findMany({
+      where: (fields, operators) => {
+        const clauses = [
+          operators.eq(fields.orgId, orgId),
+          operators.eq(fields.userId, userId),
+        ]
+
+        if ((toolkitSlugs?.length ?? 0) > 0) {
+          clauses.push(
+            inArray(fields.toolkitSlug, toolkitSlugs as [string, ...string[]])
+          )
+        }
+
+        return operators.and(...clauses)
+      },
+    })
+
   const persisted: ToolkitConnection[] = []
+  const remoteAccountIds = new Set(accounts.map((account) => account.id))
 
   for (const account of accounts) {
     await ensureToolkitPolicyRow(dbInstance, orgId, userId, account.toolkitSlug)
@@ -595,6 +615,60 @@ export async function syncConnectedAccounts(
     persisted.push(saved)
   }
 
+  const staleConnections = existingConnections.filter(
+    (connection) => !remoteAccountIds.has(connection.connectedAccountId)
+  )
+
+  for (const staleConnection of staleConnections) {
+    const updated = await markPersistedConnectionInactive(
+      dbInstance,
+      staleConnection.id
+    )
+
+    if (updated) {
+      persisted.push(updated)
+    }
+  }
+
+  const preferences = await listToolkitAccountPreferences(
+    dbInstance,
+    orgId,
+    userId
+  )
+
+  for (const preference of preferences) {
+    if (
+      (toolkitSlugs?.length ?? 0) > 0 &&
+      !toolkitSlugs?.includes(preference.toolkitSlug)
+    ) {
+      continue
+    }
+
+    const connectionsForToolkit = [
+      ...existingConnections.filter(
+        (connection) => connection.toolkitSlug === preference.toolkitSlug
+      ),
+      ...persisted.filter(
+        (connection) => connection.toolkitSlug === preference.toolkitSlug
+      ),
+    ]
+
+    const activePreferredExists = connectionsForToolkit.some(
+      (connection) =>
+        connection.connectedAccountId ===
+          preference.preferredConnectedAccountId &&
+        connection.connectedAccountStatus === 'ACTIVE'
+    )
+
+    if (!activePreferredExists) {
+      await clearToolkitAccountPreference(dbInstance, {
+        orgId,
+        userId,
+        toolkitSlug: preference.toolkitSlug,
+      })
+    }
+  }
+
   return persisted
 }
 
@@ -605,7 +679,13 @@ export async function syncUserConnectionsForOrg(
   toolkitSlugs?: string[]
 ) {
   const accounts = await listConnectedAccounts(userId, toolkitSlugs)
-  return syncConnectedAccounts(dbInstance, orgId, userId, accounts)
+  return syncConnectedAccounts(
+    dbInstance,
+    orgId,
+    userId,
+    accounts,
+    toolkitSlugs
+  )
 }
 
 export async function listPersistedConnections(
@@ -629,7 +709,8 @@ export function choosePrimaryConnection(
   if (preferredConnectedAccountId) {
     const preferred = connections.find(
       (connection) =>
-        connection.connectedAccountId === preferredConnectedAccountId
+        connection.connectedAccountId === preferredConnectedAccountId &&
+        connection.connectedAccountStatus === 'ACTIVE'
     )
 
     if (preferred) return preferred
@@ -638,6 +719,10 @@ export function choosePrimaryConnection(
   return (
     connections.find(
       (connection) => connection.connectedAccountStatus === 'ACTIVE'
+    ) ??
+    connections.find(
+      (connection) =>
+        connection.connectedAccountId === preferredConnectedAccountId
     ) ??
     connections[0] ??
     null
@@ -744,7 +829,20 @@ export async function createConnectLink(params: {
 
 export async function disableConnectedAccount(connectedAccountId: string) {
   const composio = getComposioClient()
-  await composio.connectedAccounts.disable(connectedAccountId)
+  try {
+    await composio.connectedAccounts.disable(connectedAccountId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    if (
+      message.includes('ConnectedAccount_ResourceNotFound') ||
+      message.includes('Connected account not found')
+    ) {
+      return
+    }
+
+    throw error
+  }
 }
 
 export async function markPersistedConnectionInactive(

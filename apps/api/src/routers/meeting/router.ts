@@ -1,5 +1,8 @@
 import { z } from 'zod'
 import { router, memberProcedure } from '../../trpc'
+import { MeetingOrchestrationService } from '../../lib/meetings/orchestration-service'
+import { createDefaultMeetingProviderGateway } from '../../lib/meetings/provider-runtime'
+import { TRPCError } from '@trpc/server'
 
 export const meetingRouter = router({
   list: memberProcedure
@@ -18,9 +21,11 @@ export const meetingRouter = router({
           provider: true,
           status: true,
           title: true,
+          liveSummary: true,
           actualStartAt: true,
           endedAt: true,
           createdAt: true,
+          updatedAt: true,
         },
       })
     }),
@@ -162,5 +167,45 @@ export const meetingRouter = router({
         orderBy: (fields, { desc }) => desc(fields.createdAt),
         limit: input.limit,
       })
+    }),
+
+  joinByUrl: memberProcedure
+    .input(
+      z.object({
+        meetingUrl: z.string().url(),
+        title: z.string().trim().min(1).max(120).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meetingHost = new URL(input.meetingUrl).hostname.toLowerCase()
+      if (!meetingHost.includes('meet.google.com')) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only Google Meet links are supported right now.',
+        })
+      }
+
+      const orchestration = new MeetingOrchestrationService(
+        createDefaultMeetingProviderGateway()
+      )
+
+      const result = await orchestration.requestBotJoin({
+        orgId: ctx.org.id,
+        provider: 'google_meet',
+        hostUserId: ctx.session.user.id,
+        meeting: {
+          joinUrl: input.meetingUrl,
+          title: input.title?.trim() || null,
+        },
+        botIdentity: {
+          displayName: 'Kodi',
+        },
+      })
+
+      return {
+        ok: true,
+        meetingSessionId: result.meetingSession.id,
+        status: result.meetingSession.status,
+      }
     }),
 })

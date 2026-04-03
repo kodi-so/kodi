@@ -1,5 +1,4 @@
 import type { Context, Hono } from 'hono'
-import { db } from '@kodi/db'
 import { MeetingOrchestrationService } from '../lib/meetings/orchestration-service'
 import { createDefaultMeetingProviderGateway } from '../lib/meetings/provider-runtime'
 import { env } from '../env'
@@ -133,42 +132,10 @@ export function registerRecallRoutes(app: Hono) {
 
     const orgId =
       typeof botMetadata?.orgId === 'string' ? botMetadata.orgId : null
-    const legacyBotId =
-      typeof data?.bot_id === 'string'
-        ? data.bot_id
-        : null
-    const externalBotSessionId =
-      typeof bot?.id === 'string' ? bot.id : legacyBotId
-
-    const matchedSession =
-      !orgId && externalBotSessionId
-        ? await db.query.meetingSessions.findFirst({
-            where: (fields, { and, eq }) =>
-              and(
-                eq(fields.provider, 'google_meet' as never),
-                eq(fields.providerBotSessionId, externalBotSessionId)
-              ),
-          })
-        : null
-
-    const resolvedOrgId = orgId ?? matchedSession?.orgId ?? null
-    const resolvedInternalMeetingSessionId =
-      typeof botMetadata?.internalMeetingSessionId === 'string'
-        ? botMetadata.internalMeetingSessionId
-        : matchedSession?.id
-    const resolvedExternalMeetingId =
-      typeof botMetadata?.externalMeetingId === 'string'
-        ? botMetadata.externalMeetingId
-        : matchedSession?.providerMeetingId ?? null
-    const resolvedExternalMeetingInstanceId =
-      typeof botMetadata?.externalMeetingInstanceId === 'string'
-        ? botMetadata.externalMeetingInstanceId
-        : matchedSession?.providerMeetingInstanceId ?? null
-
-    if (!resolvedOrgId) {
+    if (!orgId) {
       console.warn('[recall] bot webhook missing org id', {
         event: payload.event,
-        botId: externalBotSessionId,
+        botId: typeof bot?.id === 'string' ? bot.id : null,
       })
       return c.json({ ok: true, ignored: 'missing-org-id' })
     }
@@ -178,17 +145,26 @@ export function registerRecallRoutes(app: Hono) {
     )
 
     const result = await orchestration.ingestProviderEnvelope({
-      orgId: resolvedOrgId,
+      orgId,
       provider: 'google_meet',
       envelope: {
         provider: 'google_meet',
         transport: 'webhook',
         receivedAt: new Date(),
         session: {
-          internalMeetingSessionId: resolvedInternalMeetingSessionId,
-          externalMeetingId: resolvedExternalMeetingId,
-          externalMeetingInstanceId: resolvedExternalMeetingInstanceId,
-          externalBotSessionId,
+          internalMeetingSessionId:
+            typeof botMetadata?.internalMeetingSessionId === 'string'
+              ? botMetadata.internalMeetingSessionId
+              : undefined,
+          externalMeetingId:
+            typeof botMetadata?.externalMeetingId === 'string'
+              ? botMetadata.externalMeetingId
+              : null,
+          externalMeetingInstanceId:
+            typeof botMetadata?.externalMeetingInstanceId === 'string'
+              ? botMetadata.externalMeetingInstanceId
+              : null,
+          externalBotSessionId: typeof bot?.id === 'string' ? bot.id : null,
         },
         payload,
       },

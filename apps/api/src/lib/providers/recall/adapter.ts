@@ -85,20 +85,6 @@ function extractSessionRef(payload: Record<string, unknown>): MeetingProviderSes
   }
 }
 
-function extractLegacySessionRef(payload: Record<string, unknown>): MeetingProviderSessionRef | null {
-  const data = asRecord(payload.data)
-  const status = asRecord(data?.status)
-
-  return {
-    externalBotSessionId:
-      typeof data?.bot_id === 'string'
-        ? data.bot_id
-        : typeof status?.bot_id === 'string'
-          ? status.bot_id
-          : null,
-  }
-}
-
 function extractOccurredAt(payload: Record<string, unknown>) {
   const data = asRecord(payload.data)
   const statusData = asRecord(data?.data)
@@ -106,21 +92,6 @@ function extractOccurredAt(payload: Record<string, unknown>) {
 
   if (typeof updatedAt === 'string') {
     const parsed = new Date(updatedAt)
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed
-    }
-  }
-
-  return new Date()
-}
-
-function extractLegacyOccurredAt(payload: Record<string, unknown>) {
-  const data = asRecord(payload.data)
-  const status = asRecord(data?.status)
-  const createdAt = status?.created_at
-
-  if (typeof createdAt === 'string') {
-    const parsed = new Date(createdAt)
     if (!Number.isNaN(parsed.getTime())) {
       return parsed
     }
@@ -372,35 +343,16 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
       return []
     }
 
-    const session =
-      extractSessionRef(payload) ??
-      extractLegacySessionRef(payload) ??
-      envelope.session ??
-      null
-    const occurredAt =
-      payload.event === 'bot.status_change'
-        ? extractLegacyOccurredAt(payload)
-        : extractOccurredAt(payload)
+    const session = extractSessionRef(payload) ?? envelope.session ?? null
+    const occurredAt = extractOccurredAt(payload)
     const data = asRecord(payload.data)
     const eventData = asRecord(data?.data)
-    const legacyStatus = asRecord(data?.status)
     const subCode =
-      payload.event === 'bot.status_change'
-        ? typeof legacyStatus?.sub_code === 'string'
-          ? legacyStatus.sub_code
-          : null
-        :
       typeof eventData?.sub_code === 'string' ? eventData.sub_code : null
 
     if (payload.event.startsWith('bot.')) {
-      const lifecycleEventName =
-        payload.event === 'bot.status_change' &&
-        typeof legacyStatus?.code === 'string'
-          ? `bot.${legacyStatus.code}`
-          : payload.event
-
       const lifecycle = mapRecallBotEventToLifecycleState(
-        lifecycleEventName,
+        payload.event,
         subCode
       )
       if (!lifecycle) return []
@@ -422,13 +374,11 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
             lifecycle.state === 'failed'
               ? typeof eventData?.message === 'string'
                 ? eventData.message
-                : typeof legacyStatus?.message === 'string'
-                  ? legacyStatus.message
-                  : null
+                : null
               : null,
           metadata: {
             transport: 'recall',
-            recallEvent: lifecycleEventName,
+            recallEvent: payload.event,
             failure,
           },
         },

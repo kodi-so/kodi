@@ -1,8 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { ArrowRight, Link2, RefreshCcw, Video } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
+import {
+  ArrowRight,
+  ExternalLink,
+  Link2,
+  RefreshCcw,
+  Sparkles,
+  Video,
+} from 'lucide-react'
 import {
   Alert,
   AlertDescription,
@@ -13,14 +21,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
+  Label,
   Skeleton,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 
-type ZoomInstallStatus = Awaited<
-  ReturnType<typeof trpc.zoom.getInstallStatus.query>
->
 type MeetingListItem = Awaited<ReturnType<typeof trpc.meeting.list.query>>
 
 function formatDate(value: Date | string | null | undefined) {
@@ -37,59 +44,81 @@ function formatDate(value: Date | string | null | undefined) {
 
 function statusTone(status: string) {
   switch (status) {
-    case 'active':
     case 'listening':
       return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
     case 'admitted':
       return 'border-cyan-500/30 bg-cyan-500/15 text-cyan-200'
     case 'processing':
-      return 'border-violet-500/30 bg-violet-500/15 text-violet-200'
+      return 'border-indigo-500/30 bg-indigo-500/15 text-indigo-200'
     case 'joining':
-    case 'pending':
     case 'scheduled':
     case 'preparing':
       return 'border-amber-500/30 bg-amber-500/15 text-amber-200'
     case 'ended':
-      return 'border-sky-500/30 bg-sky-500/15 text-sky-200'
-    case 'revoked':
+      return 'border-zinc-700 bg-zinc-800 text-zinc-300'
     case 'failed':
-    case 'error':
       return 'border-red-500/30 bg-red-500/15 text-red-200'
     default:
-      return 'border-zinc-700 bg-zinc-800/80 text-zinc-300'
+      return 'border-zinc-700 bg-zinc-800 text-zinc-300'
   }
 }
 
 function statusLabel(status: string) {
   switch (status) {
     case 'listening':
-      return 'listening'
+      return 'Live'
     case 'admitted':
-      return 'admitted'
+      return 'Admitted'
     case 'processing':
-      return 'processing'
+      return 'Summarizing'
     case 'preparing':
-      return 'preparing'
+      return 'Preparing'
+    case 'joining':
+      return 'Joining'
     case 'ended':
-      return 'ended'
+      return 'Ended'
+    case 'failed':
+      return 'Needs attention'
     default:
       return status
   }
 }
 
+function meetingSnapshot(meeting: MeetingListItem[number]) {
+  if (meeting.liveSummary) return meeting.liveSummary
+
+  switch (meeting.status) {
+    case 'joining':
+    case 'preparing':
+      return 'Kodi is on the way into the call.'
+    case 'admitted':
+      return 'Kodi reached the meeting and is waiting for the call to begin.'
+    case 'listening':
+      return 'Transcript and live meeting context are flowing now.'
+    case 'processing':
+      return 'Meeting intelligence is turning the call into notes and actions.'
+    case 'failed':
+      return 'This meeting hit a provider issue and may need another attempt.'
+    case 'ended':
+      return 'This session has ended.'
+    default:
+      return 'Open the meeting to see transcript, summary, and state.'
+  }
+}
+
 export default function MeetingsPage() {
+  const router = useRouter()
   const { activeOrg } = useOrg()
-  const [installStatus, setInstallStatus] = useState<ZoomInstallStatus | null>(
-    null
-  )
   const [meetings, setMeetings] = useState<MeetingListItem>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [action, setAction] = useState<'refresh' | null>(null)
+  const [meetingUrl, setMeetingUrl] = useState('')
+  const [title, setTitle] = useState('')
+  const [isStarting, startStartTransition] = useTransition()
+  const [isRefreshing, startRefreshTransition] = useTransition()
 
   useEffect(() => {
     if (!activeOrg) {
-      setInstallStatus(null)
       setMeetings([])
       setLoading(false)
       return
@@ -102,20 +131,15 @@ export default function MeetingsPage() {
 
     async function load() {
       try {
-        const [status, meetingItems] = await Promise.all([
-          trpc.zoom.getInstallStatus.query({ orgId }),
-          trpc.meeting.list.query({ orgId, limit: 20 }),
-        ])
-
+        const meetingItems = await trpc.meeting.list.query({ orgId, limit: 20 })
         if (cancelled) return
-        setInstallStatus(status)
         setMeetings(meetingItems)
       } catch (err) {
         if (cancelled) return
         setError(
           err instanceof Error
             ? err.message
-            : 'Failed to load Zoom copilot state.'
+            : 'Failed to load meetings.'
         )
       } finally {
         if (!cancelled) setLoading(false)
@@ -128,85 +152,172 @@ export default function MeetingsPage() {
     }
   }, [activeOrg?.orgId])
 
-  const missingZoomSetup = installStatus?.setup.missing ?? []
-  const isOwner = activeOrg?.role === 'owner'
-  const installation = installStatus?.installation ?? null
-
   async function refresh() {
     if (!activeOrg) return
-    const orgId = activeOrg.orgId
-    setAction('refresh')
-    try {
-      const [status, meetingItems] = await Promise.all([
-        trpc.zoom.getInstallStatus.query({ orgId }),
-        trpc.meeting.list.query({ orgId, limit: 20 }),
-      ])
-      setInstallStatus(status)
-      setMeetings(meetingItems)
-      setError(null)
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to refresh Zoom copilot state.'
-      )
-    } finally {
-      setAction(null)
-    }
+
+    startRefreshTransition(() => {
+      void (async () => {
+        try {
+          const meetingItems = await trpc.meeting.list.query({
+            orgId: activeOrg.orgId,
+            limit: 20,
+          })
+          setMeetings(meetingItems)
+          setError(null)
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to refresh meetings.'
+          )
+        }
+      })()
+    })
+  }
+
+  async function startMeeting() {
+    if (!activeOrg) return
+
+    startStartTransition(() => {
+      void (async () => {
+        try {
+          const result = await trpc.meeting.joinByUrl.mutate({
+            orgId: activeOrg.orgId,
+            meetingUrl: meetingUrl.trim(),
+            title: title.trim() || undefined,
+          })
+
+          setError(null)
+          setMeetingUrl('')
+          setTitle('')
+          router.push(`/meetings/${result.meetingSessionId}`)
+        } catch (err) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to start the meeting bot.'
+          )
+        }
+      })()
+    })
   }
 
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6 text-sm text-zinc-500">
-        Select a workspace to set up the Zoom copilot.
+        Select a workspace to work with meetings.
       </div>
     )
   }
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.18),_transparent_42%),linear-gradient(180deg,_rgba(24,24,27,0.35),_rgba(10,10,15,0.9))]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <div className="flex flex-col gap-4 rounded-3xl border border-zinc-800 bg-zinc-950/75 p-6 shadow-2xl shadow-black/20 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
-            <Badge className="w-fit border-sky-500/30 bg-sky-500/15 text-sky-200">
-              Phase 1: Install and ingestion
-            </Badge>
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">
-                Zoom copilot
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                Track meeting sessions and live ingestion for{' '}
-                {activeOrg.orgName}. Workspace-level setup now lives in
-                Integrations so meetings stay focused on runtime activity.
-              </p>
+    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(84,103,255,0.08),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.08),_transparent_30%),linear-gradient(180deg,_rgba(18,18,22,0.45),_rgba(8,8,12,0.98))]">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8">
+        <section className="overflow-hidden rounded-[2rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(17,18,22,0.96),_rgba(9,10,13,0.94))] shadow-2xl shadow-black/20">
+          <div className="grid gap-8 px-6 py-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-8">
+            <div className="space-y-5">
+              <Badge className="w-fit border-zinc-700 bg-zinc-900 text-zinc-300">
+                Meeting intelligence
+              </Badge>
+              <div className="space-y-3">
+                <h1 className="max-w-xl text-4xl font-semibold tracking-tight text-white">
+                  Bring Kodi into a live Google Meet in one step.
+                </h1>
+                <p className="max-w-2xl text-sm leading-7 text-zinc-400">
+                  Start with a Meet link, then let Kodi join, listen, and turn
+                  the conversation into a usable summary. The list below stays
+                  focused on the sessions your team actually cares about.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3 text-sm text-zinc-400">
+                <div className="rounded-full border border-zinc-800 bg-zinc-950/60 px-3 py-1.5">
+                  Google Meet first
+                </div>
+                <div className="rounded-full border border-zinc-800 bg-zinc-950/60 px-3 py-1.5">
+                  Transcript in app
+                </div>
+                <div className="rounded-full border border-zinc-800 bg-zinc-950/60 px-3 py-1.5">
+                  Live summary in workspace
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[1.75rem] border border-zinc-800 bg-zinc-950/70 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                    Start a session
+                  </p>
+                  <h2 className="mt-3 text-xl font-semibold text-white">
+                    Paste a Meet link
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">
+                    Kodi will request to join the meeting right away. Admit the
+                    bot in Meet, then watch transcript and summary fill in on
+                    the meeting page.
+                  </p>
+                </div>
+
+                <div className="hidden h-11 w-11 items-center justify-center rounded-[1.15rem] border border-zinc-800 bg-zinc-900 text-zinc-200 sm:flex">
+                  <Video size={18} />
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="meeting-url" className="text-zinc-300">
+                    Google Meet URL
+                  </Label>
+                  <Input
+                    id="meeting-url"
+                    value={meetingUrl}
+                    onChange={(event) => setMeetingUrl(event.target.value)}
+                    placeholder="https://meet.google.com/abc-defg-hij"
+                    className="h-11 border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="meeting-title" className="text-zinc-300">
+                    Title
+                  </Label>
+                  <Input
+                    id="meeting-title"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Weekly product sync"
+                    className="h-11 border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center">
+                  <Button
+                    onClick={() => void startMeeting()}
+                    disabled={isStarting || meetingUrl.trim().length === 0}
+                    className="gap-2 bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+                  >
+                    <Sparkles size={16} />
+                    {isStarting ? 'Starting Kodi…' : 'Start meeting bot'}
+                  </Button>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                  >
+                    <Link href="/settings/integrations">
+                      <Link2 size={16} />
+                      Integrations
+                    </Link>
+                  </Button>
+                </div>
+
+                <p className="text-xs leading-5 text-zinc-500">
+                  Google Meet only for now. Invite-by-email and automatic join
+                  rules come next.
+                </p>
+              </div>
             </div>
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Button
-              onClick={() => void refresh()}
-              variant="ghost"
-              className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-              disabled={action !== null}
-            >
-              <RefreshCcw
-                size={16}
-                className={action === 'refresh' ? 'animate-spin' : ''}
-              />
-              Refresh
-            </Button>
-            <Button
-              asChild
-              className="gap-2 bg-sky-500 text-white hover:bg-sky-400"
-            >
-              <Link href="/settings/integrations">
-                <Link2 size={16} />
-                Manage integrations
-              </Link>
-            </Button>
-          </div>
-        </div>
+        </section>
 
         {error && (
           <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
@@ -214,208 +325,153 @@ export default function MeetingsPage() {
           </Alert>
         )}
 
-        {loading ? (
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <Card className="border-zinc-800 bg-zinc-900/60">
-              <CardContent className="space-y-3 p-6">
-                <Skeleton className="h-5 w-32 bg-zinc-800" />
-                <Skeleton className="h-24 bg-zinc-800" />
-                <Skeleton className="h-9 w-40 bg-zinc-800" />
-              </CardContent>
-            </Card>
-            <Card className="border-zinc-800 bg-zinc-900/60">
-              <CardContent className="space-y-3 p-6">
-                <Skeleton className="h-5 w-40 bg-zinc-800" />
-                <Skeleton className="h-40 bg-zinc-800" />
-              </CardContent>
-            </Card>
+        <section className="space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
+                Recent meetings
+              </h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                The sessions where transcript, summary, and follow-through are
+                already taking shape.
+              </p>
+            </div>
+
+            <Button
+              onClick={() => void refresh()}
+              variant="ghost"
+              className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+              disabled={isRefreshing}
+            >
+              <RefreshCcw
+                size={16}
+                className={isRefreshing ? 'animate-spin' : ''}
+              />
+              Refresh
+            </Button>
           </div>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <Card className="order-2 border-zinc-800 bg-zinc-900/60 lg:order-1">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">
-                  Recent meetings
-                </CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Meeting sessions created by webhooks and RTMS lifecycle
-                  events.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {meetings.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
-                    Meeting sessions will appear here once Zoom webhooks start
-                    creating records.
-                  </div>
-                ) : (
-                  meetings.map((meeting) => (
-                    <Link
-                      key={meeting.id}
-                      href={`/meetings/${meeting.id}`}
-                      className="group block rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4 transition hover:border-zinc-700 hover:bg-zinc-900"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-white">
-                            {meeting.title ?? 'Untitled Zoom meeting'}
-                          </p>
-                          <p className="mt-1 text-xs text-zinc-500">
-                            Started{' '}
-                            {formatDate(
-                              meeting.actualStartAt ?? meeting.createdAt
-                            )}
-                          </p>
-                        </div>
-                        <Badge className={statusTone(meeting.status)}>
-                          {statusLabel(meeting.status)}
-                        </Badge>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2 text-xs text-zinc-400">
-                        <span>Open meeting console</span>
-                        <ArrowRight
-                          size={14}
-                          className="transition group-hover:translate-x-0.5"
-                        />
-                      </div>
-                    </Link>
-                  ))
-                )}
+
+          {loading ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Card key={index} className="border-zinc-800 bg-zinc-900/60">
+                  <CardContent className="space-y-4 p-5">
+                    <Skeleton className="h-4 w-32 bg-zinc-800" />
+                    <Skeleton className="h-10 bg-zinc-800" />
+                    <Skeleton className="h-4 w-48 bg-zinc-800" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : meetings.length === 0 ? (
+            <Card className="border-zinc-800 bg-zinc-900/60">
+              <CardContent className="flex flex-col gap-4 p-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[1.15rem] border border-zinc-800 bg-zinc-950 text-zinc-300">
+                  <Video size={18} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-white">
+                    No meetings yet
+                  </h3>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
+                    Start with a Meet link above. Once Kodi joins, this list
+                    will become your running record of live context, transcript,
+                    and summaries.
+                  </p>
+                </div>
               </CardContent>
             </Card>
-
-            <Card className="order-1 border-zinc-800 bg-zinc-900/60 lg:order-2">
-              <CardHeader className="gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-300">
-                    <Video size={20} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl text-white">
-                      Workspace connection
-                    </CardTitle>
-                    <CardDescription className="text-zinc-400">
-                      A quick read on whether Zoom is ready to create and update
-                      meeting sessions.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge
-                    className={
-                      installStatus?.featureFlags.zoomCopilot
-                        ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                        : 'border-zinc-700 bg-zinc-800 text-zinc-300'
-                    }
-                  >
-                    {installStatus?.featureFlags.zoomCopilot
-                      ? 'Feature enabled'
-                      : 'Feature disabled'}
-                  </Badge>
-                  <Badge
-                    className={
-                      installStatus?.setup.configured
-                        ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                        : 'border-amber-500/30 bg-amber-500/15 text-amber-200'
-                    }
-                  >
-                    {installStatus?.setup.configured
-                      ? 'App configured'
-                      : 'Setup incomplete'}
-                  </Badge>
-                  {installation && (
-                    <Badge className={statusTone(installation.status)}>
-                      Zoom {installation.status}
-                    </Badge>
-                  )}
-                </div>
-
-                {!installStatus?.featureFlags.zoomCopilot && (
-                  <Alert className="border-zinc-700 bg-zinc-950/70 text-zinc-300">
-                    <AlertDescription>
-                      Enable{' '}
-                      <code className="rounded bg-zinc-800 px-1 py-0.5">
-                        KODI_FEATURE_ZOOM_COPILOT
-                      </code>{' '}
-                      before trying the live integration.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {missingZoomSetup.length > 0 && (
-                  <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-100">
-                    <AlertDescription>
-                      Missing Zoom env vars: {missingZoomSetup.join(', ')}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {installation ? (
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5">
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {installation.externalAccountEmail ??
-                          'Connected Zoom account'}
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {meetings.map((meeting) => (
+                <Link
+                  key={meeting.id}
+                  href={`/meetings/${meeting.id}`}
+                  className="group rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(19,19,23,0.94),_rgba(10,10,14,0.9))] p-5 transition hover:border-zinc-700 hover:bg-zinc-900/90"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-lg font-medium text-white">
+                        {meeting.title ?? 'Untitled meeting'}
                       </p>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        Updated {formatDate(installation.updatedAt)}
+                      <p className="mt-2 text-sm text-zinc-500">
+                        Started {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
                       </p>
                     </div>
-                    <p className="mt-4 text-sm text-zinc-300">
-                      Zoom is installed for this workspace. Manage OAuth
-                      details, setup requirements, and future integrations from
-                      Settings.
-                    </p>
+                    <Badge className={statusTone(meeting.status)}>
+                      {statusLabel(meeting.status)}
+                    </Badge>
                   </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-400">
-                    {isOwner
-                      ? 'Zoom still needs to be connected in Settings before meeting ingestion can start.'
-                      : 'An owner needs to connect Zoom in Settings before meeting ingestion can start.'}
+
+                  <p className="mt-5 line-clamp-3 text-sm leading-6 text-zinc-300">
+                    {meetingSnapshot(meeting)}
+                  </p>
+
+                  <div className="mt-6 flex items-center justify-between gap-3 text-sm">
+                    <span className="text-zinc-500">
+                      Updated {formatDate(meeting.updatedAt)}
+                    </span>
+                    <span className="inline-flex items-center gap-2 text-zinc-200 transition group-hover:translate-x-0.5">
+                      Open meeting
+                      <ArrowRight size={15} />
+                    </span>
                   </div>
-                )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
 
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="w-full justify-between border border-zinc-800 bg-zinc-950 text-zinc-200 hover:bg-zinc-900 hover:text-white"
-                >
-                  <Link href="/settings/integrations">
-                    Open Integrations
-                    <ArrowRight size={16} />
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        <div className="grid gap-6">
+        <section className="grid gap-4 lg:grid-cols-3">
           <Card className="border-zinc-800 bg-zinc-900/60">
             <CardHeader>
-              <CardTitle className="text-lg text-white">
-                Phase 1 outcome
-              </CardTitle>
+              <CardTitle className="text-lg text-white">What matters here</CardTitle>
               <CardDescription className="text-zinc-400">
-                This milestone gets Kodi attached to Zoom’s install and meeting
-                event surface before live reasoning and execution phases.
+                Meetings should help a team move from conversation to action.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 text-sm text-zinc-300 md:grid-cols-3">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                OAuth install flow
-              </div>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                Meeting session creation and ingestion
-              </div>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                Transcript and participant console
-              </div>
+            <CardContent className="space-y-3 text-sm leading-6 text-zinc-300">
+              <p>Transcript gives the raw truth of what was said.</p>
+              <p>Summary compresses the meeting into something reusable.</p>
+              <p>Everything else should support those two outcomes.</p>
             </CardContent>
           </Card>
-        </div>
+
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardHeader>
+              <CardTitle className="text-lg text-white">Current scope</CardTitle>
+              <CardDescription className="text-zinc-400">
+                The cleanest path we validated in dev.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm leading-6 text-zinc-300">
+              <p>Paste a Google Meet URL.</p>
+              <p>Admit Kodi into the call.</p>
+              <p>Read transcript and summary on the meeting page.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardHeader>
+              <CardTitle className="text-lg text-white">What’s next</CardTitle>
+              <CardDescription className="text-zinc-400">
+                The roadmap now shifts from proof to product.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm leading-6 text-zinc-300">
+              <p>Invite-by-email setup.</p>
+              <p>Automatic meeting discovery.</p>
+              <p>Cleaner outputs review for decisions and tasks.</p>
+              <Link
+                href="/settings/integrations"
+                className="inline-flex items-center gap-2 text-zinc-100 transition hover:text-white"
+              >
+                Review integrations
+                <ExternalLink size={14} />
+              </Link>
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </div>
   )

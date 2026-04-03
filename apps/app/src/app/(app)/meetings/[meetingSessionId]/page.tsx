@@ -2,15 +2,13 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
-  Bot,
   Clock3,
   Mic2,
-  Radio,
   RefreshCw,
+  Sparkles,
   Users,
 } from 'lucide-react'
 import {
@@ -31,27 +29,15 @@ import { trpc } from '@/lib/trpc'
 type MeetingConsole = NonNullable<
   Awaited<ReturnType<typeof trpc.meeting.getConsole.query>>
 >
-type MeetingRecord = MeetingConsole['meeting']
 type MeetingParticipants = MeetingConsole['participants']
 type MeetingTranscript = MeetingConsole['transcript']
 type MeetingLiveState = MeetingConsole['liveState'] | null
 type MeetingEventFeed = MeetingConsole['events']
-type LooseBadgeProps = {
-  className?: string
-  children?: ReactNode
-}
 
 function asRecord(value: unknown) {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
-}
-
-function asRecordArray(value: unknown) {
-  if (!Array.isArray(value)) return []
-  return value
-    .map((item) => asRecord(item))
-    .filter((item): item is Record<string, unknown> => item !== null)
 }
 
 function formatDate(value: Date | string | null | undefined) {
@@ -110,13 +96,13 @@ function statusTone(status: string) {
     case 'admitted':
       return 'border-cyan-500/30 bg-cyan-500/15 text-cyan-200'
     case 'processing':
-      return 'border-violet-500/30 bg-violet-500/15 text-violet-200'
+      return 'border-indigo-500/30 bg-indigo-500/15 text-indigo-200'
     case 'joining':
     case 'scheduled':
     case 'preparing':
       return 'border-amber-500/30 bg-amber-500/15 text-amber-200'
     case 'ended':
-      return 'border-sky-500/30 bg-sky-500/15 text-sky-200'
+      return 'border-zinc-700 bg-zinc-800 text-zinc-300'
     case 'failed':
       return 'border-red-500/30 bg-red-500/15 text-red-200'
     default:
@@ -127,15 +113,19 @@ function statusTone(status: string) {
 function statusLabel(status: string) {
   switch (status) {
     case 'listening':
-      return 'listening'
+      return 'Live'
     case 'admitted':
-      return 'admitted'
+      return 'Admitted'
     case 'processing':
-      return 'processing'
+      return 'Summarizing'
     case 'preparing':
-      return 'preparing'
+      return 'Preparing'
+    case 'joining':
+      return 'Joining'
     case 'ended':
-      return 'ended'
+      return 'Ended'
+    case 'failed':
+      return 'Needs attention'
     default:
       return status
   }
@@ -143,24 +133,22 @@ function statusLabel(status: string) {
 
 function statusDescription(status: string) {
   switch (status) {
-    case 'scheduled':
-      return 'Kodi has a meeting record but has not started preparing a live bot session yet.'
     case 'preparing':
-      return 'Kodi is preparing the provider session and assembling the meeting bot request.'
+      return 'Kodi is assembling the meeting session and getting ready to join.'
     case 'joining':
-      return 'The meeting bot is trying to join the call and may still be waiting on provider setup.'
+      return 'Kodi is on the way into the call.'
     case 'admitted':
-      return 'The bot has reached the call and is waiting to begin active listening.'
+      return 'Kodi reached the meeting and is waiting to actively listen.'
     case 'listening':
-      return 'The bot is in the meeting and Kodi should be receiving realtime participant or transcript updates.'
+      return 'Transcript and live meeting context are flowing now.'
     case 'processing':
-      return 'The live session has moved into downstream processing or review work.'
+      return 'The meeting is being compressed into notes, topics, and actions.'
     case 'ended':
-      return 'The meeting session has ended and no further live updates are expected.'
+      return 'This meeting session has ended.'
     case 'failed':
-      return 'The live meeting session failed and likely needs a retry or setup fix before it can continue.'
+      return 'This meeting hit a provider issue and may need another attempt.'
     default:
-      return 'Kodi has recorded this meeting session but has not attached a richer runtime explanation yet.'
+      return 'Kodi has a record of this meeting and will update it as new context arrives.'
   }
 }
 
@@ -183,12 +171,6 @@ function formatSourceLabel(source: string) {
       return 'Zoom webhook'
     case 'rtms':
       return 'RTMS'
-    case 'agent':
-      return 'Agent'
-    case 'worker':
-      return 'Worker'
-    case 'kodi_ui':
-      return 'Kodi UI'
     default:
       return source.replace(/_/g, ' ')
   }
@@ -196,20 +178,8 @@ function formatSourceLabel(source: string) {
 
 function formatEventLabel(eventType: string) {
   switch (eventType) {
-    case 'meeting.transcript.segment_received':
-      return 'Transcript'
-    case 'participant.joined':
-      return 'Participant joined'
-    case 'participant.updated':
-      return 'Participant updated'
-    case 'participant.left':
-      return 'Participant left'
-    case 'meeting.prepared':
-      return 'Prepared'
     case 'meeting.joining':
       return 'Joining'
-    case 'meeting.joined':
-      return 'Joined'
     case 'meeting.admitted':
       return 'Admitted'
     case 'meeting.started':
@@ -218,8 +188,10 @@ function formatEventLabel(eventType: string) {
       return 'Ended'
     case 'meeting.failed':
       return 'Failed'
-    case 'meeting.health.updated':
-      return 'Health'
+    case 'participant.joined':
+      return 'Participant joined'
+    case 'meeting.transcript.segment_received':
+      return 'Transcript'
     default:
       return eventType.replace(/^meeting\./, '').replace(/\./g, ' ')
   }
@@ -241,87 +213,23 @@ function describeEvent(event: MeetingEventFeed[number]) {
     const content =
       typeof transcript?.content === 'string' ? transcript.content : null
 
-    if (!content) return speakerName
-    return `${speakerName}: ${content}`
+    return content ? `${speakerName}: ${content}` : speakerName
   }
 
-  if (
-    event.eventType === 'participant.joined' ||
-    event.eventType === 'participant.updated' ||
-    event.eventType === 'participant.left'
-  ) {
+  if (event.eventType === 'participant.joined') {
     const participant = asRecord(payload.participant)
     return (
       (typeof participant?.displayName === 'string' && participant.displayName) ||
       (typeof participant?.email === 'string' && participant.email) ||
-      'Participant record updated'
+      'Participant joined'
     )
   }
 
-  if (
-    event.eventType === 'meeting.joining' ||
-    event.eventType === 'meeting.joined' ||
-    event.eventType === 'meeting.admitted' ||
-    event.eventType === 'meeting.started' ||
-    event.eventType === 'meeting.ended' ||
-    event.eventType === 'meeting.failed'
-  ) {
-    const errorMessage =
-      typeof payload.errorMessage === 'string' ? payload.errorMessage : null
-    const state = typeof payload.state === 'string' ? payload.state : null
-    return errorMessage ?? state
-  }
-
-  if (event.eventType === 'meeting.health.updated') {
-    const health = asRecord(payload.health)
-    const status = typeof health?.status === 'string' ? health.status : null
-    const detail = typeof health?.detail === 'string' ? health.detail : null
-    return [status, detail].filter(Boolean).join(' - ') || null
-  }
-
-  return null
+  const state = typeof payload.state === 'string' ? payload.state : null
+  const errorMessage =
+    typeof payload.errorMessage === 'string' ? payload.errorMessage : null
+  return errorMessage ?? state
 }
-
-function ConsoleMetric(props: {
-  label: string
-  value: string
-  hint?: string
-}) {
-  return (
-    <div className="rounded-[1.5rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,18,22,0.96),_rgba(10,10,14,0.9))] px-4 py-4">
-      <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-        {props.label}
-      </p>
-      <p className="mt-3 text-lg font-semibold text-white">{props.value}</p>
-      {props.hint && <p className="mt-2 text-xs leading-5 text-zinc-500">{props.hint}</p>}
-    </div>
-  )
-}
-
-function ConsoleDetail(props: {
-  label: string
-  value: string
-  tone?: 'default' | 'accent'
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 py-3">
-      <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-        {props.label}
-      </p>
-      <p
-        className={
-          props.tone === 'accent'
-            ? 'max-w-[16rem] text-right text-sm font-medium text-zinc-100'
-            : 'max-w-[16rem] text-right text-sm text-zinc-300'
-        }
-      >
-        {props.value}
-      </p>
-    </div>
-  )
-}
-
-const UiBadge = Badge as unknown as (props: LooseBadgeProps) => JSX.Element
 
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
@@ -356,7 +264,7 @@ export default function MeetingDetailsPage() {
           orgId: currentOrgId,
           meetingSessionId,
           transcriptLimit: 200,
-          eventLimit: 60,
+          eventLimit: 20,
         })
 
         if (cancelled) return
@@ -390,62 +298,23 @@ export default function MeetingDetailsPage() {
   const liveState: MeetingLiveState = consoleData?.liveState ?? null
   const events: MeetingEventFeed = consoleData?.events ?? []
 
-  const chronologicalTranscript = useMemo(() => {
-    return [...transcript].reverse()
-  }, [transcript])
-
+  const chronologicalTranscript = useMemo(() => [...transcript].reverse(), [transcript])
+  const inCallParticipants = useMemo(
+    () => participants.filter((participant) => !participant.leftAt),
+    [participants]
+  )
   const meetingMetadata = useMemo(() => asRecord(meeting?.metadata), [meeting?.metadata])
-
-  const rtmsGateway = useMemo(() => {
-    const candidate = asRecord(meetingMetadata?.rtmsGateway)
-    return candidate
-  }, [meetingMetadata])
 
   const failureReason = useMemo(() => {
     const failure = asRecord(meetingMetadata?.failure)
     const kind = typeof failure?.kind === 'string' ? failure.kind : null
-    const retryable =
-      typeof failure?.retryable === 'boolean' ? failure.retryable : null
     const message =
       typeof meetingMetadata?.lastErrorMessage === 'string'
         ? meetingMetadata.lastErrorMessage
-        : typeof failure?.message === 'string'
-          ? failure.message
-          : null
+        : null
 
-    if (!kind && !message) return null
-
-    const retryText =
-      retryable === null ? null : retryable ? 'Retryable' : 'Needs manual fix'
-
-    return [kind, retryText, message].filter(Boolean).join(' - ')
+    return [kind, message].filter(Boolean).join(' - ') || null
   }, [meetingMetadata])
-
-  const providerRuntimeSource = useMemo(() => {
-    const transport =
-      typeof meetingMetadata?.transport === 'string'
-        ? meetingMetadata.transport
-        : rtmsGateway && typeof rtmsGateway.status === 'string'
-          ? 'rtms'
-          : null
-
-    if (!meeting) return 'Unknown provider'
-    if (!transport) return formatProviderLabel(meeting.provider)
-
-    return `${formatProviderLabel(meeting.provider)} via ${transport}`
-  }, [meeting, meetingMetadata, rtmsGateway])
-
-  const sourceLabels = useMemo(() => {
-    return [...new Set(events.map((event) => formatSourceLabel(event.source)))]
-  }, [events])
-
-  const retryHistory = useMemo(() => {
-    return asRecordArray(meetingMetadata?.retryHistory)
-  }, [meetingMetadata])
-
-  const inCallParticipants = useMemo(() => {
-    return participants.filter((participant) => !participant.leftAt)
-  }, [participants])
 
   const latestActivityAt = useMemo(() => {
     const candidates = [
@@ -463,50 +332,31 @@ export default function MeetingDetailsPage() {
     return candidates.sort((left, right) => right.getTime() - left.getTime())[0]
   }, [events, transcript, liveState?.createdAt, meeting?.updatedAt])
 
-  const diagnosticsTimeline = useMemo(() => {
-    const lifecycleEvent = events.find((event) =>
-      [
-        'meeting.prepared',
-        'meeting.joining',
-        'meeting.joined',
-        'meeting.admitted',
-        'meeting.started',
-        'meeting.ended',
-        'meeting.failed',
-      ].includes(event.eventType)
-    )
-    const participantEvent = events.find((event) =>
-      ['participant.joined', 'participant.updated', 'participant.left'].includes(
-        event.eventType
-      )
-    )
-    const transcriptEvent = events.find(
-      (event) => event.eventType === 'meeting.transcript.segment_received'
-    )
+  const timelineEvents = useMemo(
+    () =>
+      [...events]
+        .filter((event) =>
+          [
+            'meeting.joining',
+            'meeting.admitted',
+            'meeting.started',
+            'meeting.ended',
+            'meeting.failed',
+            'participant.joined',
+            'meeting.transcript.segment_received',
+          ].includes(event.eventType)
+        )
+        .slice(0, 8),
+    [events]
+  )
 
-    return {
-      transportRequestedAt:
-        typeof meetingMetadata?.transportRequestedAt === 'string'
-          ? meetingMetadata.transportRequestedAt
-          : null,
-      lastJoinAttemptAt:
-        typeof meetingMetadata?.lastJoinAttemptAt === 'string'
-          ? meetingMetadata.lastJoinAttemptAt
-          : null,
-      lifecycleEventAt: lifecycleEvent?.occurredAt ?? null,
-      participantEventAt: participantEvent?.occurredAt ?? null,
-      transcriptEventAt:
-        transcriptEvent?.occurredAt ?? transcript[0]?.createdAt ?? null,
-    }
-  }, [events, meetingMetadata, transcript])
-
-  const runtimeDetails = useMemo(() => {
+  const technicalDetails = useMemo(() => {
     if (!meeting) return []
 
     return [
       {
-        label: 'Provider source',
-        value: providerRuntimeSource,
+        label: 'Provider',
+        value: formatProviderLabel(meeting.provider),
       },
       {
         label: 'Bot session',
@@ -522,35 +372,16 @@ export default function MeetingDetailsPage() {
           meeting.providerMeetingInstanceId ?? meeting.providerMeetingUuid
         ),
       },
-    ]
-  }, [meeting, providerRuntimeSource])
-
-  const diagnosticsDetails = useMemo(() => {
-    if (!meeting) return []
-
-    return [
       {
-        label: 'Recall bot ID',
-        value: truncateMiddle(
-          typeof meetingMetadata?.recallBotId === 'string'
-            ? meetingMetadata.recallBotId
-            : null
-        ),
+        label: 'Last refresh',
+        value: formatTime(lastRefreshedAt),
       },
       {
-        label: 'Provider bot session',
-        value: truncateMiddle(meeting.providerBotSessionId),
-      },
-      {
-        label: 'Failure reason',
-        value: failureReason ?? 'No provider failure recorded',
-      },
-      {
-        label: 'Retry count',
-        value: `${typeof meetingMetadata?.retryCount === 'number' ? meetingMetadata.retryCount : retryHistory.length > 0 ? Math.max(0, retryHistory.length - 1) : 0}`,
+        label: 'Latest activity',
+        value: formatTime(latestActivityAt),
       },
     ]
-  }, [failureReason, meeting, meetingMetadata, retryHistory.length])
+  }, [lastRefreshedAt, latestActivityAt, meeting])
 
   if (!activeOrg) {
     return (
@@ -565,7 +396,7 @@ export default function MeetingDetailsPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <Skeleton className="h-9 w-48 bg-zinc-800" />
         <Skeleton className="h-[220px] bg-zinc-800" />
-        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Skeleton className="h-[520px] bg-zinc-800" />
           <Skeleton className="h-[520px] bg-zinc-800" />
         </div>
@@ -596,9 +427,9 @@ export default function MeetingDetailsPage() {
   }
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(96,165,250,0.08),_transparent_34%),linear-gradient(180deg,_rgba(23,23,28,0.45),_rgba(8,8,12,0.98))]">
+    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.08),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(84,103,255,0.08),_transparent_30%),linear-gradient(180deg,_rgba(23,23,28,0.45),_rgba(8,8,12,0.98))]">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <div className="overflow-hidden rounded-[2rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(20,20,24,0.94),_rgba(10,10,14,0.92))] shadow-2xl shadow-black/25">
+        <section className="overflow-hidden rounded-[2rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(20,20,24,0.94),_rgba(10,10,14,0.92))] shadow-2xl shadow-black/25">
           <div className="border-b border-zinc-800/80 px-6 py-5">
             <Link
               href="/meetings"
@@ -612,15 +443,15 @@ export default function MeetingDetailsPage() {
           <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <UiBadge className={statusTone(meeting.status)}>
+                <Badge className={statusTone(meeting.status)}>
                   {statusLabel(meeting.status)}
-                </UiBadge>
-                <UiBadge className="border-zinc-700 bg-zinc-800 text-zinc-300">
+                </Badge>
+                <Badge className="border-zinc-700 bg-zinc-800 text-zinc-300">
                   {formatProviderLabel(meeting.provider)}
-                </UiBadge>
-                <UiBadge className="border-zinc-700 bg-zinc-900/80 text-zinc-400">
+                </Badge>
+                <Badge className="border-zinc-700 bg-zinc-900/80 text-zinc-400">
                   refresh {Math.round(pollIntervalMs / 1000)}s
-                </UiBadge>
+                </Badge>
               </div>
 
               <div>
@@ -628,10 +459,7 @@ export default function MeetingDetailsPage() {
                   {meeting.title ?? 'Untitled meeting'}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-                  Live meeting console for provider state, participant activity, and transcript flow.
-                </p>
-                <p className="mt-3 text-xs uppercase tracking-[0.18em] text-zinc-500">
-                  Meeting session {meeting.id}
+                  {statusDescription(meeting.status)}
                 </p>
               </div>
             </div>
@@ -648,333 +476,66 @@ export default function MeetingDetailsPage() {
               </div>
               <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/70 px-4 py-4">
                 <div className="flex items-center gap-2 text-zinc-500">
-                  <Clock3 size={14} />
-                  Ended
+                  <RefreshCw size={14} />
+                  Last activity
                 </div>
-                <p className="mt-3 text-white">{formatDate(meeting.endedAt)}</p>
+                <p className="mt-3 text-white">{formatDate(latestActivityAt)}</p>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <Card className="overflow-hidden border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,18,22,0.94),_rgba(9,9,13,0.92))]">
-          <CardHeader className="border-b border-zinc-800/80">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <CardTitle className="text-xl text-white">Realtime console</CardTitle>
-                <CardDescription className="mt-2 max-w-2xl text-zinc-400">
-                  Provider runtime context, refresh cadence, and delivery signals for this live meeting session.
-                </CardDescription>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {sourceLabels.map((source) => (
-                  <UiBadge
-                    key={source}
-                    className="border-zinc-700 bg-zinc-900/80 text-zinc-300"
-                  >
-                    {source}
-                  </UiBadge>
-                ))}
-              </div>
-            </div>
-          </CardHeader>
+        {failureReason && (
+          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+            <AlertDescription>{failureReason}</AlertDescription>
+          </Alert>
+        )}
 
-          <CardContent className="grid gap-6 px-6 py-6 xl:grid-cols-[1.05fr_0.95fr_1fr]">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 text-zinc-200">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[1.25rem] border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
-                  <Radio size={18} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-white">{providerRuntimeSource}</p>
-                  <p className="text-sm text-zinc-500">
-                    {statusDescription(meeting.status)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ConsoleMetric
-                  label="Participants live"
-                  value={`${inCallParticipants.length}`}
-                  hint={`${participants.length} participant records stored`}
-                />
-                <ConsoleMetric
-                  label="Transcript chunks"
-                  value={`${transcript.length}`}
-                  hint="Latest stored transcript segments"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 text-zinc-200">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[1.25rem] border border-sky-500/20 bg-sky-500/10 text-sky-300">
-                  <RefreshCw size={18} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-white">Adaptive refresh</p>
-                  <p className="text-sm text-zinc-500">
-                    Polling every {Math.round(pollIntervalMs / 1000)} seconds while the session is active.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 px-4 py-3">
-                <ConsoleDetail
-                  label="Last refresh"
-                  value={formatTime(lastRefreshedAt)}
-                  tone="accent"
-                />
-                <Separator className="bg-zinc-800" />
-                <ConsoleDetail
-                  label="Latest activity"
-                  value={formatTime(latestActivityAt)}
-                  tone="accent"
-                />
-                <Separator className="bg-zinc-800" />
-                <ConsoleDetail
-                  label="Active topics"
-                  value={`${liveState?.activeTopics?.length ?? 0}`}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 text-zinc-200">
-                <div className="flex h-11 w-11 items-center justify-center rounded-[1.25rem] border border-amber-500/20 bg-amber-500/10 text-amber-300">
-                  <Bot size={18} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-white">Provider identity</p>
-                  <p className="text-sm text-zinc-500">
-                    Stable IDs Kodi can use while correlating callbacks and runtime events.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 px-4 py-3">
-                {runtimeDetails.map((detail, index) => (
-                  <div key={detail.label}>
-                    {index > 0 && <Separator className="bg-zinc-800" />}
-                    <ConsoleDetail
-                      label={detail.label}
-                      value={detail.value}
-                      tone={index === 0 ? 'accent' : 'default'}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <Card className="border-zinc-800 bg-zinc-900/60">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[1.15rem] border border-zinc-700 bg-zinc-950/80 text-zinc-300">
-                  <Mic2 size={18} />
-                </div>
-                <div>
-                  <CardTitle className="text-xl text-white">Transcript stream</CardTitle>
-                  <CardDescription className="text-zinc-400">
-                    Latest transcript segments stored for this meeting.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {chronologicalTranscript.length === 0 ? (
-                <div className="rounded-[1.5rem] border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
-                  Transcript segments will appear here once provider events begin streaming.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {chronologicalTranscript.map((segment) => (
-                    <div
-                      key={segment.id}
-                      className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4"
-                    >
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                        <span className="font-medium text-zinc-300">
-                          {segment.speakerName ?? 'Unknown speaker'}
-                        </span>
-                        <span>{formatDate(segment.createdAt)}</span>
-                        <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-400">
-                          {formatSourceLabel(segment.source)}
-                        </UiBadge>
-                        {segment.isPartial && (
-                          <UiBadge className="border-amber-500/30 bg-amber-500/15 text-amber-200">
-                            Partial
-                          </UiBadge>
-                        )}
-                      </div>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
-                        {segment.content}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <div className="flex flex-col gap-6">
-            <Card className="border-zinc-800 bg-zinc-900/60">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Live status</CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Current meeting runtime state and provider delivery context.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm text-zinc-300">
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <UiBadge className={statusTone(meeting.status)}>
-                      {statusLabel(meeting.status)}
-                    </UiBadge>
-                    <UiBadge className="border-zinc-700 bg-zinc-800 text-zinc-300">
-                      {providerRuntimeSource}
-                    </UiBadge>
-                  </div>
-                  <p className="mt-3 leading-6 text-zinc-200">
-                    {statusDescription(meeting.status)}
-                  </p>
-                  {failureReason && (
-                    <div className="mt-4 rounded-[1.5rem] border border-red-500/20 bg-red-500/10 px-4 py-3 text-red-100">
-                      <p className="text-xs uppercase tracking-[0.18em] text-red-200/80">
-                        Failure reason
-                      </p>
-                      <p className="mt-2 leading-6">{failureReason}</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-zinc-800 bg-zinc-900/60">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Recent provider events</CardTitle>
-                <CardDescription className="text-zinc-400">
-                  Newest lifecycle, participant, transcript, and health events seen by Kodi.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {events.length === 0 ? (
-                  <div className="rounded-[1.5rem] border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
-                    Provider callbacks and normalized meeting events will appear here.
-                  </div>
-                ) : (
-                  events.map((event) => {
-                    const detail = describeEvent(event)
-
-                    return (
-                      <div
-                        key={event.id}
-                        className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4"
-                      >
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                          <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-300">
-                            {formatEventLabel(event.eventType)}
-                          </UiBadge>
-                          <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-400">
-                            {formatSourceLabel(event.source)}
-                          </UiBadge>
-                          <span>#{event.sequence}</span>
-                          <span>{formatDate(event.occurredAt)}</span>
-                        </div>
-                        {detail && (
-                          <p className="mt-3 text-sm leading-6 text-zinc-200">
-                            {detail}
-                          </p>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </CardContent>
-            </Card>
-
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-6">
             <Card className="border-zinc-800 bg-zinc-900/60">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.15rem] border border-indigo-500/20 bg-indigo-500/10 text-indigo-300">
-                    <Mic2 size={18} />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.15rem] border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                    <Sparkles size={18} />
                   </div>
                   <div>
-                    <CardTitle className="text-xl text-white">Runtime state</CardTitle>
+                    <CardTitle className="text-xl text-white">Live summary</CardTitle>
                     <CardDescription className="text-zinc-400">
-                      Most recent state snapshot generated for this meeting.
+                      The shortest useful version of the meeting so far.
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm text-zinc-300">
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                    Summary
-                  </p>
-                  <p className="mt-3 leading-6 text-zinc-200">
+              <CardContent className="space-y-5">
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-5">
+                  <p className="text-sm leading-7 text-zinc-100">
                     {meeting.liveSummary ??
                       liveState?.summary ??
-                      'No live summary has been generated yet.'}
+                      'Kodi has not produced a live summary yet.'}
                   </p>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 p-4">
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-5">
                   <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
                     Active topics
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {(liveState?.activeTopics ?? []).length > 0 ? (
                       (liveState?.activeTopics ?? []).map((topic) => (
-                        <UiBadge
+                        <Badge
                           key={topic}
                           className="border-zinc-700 bg-zinc-800 text-zinc-300"
                         >
                           {topic}
-                        </UiBadge>
+                        </Badge>
                       ))
                     ) : (
-                      <p className="text-zinc-500">No active topics yet.</p>
+                      <p className="text-sm text-zinc-500">
+                        Topics will appear here as the meeting develops.
+                      </p>
                     )}
                   </div>
-                </div>
-
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                    RTMS gateway
-                  </p>
-                  {rtmsGateway ? (
-                    <div className="mt-3 space-y-2 text-sm text-zinc-300">
-                      <div className="flex flex-wrap gap-2">
-                        {typeof rtmsGateway.status === 'string' && (
-                          <UiBadge className={statusTone(rtmsGateway.status)}>
-                            {rtmsGateway.status}
-                          </UiBadge>
-                        )}
-                        {typeof rtmsGateway.retryCount === 'number' && (
-                          <UiBadge className="border-zinc-700 bg-zinc-800 text-zinc-300">
-                            retries {rtmsGateway.retryCount}
-                          </UiBadge>
-                        )}
-                      </div>
-                      {typeof rtmsGateway.joinedAt === 'string' && (
-                        <p>Joined {formatDate(rtmsGateway.joinedAt)}</p>
-                      )}
-                      {typeof rtmsGateway.stoppedAt === 'string' && (
-                        <p>Stopped {formatDate(rtmsGateway.stoppedAt)}</p>
-                      )}
-                      {typeof rtmsGateway.reason === 'string' && (
-                        <p className="text-zinc-400">Reason: {rtmsGateway.reason}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-zinc-500">
-                      No RTMS runtime state has been written yet.
-                    </p>
-                  )}
                 </div>
               </CardContent>
             </Card>
@@ -982,148 +543,132 @@ export default function MeetingDetailsPage() {
             <Card className="border-zinc-800 bg-zinc-900/60">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.15rem] border border-amber-500/20 bg-amber-500/10 text-amber-300">
-                    <Bot size={18} />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.15rem] border border-zinc-700 bg-zinc-950/80 text-zinc-300">
+                    <Mic2 size={18} />
                   </div>
                   <div>
-                    <CardTitle className="text-xl text-white">
-                      Admin diagnostics
-                    </CardTitle>
+                    <CardTitle className="text-xl text-white">Transcript</CardTitle>
                     <CardDescription className="text-zinc-400">
-                      Provider timestamps, bot identity, failure context, and retry history for debugging live joins.
+                      Raw meeting language, newest lines at the bottom.
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm text-zinc-300">
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 px-4 py-3">
-                  <ConsoleDetail
-                    label="Transport requested"
-                    value={formatDate(diagnosticsTimeline.transportRequestedAt)}
-                    tone="accent"
-                  />
-                  <Separator className="bg-zinc-800" />
-                  <ConsoleDetail
-                    label="Last join attempt"
-                    value={formatDate(diagnosticsTimeline.lastJoinAttemptAt)}
-                  />
-                  <Separator className="bg-zinc-800" />
-                  <ConsoleDetail
-                    label="Lifecycle event"
-                    value={formatDate(diagnosticsTimeline.lifecycleEventAt)}
-                  />
-                  <Separator className="bg-zinc-800" />
-                  <ConsoleDetail
-                    label="Participant event"
-                    value={formatDate(diagnosticsTimeline.participantEventAt)}
-                  />
-                  <Separator className="bg-zinc-800" />
-                  <ConsoleDetail
-                    label="Transcript event"
-                    value={formatDate(diagnosticsTimeline.transcriptEventAt)}
-                  />
-                </div>
-
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 px-4 py-3">
-                  {diagnosticsDetails.map((detail, index) => (
-                    <div key={detail.label}>
-                      {index > 0 && <Separator className="bg-zinc-800" />}
-                      <ConsoleDetail
-                        label={detail.label}
-                        value={detail.value}
-                        tone={index < 2 ? 'accent' : 'default'}
-                      />
-                    </div>
-                  ))}
-                </div>
-
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                      Retry history
-                    </p>
-                    <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-300">
-                      {retryHistory.length} attempts
-                    </UiBadge>
+              <CardContent>
+                {chronologicalTranscript.length === 0 ? (
+                  <div className="rounded-[1.5rem] border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
+                    Transcript lines will appear here once Kodi starts hearing the call.
                   </div>
+                ) : (
+                  <div className="space-y-3">
+                    {chronologicalTranscript.map((segment) => (
+                      <div
+                        key={segment.id}
+                        className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                          <span className="font-medium text-zinc-300">
+                            {segment.speakerName ?? 'Unknown speaker'}
+                          </span>
+                          <span>{formatDate(segment.createdAt)}</span>
+                          <Badge className="border-zinc-700 bg-zinc-900 text-zinc-400">
+                            {formatSourceLabel(segment.source)}
+                          </Badge>
+                          {segment.isPartial && (
+                            <Badge className="border-amber-500/30 bg-amber-500/15 text-amber-200">
+                              Partial
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-zinc-100">
+                          {segment.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-                  {retryHistory.length === 0 ? (
-                    <p className="mt-3 text-zinc-500">
-                      No join retries have been recorded for this meeting.
-                    </p>
-                  ) : (
-                    <div className="mt-3 space-y-3">
-                      {retryHistory.map((attempt, index) => {
-                        const attemptNumber =
-                          typeof attempt.attempt === 'number'
-                            ? attempt.attempt
-                            : index + 1
-                        const status =
-                          typeof attempt.status === 'string'
-                            ? attempt.status
-                            : 'unknown'
-                        const failureKind =
-                          typeof attempt.failureKind === 'string'
-                            ? attempt.failureKind
-                            : null
-                        const message =
-                          typeof attempt.message === 'string'
-                            ? attempt.message
-                            : null
-                        const retryable =
-                          typeof attempt.retryable === 'boolean'
-                            ? attempt.retryable
-                              ? 'retryable'
-                              : 'terminal'
-                            : null
-
-                        return (
-                          <div
-                            key={`${attemptNumber}-${attempt.completedAt ?? index}`}
-                            className="rounded-[1.25rem] border border-zinc-800 bg-zinc-900/60 p-3"
-                          >
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                              <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-300">
-                                attempt {attemptNumber}
-                              </UiBadge>
-                              <UiBadge
-                                className={
-                                  status === 'succeeded'
-                                    ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                                    : 'border-amber-500/30 bg-amber-500/15 text-amber-200'
-                                }
-                              >
-                                {status}
-                              </UiBadge>
-                              {failureKind && (
-                                <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-400">
-                                  {failureKind}
-                                </UiBadge>
-                              )}
-                              {retryable && (
-                                <UiBadge className="border-zinc-700 bg-zinc-900 text-zinc-400">
-                                  {retryable}
-                                </UiBadge>
-                              )}
-                              <span>
-                                {formatDate(
-                                  typeof attempt.completedAt === 'string'
-                                    ? attempt.completedAt
-                                    : null
-                                )}
-                              </span>
-                            </div>
-                            {message && (
-                              <p className="mt-3 text-sm leading-6 text-zinc-300">
-                                {message}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+          <div className="space-y-6">
+            <Card className="border-zinc-800 bg-zinc-900/60">
+              <CardHeader>
+                <CardTitle className="text-xl text-white">Session health</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  The signals that tell you whether this meeting is healthy and useful.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                    Status
+                  </p>
+                  <div className="mt-3">
+                    <Badge className={statusTone(meeting.status)}>
+                      {statusLabel(meeting.status)}
+                    </Badge>
+                  </div>
                 </div>
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                    Participants live
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold text-white">
+                    {inCallParticipants.length}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                    Transcript chunks
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold text-white">
+                    {transcript.length}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                    Last refresh
+                  </p>
+                  <p className="mt-3 text-lg font-medium text-white">
+                    {formatTime(lastRefreshedAt)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-zinc-800 bg-zinc-900/60">
+              <CardHeader>
+                <CardTitle className="text-xl text-white">Timeline</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  The few updates that matter most while the call is live.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {timelineEvents.length === 0 ? (
+                  <div className="rounded-[1.5rem] border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
+                    Kodi will add the important meeting moments here.
+                  </div>
+                ) : (
+                  timelineEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                        <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                          {formatEventLabel(event.eventType)}
+                        </Badge>
+                        <span>{formatDate(event.occurredAt)}</span>
+                      </div>
+                      {describeEvent(event) && (
+                        <p className="mt-3 text-sm leading-6 text-zinc-200">
+                          {describeEvent(event)}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
               </CardContent>
             </Card>
 
@@ -1136,7 +681,7 @@ export default function MeetingDetailsPage() {
                   <div>
                     <CardTitle className="text-xl text-white">Participants</CardTitle>
                     <CardDescription className="text-zinc-400">
-                      Current participant records associated with the meeting.
+                      Who Kodi currently sees in the meeting.
                     </CardDescription>
                   </div>
                 </div>
@@ -1144,7 +689,7 @@ export default function MeetingDetailsPage() {
               <CardContent className="space-y-3">
                 {participants.length === 0 ? (
                   <div className="rounded-[1.5rem] border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-sm text-zinc-500">
-                    Participant join and leave events will populate this panel.
+                    Participant activity will appear here.
                   </div>
                 ) : (
                   participants.map((participant) => (
@@ -1163,34 +708,49 @@ export default function MeetingDetailsPage() {
                             {participant.email ?? 'No email captured'}
                           </p>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {participant.isHost && (
-                            <UiBadge className="border-indigo-500/30 bg-indigo-500/15 text-indigo-200">
-                              Host
-                            </UiBadge>
-                          )}
-                          <UiBadge
-                            className={
-                              participant.leftAt
-                                ? 'border-zinc-700 bg-zinc-800 text-zinc-300'
-                                : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
-                            }
-                          >
-                            {participant.leftAt ? 'Left' : 'In call'}
-                          </UiBadge>
-                        </div>
+                        <Badge
+                          className={
+                            participant.leftAt
+                              ? 'border-zinc-700 bg-zinc-800 text-zinc-300'
+                              : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+                          }
+                        >
+                          {participant.leftAt ? 'Left' : 'In call'}
+                        </Badge>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-500">
-                        <span>Joined {formatDate(participant.joinedAt)}</span>
-                        {participant.leftAt && (
-                          <span>Left {formatDate(participant.leftAt)}</span>
-                        )}
-                      </div>
+                      <p className="mt-3 text-xs text-zinc-500">
+                        Joined {formatDate(participant.joinedAt)}
+                      </p>
                     </div>
                   ))
                 )}
               </CardContent>
             </Card>
+
+            <details className="group rounded-[1.75rem] border border-zinc-800 bg-zinc-900/50 p-5">
+              <summary className="cursor-pointer list-none text-sm font-medium text-zinc-200 marker:hidden">
+                Technical details
+              </summary>
+              <p className="mt-2 text-sm leading-6 text-zinc-500">
+                Provider identifiers and refresh timing for debugging when needed.
+              </p>
+
+              <div className="mt-4 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+                {technicalDetails.map((detail, index) => (
+                  <div key={detail.label}>
+                    {index > 0 && <Separator className="bg-zinc-800" />}
+                    <div className="flex items-start justify-between gap-4 py-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                        {detail.label}
+                      </p>
+                      <p className="max-w-[16rem] text-right text-sm text-zinc-300">
+                        {detail.value}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
         </div>
       </div>

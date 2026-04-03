@@ -1,4 +1,4 @@
-import type { Hono } from 'hono'
+import type { Context, Hono } from 'hono'
 import { MeetingOrchestrationService } from '../lib/meetings/orchestration-service'
 import { createDefaultMeetingProviderGateway } from '../lib/meetings/provider-runtime'
 import { env } from '../env'
@@ -16,7 +16,7 @@ function isRecallRealtimeWebhookAuthorized(url: URL) {
 }
 
 export function registerRecallRoutes(app: Hono) {
-  app.post('/webhooks/recall/realtime', async (c) => {
+  const handleRealtimeWebhook = async (c: Context) => {
     const url = new URL(c.req.url)
     if (!isRecallRealtimeWebhookAuthorized(url)) {
       return c.json({ error: 'Unauthorized' }, 401)
@@ -82,9 +82,9 @@ export function registerRecallRoutes(app: Hono) {
       normalizedEvents: result.normalizedEvents.length,
       meetingSessionId: result.meetingSession?.id ?? null,
     })
-  })
+  }
 
-  app.post('/webhooks/recall/bot', async (c) => {
+  const handleBotWebhook = async (c: Context) => {
     const payload = (await c.req.json()) as Record<string, unknown>
     const data =
       payload.data &&
@@ -145,7 +145,12 @@ export function registerRecallRoutes(app: Hono) {
       normalizedEvents: result.normalizedEvents.length,
       meetingSessionId: result.meetingSession?.id ?? null,
     })
-  })
+  }
+
+  app.post('/webhooks/recall/realtime', handleRealtimeWebhook)
+  app.post('/webhooks/recall/realtime/', handleRealtimeWebhook)
+  app.post('/webhooks/recall/bot', handleBotWebhook)
+  app.post('/webhooks/recall/bot/', handleBotWebhook)
 
   app.post('/internal/meetings/recall/join', async (c) => {
     if (!isRecallRouteAuthorized(c.req.header('authorization') ?? null)) {

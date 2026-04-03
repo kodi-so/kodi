@@ -206,6 +206,9 @@ async function recallFetch<TResponse>(
 
 export function buildRecallRealtimeWebhookUrl(baseUrl: string, token?: string | null) {
   const url = new URL(baseUrl)
+  if (token && !url.pathname.endsWith('/')) {
+    url.pathname = `${url.pathname}/`
+  }
   if (token) {
     url.searchParams.set('token', token)
   }

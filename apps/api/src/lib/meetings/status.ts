@@ -60,6 +60,15 @@ export function transitionMeetingStatus(
     return currentNormalized
   }
 
+  // Once Kodi has actually reached the meeting, provider shutdown edge cases
+  // should read as a normal end to the user instead of a fresh failure.
+  if (
+    nextNormalized === 'failed' &&
+    ['admitted', 'listening', 'processing'].includes(currentNormalized)
+  ) {
+    return 'ended'
+  }
+
   if (nextNormalized === 'failed' || nextNormalized === 'ended') {
     return nextNormalized
   }

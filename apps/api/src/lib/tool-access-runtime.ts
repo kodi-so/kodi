@@ -183,6 +183,7 @@ type SessionTool = {
   outputParameters: Record<string, unknown>
   scopes: string[]
   tags: string[]
+  searchRank: number
   toolkit: {
     slug: string
     name: string
@@ -267,6 +268,8 @@ type AutomaticToolExecutionPlan = {
   tool: SessionTool
 }
 
+type OpenAIToolChoice = 'auto' | 'required'
+
 type ToolExecutionPayload = {
   success: boolean
   error: string | null
@@ -347,6 +350,9 @@ function getToolSchemaProperties(tool: SessionTool) {
 function inferToolFamily(tool: SessionTool) {
   const slug = tool.slug.toUpperCase()
 
+  if (slug.includes('EMAIL') || slug.includes('INBOX')) return 'emails'
+  if (slug.includes('MESSAGE') || slug.includes('THREAD')) return 'messages'
+  if (slug.includes('CALENDAR') || slug.includes('EVENT')) return 'events'
   if (slug.includes('PROJECT')) return 'projects'
   if (slug.includes('ISSUE') || slug.includes('TICKET')) return 'issues'
   if (slug.includes('TEAM')) return 'teams'
@@ -355,7 +361,70 @@ function inferToolFamily(tool: SessionTool) {
   if (slug.includes('USER')) return 'users'
   if (slug.includes('CYCLE')) return 'cycles'
   if (slug.includes('COMMENT')) return 'comments'
+  if (
+    slug.includes('REPO') ||
+    slug.includes('REPOSITORY') ||
+    slug.includes('PULL_REQUEST') ||
+    slug.includes('PULLREQUEST') ||
+    slug.includes('PR')
+  ) {
+    return 'repositories'
+  }
+  if (slug.includes('CHANNEL')) return 'channels'
+  if (slug.includes('DOC') || slug.includes('PAGE') || slug.includes('NOTE')) {
+    return 'documents'
+  }
+  if (slug.includes('FILE') || slug.includes('FOLDER')) return 'files'
+  if (slug.includes('CONTACT') || slug.includes('CUSTOMER')) return 'contacts'
   return tool.slug.toLowerCase()
+}
+
+function isSimpleGreeting(message: string) {
+  return /^(hi|hello|hey|yo|sup|ping|thanks|thank you|ok|okay)[.!?]*$/i.test(
+    message
+  )
+}
+
+function isRuntimeAvailabilityQuestion(message: string) {
+  return /\b(do you have access|can you access|are you connected|what can you do|what tools|what integrations|available actions|what do you have access to)\b/.test(
+    message
+  )
+}
+
+function isIntegrationSetupQuestion(message: string) {
+  return /\b(set\s*up|setup|configure|integration|integrations|auth|oauth|callback|redirect|webhook|permission|permissions|policy|policies|token|secret|credential|credentials|env var|environment variable|why (?:is|isn't|does|doesn't)|not working|not work|broken|error|failed|attention needed)\b/.test(
+    message
+  )
+}
+
+function isLikelyWriteOnlyRequest(message: string) {
+  const mentionsWriteVerb =
+    /\b(create|make|open|file|log|add|send|post|update|edit|reply|comment|delete|remove|archive|share|assign|schedule|invite|draft)\b/.test(
+      message
+    )
+  const mentionsReadVerb =
+    /\b(list|show|find|search|lookup|look up|check|fetch|get|read|retrieve|summarize|review|what|which|latest|recent|today|tomorrow|upcoming|unread)\b/.test(
+      message
+    )
+
+  return mentionsWriteVerb && !mentionsReadVerb
+}
+
+function isLikelyLiveDataRequest(message: string) {
+  return (
+    /\b(list|show|find|search|lookup|look up|check|fetch|get|read|retrieve|summarize|review|which)\b/.test(
+      message
+    ) ||
+    /\b(latest|recent|today|tomorrow|upcoming|unread|open|assigned|left|exists)\b/.test(
+      message
+    ) ||
+    /\bwhat\b.*\b(do we have|exists|left|open|assigned|in my|in our)\b/.test(
+      message
+    ) ||
+    /\b(email|emails|inbox|mail|message|messages|thread|threads|calendar|event|events|repo|repos|repository|repositories|pull request|pull requests|pr|prs|issue|issues|ticket|tickets|team|teams|channel|channels|dm|project|projects|task|tasks|doc|docs|document|documents|page|pages|note|notes|file|files|folder|folders|contact|contacts|customer|customers|record|records)\b/.test(
+      message
+    )
+  )
 }
 
 function shouldRequireToolUse(
@@ -366,16 +435,13 @@ function shouldRequireToolUse(
 
   const message = userMessage.trim().toLowerCase()
 
-  if (
-    /^(hi|hello|hey|yo|sup|ping|thanks|thank you|ok|okay)[.!?]*$/i.test(message)
-  ) {
+  if (isSimpleGreeting(message)) {
     return false
   }
 
   if (
-    /\b(do you have access|can you access|are you connected|what can you do|what tools|what integrations|available actions|what do you have access to)\b/.test(
-      message
-    )
+    isRuntimeAvailabilityQuestion(message) ||
+    isIntegrationSetupQuestion(message)
   ) {
     return false
   }
@@ -390,16 +456,15 @@ function shouldRequireToolUse(
     (term) => term.length > 0 && message.includes(term)
   )
 
-  const asksForLiveData =
-    /\b(list|show|find|search|lookup|look up|check|fetch|get|which)\b/.test(
-      message
-    ) ||
-    /\b(project|projects|issue|issues|ticket|tickets|team|teams|state|states|label|labels|cycle|cycles)\b/.test(
-      message
-    ) ||
-    /\bwhat\b.*\b(do we have|exists|left|open|assigned)\b/.test(message)
+  if (mentionsToolkit && !isLikelyWriteOnlyRequest(message)) {
+    return true
+  }
 
-  return mentionsToolkit || asksForLiveData
+  if (isLikelyWriteOnlyRequest(message)) {
+    return false
+  }
+
+  return isLikelyLiveDataRequest(message)
 }
 
 function shouldAnswerFromRuntimeState(
@@ -410,8 +475,8 @@ function shouldAnswerFromRuntimeState(
 
   const message = userMessage.trim().toLowerCase()
 
-  return /\b(do you have access|can you access|are you connected|what tools|what integrations|what do you have access to|do you have linear|do you have github|do you have slack|do you have notion)\b/.test(
-    message
+  return (
+    isRuntimeAvailabilityQuestion(message) && !isLikelyLiveDataRequest(message)
   )
 }
 
@@ -503,11 +568,12 @@ function getAutomaticToolScore(tool: SessionTool, userMessage: string) {
   const family = inferToolFamily(tool)
   const { required } = getToolSchemaProperties(tool)
 
-  let score = 5
+  let score = Math.max(4, 42 - tool.searchRank * 4)
 
   if (slug.includes('LIST')) score += 20
   if (slug.includes('SEARCH')) score += 18
   if (slug.includes('GET')) score += 10
+  if (slug.includes('PROFILE')) score += 12
   if (slug.includes('RUN_QUERY_OR_MUTATION')) score -= 35
 
   if (message.includes('project') && slug.includes('PROJECT')) score += 55
@@ -520,14 +586,89 @@ function getAutomaticToolScore(tool: SessionTool, userMessage: string) {
   if (message.includes('team') && slug.includes('TEAM')) score += 45
   if (message.includes('state') && slug.includes('STATE')) score += 35
   if (
+    (message.includes('email') ||
+      message.includes('inbox') ||
+      message.includes('mail')) &&
+    (slug.includes('EMAIL') ||
+      slug.includes('MESSAGE') ||
+      slug.includes('THREAD'))
+  ) {
+    score += 55
+  }
+  if (
+    (message.includes('message') || message.includes('thread')) &&
+    (slug.includes('MESSAGE') || slug.includes('THREAD'))
+  ) {
+    score += 45
+  }
+  if (
+    (message.includes('calendar') ||
+      message.includes('event') ||
+      message.includes('schedule')) &&
+    (slug.includes('CALENDAR') || slug.includes('EVENT'))
+  ) {
+    score += 55
+  }
+  if (
+    (message.includes('repo') ||
+      message.includes('repository') ||
+      message.includes('pull request') ||
+      /\bpr\b/.test(message)) &&
+    (slug.includes('REPO') ||
+      slug.includes('REPOSITORY') ||
+      slug.includes('PULL_REQUEST') ||
+      slug.includes('PULLREQUEST'))
+  ) {
+    score += 55
+  }
+  if (
+    (message.includes('channel') ||
+      message.includes('slack') ||
+      message.includes('dm')) &&
+    slug.includes('CHANNEL')
+  ) {
+    score += 50
+  }
+  if (
+    (message.includes('doc') ||
+      message.includes('page') ||
+      message.includes('note')) &&
+    (slug.includes('DOC') || slug.includes('PAGE') || slug.includes('NOTE'))
+  ) {
+    score += 45
+  }
+  if (
+    (message.includes('file') || message.includes('folder')) &&
+    (slug.includes('FILE') || slug.includes('FOLDER'))
+  ) {
+    score += 45
+  }
+  if (
     /\b(my|me|current user|who am i)\b/.test(message) &&
     slug.includes('CURRENT_USER')
   ) {
     score += 45
   }
+  if (
+    /\b(my|me|our|today|tomorrow|latest|recent|upcoming|unread)\b/.test(
+      message
+    ) &&
+    (slug.includes('LIST') ||
+      slug.includes('FETCH') ||
+      slug.includes('SEARCH') ||
+      slug.includes('GET_PROFILE'))
+  ) {
+    score += 15
+  }
 
   if (required.length === 0) score += 15
   score -= required.length * 25
+  if (
+    !/\b(id|identifier|number|key)\b/.test(message) &&
+    required.some((value) => /(^|_)(id|key)$/.test(value.toLowerCase()))
+  ) {
+    score -= 30
+  }
 
   if (
     family === 'users' &&
@@ -539,13 +680,38 @@ function getAutomaticToolScore(tool: SessionTool, userMessage: string) {
   return score
 }
 
-function buildAutomaticToolArguments(tool: SessionTool) {
+function buildAutomaticToolArguments(tool: SessionTool, userMessage: string) {
   const { properties, required } = getToolSchemaProperties(tool)
   const args: Record<string, unknown> = {}
+  const normalizedMessage = userMessage.trim().replace(/\s+/g, ' ')
+  const loweredMessage = normalizedMessage.toLowerCase()
+  const prefersRecent = /\b(latest|recent|newest|today|upcoming|unread)\b/.test(
+    loweredMessage
+  )
 
   const buildValue = (name: string) => {
     const normalized = name.toLowerCase()
     const schema = properties[name] ?? {}
+    const enumValues = Array.isArray(schema.enum)
+      ? schema.enum.filter(
+          (value): value is string => typeof value === 'string'
+        )
+      : []
+
+    if (
+      [
+        'query',
+        'q',
+        'search_query',
+        'searchquery',
+        'keywords',
+        'keyword',
+        'term',
+        'text',
+      ].includes(normalized)
+    ) {
+      return normalizedMessage
+    }
 
     if (
       [
@@ -557,7 +723,7 @@ function buildAutomaticToolArguments(tool: SessionTool) {
         'maxresults',
       ].includes(normalized)
     ) {
-      return 10
+      return prefersRecent ? 5 : 10
     }
 
     if (
@@ -570,6 +736,45 @@ function buildAutomaticToolArguments(tool: SessionTool) {
       ].includes(normalized)
     ) {
       return false
+    }
+
+    if (
+      [
+        'only_unread',
+        'unread_only',
+        'include_unread_only',
+        'is_unread',
+      ].includes(normalized)
+    ) {
+      return loweredMessage.includes('unread')
+    }
+
+    if (
+      ['sort', 'order', 'sort_order', 'order_by', 'orderby'].includes(
+        normalized
+      )
+    ) {
+      if (prefersRecent) {
+        if (enumValues.includes('desc')) return 'desc'
+        if (enumValues.includes('descending')) return 'descending'
+        if (enumValues.includes('latest')) return 'latest'
+      }
+
+      if (enumValues.length === 1) {
+        return enumValues[0]
+      }
+    }
+
+    if (enumValues.length === 1) {
+      return enumValues[0]
+    }
+
+    if (schema.type === 'array') {
+      return []
+    }
+
+    if (schema.type === 'object') {
+      return {}
     }
 
     if (schema.default !== undefined) {
@@ -977,7 +1182,7 @@ function selectAutomaticToolExecutionPlans(
         return null
       }
 
-      const argumentsPayload = buildAutomaticToolArguments(tool)
+      const argumentsPayload = buildAutomaticToolArguments(tool, userMessage)
       if (!argumentsPayload) {
         return null
       }
@@ -992,7 +1197,7 @@ function selectAutomaticToolExecutionPlans(
     })
     .filter(
       (plan): plan is AutomaticToolExecutionPlan =>
-        plan !== null && plan.score > 0
+        plan !== null && plan.score > -20
     )
     .sort((left, right) => right.score - left.score)
 
@@ -1008,6 +1213,10 @@ function selectAutomaticToolExecutionPlans(
     if (selected.length >= 2) {
       break
     }
+  }
+
+  if (selected.length === 0 && plans.length > 0) {
+    selected.push(plans[0]!)
   }
 
   return selected
@@ -1075,6 +1284,7 @@ function normalizeSessionTool(
     tags: Array.isArray(raw.tags)
       ? raw.tags.filter((item): item is string => typeof item === 'string')
       : [],
+    searchRank: 0,
     toolkit: {
       slug: typeof toolkit.slug === 'string' ? toolkit.slug : 'unknown',
       name: typeof toolkit.name === 'string' ? toolkit.name : 'Unknown toolkit',
@@ -1286,6 +1496,17 @@ function buildRuntimeSystemPrompt(
   return lines.join('\n')
 }
 
+function looksLikeInvalidIntegrationNarration(content: string) {
+  const normalized = content.toLowerCase()
+
+  return [
+    /(?:do not|don't|can not|can't|cannot|unable to).{0,40}(?:access|use|query|call|execute)/,
+    /(?:no direct access|not currently attached|not attached|not configured|not available in this session)/,
+    /(?:gateway config|plugin list|plugin configuration|openclaw setup|current environment|different mechanism|different channel)/,
+    /(?:would need|need to).{0,50}(?:set up|configure|enable|connect|install)/,
+  ].some((pattern) => pattern.test(normalized))
+}
+
 function toOpenAITool(tool: SessionTool): OpenAIToolDefinition {
   return {
     type: 'function',
@@ -1379,6 +1600,7 @@ async function requestOpenClawChatCompletion(params: {
   headers: Record<string, string>
   messages: OpenAIMessage[]
   tools?: OpenAIToolDefinition[]
+  toolChoice?: OpenAIToolChoice
 }) {
   const controller = new AbortController()
   const timeoutId = setTimeout(
@@ -1394,7 +1616,7 @@ async function requestOpenClawChatCompletion(params: {
 
     if ((params.tools?.length ?? 0) > 0) {
       body.tools = params.tools
-      body.tool_choice = 'auto'
+      body.tool_choice = params.toolChoice ?? 'auto'
     }
 
     const response = await fetch(`${params.instanceUrl}/v1/chat/completions`, {
@@ -1643,52 +1865,57 @@ async function createScopedToolRuntime(params: {
       searchResponse.error ??
       null
 
-    relevantTools = relevantToolSlugs.reduce<SessionTool[]>((items, slug) => {
-      const schema = searchResponse.toolSchemas?.[slug]
-      if (!schema) return items
+    relevantTools = relevantToolSlugs.reduce<SessionTool[]>(
+      (items, slug, index) => {
+        const schema = searchResponse.toolSchemas?.[slug]
+        if (!schema) return items
 
-      const toolkitSlug = normalizeToolkitSlug(schema.toolkit)
-      const connection =
-        activeToolkitState.primaryConnections.get(toolkitSlug) ?? null
+        const toolkitSlug = normalizeToolkitSlug(schema.toolkit)
+        const connection =
+          activeToolkitState.primaryConnections.get(toolkitSlug) ?? null
 
-      items.push({
-        slug: typeof schema.tool_slug === 'string' ? schema.tool_slug : slug,
-        name: typeof schema.tool_slug === 'string' ? schema.tool_slug : slug,
-        description:
-          typeof schema.description === 'string'
-            ? schema.description
-            : typeof schema.tool_slug === 'string'
-              ? schema.tool_slug
-              : slug,
-        inputParameters:
-          schema.input_schema &&
-          typeof schema.input_schema === 'object' &&
-          !Array.isArray(schema.input_schema)
-            ? (schema.input_schema as Record<string, unknown>)
-            : {
-                type: 'object',
-                properties: {},
-              },
-        outputParameters:
-          schema.output_schema &&
-          typeof schema.output_schema === 'object' &&
-          !Array.isArray(schema.output_schema)
-            ? (schema.output_schema as Record<string, unknown>)
-            : {},
-        scopes: toStringArray(schema.scopes),
-        tags: toStringArray(schema.tags),
-        toolkit: {
-          slug: toolkitSlug,
-          name:
-            connection?.toolkitName && connection.toolkitName.trim().length > 0
-              ? connection.toolkitName
-              : toolkitSlug,
-          logo: null,
-        },
-      } satisfies SessionTool)
+        items.push({
+          slug: typeof schema.tool_slug === 'string' ? schema.tool_slug : slug,
+          name: typeof schema.tool_slug === 'string' ? schema.tool_slug : slug,
+          description:
+            typeof schema.description === 'string'
+              ? schema.description
+              : typeof schema.tool_slug === 'string'
+                ? schema.tool_slug
+                : slug,
+          inputParameters:
+            schema.input_schema &&
+            typeof schema.input_schema === 'object' &&
+            !Array.isArray(schema.input_schema)
+              ? (schema.input_schema as Record<string, unknown>)
+              : {
+                  type: 'object',
+                  properties: {},
+                },
+          outputParameters:
+            schema.output_schema &&
+            typeof schema.output_schema === 'object' &&
+            !Array.isArray(schema.output_schema)
+              ? (schema.output_schema as Record<string, unknown>)
+              : {},
+          scopes: toStringArray(schema.scopes),
+          tags: toStringArray(schema.tags),
+          searchRank: index,
+          toolkit: {
+            slug: toolkitSlug,
+            name:
+              connection?.toolkitName &&
+              connection.toolkitName.trim().length > 0
+                ? connection.toolkitName
+                : toolkitSlug,
+            logo: null,
+          },
+        } satisfies SessionTool)
 
-      return items
-    }, [])
+        return items
+      },
+      []
+    )
   } catch (error) {
     searchError =
       error instanceof Error
@@ -2297,6 +2524,8 @@ export async function runChatCompletionWithToolAccess(params: {
     ? shouldRequireToolUse(params.userMessage, scopedRuntime)
     : false
   let automaticExecutionUsed = false
+  let forcedToolRetryUsed = false
+  let groundedRewriteUsed = false
 
   try {
     if (
@@ -2387,6 +2616,10 @@ export async function runChatCompletionWithToolAccess(params: {
         headers: params.headers,
         messages: conversation,
         tools: scopedRuntime?.openAITools,
+        toolChoice:
+          scopedRuntime && mustUseTools && usedToolSlugs.length === 0
+            ? 'required'
+            : 'auto',
       })
 
       const choice = response.choices?.[0]
@@ -2464,6 +2697,55 @@ export async function runChatCompletionWithToolAccess(params: {
         const content = rawMessage.content?.trim()
         if (!content) {
           throw new Error('Empty response from instance')
+        }
+
+        if (
+          scopedRuntime &&
+          mustUseTools &&
+          usedToolSlugs.length === 0 &&
+          !forcedToolRetryUsed &&
+          scopedRuntime.allowedTools.length > 0
+        ) {
+          forcedToolRetryUsed = true
+          conversation.push({
+            role: 'system',
+            content:
+              'The previous draft was invalid because it answered without executing a live tool. This request requires current integration data. Return exactly one relevant tool call now. Do not answer in prose unless every relevant tool truly requires missing user input.',
+          })
+          continue
+        }
+
+        if (
+          scopedRuntime &&
+          usedToolSlugs.length > 0 &&
+          looksLikeInvalidIntegrationNarration(content) &&
+          !groundedRewriteUsed
+        ) {
+          groundedRewriteUsed = true
+          conversation.push({
+            role: 'assistant',
+            content,
+          })
+          conversation.push({
+            role: 'system',
+            content:
+              'The previous draft was invalid because it talked about tool availability or setup instead of answering from the tool results already in the conversation. Do not mention access, plugins, gateway config, OpenClaw setup, environment, or alternate channels. Answer the user directly from the tool results. If the tool results are insufficient, say exactly what data is still missing from those tool results.',
+          })
+          continue
+        }
+
+        if (scopedRuntime && mustUseTools && usedToolSlugs.length === 0) {
+          return {
+            content:
+              'I couldn’t complete that with live integration data because Kodi did not get a real tool result for this request. Please retry, or reconnect the integration if the problem persists.',
+            toolRuntime: {
+              sessionRunId: scopedRuntime.sessionRunId,
+              composioSessionId: scopedRuntime.composioSessionId,
+              usedToolSlugs: [],
+              gatedToolCount: scopedRuntime.gatedDecisions.length,
+              availableToolCount: scopedRuntime.allowedTools.length,
+            },
+          }
         }
 
         return {

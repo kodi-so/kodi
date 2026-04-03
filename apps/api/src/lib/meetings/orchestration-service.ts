@@ -5,6 +5,9 @@ import {
   type MeetingIngestionSource,
   updateMeetingSessionRuntimeState,
 } from './ingestion'
+import { processMeetingCandidateTasks } from './openclaw-candidate-tasks'
+import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
+import { processMeetingRollingNotes } from './openclaw-rolling-notes'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
@@ -320,7 +323,7 @@ export class MeetingOrchestrationService {
       metadata: input.metadata ?? input.event.metadata ?? null,
     })
 
-    await appendNormalizedMeetingEvent(
+    const persistedEvent = await appendNormalizedMeetingEvent(
       meetingSession.id,
       input.event,
       input.source ?? 'worker'
@@ -330,8 +333,78 @@ export class MeetingOrchestrationService {
       where: (fields, { eq }) => eq(fields.id, meetingSession.id),
     })
 
+    const resolvedMeetingSession = updated ?? meetingSession
+
+    const forwardResult = await forwardMeetingEventToOpenClaw({
+      orgId: input.orgId,
+      meetingSession: resolvedMeetingSession,
+      persistedEvent,
+      event: input.event,
+      source: input.source ?? 'worker',
+    })
+
+    if (
+      !forwardResult.ok &&
+      'reason' in forwardResult &&
+      forwardResult.reason !== 'missing-instance'
+    ) {
+      console.warn('[meetings] openclaw forward failed', {
+        orgId: input.orgId,
+        meetingSessionId: resolvedMeetingSession.id,
+        eventId: persistedEvent.id,
+        reason: forwardResult.reason,
+        error: 'error' in forwardResult ? forwardResult.error ?? null : null,
+      })
+    }
+
+    if (input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
+      const rollingNotesResult = await processMeetingRollingNotes({
+        orgId: input.orgId,
+        meetingSession: resolvedMeetingSession,
+        lastEventSequence: persistedEvent.sequence,
+      })
+
+      if (
+        !rollingNotesResult.ok &&
+        'reason' in rollingNotesResult &&
+        rollingNotesResult.reason !== 'missing-instance'
+      ) {
+        console.warn('[meetings] openclaw rolling notes failed', {
+          orgId: input.orgId,
+          meetingSessionId: resolvedMeetingSession.id,
+          eventId: persistedEvent.id,
+          reason: rollingNotesResult.reason,
+          error:
+            'error' in rollingNotesResult ? rollingNotesResult.error ?? null : null,
+        })
+      }
+
+      const candidateTasksResult = await processMeetingCandidateTasks({
+        orgId: input.orgId,
+        meetingSession: resolvedMeetingSession,
+        lastEventSequence: persistedEvent.sequence,
+      })
+
+      if (
+        !candidateTasksResult.ok &&
+        'reason' in candidateTasksResult &&
+        candidateTasksResult.reason !== 'missing-instance'
+      ) {
+        console.warn('[meetings] openclaw candidate tasks failed', {
+          orgId: input.orgId,
+          meetingSessionId: resolvedMeetingSession.id,
+          eventId: persistedEvent.id,
+          reason: candidateTasksResult.reason,
+          error:
+            'error' in candidateTasksResult
+              ? candidateTasksResult.error ?? null
+              : null,
+        })
+      }
+    }
+
     return {
-      meetingSession: updated ?? meetingSession,
+      meetingSession: resolvedMeetingSession,
       event: input.event,
     }
   }

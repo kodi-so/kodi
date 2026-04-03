@@ -355,6 +355,28 @@ export default function IntegrationDetailPage() {
     }
   }
 
+  async function revalidateConnection(connectedAccountId: string) {
+    if (!activeOrg) return
+    setActionKey(`revalidate:${connectedAccountId}`)
+    setError(null)
+
+    try {
+      await trpc.toolAccess.revalidateConnection.mutate({
+        orgId: activeOrg.orgId,
+        connectedAccountId,
+      })
+      await loadToolkitDetail(activeOrg.orgId)
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Failed to revalidate this connection.'
+      )
+    } finally {
+      setActionKey(null)
+    }
+  }
+
   async function selectPreferredConnection(connectedAccountId: string | null) {
     if (!activeOrg) return
     setPreferenceActionKey(connectedAccountId ?? 'automatic')
@@ -706,6 +728,9 @@ export default function IntegrationDetailPage() {
                         const isDisconnecting =
                           actionKey ===
                           `disconnect:${connection.connectedAccountId}`
+                        const isRevalidating =
+                          actionKey ===
+                          `revalidate:${connection.connectedAccountId}`
                         const isSelecting =
                           preferenceActionKey === connection.connectedAccountId
 
@@ -761,6 +786,24 @@ export default function IntegrationDetailPage() {
                                 </div>
 
                                 <div className="flex flex-wrap gap-2">
+                                  {connection.status !== 'ACTIVE' && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                                      disabled={actionKey !== null}
+                                      onClick={() =>
+                                        void revalidateConnection(
+                                          connection.connectedAccountId
+                                        )
+                                      }
+                                    >
+                                      {isRevalidating
+                                        ? 'Revalidating...'
+                                        : 'Revalidate'}
+                                    </Button>
+                                  )}
+
                                   {!connection.isPreferred &&
                                     connection.status !== 'INACTIVE' && (
                                       <Button

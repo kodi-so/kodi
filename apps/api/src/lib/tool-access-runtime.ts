@@ -9,9 +9,14 @@ import {
   listPersistedConnections,
   listToolkitAccountPreferences,
   listToolkitPolicies,
+  markPersistedConnectionAttention,
   syncUserConnectionsForOrg,
   type EffectiveToolkitPolicy,
 } from './composio'
+import {
+  buildApprovalResponseMessage,
+  queueToolApprovalRequest,
+} from './tool-access-approvals'
 
 type AnyDb = typeof db
 
@@ -255,10 +260,14 @@ type ToolPermissionDecision = {
 type ScopedToolRuntime = {
   sessionRunId: string | null
   composioSessionId: string | null
+  sourceType: ToolRuntimeSourceType
+  sourceId: string | null
   enabledToolkits: string[]
   allowedTools: SessionTool[]
+  approvalTools: SessionTool[]
   openAITools: OpenAIToolDefinition[]
   allowedDecisions: Map<string, ToolPermissionDecision>
+  approvalDecisions: Map<string, ToolPermissionDecision>
   gatedDecisions: ToolPermissionDecision[]
   assistivePrompt: string | null
   metadata: Record<string, unknown>
@@ -295,6 +304,20 @@ type AutomaticToolExecutionResult = {
   summaryMessage: OpenAIMessage
   toolMessages: OpenAIMessage[]
   usedToolSlugs: string[]
+}
+
+type QueuedApprovalResult = {
+  approvalRequestId: string
+  toolActionRunId: string
+  preview: {
+    title: string
+    summary: string
+    targetText: string | null
+    fieldPreview: Array<{ label: string; value: string }>
+    argumentsPreview: Record<string, unknown>
+  }
+  toolkitName: string
+  toolSlug: string
 }
 
 type LinearTeamSnapshot = {
@@ -442,9 +465,14 @@ function isLikelyLiveDataRequest(message: string) {
 
 function shouldRequireToolUse(
   userMessage: string,
-  runtime: Pick<ScopedToolRuntime, 'allowedTools' | 'enabledToolkits'>
+  runtime: Pick<
+    ScopedToolRuntime,
+    'allowedTools' | 'approvalTools' | 'enabledToolkits'
+  >
 ) {
-  if (runtime.allowedTools.length === 0) return false
+  if (runtime.allowedTools.length === 0 && runtime.approvalTools.length === 0) {
+    return false
+  }
 
   const message = userMessage.trim().toLowerCase()
 
@@ -463,6 +491,8 @@ function shouldRequireToolUse(
     ...runtime.enabledToolkits,
     ...runtime.allowedTools.map((tool) => tool.toolkit.slug),
     ...runtime.allowedTools.map((tool) => tool.toolkit.name.toLowerCase()),
+    ...runtime.approvalTools.map((tool) => tool.toolkit.slug),
+    ...runtime.approvalTools.map((tool) => tool.toolkit.name.toLowerCase()),
   ]).map((term) => term.toLowerCase())
 
   const mentionsToolkit = toolkitTerms.some(
@@ -474,7 +504,7 @@ function shouldRequireToolUse(
   }
 
   if (isLikelyWriteOnlyRequest(message)) {
-    return false
+    return runtime.approvalTools.length > 0
   }
 
   return isLikelyLiveDataRequest(message)
@@ -1494,6 +1524,18 @@ function buildRuntimeSystemPrompt(
     )
   }
 
+  if (runtime.approvalTools.length > 0) {
+    lines.push(
+      `Approval-preview tools available for this request: ${runtime.approvalTools
+        .map((tool) => tool.slug)
+        .slice(0, MAX_RELEVANT_TOOLS)
+        .join(', ')}.`
+    )
+    lines.push(
+      'If the user asks you to create, update, send, delete, or otherwise change data in one of these systems, return the relevant tool call. Kodi will turn that into a human approval request instead of executing the write immediately.'
+    )
+  }
+
   const approvalRequired = runtime.gatedDecisions.filter(
     (decision) => decision.status === 'approval_required'
   )
@@ -1524,7 +1566,7 @@ function buildRuntimeSystemPrompt(
 
   if (options?.mustUseTools) {
     lines.push(
-      'This request requires live tool data. You must use at least one relevant executable tool before answering unless every relevant tool call fails.'
+      'This request requires live integration handling. You must use at least one relevant executable or approval-preview tool before answering unless every relevant tool call fails.'
     )
   }
 
@@ -1734,6 +1776,81 @@ function toLegacyToolProvider(toolkitSlug: string): LegacyToolProvider | null {
     default:
       return null
   }
+}
+
+function getActionTargetText(argumentsPayload: Record<string, unknown>) {
+  const candidates = [
+    argumentsPayload.title,
+    argumentsPayload.subject,
+    argumentsPayload.name,
+    argumentsPayload.identifier,
+    argumentsPayload.id,
+    argumentsPayload.issue_id,
+    argumentsPayload.issueId,
+    argumentsPayload.project_id,
+    argumentsPayload.projectId,
+    argumentsPayload.channel,
+    argumentsPayload.channel_id,
+    argumentsPayload.repo,
+    argumentsPayload.repository,
+    argumentsPayload.path,
+    argumentsPayload.url,
+  ]
+
+  const match = candidates.find(
+    (value): value is string =>
+      typeof value === 'string' && value.trim().length > 0
+  )
+
+  return match?.trim() ?? null
+}
+
+function appendToolTransition(
+  existing: Array<Record<string, unknown>> | null | undefined,
+  entry: {
+    status: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+    note?: string | null
+    error?: string | null
+  }
+) {
+  return [
+    ...(existing ?? []),
+    {
+      status: entry.status,
+      at: new Date().toISOString(),
+      ...(entry.note ? { note: entry.note } : {}),
+      ...(entry.error ? { error: entry.error } : {}),
+    },
+  ]
+}
+
+function isTransientToolExecutionError(message: string) {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('timeout') ||
+    normalized.includes('timed out') ||
+    normalized.includes('temporarily unavailable') ||
+    normalized.includes('rate limit') ||
+    normalized.includes('too many requests') ||
+    normalized.includes('network') ||
+    normalized.includes('socket') ||
+    normalized.includes('502') ||
+    normalized.includes('503') ||
+    normalized.includes('504')
+  )
+}
+
+function isConnectionFailureMessage(message: string) {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('expired') ||
+    normalized.includes('revoked') ||
+    normalized.includes('reconnect') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('forbidden') ||
+    normalized.includes('invalid grant') ||
+    normalized.includes('not connected')
+  )
 }
 
 function parseToolCallArguments(toolCall: OpenAIToolCall) {
@@ -2186,11 +2303,15 @@ async function createScopedToolRuntime(params: {
   })
 
   const allowedDecisions = new Map<string, ToolPermissionDecision>()
+  const approvalDecisions = new Map<string, ToolPermissionDecision>()
   const gatedDecisions: ToolPermissionDecision[] = []
 
   for (const decision of decisions) {
     if (decision.status === 'allowed') {
       allowedDecisions.set(decision.toolSlug, decision)
+    } else if (decision.status === 'approval_required') {
+      approvalDecisions.set(decision.toolSlug, decision)
+      gatedDecisions.push(decision)
     } else {
       gatedDecisions.push(decision)
     }
@@ -2199,12 +2320,16 @@ async function createScopedToolRuntime(params: {
   const allowedTools = relevantTools.filter((tool) =>
     allowedDecisions.has(tool.slug)
   )
+  const approvalTools = relevantTools.filter((tool) =>
+    approvalDecisions.has(tool.slug)
+  )
 
   const metadata: Record<string, unknown> = {
     syncError: runtimeState.syncError,
     searchError,
     relevantToolSlugs,
     allowedToolSlugs: allowedTools.map((tool) => tool.slug),
+    approvalToolSlugs: approvalTools.map((tool) => tool.slug),
     gatedTools: gatedDecisions.map((decision) => ({
       toolSlug: decision.toolSlug,
       status: decision.status,
@@ -2222,10 +2347,16 @@ async function createScopedToolRuntime(params: {
   return {
     sessionRunId: sessionRun.id,
     composioSessionId: session.sessionId,
+    sourceType: params.sourceType,
+    sourceId: params.sourceId ?? null,
     enabledToolkits: activeToolkitState.enabledToolkits,
     allowedTools,
-    openAITools: allowedTools.map((tool) => toOpenAITool(tool)),
+    approvalTools,
+    openAITools: [...allowedTools, ...approvalTools].map((tool) =>
+      toOpenAITool(tool)
+    ),
     allowedDecisions,
+    approvalDecisions,
     gatedDecisions,
     assistivePrompt: session.experimental?.assistivePrompt ?? null,
     metadata,
@@ -2255,6 +2386,8 @@ async function executeAutomaticToolPlans(params: {
   db: AnyDb
   orgId: string
   plans: AutomaticToolExecutionPlan[]
+  sourceId: string | null
+  sourceType: ToolRuntimeSourceType
   sessionRunId: string
 }): Promise<AutomaticToolExecutionResult> {
   const assistantToolCalls = params.plans.map((plan, index) => ({
@@ -2275,6 +2408,8 @@ async function executeAutomaticToolPlans(params: {
       orgId: params.orgId,
       actorUserId: params.actorUserId,
       sessionRunId: params.sessionRunId,
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
       composioSessionId: params.composioSessionId,
       toolCall: assistantToolCalls[index]!,
       decision: plan.decision,
@@ -2300,6 +2435,8 @@ async function recordToolActionRunStart(params: {
   orgId: string
   actorUserId: string
   sessionRunId: string
+  sourceType: ToolRuntimeSourceType
+  sourceId: string | null
   decision: ToolPermissionDecision
   toolCallId: string
   argumentsPayload: Record<string, unknown> | null
@@ -2315,12 +2452,22 @@ async function recordToolActionRunStart(params: {
       connectedAccountId: params.decision.connectedAccountId,
       action: params.decision.toolSlug,
       actionCategory: params.decision.category,
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
+      targetText: params.argumentsPayload
+        ? getActionTargetText(params.argumentsPayload)
+        : null,
       idempotencyKey: `${params.sessionRunId}:${params.toolCallId}`,
+      attemptCount: 1,
       status: 'running',
       requestPayload: {
         toolCallId: params.toolCallId,
         arguments: params.argumentsPayload,
       },
+      transitionHistory: appendToolTransition(null, {
+        status: 'running',
+        note: 'execution_started',
+      }),
       startedAt: new Date(),
     })
     .returning()
@@ -2330,8 +2477,10 @@ async function recordToolActionRunStart(params: {
 
 async function finishToolActionRun(params: {
   db: AnyDb
+  existingTransitionHistory?: Array<Record<string, unknown>> | null
   toolActionRunId: string
   status: 'succeeded' | 'failed'
+  externalLogId?: string | null
   responsePayload?: Record<string, unknown> | null
   error?: string | null
 }) {
@@ -2340,7 +2489,15 @@ async function finishToolActionRun(params: {
     .set({
       status: params.status,
       responsePayload: params.responsePayload ?? null,
+      externalLogId: params.externalLogId ?? null,
       error: params.error ?? null,
+      transitionHistory: appendToolTransition(
+        params.existingTransitionHistory,
+        {
+          status: params.status,
+          error: params.error ?? null,
+        }
+      ),
       completedAt: new Date(),
     })
     .where(
@@ -2353,6 +2510,8 @@ async function executeAllowedToolCall(params: {
   orgId: string
   actorUserId: string
   sessionRunId: string
+  sourceType: ToolRuntimeSourceType
+  sourceId: string | null
   composioSessionId: string
   toolCall: OpenAIToolCall
   decision: ToolPermissionDecision
@@ -2388,6 +2547,8 @@ async function executeAllowedToolCall(params: {
     orgId: params.orgId,
     actorUserId: params.actorUserId,
     sessionRunId: params.sessionRunId,
+    sourceType: params.sourceType,
+    sourceId: params.sourceId,
     decision: params.decision,
     toolCallId: params.toolCall.id,
     argumentsPayload: parsedArguments.value,
@@ -2396,20 +2557,63 @@ async function executeAllowedToolCall(params: {
   try {
     const composio = getComposioClient()
     const session = await composio.toolRouter.use(params.composioSessionId)
-    const response = (await session.execute(
-      params.decision.toolSlug,
-      parsedArguments.value
-    )) as {
+    let response: {
       data?: Record<string, unknown>
       error?: string | null
       logId?: string
+    } | null = null
+    let lastError: string | null = null
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        response = (await session.execute(
+          params.decision.toolSlug,
+          parsedArguments.value
+        )) as {
+          data?: Record<string, unknown>
+          error?: string | null
+          logId?: string
+        }
+
+        if (
+          response.error &&
+          attempt === 0 &&
+          params.decision.category !== 'write' &&
+          params.decision.category !== 'admin' &&
+          isTransientToolExecutionError(response.error)
+        ) {
+          lastError = response.error
+          continue
+        }
+
+        break
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Tool execution failed.'
+        lastError = message
+
+        if (
+          attempt === 0 &&
+          params.decision.category !== 'write' &&
+          params.decision.category !== 'admin' &&
+          isTransientToolExecutionError(message)
+        ) {
+          continue
+        }
+
+        throw error
+      }
+    }
+
+    if (!response && lastError) {
+      throw new Error(lastError)
     }
 
     const toolPayload = {
-      success: !response.error,
-      error: response.error ?? null,
-      data: response.data ?? null,
-      logId: response.logId ?? null,
+      success: !response?.error,
+      error: response?.error ?? null,
+      data: response?.data ?? null,
+      logId: response?.logId ?? null,
     } satisfies ToolExecutionPayload
     const modelToolPayload = buildModelSafeToolPayload({
       toolkitSlug: params.decision.toolkitSlug,
@@ -2419,11 +2623,24 @@ async function executeAllowedToolCall(params: {
 
     await finishToolActionRun({
       db: params.db,
+      existingTransitionHistory: run.transitionHistory,
       toolActionRunId: run.id,
-      status: response.error ? 'failed' : 'succeeded',
+      status: response?.error ? 'failed' : 'succeeded',
+      externalLogId: response?.logId ?? null,
       responsePayload: toolPayload,
-      error: response.error ?? null,
+      error: response?.error ?? null,
     })
+
+    if (
+      toolPayload.error &&
+      isConnectionFailureMessage(toolPayload.error) &&
+      run.toolConnectionId
+    ) {
+      await markPersistedConnectionAttention(params.db, run.toolConnectionId, {
+        status: 'FAILED',
+        errorMessage: toolPayload.error,
+      })
+    }
 
     return {
       toolMessage: {
@@ -2452,11 +2669,19 @@ async function executeAllowedToolCall(params: {
 
     await finishToolActionRun({
       db: params.db,
+      existingTransitionHistory: run.transitionHistory,
       toolActionRunId: run.id,
       status: 'failed',
       responsePayload: toolPayload,
       error: message,
     })
+
+    if (isConnectionFailureMessage(message) && run.toolConnectionId) {
+      await markPersistedConnectionAttention(params.db, run.toolConnectionId, {
+        status: 'FAILED',
+        errorMessage: message,
+      })
+    }
 
     return {
       toolMessage: {
@@ -2477,7 +2702,12 @@ async function executeScopedToolBySlug(params: {
   orgId: string
   runtime: Pick<
     ScopedToolRuntime,
-    'allowedDecisions' | 'composioSessionId' | 'sessionRunId'
+    | 'allowedDecisions'
+    | 'approvalDecisions'
+    | 'composioSessionId'
+    | 'sessionRunId'
+    | 'sourceId'
+    | 'sourceType'
   >
   toolSlug: string
 }) {
@@ -2495,9 +2725,44 @@ async function executeScopedToolBySlug(params: {
     orgId: params.orgId,
     actorUserId: params.actorUserId,
     sessionRunId: params.runtime.sessionRunId,
+    sourceType: params.runtime.sourceType,
+    sourceId: params.runtime.sourceId,
     composioSessionId: params.runtime.composioSessionId,
     toolCall: buildSyntheticToolCall(params.toolSlug, params.argumentsPayload),
     decision,
+  })
+}
+
+async function queueScopedToolApprovalBySlug(params: {
+  actorUserId: string
+  argumentsPayload: Record<string, unknown>
+  db: AnyDb
+  orgId: string
+  runtime: Pick<
+    ScopedToolRuntime,
+    'approvalDecisions' | 'sessionRunId' | 'sourceId' | 'sourceType'
+  >
+  toolSlug: string
+}) {
+  const decision = params.runtime.approvalDecisions.get(params.toolSlug)
+  if (!decision || !params.runtime.sessionRunId) {
+    return null
+  }
+
+  return queueToolApprovalRequest({
+    db: params.db,
+    orgId: params.orgId,
+    actorUserId: params.actorUserId,
+    toolCallId: buildSyntheticToolCall(
+      params.toolSlug,
+      params.argumentsPayload,
+      'approval'
+    ).id,
+    sessionRunId: params.runtime.sessionRunId,
+    sourceType: params.runtime.sourceType,
+    sourceId: params.runtime.sourceId,
+    decision,
+    argumentsPayload: params.argumentsPayload,
   })
 }
 
@@ -2637,7 +2902,25 @@ async function maybeHandleLinearIssueCreation(params: {
   })
 
   if (!createResult) {
-    return null
+    const approvalRequest = await queueScopedToolApprovalBySlug({
+      actorUserId: params.actorUserId,
+      argumentsPayload: finalized.argumentsPayload,
+      db: params.db,
+      orgId: params.orgId,
+      runtime: params.runtime,
+      toolSlug: 'LINEAR_CREATE_LINEAR_ISSUE',
+    })
+
+    if (!approvalRequest) {
+      return null
+    }
+
+    return {
+      content: buildApprovalResponseMessage({
+        created: [approvalRequest],
+      }),
+      usedToolSlugs,
+    }
   }
 
   usedToolSlugs.push(createResult.toolSlug)
@@ -2761,7 +3044,9 @@ export async function runChatCompletionWithToolAccess(params: {
           composioSessionId: scopedRuntime.composioSessionId,
           usedToolSlugs: [],
           gatedToolCount: scopedRuntime.gatedDecisions.length,
-          availableToolCount: scopedRuntime.allowedTools.length,
+          availableToolCount:
+            scopedRuntime.allowedTools.length +
+            scopedRuntime.approvalTools.length,
         },
       }
     }
@@ -2788,7 +3073,9 @@ export async function runChatCompletionWithToolAccess(params: {
             composioSessionId: scopedRuntime.composioSessionId,
             usedToolSlugs: uniqueStrings(usedToolSlugs),
             gatedToolCount: scopedRuntime.gatedDecisions.length,
-            availableToolCount: scopedRuntime.allowedTools.length,
+            availableToolCount:
+              scopedRuntime.allowedTools.length +
+              scopedRuntime.approvalTools.length,
           },
         }
       }
@@ -2815,6 +3102,8 @@ export async function runChatCompletionWithToolAccess(params: {
           db: params.db,
           orgId: params.orgId,
           plans,
+          sourceId: scopedRuntime.sourceId,
+          sourceType: scopedRuntime.sourceType,
           sessionRunId: scopedRuntime.sessionRunId,
         })
 
@@ -2898,6 +3187,8 @@ export async function runChatCompletionWithToolAccess(params: {
               db: params.db,
               orgId: params.orgId,
               plans,
+              sourceId: scopedRuntime.sourceId,
+              sourceType: scopedRuntime.sourceType,
               sessionRunId: scopedRuntime.sessionRunId,
             })
 
@@ -2923,7 +3214,8 @@ export async function runChatCompletionWithToolAccess(params: {
           mustUseTools &&
           usedToolSlugs.length === 0 &&
           !forcedToolRetryUsed &&
-          scopedRuntime.allowedTools.length > 0
+          (scopedRuntime.allowedTools.length > 0 ||
+            scopedRuntime.approvalTools.length > 0)
         ) {
           forcedToolRetryUsed = true
           conversation.push({
@@ -2962,7 +3254,9 @@ export async function runChatCompletionWithToolAccess(params: {
               composioSessionId: scopedRuntime.composioSessionId,
               usedToolSlugs: [],
               gatedToolCount: scopedRuntime.gatedDecisions.length,
-              availableToolCount: scopedRuntime.allowedTools.length,
+              availableToolCount:
+                scopedRuntime.allowedTools.length +
+                scopedRuntime.approvalTools.length,
             },
           }
         }
@@ -2975,7 +3269,9 @@ export async function runChatCompletionWithToolAccess(params: {
                 composioSessionId: scopedRuntime.composioSessionId,
                 usedToolSlugs: uniqueStrings(usedToolSlugs),
                 gatedToolCount: scopedRuntime.gatedDecisions.length,
-                availableToolCount: scopedRuntime.allowedTools.length,
+                availableToolCount:
+                  scopedRuntime.allowedTools.length +
+                  scopedRuntime.approvalTools.length,
               }
             : null,
         }
@@ -2988,6 +3284,7 @@ export async function runChatCompletionWithToolAccess(params: {
       })
 
       const toolMessages: OpenAIMessage[] = []
+      const createdApprovals: QueuedApprovalResult[] = []
 
       for (const [index, toolCall] of toolCalls.entries()) {
         if (index >= MAX_TOOL_CALLS_PER_ROUND) {
@@ -3002,13 +3299,66 @@ export async function runChatCompletionWithToolAccess(params: {
           continue
         }
 
-        const decision = scopedRuntime?.allowedDecisions.get(
-          toolCall.function.name
-        )
+        const decision =
+          scopedRuntime?.allowedDecisions.get(toolCall.function.name) ??
+          scopedRuntime?.approvalDecisions.get(toolCall.function.name)
         const sessionRunId = scopedRuntime?.sessionRunId ?? null
         const composioSessionId = scopedRuntime?.composioSessionId ?? null
 
-        if (!decision || !composioSessionId || !sessionRunId) {
+        if (!decision || !sessionRunId || !scopedRuntime) {
+          toolMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              success: false,
+              error:
+                'This tool is not executable in the current request scope.',
+            }),
+          })
+          continue
+        }
+
+        if (decision.status === 'approval_required') {
+          const parsedArguments = parseToolCallArguments(toolCall)
+          if (!parsedArguments.ok) {
+            toolMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify({
+                success: false,
+                error: parsedArguments.error,
+              }),
+            })
+            continue
+          }
+
+          const approvalRequest = await queueToolApprovalRequest({
+            db: params.db,
+            orgId: params.orgId,
+            actorUserId: params.actorUserId,
+            toolCallId: toolCall.id,
+            sessionRunId,
+            sourceType: scopedRuntime.sourceType,
+            sourceId: scopedRuntime.sourceId,
+            decision,
+            argumentsPayload: parsedArguments.value,
+          })
+
+          createdApprovals.push(approvalRequest)
+          toolMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({
+              success: true,
+              approvalRequested: true,
+              approvalRequestId: approvalRequest.approvalRequestId,
+              preview: approvalRequest.preview,
+            }),
+          })
+          continue
+        }
+
+        if (!composioSessionId) {
           toolMessages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
@@ -3026,6 +3376,8 @@ export async function runChatCompletionWithToolAccess(params: {
           orgId: params.orgId,
           actorUserId: params.actorUserId,
           sessionRunId,
+          sourceType: scopedRuntime.sourceType,
+          sourceId: scopedRuntime.sourceId,
           composioSessionId,
           toolCall,
           decision,
@@ -3033,6 +3385,23 @@ export async function runChatCompletionWithToolAccess(params: {
 
         usedToolSlugs.push(result.toolSlug)
         toolMessages.push(result.toolMessage)
+      }
+
+      if (createdApprovals.length > 0) {
+        return {
+          content: buildApprovalResponseMessage({
+            created: createdApprovals,
+          }),
+          toolRuntime: {
+            sessionRunId: scopedRuntime?.sessionRunId ?? null,
+            composioSessionId: scopedRuntime?.composioSessionId ?? null,
+            usedToolSlugs: uniqueStrings(usedToolSlugs),
+            gatedToolCount: scopedRuntime?.gatedDecisions.length ?? 0,
+            availableToolCount:
+              (scopedRuntime?.allowedTools.length ?? 0) +
+              (scopedRuntime?.approvalTools.length ?? 0),
+          },
+        }
       }
 
       conversation.push(...toolMessages)

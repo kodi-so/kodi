@@ -3,7 +3,11 @@ import type { Context, Hono } from 'hono'
 import { db } from '@kodi/db'
 import { env } from '../env'
 import { logActivity } from '../lib/activity'
-import { getComposioClient, syncWebhookConnectionUpdate } from '../lib/composio'
+import {
+  getComposioClient,
+  revalidatePersistedConnectionsBatch,
+  syncWebhookConnectionUpdate,
+} from '../lib/composio'
 
 function getWebhookHeader(c: Context) {
   return {
@@ -51,7 +55,7 @@ function mapEventTypeToAction(type: string | null) {
 
 function resolveReturnPath(returnPath: string | null | undefined) {
   if (!returnPath || !returnPath.startsWith('/')) {
-    return '/settings/integrations/tool-access'
+    return '/integrations'
   }
 
   return returnPath
@@ -59,6 +63,16 @@ function resolveReturnPath(returnPath: string | null | undefined) {
 
 function resolveAppUrl() {
   return env.APP_URL ?? env.BETTER_AUTH_URL
+}
+
+function isToolAccessInternalAuthorized(headerValue: string | null) {
+  const token =
+    env.TOOL_ACCESS_INTERNAL_TOKEN ??
+    env.MEETING_INTERNAL_TOKEN ??
+    env.ZOOM_GATEWAY_INTERNAL_TOKEN
+
+  if (!token) return true
+  return headerValue === `Bearer ${token}`
 }
 
 export function registerComposioRoutes(app: Hono) {
@@ -157,5 +171,69 @@ export function registerComposioRoutes(app: Hono) {
         500
       )
     }
+  })
+
+  app.post('/internal/tool-access/revalidate-connections', async (c) => {
+    if (
+      !isToolAccessInternalAuthorized(c.req.header('authorization') ?? null)
+    ) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    const body = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<
+      string,
+      unknown
+    >
+
+    const limit =
+      typeof body.limit === 'number' && Number.isFinite(body.limit)
+        ? Math.min(250, Math.max(1, Math.floor(body.limit)))
+        : 100
+    const staleAfterHours =
+      typeof body.staleAfterHours === 'number' && body.staleAfterHours > 0
+        ? body.staleAfterHours
+        : 12
+    const forceAll = body.forceAll === true
+
+    const result = await revalidatePersistedConnectionsBatch({
+      db,
+      orgId: typeof body.orgId === 'string' ? body.orgId : undefined,
+      userId: typeof body.userId === 'string' ? body.userId : undefined,
+      toolkitSlug:
+        typeof body.toolkitSlug === 'string' ? body.toolkitSlug : undefined,
+      limit,
+      staleBefore: forceAll
+        ? null
+        : new Date(Date.now() - staleAfterHours * 60 * 60 * 1000),
+      forceAll,
+    })
+
+    for (const item of result.results) {
+      if (!item.changed && !item.error) continue
+
+      await logActivity(
+        db,
+        item.orgId,
+        item.error
+          ? 'tool_access.connection_revalidation_failed'
+          : 'tool_access.connection_revalidated_by_job',
+        {
+          toolkitSlug: item.toolkitSlug,
+          connectedAccountId: item.connectedAccountId,
+          previousStatus: item.previousStatus,
+          nextStatus: item.nextStatus,
+          error: item.error,
+        },
+        null
+      )
+    }
+
+    return c.json({
+      ok: true,
+      scannedCount: result.scannedCount,
+      changedCount: result.changedCount,
+      failureCount: result.failureCount,
+      results: result.results,
+    })
   })
 }

@@ -207,12 +207,16 @@ export function registerRecallRoutes(app: Hono) {
           orgId: body.orgId,
           meetingUrl: body.meetingUrl,
           error: error.message,
+          providerStatus: error.providerStatus ?? null,
+          providerBody: error.providerBody ?? null,
           failure: error.failure,
           attempts: error.attempts,
         })
         return c.json(
           {
             error: error.message,
+            providerStatus: error.providerStatus ?? null,
+            providerBody: error.providerBody ?? null,
             failure: error.failure,
           },
           502

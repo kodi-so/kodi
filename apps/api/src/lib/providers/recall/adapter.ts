@@ -240,12 +240,20 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
             failureKind: failure.kind,
             retryable: failure.retryable,
             message: error.message,
+            providerBody: error.body ?? null,
           })
           if (failure.retryable && attempt === 0) {
             continue
           }
 
-          throw new RecallMeetingJoinError(error.message, failure, attempts, error)
+          throw new RecallMeetingJoinError(
+            error.message,
+            failure,
+            attempts,
+            error,
+            error.status,
+            error.body ?? null
+          )
         }
 
         const failure = classifyUnexpectedRecallError(error)
@@ -267,7 +275,9 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
           error instanceof Error ? error.message : 'Unknown Recall error',
           failure,
           attempts,
-          error
+          error,
+          null,
+          null
         )
       }
     }

@@ -1,8 +1,11 @@
 import type { Context, Hono } from 'hono'
+import { db } from '@kodi/db'
 import { MeetingOrchestrationService } from '../lib/meetings/orchestration-service'
 import { createDefaultMeetingProviderGateway } from '../lib/meetings/provider-runtime'
 import { env } from '../env'
 import { RecallMeetingJoinError } from '../lib/providers/recall/client'
+import { getRecallBotWebhookSecret } from '../lib/providers/recall/config'
+import { verifyRequestFromRecall } from '../lib/providers/recall/verification'
 
 function isRecallRouteAuthorized(headerValue: string | null) {
   const token = env.MEETING_INTERNAL_TOKEN ?? env.RECALL_REALTIME_AUTH_TOKEN
@@ -85,7 +88,32 @@ export function registerRecallRoutes(app: Hono) {
   }
 
   const handleBotWebhook = async (c: Context) => {
-    const payload = (await c.req.json()) as Record<string, unknown>
+    const rawBody = await c.req.text()
+    const secret = getRecallBotWebhookSecret()
+
+    if (secret) {
+      try {
+        verifyRequestFromRecall({
+          secret,
+          headers: {
+            'webhook-id': c.req.header('webhook-id') ?? undefined,
+            'webhook-timestamp': c.req.header('webhook-timestamp') ?? undefined,
+            'webhook-signature': c.req.header('webhook-signature') ?? undefined,
+            'svix-id': c.req.header('svix-id') ?? undefined,
+            'svix-timestamp': c.req.header('svix-timestamp') ?? undefined,
+            'svix-signature': c.req.header('svix-signature') ?? undefined,
+          },
+          payload: rawBody,
+        })
+      } catch (error) {
+        console.error('[recall] bot webhook verification failed', {
+          error: error instanceof Error ? error.message : 'Unknown verification error',
+        })
+        return c.json({ error: 'Unauthorized' }, 401)
+      }
+    }
+
+    const payload = JSON.parse(rawBody) as Record<string, unknown>
     const data =
       payload.data &&
       typeof payload.data === 'object' &&
@@ -105,7 +133,43 @@ export function registerRecallRoutes(app: Hono) {
 
     const orgId =
       typeof botMetadata?.orgId === 'string' ? botMetadata.orgId : null
-    if (!orgId) {
+    const legacyBotId =
+      typeof data?.bot_id === 'string'
+        ? data.bot_id
+        : null
+    const externalBotSessionId =
+      typeof bot?.id === 'string' ? bot.id : legacyBotId
+
+    const matchedSession =
+      !orgId && externalBotSessionId
+        ? await db.query.meetingSessions.findFirst({
+            where: (fields, { and, eq }) =>
+              and(
+                eq(fields.provider, 'google_meet' as never),
+                eq(fields.providerBotSessionId, externalBotSessionId)
+              ),
+          })
+        : null
+
+    const resolvedOrgId = orgId ?? matchedSession?.orgId ?? null
+    const resolvedInternalMeetingSessionId =
+      typeof botMetadata?.internalMeetingSessionId === 'string'
+        ? botMetadata.internalMeetingSessionId
+        : matchedSession?.id
+    const resolvedExternalMeetingId =
+      typeof botMetadata?.externalMeetingId === 'string'
+        ? botMetadata.externalMeetingId
+        : matchedSession?.providerMeetingId ?? null
+    const resolvedExternalMeetingInstanceId =
+      typeof botMetadata?.externalMeetingInstanceId === 'string'
+        ? botMetadata.externalMeetingInstanceId
+        : matchedSession?.providerMeetingInstanceId ?? null
+
+    if (!resolvedOrgId) {
+      console.warn('[recall] bot webhook missing org id', {
+        event: payload.event,
+        botId: externalBotSessionId,
+      })
       return c.json({ ok: true, ignored: 'missing-org-id' })
     }
 
@@ -114,26 +178,17 @@ export function registerRecallRoutes(app: Hono) {
     )
 
     const result = await orchestration.ingestProviderEnvelope({
-      orgId,
+      orgId: resolvedOrgId,
       provider: 'google_meet',
       envelope: {
         provider: 'google_meet',
         transport: 'webhook',
         receivedAt: new Date(),
         session: {
-          internalMeetingSessionId:
-            typeof botMetadata?.internalMeetingSessionId === 'string'
-              ? botMetadata.internalMeetingSessionId
-              : undefined,
-          externalMeetingId:
-            typeof botMetadata?.externalMeetingId === 'string'
-              ? botMetadata.externalMeetingId
-              : null,
-          externalMeetingInstanceId:
-            typeof botMetadata?.externalMeetingInstanceId === 'string'
-              ? botMetadata.externalMeetingInstanceId
-              : null,
-          externalBotSessionId: typeof bot?.id === 'string' ? bot.id : null,
+          internalMeetingSessionId: resolvedInternalMeetingSessionId,
+          externalMeetingId: resolvedExternalMeetingId,
+          externalMeetingInstanceId: resolvedExternalMeetingInstanceId,
+          externalBotSessionId,
         },
         payload,
       },

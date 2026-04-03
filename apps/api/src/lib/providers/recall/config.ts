@@ -48,3 +48,12 @@ export function getRecallClientConfig() {
     botStatusWebhookSecret: recall.RECALL_BOT_STATUS_WEBHOOK_SECRET ?? null,
   }
 }
+
+export function getRecallBotWebhookSecret() {
+  const recall = requireRecall()
+  return (
+    recall.RECALL_BOT_STATUS_WEBHOOK_SECRET ??
+    recall.RECALL_WEBHOOK_SECRET ??
+    null
+  )
+}

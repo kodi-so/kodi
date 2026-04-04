@@ -371,56 +371,199 @@ export default function MeetingsPage() {
 
   return (
     <div className="min-h-full bg-background">
-      <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-6 px-4 py-8">
-        <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,28rem)]">
-          <div className="min-w-0 overflow-hidden rounded-[2rem] border border-border bg-card p-6 lg:p-8">
-            <Badge variant="outline">Meetings</Badge>
-            <div className="mt-5 max-w-2xl space-y-4">
-              <h1 className="text-4xl font-semibold tracking-tight text-foreground">
-                Start a meeting. Keep the output that matters.
-              </h1>
-              <p className="text-sm leading-7 text-muted-foreground">
-                Kodi joins the call, captures the transcript, and turns the
-                conversation into a useful summary for the team. This page is
-                for two jobs only: start the bot, then review the meeting.
-              </p>
-            </div>
+      <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-6 px-4 py-8">
+        {zoomCallbackBanner && (
+          <Alert
+            className={
+              zoomCallbackBanner.tone === 'success'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                : 'border-red-500/30 bg-red-500/10 text-red-200'
+            }
+          >
+            <AlertDescription>{zoomCallbackBanner.message}</AlertDescription>
+          </Alert>
+        )}
 
-            <div className="mt-8 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Live now
-                </p>
-                <p className="mt-3 text-3xl font-semibold text-foreground">
-                  {liveCount}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Sessions currently joining, listening, or summarizing.
-                </p>
-              </div>
-              <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Workflow
-                </p>
-                <p className="mt-3 text-sm leading-6 text-foreground">
-                  Paste the Meet link, admit Kodi, then review the summary and
-                  transcript here.
-                </p>
-              </div>
-              <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4 md:col-span-2 2xl:col-span-1">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Current scope
-                </p>
-                <p className="mt-3 text-sm leading-6 text-foreground">
-                  Google Meet live start is ready now. Stable invite identity is
-                  in place, with invite-by-email automation and auto-join rules
-                  coming next.
+        {error && (
+          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(21rem,27rem)]">
+          <div className="min-w-0 space-y-6">
+            <section className="min-w-0 overflow-hidden rounded-[2rem] border border-border bg-card p-6 lg:p-8">
+              <Badge variant="outline">Meetings</Badge>
+              <div className="mt-5 max-w-2xl space-y-4">
+                <h1 className="text-4xl font-semibold tracking-tight text-foreground">
+                  Start a meeting. Keep the output that matters.
+                </h1>
+                <p className="text-sm leading-7 text-muted-foreground">
+                  Kodi joins the call, captures the transcript, and turns the
+                  conversation into a useful summary for the team. This page is
+                  for two jobs only: start the bot, then review the meeting.
                 </p>
               </div>
-            </div>
+
+              <div className="mt-8 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Live now
+                  </p>
+                  <p className="mt-3 text-3xl font-semibold text-foreground">
+                    {liveCount}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Sessions currently joining, listening, or summarizing.
+                  </p>
+                </div>
+                <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Workflow
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-foreground">
+                    Paste the Meet link, admit Kodi, then review the summary and
+                    transcript here.
+                  </p>
+                </div>
+                <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4 md:col-span-2 2xl:col-span-1">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Current scope
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-foreground">
+                    Google Meet live start is ready now. Stable invite identity
+                    is in place, with invite-by-email automation and auto-join
+                    rules coming next.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight text-white">
+                    Recent meetings
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+                    Open any session to review the summary, grouped transcript,
+                    and the follow-up that seems worth acting on.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => void refresh()}
+                  variant="ghost"
+                  className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                  disabled={isRefreshing}
+                >
+                  <RefreshCcw
+                    size={16}
+                    className={isRefreshing ? 'animate-spin' : ''}
+                  />
+                  Refresh
+                </Button>
+              </div>
+
+              {loading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <Card key={index} className="border-zinc-800 bg-zinc-900/60">
+                      <CardContent className="space-y-4 p-5">
+                        <Skeleton className="h-4 w-28 bg-zinc-800" />
+                        <Skeleton className="h-5 w-56 bg-zinc-800" />
+                        <Skeleton className="h-10 bg-zinc-800" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : meetings.length === 0 ? (
+                <Card className="border-zinc-800 bg-zinc-900/60">
+                  <CardContent className="flex flex-col gap-5 p-8">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-[1.15rem] border border-zinc-800 bg-zinc-950 text-zinc-300">
+                      <Video size={18} />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-medium text-white">
+                        No meetings yet
+                      </h3>
+                      <p className="max-w-xl text-sm leading-6 text-zinc-400">
+                        Start with a Meet link on the right. Once Kodi joins,
+                        this page becomes the running record of summary,
+                        transcript, and follow-up for the workspace.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {meetings.map((meeting) => (
+                    <Link
+                      key={meeting.id}
+                      href={`/meetings/${meeting.id}`}
+                      className="group block rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,19,23,0.95),_rgba(11,12,15,0.92))] p-5 transition hover:border-zinc-700 hover:bg-zinc-900/90"
+                    >
+                      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className={statusTone(meeting.status)}>
+                              {statusLabel(meeting.status)}
+                            </Badge>
+                            <Badge className="border-zinc-700 bg-zinc-900 text-zinc-400">
+                              {meetingOutcomeLabel(meeting)}
+                            </Badge>
+                          </div>
+
+                          <h3 className="mt-4 text-xl font-medium text-white">
+                            {meeting.title ?? 'Untitled meeting'}
+                          </h3>
+
+                          <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">
+                            {meetingSnapshot(meeting)}
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 flex-col gap-3 text-sm text-zinc-400 lg:items-end">
+                          <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                              Started
+                            </p>
+                            <p className="mt-2 text-zinc-200">
+                              {formatDate(
+                                meeting.actualStartAt ?? meeting.createdAt
+                              )}
+                            </p>
+                          </div>
+                          <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+                              Updated
+                            </p>
+                            <p className="mt-2 text-zinc-200">
+                              {formatDate(meeting.updatedAt)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-800/80 pt-4 text-sm">
+                        <span className="text-zinc-500">
+                          {meeting.provider === 'google_meet'
+                            ? 'Google Meet'
+                            : 'Meeting'}
+                        </span>
+                        <span className="inline-flex items-center gap-2 text-zinc-100 transition group-hover:translate-x-0.5">
+                          Open meeting
+                          <ArrowRight size={15} />
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
 
-          <div className="min-w-0 space-y-4">
+          <div className="min-w-0 space-y-4 xl:sticky xl:top-6">
             <Card className="min-w-0 border-border bg-card">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-4">
@@ -469,13 +612,28 @@ export default function MeetingsPage() {
                     />
                   </div>
 
-                  <div className="rounded-[1.4rem] border border-border bg-secondary p-4 text-sm leading-6 text-foreground">
-                    <p>1. Start the meeting here.</p>
-                    <p>2. Admit Kodi when Google Meet asks.</p>
-                    <p>3. Review the summary, notes, and transcript in Kodi.</p>
+                  <div className="rounded-[1.2rem] border border-border bg-secondary px-4 py-3 text-sm leading-6 text-muted-foreground">
+                    Start here for a live call. Admit Kodi in Meet, then come
+                    back to this workspace to review the summary and transcript.
                   </div>
 
-                  <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
+                  <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+                    <Button
+                      onClick={() => void startMeeting()}
+                      disabled={isStarting || meetingUrl.trim().length === 0}
+                      className="gap-2"
+                    >
+                      <Sparkles size={16} />
+                      {isStarting ? 'Starting Kodi…' : 'Start meeting bot'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border bg-card">
+              <CardContent className="p-6">
+                <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-2">
                         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -575,18 +733,6 @@ export default function MeetingsPage() {
                         </p>
                       ))}
                     </div>
-                  </div>
-
-                  <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
-                    <Button
-                      onClick={() => void startMeeting()}
-                      disabled={isStarting || meetingUrl.trim().length === 0}
-                      className="gap-2"
-                    >
-                      <Sparkles size={16} />
-                      {isStarting ? 'Starting Kodi…' : 'Start meeting bot'}
-                    </Button>
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -670,148 +816,7 @@ export default function MeetingsPage() {
               </CardContent>
             </Card>
           </div>
-        </section>
-
-        {zoomCallbackBanner && (
-          <Alert
-            className={
-              zoomCallbackBanner.tone === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                : 'border-red-500/30 bg-red-500/10 text-red-200'
-            }
-          >
-            <AlertDescription>{zoomCallbackBanner.message}</AlertDescription>
-          </Alert>
-        )}
-
-        {error && (
-          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <section className="space-y-4">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight text-white">
-                Recent meetings
-              </h2>
-              <p className="mt-1 text-sm text-zinc-400">
-                Open any session to review what was said, what Kodi understood,
-                and what deserves follow-through.
-              </p>
-            </div>
-
-            <Button
-              onClick={() => void refresh()}
-              variant="ghost"
-              className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-              disabled={isRefreshing}
-            >
-              <RefreshCcw
-                size={16}
-                className={isRefreshing ? 'animate-spin' : ''}
-              />
-              Refresh
-            </Button>
-          </div>
-
-          {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Card key={index} className="border-zinc-800 bg-zinc-900/60">
-                  <CardContent className="space-y-4 p-5">
-                    <Skeleton className="h-4 w-28 bg-zinc-800" />
-                    <Skeleton className="h-5 w-56 bg-zinc-800" />
-                    <Skeleton className="h-10 bg-zinc-800" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : meetings.length === 0 ? (
-            <Card className="border-zinc-800 bg-zinc-900/60">
-              <CardContent className="flex flex-col gap-5 p-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-[1.15rem] border border-zinc-800 bg-zinc-950 text-zinc-300">
-                  <Video size={18} />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-xl font-medium text-white">
-                    No meetings yet
-                  </h3>
-                  <p className="max-w-xl text-sm leading-6 text-zinc-400">
-                    Start with a Meet link above. Once Kodi joins, this page
-                    becomes the running record of summary, transcript, and
-                    follow-up for the workspace.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {meetings.map((meeting) => (
-                <Link
-                  key={meeting.id}
-                  href={`/meetings/${meeting.id}`}
-                  className="group block rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,19,23,0.95),_rgba(11,12,15,0.92))] p-5 transition hover:border-zinc-700 hover:bg-zinc-900/90"
-                >
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={statusTone(meeting.status)}>
-                          {statusLabel(meeting.status)}
-                        </Badge>
-                        <Badge className="border-zinc-700 bg-zinc-900 text-zinc-400">
-                          {meetingOutcomeLabel(meeting)}
-                        </Badge>
-                      </div>
-
-                      <h3 className="mt-4 text-xl font-medium text-white">
-                        {meeting.title ?? 'Untitled meeting'}
-                      </h3>
-
-                      <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">
-                        {meetingSnapshot(meeting)}
-                      </p>
-                    </div>
-
-                    <div className="flex shrink-0 flex-col gap-3 text-sm text-zinc-400 lg:items-end">
-                      <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-                          Started
-                        </p>
-                        <p className="mt-2 text-zinc-200">
-                          {formatDate(
-                            meeting.actualStartAt ?? meeting.createdAt
-                          )}
-                        </p>
-                      </div>
-                      <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-                          Updated
-                        </p>
-                        <p className="mt-2 text-zinc-200">
-                          {formatDate(meeting.updatedAt)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-800/80 pt-4 text-sm">
-                    <span className="text-zinc-500">
-                      {meeting.provider === 'google_meet'
-                        ? 'Google Meet'
-                        : 'Meeting'}
-                    </span>
-                    <span className="inline-flex items-center gap-2 text-zinc-100 transition group-hover:translate-x-0.5">
-                      Open meeting
-                      <ArrowRight size={15} />
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+        </div>
       </div>
     </div>
   )

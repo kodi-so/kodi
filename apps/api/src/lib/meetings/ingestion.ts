@@ -663,42 +663,95 @@ function normalizedEventPayload(event: MeetingProviderEvent) {
   }
 }
 
+async function sanitizeLifecycleEventForPersistence(
+  meetingSessionId: string,
+  event: MeetingLifecycleEvent
+): Promise<MeetingLifecycleEvent> {
+  if (event.action !== 'meeting.failed' || event.state !== 'failed') {
+    return event
+  }
+
+  const meetingSession = await db.query.meetingSessions.findFirst({
+    where: (fields, { eq }) => eq(fields.id, meetingSessionId),
+    columns: {
+      status: true,
+      endedAt: true,
+      actualStartAt: true,
+    },
+  })
+
+  if (!meetingSession) return event
+
+  const currentStatus = meetingSession.status as MeetingSessionStatus
+  const shouldTreatAsEnded =
+    ['admitted', 'listening', 'processing', 'ended'].includes(currentStatus) ||
+    meetingSession.endedAt != null ||
+    meetingSession.actualStartAt != null
+
+  if (!shouldTreatAsEnded) {
+    return event
+  }
+
+  return {
+    ...event,
+    action: 'meeting.ended',
+    state: 'stopped',
+    errorCode: null,
+    errorMessage: null,
+    metadata: {
+      ...(event.metadata ?? {}),
+      normalizedFromFailure: true,
+    },
+  }
+}
+
 export async function appendNormalizedMeetingEvent(
   meetingSessionId: string,
   event: MeetingProviderEvent,
   source: MeetingIngestionSource = 'worker'
 ): Promise<AppendNormalizedMeetingEventResult> {
+  const normalizedEvent =
+    event.kind === 'lifecycle'
+      ? await sanitizeLifecycleEventForPersistence(meetingSessionId, event)
+      : event
   let transcriptOperation: TranscriptPersistenceResult['operation'] | undefined
 
-  if (event.kind === 'participant') {
+  if (normalizedEvent.kind === 'participant') {
     await upsertMeetingParticipant(meetingSessionId, {
-      providerParticipantId: event.participant.providerParticipantId ?? null,
-      displayName: event.participant.displayName ?? null,
-      email: event.participant.email ?? null,
-      joinedAt: event.action === 'participant.joined' ? event.occurredAt : null,
-      leftAt: event.action === 'participant.left' ? event.occurredAt : null,
-      metadata: event.metadata ?? null,
+      providerParticipantId:
+        normalizedEvent.participant.providerParticipantId ?? null,
+      displayName: normalizedEvent.participant.displayName ?? null,
+      email: normalizedEvent.participant.email ?? null,
+      joinedAt:
+        normalizedEvent.action === 'participant.joined'
+          ? normalizedEvent.occurredAt
+          : null,
+      leftAt:
+        normalizedEvent.action === 'participant.left'
+          ? normalizedEvent.occurredAt
+          : null,
+      metadata: normalizedEvent.metadata ?? null,
     })
   }
 
-  if (event.kind === 'transcript') {
+  if (normalizedEvent.kind === 'transcript') {
     const [persistedTranscript] = await appendTranscriptSegments(meetingSessionId, [
       {
         providerParticipantId:
-          event.transcript.speaker?.providerParticipantId ?? null,
-        speakerName: event.transcript.speaker?.displayName ?? null,
-        content: event.transcript.content,
-        startOffsetMs: event.transcript.startOffsetMs ?? null,
-        endOffsetMs: event.transcript.endOffsetMs ?? null,
-        confidence: event.transcript.confidence ?? null,
-        isPartial: event.transcript.isPartial ?? false,
+          normalizedEvent.transcript.speaker?.providerParticipantId ?? null,
+        speakerName: normalizedEvent.transcript.speaker?.displayName ?? null,
+        content: normalizedEvent.transcript.content,
+        startOffsetMs: normalizedEvent.transcript.startOffsetMs ?? null,
+        endOffsetMs: normalizedEvent.transcript.endOffsetMs ?? null,
+        confidence: normalizedEvent.transcript.confidence ?? null,
+        isPartial: normalizedEvent.transcript.isPartial ?? false,
       },
     ], source)
 
     transcriptOperation = persistedTranscript?.operation ?? 'ignored'
 
     const shouldFanOut =
-      transcriptOperation !== 'ignored' && !event.transcript.isPartial
+      transcriptOperation !== 'ignored' && !normalizedEvent.transcript.isPartial
 
     if (!shouldFanOut) {
       return {
@@ -709,27 +762,30 @@ export async function appendNormalizedMeetingEvent(
     }
   }
 
-  if (event.kind === 'lifecycle') {
-    const nextStatus = meetingStatusFromLifecycleEvent(event)
+  if (normalizedEvent.kind === 'lifecycle') {
+    const nextStatus = meetingStatusFromLifecycleEvent(normalizedEvent)
     if (nextStatus) {
       await updateMeetingSessionRuntimeState(meetingSessionId, {
         status: nextStatus,
         actualStartAt:
-          event.action === 'meeting.started' ? event.occurredAt : undefined,
-        endedAt:
-          event.action === 'meeting.ended' || event.action === 'meeting.stopped'
-            ? event.occurredAt
+          normalizedEvent.action === 'meeting.started'
+            ? normalizedEvent.occurredAt
             : undefined,
-        metadataPatch: event.metadata ?? undefined,
+        endedAt:
+          normalizedEvent.action === 'meeting.ended' ||
+          normalizedEvent.action === 'meeting.stopped'
+            ? normalizedEvent.occurredAt
+            : undefined,
+        metadataPatch: normalizedEvent.metadata ?? undefined,
       })
     }
   }
 
   const persistedEvent = await appendMeetingEvent(
     meetingSessionId,
-    normalizedEventType(event),
+    normalizedEventType(normalizedEvent),
     source,
-    normalizedEventPayload(event)
+    normalizedEventPayload(normalizedEvent)
   )
 
   return {

@@ -36,6 +36,9 @@ type MeetingTranscript = MeetingConsole['transcript']
 type MeetingLiveState = MeetingConsole['liveState'] | null
 type MeetingEventFeed = MeetingConsole['events']
 type MeetingTranscriptSegment = MeetingTranscript[number]
+type MeetingTranscriptTurn = MeetingTranscriptSegment & {
+  mergedSegmentCount: number
+}
 
 function asRecord(value: unknown) {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -275,13 +278,66 @@ function shouldCollapseTranscriptSegments(
   )
 }
 
+function shouldMergeTranscriptTurns(
+  previous: MeetingTranscriptSegment,
+  current: MeetingTranscriptSegment
+) {
+  const previousSpeaker = previous.speakerName ?? 'Unknown speaker'
+  const currentSpeaker = current.speakerName ?? 'Unknown speaker'
+
+  if (previousSpeaker !== currentSpeaker) return false
+  if (previous.source !== current.source) return false
+
+  const previousCreatedAt = new Date(previous.createdAt).getTime()
+  const currentCreatedAt = new Date(current.createdAt).getTime()
+  if (
+    Number.isNaN(previousCreatedAt) ||
+    Number.isNaN(currentCreatedAt) ||
+    currentCreatedAt - previousCreatedAt > 90_000
+  ) {
+    return false
+  }
+
+  return !previous.isPartial && !current.isPartial
+}
+
+function joinTranscriptContent(previous: string, current: string) {
+  const previousNormalized = normalizeTranscriptContent(previous)
+  const currentNormalized = normalizeTranscriptContent(current)
+
+  if (!previousNormalized) return current.trim()
+  if (!currentNormalized) return previous.trim()
+
+  if (previousNormalized === currentNormalized) {
+    return previous.length >= current.length ? previous.trim() : current.trim()
+  }
+
+  if (previousNormalized.startsWith(currentNormalized)) {
+    return previous.trim()
+  }
+
+  if (currentNormalized.startsWith(previousNormalized)) {
+    return current.trim()
+  }
+
+  const left = previous.trim()
+  const right = current.trim()
+  if (!left) return right
+  if (!right) return left
+
+  return `${left}${/\s$/.test(left) ? '' : ' '}${right}`
+}
+
 function collapseTranscriptSegments(segments: MeetingTranscript) {
-  const collapsed: MeetingTranscript = []
+  const collapsed: MeetingTranscriptTurn[] = []
 
   for (const segment of segments) {
     const previous = collapsed[collapsed.length - 1]
     if (!previous || !shouldCollapseTranscriptSegments(previous, segment)) {
-      collapsed.push(segment)
+      collapsed.push({
+        ...segment,
+        mergedSegmentCount: 1,
+      })
       continue
     }
 
@@ -290,11 +346,33 @@ function collapseTranscriptSegments(segments: MeetingTranscript) {
       segment.content.length >= previous.content.length
 
     if (preferCurrent) {
-      collapsed[collapsed.length - 1] = segment
+      collapsed[collapsed.length - 1] = {
+        ...segment,
+        mergedSegmentCount: previous.mergedSegmentCount,
+      }
     }
   }
 
-  return collapsed
+  const grouped: MeetingTranscriptTurn[] = []
+
+  for (const segment of collapsed) {
+    const previous = grouped[grouped.length - 1]
+
+    if (!previous || !shouldMergeTranscriptTurns(previous, segment)) {
+      grouped.push(segment)
+      continue
+    }
+
+    grouped[grouped.length - 1] = {
+      ...segment,
+      id: previous.id,
+      createdAt: previous.createdAt,
+      content: joinTranscriptContent(previous.content, segment.content),
+      mergedSegmentCount: previous.mergedSegmentCount + segment.mergedSegmentCount,
+    }
+  }
+
+  return grouped
 }
 
 export default function MeetingDetailsPage() {
@@ -368,10 +446,6 @@ export default function MeetingDetailsPage() {
     () => collapseTranscriptSegments([...transcript].reverse()),
     [transcript]
   )
-  const inCallParticipants = useMemo(
-    () => participants.filter((participant) => !participant.leftAt),
-    [participants]
-  )
   const meetingMetadata = useMemo(
     () => asRecord(meeting?.metadata),
     [meeting?.metadata]
@@ -420,6 +494,23 @@ export default function MeetingDetailsPage() {
         .slice(0, 8),
     [events]
   )
+
+  const compactTimelineEvents = useMemo(() => {
+    if (timelineEvents.length === 0) return []
+
+    return timelineEvents.filter((event, index, list) => {
+      if (event.eventType !== 'meeting.failed') {
+        return true
+      }
+
+      const previous = list[index - 1]
+      const next = list[index + 1]
+      return !(
+        previous?.eventType === 'meeting.ended' ||
+        next?.eventType === 'meeting.ended'
+      )
+    })
+  }, [timelineEvents])
 
   const rollingNotes = useMemo(
     () =>
@@ -714,7 +805,7 @@ export default function MeetingDetailsPage() {
           </Alert>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.18fr)_minmax(300px,0.82fr)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
           <div className="space-y-6">
             <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
               <CardHeader>
@@ -732,7 +823,20 @@ export default function MeetingDetailsPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-5">
+              <CardContent className="space-y-4">
+                {activeTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {activeTopics.map((topic) => (
+                      <Badge
+                        key={topic}
+                        className="border-white/12 bg-white/10 text-[#dce5e7]"
+                      >
+                        {topic}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
                 <div className="rounded-[1.5rem] border border-white/10 bg-black/12 p-5">
                   <p className="text-sm leading-7 text-white">
                     {meeting.liveSummary ??
@@ -741,39 +845,15 @@ export default function MeetingDetailsPage() {
                   </p>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-                  <div className="rounded-[1.5rem] border border-white/10 bg-black/12 p-5">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Active topics
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {activeTopics.length > 0 ? (
-                        activeTopics.map((topic) => (
-                          <Badge
-                            key={topic}
-                            className="border-white/12 bg-white/10 text-[#dce5e7]"
-                          >
-                            {topic}
-                          </Badge>
-                        ))
-                      ) : (
-                        <p className="text-sm text-[#8ea3a8]">
-                          Topics will appear here as the meeting develops.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.5rem] border border-white/10 bg-black/12 p-5">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Running notes
-                    </p>
-                    <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[#eef2ea]">
-                      {rollingNotes ??
-                        'Kodi will keep a tighter running set of notes here as the meeting develops.'}
-                    </p>
-                  </div>
-                </div>
+                <details className="group rounded-[1.5rem] border border-white/10 bg-black/12 p-5">
+                  <summary className="cursor-pointer list-none text-sm font-medium text-[#eef2ea] marker:hidden">
+                    Working notes
+                  </summary>
+                  <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[#eef2ea]">
+                    {rollingNotes ??
+                      'Kodi will keep a tighter running set of notes here as the meeting develops.'}
+                  </p>
+                </details>
               </CardContent>
             </Card>
 
@@ -786,7 +866,7 @@ export default function MeetingDetailsPage() {
                   <div>
                     <CardTitle className="text-xl text-white">Transcript</CardTitle>
                     <CardDescription className="text-[#9bb0b5]">
-                      Raw meeting language, newest lines at the bottom.
+                      Raw meeting language, grouped into readable speaker turns.
                     </CardDescription>
                   </div>
                 </div>
@@ -836,39 +916,10 @@ export default function MeetingDetailsPage() {
                   Follow-up
                 </CardTitle>
                 <CardDescription className="text-[#9bb0b5]">
-                  The outputs that should help the team move after the call.
+                  The handful of outputs that are actually worth acting on.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[1.3rem] border border-white/10 bg-black/12 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Status
-                    </p>
-                    <div className="mt-3">
-                      <Badge className={statusTone(meeting.status)}>
-                        {statusLabel(meeting.status)}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="rounded-[1.3rem] border border-white/10 bg-black/12 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      People live
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold text-white">
-                      {inCallParticipants.length}
-                    </p>
-                  </div>
-                  <div className="rounded-[1.3rem] border border-white/10 bg-black/12 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Transcript
-                    </p>
-                    <p className="mt-3 text-2xl font-semibold text-white">
-                      {transcript.length}
-                    </p>
-                  </div>
-                </div>
-
                 <div className="space-y-3">
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
@@ -924,9 +975,14 @@ export default function MeetingDetailsPage() {
                             )}
 
                             {draft.sourceEvidence.length > 0 && (
-                              <p className="mt-3 text-sm leading-6 text-[#8ea3a8]">
-                                {draft.sourceEvidence[0]}
-                              </p>
+                              <details className="mt-3">
+                                <summary className="cursor-pointer text-sm text-[#8ea3a8]">
+                                  Why Kodi suggested this
+                                </summary>
+                                <p className="mt-2 text-sm leading-6 text-[#8ea3a8]">
+                                  {draft.sourceEvidence[0]}
+                                </p>
+                              </details>
                             )}
                           </div>
                         ))
@@ -966,9 +1022,14 @@ export default function MeetingDetailsPage() {
                               </p>
                             )}
                             {task.sourceEvidence.length > 0 && (
-                              <p className="mt-3 text-sm leading-6 text-[#8ea3a8]">
-                                {task.sourceEvidence[0]}
-                              </p>
+                              <details className="mt-3">
+                                <summary className="cursor-pointer text-sm text-[#8ea3a8]">
+                                  Why Kodi suggested this
+                                </summary>
+                                <p className="mt-2 text-sm leading-6 text-[#8ea3a8]">
+                                  {task.sourceEvidence[0]}
+                                </p>
+                              </details>
                             )}
                           </div>
                         ))
@@ -1036,20 +1097,67 @@ export default function MeetingDetailsPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">Timeline</CardTitle>
-                <CardDescription className="text-[#9bb0b5]">
-                  The handful of meeting moments worth keeping in view.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {timelineEvents.length === 0 ? (
+            <details className="group rounded-[1.75rem] border border-white/10 bg-[rgba(49,66,71,0.72)] p-5">
+              <summary className="cursor-pointer list-none text-sm font-medium text-[#eef2ea] marker:hidden">
+                People, activity, and diagnostics
+              </summary>
+              <p className="mt-2 text-sm leading-6 text-[#8ea3a8]">
+                Keep the meeting page focused by tucking roster, raw lifecycle, and provider details here.
+              </p>
+
+              <div className="mt-4 space-y-3">
+                <div className="rounded-[1.5rem] border border-white/10 bg-black/12 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-white">
+                    <Users size={16} className="text-[#dbeaf0]" />
+                    People
+                  </div>
+                  {participants.length === 0 ? (
+                    <p className="mt-3 text-sm text-[#8ea3a8]">
+                      Participant activity will appear here.
+                    </p>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      {participants.map((participant) => (
+                        <div
+                          key={participant.id}
+                          className="rounded-[1.2rem] border border-white/10 bg-black/10 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-white">
+                                {participant.displayName ??
+                                  participant.email ??
+                                  'Unknown participant'}
+                              </p>
+                              <p className="mt-1 truncate text-xs text-[#8ea3a8]">
+                                {participant.email ?? 'No email captured'}
+                              </p>
+                            </div>
+                            <Badge
+                              className={
+                                participant.leftAt
+                                  ? 'border-white/12 bg-white/10 text-[#dce5e7]'
+                                  : 'border-[#6FA88C]/30 bg-[#6FA88C]/14 text-[#d6eadf]'
+                              }
+                            >
+                              {participant.leftAt ? 'Left' : 'In call'}
+                            </Badge>
+                          </div>
+                          <p className="mt-3 text-xs text-[#8ea3a8]">
+                            Joined {formatDate(participant.joinedAt)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {compactTimelineEvents.length === 0 ? (
                   <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-5 text-sm text-[#8ea3a8]">
                     Kodi will add the important meeting moments here.
                   </div>
                 ) : (
-                  timelineEvents.map((event) => (
+                  compactTimelineEvents.map((event) => (
                     <div
                       key={event.id}
                       className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4"
@@ -1068,71 +1176,7 @@ export default function MeetingDetailsPage() {
                     </div>
                   ))
                 )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-white/12 bg-white/8 text-[#dbeaf0]">
-                    <Users size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl text-white">People</CardTitle>
-                    <CardDescription className="text-[#9bb0b5]">
-                      Who Kodi currently sees in the meeting.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {participants.length === 0 ? (
-                  <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-5 text-sm text-[#8ea3a8]">
-                    Participant activity will appear here.
-                  </div>
-                ) : (
-                  participants.map((participant) => (
-                    <div
-                      key={participant.id}
-                      className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-white">
-                            {participant.displayName ??
-                              participant.email ??
-                              'Unknown participant'}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-[#8ea3a8]">
-                            {participant.email ?? 'No email captured'}
-                          </p>
-                        </div>
-                        <Badge
-                          className={
-                            participant.leftAt
-                              ? 'border-white/12 bg-white/10 text-[#dce5e7]'
-                              : 'border-[#6FA88C]/30 bg-[#6FA88C]/14 text-[#d6eadf]'
-                          }
-                        >
-                          {participant.leftAt ? 'Left' : 'In call'}
-                        </Badge>
-                      </div>
-                      <p className="mt-3 text-xs text-[#8ea3a8]">
-                        Joined {formatDate(participant.joinedAt)}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <details className="group rounded-[1.75rem] border border-white/10 bg-[rgba(49,66,71,0.72)] p-5">
-              <summary className="cursor-pointer list-none text-sm font-medium text-[#eef2ea] marker:hidden">
-                Technical details
-              </summary>
-              <p className="mt-2 text-sm leading-6 text-[#8ea3a8]">
-                Provider identifiers and refresh timing for debugging when needed.
-              </p>
+              </div>
 
               <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/12 px-4 py-3">
                 {technicalDetails.map((detail, index) => (

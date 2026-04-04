@@ -3,93 +3,13 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --kodi-ink: 196 16% 29%;
-    --kodi-room-dark: 193 23% 18%;
-    --kodi-room: 195 18% 25%;
-    --kodi-canvas: 48 25% 95%;
-    --kodi-chalk: 0 0% 100%;
-    --kodi-warm-sand: 40 35% 86%;
-    --kodi-signal: 38 67% 61%;
-    --kodi-signal-soft: 39 72% 80%;
-    --kodi-moss: 148 24% 55%;
-    --kodi-coral: 14 59% 62%;
-    --kodi-mist: 194 12% 81%;
-    --background: var(--kodi-canvas);
-    --foreground: var(--kodi-ink);
-    --card: var(--kodi-chalk);
-    --card-foreground: var(--kodi-ink);
-    --popover: var(--kodi-chalk);
-    --popover-foreground: var(--kodi-ink);
-    --primary: var(--kodi-signal);
-    --primary-foreground: var(--kodi-room-dark);
-    --secondary: 40 35% 92%;
-    --secondary-foreground: var(--kodi-ink);
-    --muted: 42 21% 92%;
-    --muted-foreground: 196 12% 42%;
-    --accent: 40 35% 92%;
-    --accent-foreground: var(--kodi-ink);
-    --destructive: var(--kodi-coral);
-    --destructive-foreground: 0 0% 100%;
-    --border: var(--kodi-mist);
-    --input: var(--kodi-mist);
-    --ring: var(--kodi-signal);
-    --radius: 1rem;
-  }
-}
-
-@layer base {
   * {
     @apply border-border;
   }
-
   html {
-    scroll-behavior: smooth;
+    font-family: var(--font-abeezee), system-ui, sans-serif;
   }
-
   body {
-    @apply bg-background text-foreground;
-    background:
-      radial-gradient(circle at top left, rgba(223, 174, 86, 0.18), transparent 26%),
-      radial-gradient(circle at 85% 12%, rgba(111, 168, 140, 0.14), transparent 24%),
-      linear-gradient(180deg, #f9f7f0 0%, #f6f4ee 36%, #f0ece1 100%);
-    color: #223239;
-    font-family: var(--font-kodi-brand), sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
+    @apply bg-background text-foreground antialiased;
   }
-
-  ::selection {
-    background: rgba(223, 174, 86, 0.3);
-    color: #223239;
-  }
-}
-
-@layer utilities {
-  .font-brand {
-    font-family: var(--font-kodi-brand), sans-serif;
-  }
-
-  .font-body {
-    font-family: var(--font-kodi-brand), sans-serif;
-  }
-
-  .font-support {
-    font-family: var(--font-kodi-body), sans-serif;
-  }
-}
-
-@keyframes gradient-shift {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient-shift 4s ease infinite;
 }

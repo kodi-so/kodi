@@ -1,10 +1,26 @@
 import type { Metadata } from 'next'
+import { ABeeZee, IBM_Plex_Sans } from 'next/font/google'
 import './globals.css'
 
+const brandFont = ABeeZee({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
+  variable: '--font-kodi-brand',
+})
+
+const bodyFont = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
+  display: 'swap',
+  variable: '--font-kodi-body',
+})
+
 export const metadata: Metadata = {
-  title: 'Kodi — AI Teammate for Meetings and Execution',
+  title: 'Kodi — AI Teammate for Meetings, Execution, and Control',
   description:
-    'Bring an AI agent into calls, chat, and your business tools. Kodi listens, answers with live context, tracks decisions, and carries work forward.',
+    'Kodi joins meetings, answers with live business context, and can organize, draft, or execute follow-through across your tools at the autonomy level you choose.',
 }
 
 export default function RootLayout({
@@ -14,19 +30,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body>{children}</body>
+      <body className={`${brandFont.variable} ${bodyFont.variable}`}>
+        {children}
+      </body>
     </html>
   )
 }

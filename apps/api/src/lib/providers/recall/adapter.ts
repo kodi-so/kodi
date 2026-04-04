@@ -165,7 +165,10 @@ function buildRecallJoinPayload(
       transcript: realtimeWebhookUrl
         ? {
             provider: {
-              recallai_streaming: {},
+              recallai_streaming: {
+                mode: 'prioritize_low_latency',
+                language_code: 'en',
+              },
             },
           }
         : undefined,

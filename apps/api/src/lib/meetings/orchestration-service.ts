@@ -5,6 +5,7 @@ import {
   type MeetingIngestionSource,
   updateMeetingSessionRuntimeState,
 } from './ingestion'
+import { processMeetingDraftActions } from './openclaw-draft-actions'
 import { processMeetingCandidateTasks } from './openclaw-candidate-tasks'
 import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
 import { processMeetingRollingNotes } from './openclaw-rolling-notes'
@@ -160,6 +161,29 @@ export class MeetingOrchestrationService {
           error:
             'error' in candidateTasksResult
               ? candidateTasksResult.error ?? null
+              : null,
+        })
+      }
+
+      const draftActionsResult = await processMeetingDraftActions({
+        orgId: input.orgId,
+        meetingSession: input.meetingSession,
+        lastEventSequence: input.persistedEvent.sequence,
+      })
+
+      if (
+        !draftActionsResult.ok &&
+        'reason' in draftActionsResult &&
+        draftActionsResult.reason !== 'missing-instance'
+      ) {
+        console.warn('[meetings] openclaw draft actions failed', {
+          orgId: input.orgId,
+          meetingSessionId: input.meetingSession.id,
+          eventId: input.persistedEvent.id,
+          reason: draftActionsResult.reason,
+          error:
+            'error' in draftActionsResult
+              ? draftActionsResult.error ?? null
               : null,
         })
       }

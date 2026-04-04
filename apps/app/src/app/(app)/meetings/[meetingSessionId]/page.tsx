@@ -466,6 +466,57 @@ export default function MeetingDetailsPage() {
     [liveState?.candidateTasks]
   )
 
+  const draftActions = useMemo(
+    () =>
+      asArray(liveState?.draftActions)
+        .map((draft) => {
+          const record = asRecord(draft)
+          if (!record) return null
+
+          return {
+            title:
+              typeof record.title === 'string' ? record.title : 'Untitled draft',
+            toolkitSlug:
+              typeof record.toolkitSlug === 'string' ? record.toolkitSlug : null,
+            toolkitName:
+              typeof record.toolkitName === 'string' ? record.toolkitName : null,
+            actionType:
+              typeof record.actionType === 'string' ? record.actionType : null,
+            targetSummary:
+              typeof record.targetSummary === 'string'
+                ? record.targetSummary
+                : null,
+            rationale:
+              typeof record.rationale === 'string' ? record.rationale : null,
+            confidence:
+              typeof record.confidence === 'number' ? record.confidence : null,
+            sourceEvidence: asArray(record.sourceEvidence).filter(
+              (item): item is string => typeof item === 'string'
+            ),
+            reviewState:
+              typeof record.reviewState === 'string' ? record.reviewState : null,
+            approvalRequired: record.approvalRequired === true,
+          }
+        })
+        .filter(
+          (
+            draft
+          ): draft is {
+            title: string
+            toolkitSlug: string | null
+            toolkitName: string | null
+            actionType: string | null
+            targetSummary: string | null
+            rationale: string | null
+            confidence: number | null
+            sourceEvidence: string[]
+            reviewState: string | null
+            approvalRequired: boolean
+          } => draft !== null
+        ),
+    [liveState?.draftActions]
+  )
+
   const decisions = useMemo(
     () =>
       asArray(liveState?.decisions)
@@ -819,6 +870,75 @@ export default function MeetingDetailsPage() {
                 </div>
 
                 <div className="space-y-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+                      Draft actions
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      {draftActions.length > 0 ? (
+                        draftActions.map((draft, index) => (
+                          <div
+                            key={`${draft.title}-${index}`}
+                            className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium text-white">
+                                  {draft.title}
+                                </p>
+                                <div className="flex flex-wrap gap-2 text-xs">
+                                  {(draft.toolkitName ?? draft.toolkitSlug) && (
+                                    <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
+                                      {draft.toolkitName ?? draft.toolkitSlug}
+                                    </Badge>
+                                  )}
+                                  {draft.actionType && (
+                                    <Badge className="border-white/12 bg-black/18 text-[#9bb0b5]">
+                                      {draft.actionType.replace(/_/g, ' ')}
+                                    </Badge>
+                                  )}
+                                  {draft.approvalRequired && (
+                                    <Badge className="border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]">
+                                      Approval required
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              {draft.confidence != null && (
+                                <Badge className="border-white/12 bg-[#314247] text-[#9bb0b5]">
+                                  {Math.round(draft.confidence * 100)}%
+                                </Badge>
+                              )}
+                            </div>
+
+                            {draft.targetSummary && (
+                              <p className="mt-3 text-sm text-[#9bb0b5]">
+                                Target: {draft.targetSummary}
+                              </p>
+                            )}
+
+                            {draft.rationale && (
+                              <p className="mt-2 text-sm leading-6 text-[#eef2ea]">
+                                {draft.rationale}
+                              </p>
+                            )}
+
+                            {draft.sourceEvidence.length > 0 && (
+                              <p className="mt-3 text-sm leading-6 text-[#8ea3a8]">
+                                {draft.sourceEvidence[0]}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-4 text-sm text-[#8ea3a8]">
+                          Draft actions will appear here once Kodi can connect
+                          meeting follow-up to tools available in the workspace.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
                       Candidate action items

@@ -3,7 +3,17 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { ArrowRight, RefreshCcw, Sparkles, Video } from 'lucide-react'
+import {
+  ArrowRight,
+  Check,
+  Copy,
+  Mail,
+  RefreshCcw,
+  Sparkles,
+  UserRound,
+  Video,
+} from 'lucide-react'
+import { deriveMeetingBotIdentity } from '@kodi/db/meeting-bot-identity'
 import {
   Alert,
   AlertDescription,
@@ -131,6 +141,9 @@ export default function MeetingsPage() {
   const [title, setTitle] = useState('')
   const [isStarting, startStartTransition] = useTransition()
   const [isRefreshing, startRefreshTransition] = useTransition()
+  const [copiedField, setCopiedField] = useState<
+    'display-name' | 'invite-email' | null
+  >(null)
   const [zoomAction, setZoomAction] = useState<
     'connect' | 'disconnect' | 'refresh' | null
   >(null)
@@ -238,6 +251,16 @@ export default function MeetingsPage() {
   const zoomInstallation = zoomInstallStatus?.installation ?? null
   const missingZoomSetup = zoomInstallStatus?.setup.missing ?? []
   const isOwner = activeOrg?.role === 'owner'
+  const meetingBotIdentity = useMemo(
+    () =>
+      activeOrg
+        ? deriveMeetingBotIdentity({
+            orgName: activeOrg.orgName,
+            orgSlug: activeOrg.orgSlug,
+          })
+        : null,
+    [activeOrg]
+  )
   const zoomCallbackStatus = searchParams.get('zoom')
 
   const zoomCallbackBanner = useMemo(() => {
@@ -259,6 +282,23 @@ export default function MeetingsPage() {
 
     return null
   }, [zoomCallbackStatus])
+
+  async function copyIdentityValue(
+    value: string,
+    field: 'display-name' | 'invite-email'
+  ) {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedField(field)
+      window.setTimeout(() => {
+        setCopiedField((current) => (current === field ? null : current))
+      }, 1800)
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to copy to clipboard.'
+      )
+    }
+  }
 
   async function refreshZoomStatus() {
     if (!activeOrg) return
@@ -322,6 +362,13 @@ export default function MeetingsPage() {
     )
   }
 
+  const workspaceMeetingBotIdentity =
+    meetingBotIdentity ??
+    deriveMeetingBotIdentity({
+      orgName: activeOrg.orgName,
+      orgSlug: activeOrg.orgSlug,
+    })
+
   return (
     <div className="min-h-full bg-background">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
@@ -365,8 +412,9 @@ export default function MeetingsPage() {
                   Current scope
                 </p>
                 <p className="mt-3 text-sm leading-6 text-foreground">
-                  Google Meet first. Invite-by-email and automatic join rules
-                  come next.
+                  Google Meet live start is ready now. Stable invite identity is
+                  in place, with invite-by-email automation and auto-join rules
+                  coming next.
                 </p>
               </div>
             </div>
@@ -425,6 +473,106 @@ export default function MeetingsPage() {
                     <p>1. Start the meeting here.</p>
                     <p>2. Admit Kodi when Google Meet asks.</p>
                     <p>3. Review the summary, notes, and transcript in Kodi.</p>
+                  </div>
+
+                  <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                          Workspace meeting agent
+                        </p>
+                        <h3 className="text-xl font-semibold text-foreground">
+                          Stable identity for invites
+                        </h3>
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          This is the workspace-specific meeting agent identity
+                          Kodi will keep using as invite-by-email comes online.
+                        </p>
+                      </div>
+                      <Badge variant="outline">Phase F1</Badge>
+                    </div>
+
+                    <div className="mt-5 grid gap-3">
+                      <div className="rounded-[1.2rem] border border-border bg-background p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-border bg-secondary text-foreground">
+                              <UserRound size={17} />
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                                Display name
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-foreground">
+                                {workspaceMeetingBotIdentity.displayName}
+                              </p>
+                            </div>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() =>
+                              void copyIdentityValue(
+                                workspaceMeetingBotIdentity.displayName,
+                                'display-name'
+                              )
+                            }
+                          >
+                            {copiedField === 'display-name' ? (
+                              <Check size={15} />
+                            ) : (
+                              <Copy size={15} />
+                            )}
+                            {copiedField === 'display-name' ? 'Copied' : 'Copy'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.2rem] border border-border bg-background p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-border bg-secondary text-foreground">
+                              <Mail size={17} />
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                                Invite address
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-foreground">
+                                {workspaceMeetingBotIdentity.inviteEmail}
+                              </p>
+                            </div>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="gap-2"
+                            onClick={() =>
+                              void copyIdentityValue(
+                                workspaceMeetingBotIdentity.inviteEmail,
+                                'invite-email'
+                              )
+                            }
+                          >
+                            {copiedField === 'invite-email' ? (
+                              <Check size={15} />
+                            ) : (
+                              <Copy size={15} />
+                            )}
+                            {copiedField === 'invite-email' ? 'Copied' : 'Copy'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[1.2rem] border border-dashed border-border bg-background p-4 text-sm leading-6 text-foreground">
+                      {workspaceMeetingBotIdentity.inviteInstructions.map((instruction) => (
+                        <p key={instruction}>{instruction}</p>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">

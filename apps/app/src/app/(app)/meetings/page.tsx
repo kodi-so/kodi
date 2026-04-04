@@ -13,7 +13,7 @@ import {
   UserRound,
   Video,
 } from 'lucide-react'
-import { deriveMeetingBotIdentity } from '@kodi/db'
+import { deriveMeetingBotIdentity } from '@kodi/db/meeting-bot-identity'
 import {
   Alert,
   AlertDescription,

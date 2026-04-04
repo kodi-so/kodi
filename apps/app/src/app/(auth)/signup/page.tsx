@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { Suspense, useState } from 'react'
 import { signIn, signUp } from '@/lib/auth-client'
 import Link from 'next/link'
@@ -74,24 +75,31 @@ function SignUpForm() {
         className="fixed inset-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.12) 0%, transparent 70%)',
+            'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(223,174,86,0.14) 0%, transparent 70%), radial-gradient(circle at 18% 18%, rgba(62,80,86,0.2) 0%, transparent 38%)',
         }}
       />
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <span className="text-white font-bold">K</span>
-          </div>
-          <span className="text-white font-semibold text-xl tracking-tight">
+          <span className="flex h-9 w-9 items-center justify-center">
+            <Image
+              src="/brand/kodi-logo.png"
+              alt=""
+              width={36}
+              height={36}
+              className="h-auto w-full object-contain invert drop-shadow-[0_12px_22px_rgba(255,255,255,0.08)]"
+              priority
+            />
+          </span>
+          <span className="font-brand text-xl tracking-[-0.04em] text-white">
             Kodi
           </span>
         </div>
 
         <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-7 text-center">
-            <CardTitle className="text-center text-2xl font-bold text-white">
+            <CardTitle className="font-brand text-center text-[2rem] tracking-[-0.04em] text-white">
               Create your account
             </CardTitle>
             <CardDescription className="text-center text-zinc-500">
@@ -151,7 +159,7 @@ function SignUpForm() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Jane Smith"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-[#DFAE56]"
                 />
               </div>
               <div>
@@ -164,7 +172,7 @@ function SignUpForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-[#DFAE56]"
                 />
               </div>
               <div>
@@ -178,7 +186,7 @@ function SignUpForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min. 8 characters"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-[#DFAE56]"
                 />
               </div>
 
@@ -194,7 +202,7 @@ function SignUpForm() {
               <Button
                 type="submit"
                 disabled={loading || googleLoading}
-                className="h-11 w-full rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white hover:opacity-90"
+                className="h-11 w-full rounded-lg bg-[#DFAE56] text-sm font-semibold text-[#223239] hover:bg-[#e6b86a]"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -211,7 +219,7 @@ function SignUpForm() {
               Already have an account?{' '}
               <Link
                 href="/login"
-                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                className="font-medium text-[#DFAE56] transition-colors hover:text-[#edc786]"
               >
                 Sign in
               </Link>

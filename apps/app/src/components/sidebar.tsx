@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -104,11 +105,17 @@ export function Sidebar() {
   const navContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-5 flex items-center gap-2.5 border-b border-zinc-800">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold text-sm">K</span>
-        </div>
-        <span className="text-white font-semibold text-lg tracking-tight">
+      <div className="px-4 py-5 flex items-center gap-3 border-b border-zinc-800">
+        <span className="flex h-8 w-8 items-center justify-center flex-shrink-0">
+          <Image
+            src="/brand/kodi-logo.png"
+            alt=""
+            width={32}
+            height={32}
+            className="h-auto w-full object-contain invert drop-shadow-[0_10px_18px_rgba(255,255,255,0.08)]"
+          />
+        </span>
+        <span className="font-brand text-lg tracking-[-0.04em] text-white">
           Kodi
         </span>
       </div>

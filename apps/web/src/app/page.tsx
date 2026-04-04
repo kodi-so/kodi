@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Badge, Button, Card, CardContent } from '@kodi/ui'
 
 const integrations = [
@@ -24,8 +25,8 @@ const valueCards = [
   },
   {
     eyebrow: 'Execution across tools',
-    title: 'Delegate follow-through without changing your stack.',
-    body: 'Create tickets, send recaps, update docs, and push next steps into the tools your team already uses instead of adding another workflow to manage.',
+    title: 'Let Kodi carry the follow-through without changing your stack.',
+    body: 'Create tickets, send recaps, update docs, and complete repeatable next steps across the tools your team already uses instead of adding another workflow to manage.',
   },
 ]
 
@@ -95,7 +96,16 @@ export default function HomePage() {
       <nav className="site-nav">
         <div className="nav-shell">
           <a href="#" className="brand-lockup" aria-label="Kodi home">
-            <span className="brand-mark">K</span>
+            <span className="brand-mark" aria-hidden="true">
+              <Image
+                src="/brand/kodi-logo.png"
+                alt=""
+                width={56}
+                height={56}
+                className="brand-mark-image"
+                priority
+              />
+            </span>
             <span className="brand-wordmark">Kodi</span>
           </a>
 
@@ -131,18 +141,18 @@ export default function HomePage() {
               </Badge>
 
               <p className="hero-kicker">
-                AI teammate for meetings and follow-through
+                AI teammate for meetings, execution, and controlled autonomy
               </p>
 
               <h1 className="hero-title">
-                Bring an AI teammate
-                <span className="hero-highlight"> into every call.</span>
+                Turn conversations
+                <span className="hero-highlight"> into completed work.</span>
               </h1>
 
               <p className="hero-body">
-                Kodi listens, answers with live business context, and turns
-                decisions into assigned work across the tools your team already
-                uses.
+                Kodi joins the room, answers with live business context, and
+                can organize, draft, or execute the next steps across the tools
+                your team already uses.
               </p>
 
               <div className="hero-actions">
@@ -160,7 +170,7 @@ export default function HomePage() {
 
               <div className="hero-proof-points">
                 <span>Launch in under 5 minutes</span>
-                <span>No credit card required</span>
+                <span>Choose exactly how autonomous Kodi is</span>
                 <span>No seat-based pricing</span>
               </div>
             </div>
@@ -423,7 +433,15 @@ export default function HomePage() {
       <footer className="site-footer">
         <div className="section-shell footer-shell">
           <div className="brand-lockup footer-brand">
-            <span className="brand-mark">K</span>
+            <span className="brand-mark" aria-hidden="true">
+              <Image
+                src="/brand/kodi-logo.png"
+                alt=""
+                width={56}
+                height={56}
+                className="brand-mark-image"
+              />
+            </span>
             <span className="brand-wordmark">Kodi</span>
           </div>
           <p className="footer-copy">
@@ -460,8 +478,8 @@ export default function HomePage() {
           --radius-lg: 2rem;
           --radius-md: 1.25rem;
           --radius-sm: 0.85rem;
-          --font-display: 'Plus Jakarta Sans', sans-serif;
-          --font-body: 'IBM Plex Sans', sans-serif;
+          --font-display: var(--font-kodi-brand);
+          --font-body: var(--font-kodi-body);
         }
 
         * {
@@ -566,17 +584,19 @@ export default function HomePage() {
           justify-content: center;
           width: 2.75rem;
           height: 2.75rem;
-          border-radius: 0.95rem;
-          background: linear-gradient(135deg, var(--accent), oklch(80% 0.13 88));
-          color: var(--accent-ink);
-          font-family: var(--font-display);
-          font-size: 1.1rem;
-          box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.45);
+          flex-shrink: 0;
+        }
+
+        .brand-mark-image {
+          width: 100%;
+          height: auto;
+          filter: drop-shadow(0 10px 18px oklch(24% 0.03 255 / 0.16));
         }
 
         .brand-wordmark {
           font-family: var(--font-display);
           font-size: 1.35rem;
+          letter-spacing: -0.04em;
           color: var(--text);
         }
 
@@ -1342,7 +1362,6 @@ export default function HomePage() {
           .brand-mark {
             width: 2.35rem;
             height: 2.35rem;
-            border-radius: 0.8rem;
           }
 
           .brand-wordmark {

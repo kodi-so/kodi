@@ -29,5 +29,18 @@
 
 @layer base {
   * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-kodi-body), sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-brand {
+    font-family: var(--font-kodi-brand), sans-serif;
+  }
+
+  .font-body {
+    font-family: var(--font-kodi-body), sans-serif;
+  }
 }

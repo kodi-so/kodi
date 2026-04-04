@@ -35,6 +35,7 @@ type MeetingParticipants = MeetingConsole['participants']
 type MeetingTranscript = MeetingConsole['transcript']
 type MeetingLiveState = MeetingConsole['liveState'] | null
 type MeetingEventFeed = MeetingConsole['events']
+type MeetingTranscriptSegment = MeetingTranscript[number]
 
 function asRecord(value: unknown) {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -237,6 +238,65 @@ function describeEvent(event: MeetingEventFeed[number]) {
   return errorMessage ?? state
 }
 
+function normalizeTranscriptContent(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function shouldCollapseTranscriptSegments(
+  previous: MeetingTranscriptSegment,
+  current: MeetingTranscriptSegment
+) {
+  const previousSpeaker = previous.speakerName ?? 'Unknown speaker'
+  const currentSpeaker = current.speakerName ?? 'Unknown speaker'
+
+  if (previousSpeaker !== currentSpeaker) return false
+  if (previous.source !== current.source) return false
+  if (!previous.isPartial && !current.isPartial) return false
+
+  const previousCreatedAt = new Date(previous.createdAt).getTime()
+  const currentCreatedAt = new Date(current.createdAt).getTime()
+  if (
+    Number.isNaN(previousCreatedAt) ||
+    Number.isNaN(currentCreatedAt) ||
+    currentCreatedAt - previousCreatedAt > 90_000
+  ) {
+    return false
+  }
+
+  const previousContent = normalizeTranscriptContent(previous.content)
+  const currentContent = normalizeTranscriptContent(current.content)
+
+  if (!previousContent || !currentContent) return false
+
+  return (
+    previousContent === currentContent ||
+    previousContent.startsWith(currentContent) ||
+    currentContent.startsWith(previousContent)
+  )
+}
+
+function collapseTranscriptSegments(segments: MeetingTranscript) {
+  const collapsed: MeetingTranscript = []
+
+  for (const segment of segments) {
+    const previous = collapsed[collapsed.length - 1]
+    if (!previous || !shouldCollapseTranscriptSegments(previous, segment)) {
+      collapsed.push(segment)
+      continue
+    }
+
+    const preferCurrent =
+      (!segment.isPartial && previous.isPartial) ||
+      segment.content.length >= previous.content.length
+
+    if (preferCurrent) {
+      collapsed[collapsed.length - 1] = segment
+    }
+  }
+
+  return collapsed
+}
+
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
   const meetingSessionId = params.meetingSessionId
@@ -305,7 +365,7 @@ export default function MeetingDetailsPage() {
   const events: MeetingEventFeed = consoleData?.events ?? []
 
   const chronologicalTranscript = useMemo(
-    () => [...transcript].reverse(),
+    () => collapseTranscriptSegments([...transcript].reverse()),
     [transcript]
   )
   const inCallParticipants = useMemo(

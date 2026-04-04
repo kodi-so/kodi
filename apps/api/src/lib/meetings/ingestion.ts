@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import {
   db,
   meetingEvents,
@@ -473,12 +473,65 @@ export async function appendTranscriptSegments(
       participantId = participant?.id ?? null
     }
 
+    const recentSegments = await db.query.transcriptSegments.findMany({
+      where: (fields, { and, eq }) =>
+        and(
+          eq(fields.meetingSessionId, meetingSessionId),
+          eq(fields.source, source)
+        ),
+      orderBy: (fields, { desc }) => desc(fields.createdAt),
+      limit: 5,
+    })
+
+    const currentSpeakerName = segment.speakerName ?? null
+    const recentPartial = recentSegments.find((existing) => {
+      if (!existing.isPartial) return false
+
+      const sameParticipant =
+        participantId != null &&
+        existing.speakerParticipantId != null &&
+        existing.speakerParticipantId === participantId
+
+      const sameSpeakerName =
+        currentSpeakerName != null &&
+        existing.speakerName != null &&
+        existing.speakerName === currentSpeakerName
+
+      if (!sameParticipant && !sameSpeakerName) return false
+
+      return Date.now() - existing.createdAt.getTime() <= 90_000
+    })
+
+    if (recentPartial) {
+      const [updated] = await db
+        .update(transcriptSegments)
+        .set({
+          speakerParticipantId:
+            participantId ?? recentPartial.speakerParticipantId,
+          speakerName: currentSpeakerName ?? recentPartial.speakerName,
+          content: segment.content,
+          startOffsetMs: segment.startOffsetMs ?? recentPartial.startOffsetMs,
+          endOffsetMs: segment.endOffsetMs ?? recentPartial.endOffsetMs,
+          confidence: segment.confidence ?? recentPartial.confidence,
+          isPartial: segment.isPartial ?? false,
+        })
+        .where(
+          eq(transcriptSegments.id as never, recentPartial.id as never) as never
+        )
+        .returning()
+
+      if (updated) {
+        persisted.push(updated)
+        continue
+      }
+    }
+
     const [created] = await db
       .insert(transcriptSegments)
       .values({
         meetingSessionId,
         speakerParticipantId: participantId,
-        speakerName: segment.speakerName ?? null,
+        speakerName: currentSpeakerName,
         content: segment.content,
         startOffsetMs: segment.startOffsetMs ?? null,
         endOffsetMs: segment.endOffsetMs ?? null,

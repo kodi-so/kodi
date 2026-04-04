@@ -91,7 +91,9 @@ export class MeetingOrchestrationService {
   private async runPostIngestionWork(input: {
     orgId: string
     meetingSession: MeetingSessionRecord
-    persistedEvent: Awaited<ReturnType<typeof appendNormalizedMeetingEvent>>
+    persistedEvent: NonNullable<
+      Awaited<ReturnType<typeof appendNormalizedMeetingEvent>>['persistedEvent']
+    >
     event: MeetingProviderEvent
     source: MeetingIngestionSource
   }) {
@@ -419,6 +421,15 @@ export class MeetingOrchestrationService {
       input.source ?? 'worker'
     )
 
+    if (!persistedEvent.shouldFanOut || !persistedEvent.persistedEvent) {
+      return {
+        meetingSession,
+        event: input.event,
+      }
+    }
+
+    const persistedEventRecord = persistedEvent.persistedEvent
+
     const updated = await this.database.query.meetingSessions.findFirst({
       where: (fields, { eq }) => eq(fields.id, meetingSession.id),
     })
@@ -428,7 +439,7 @@ export class MeetingOrchestrationService {
     const postIngestionWork = this.runPostIngestionWork({
       orgId: input.orgId,
       meetingSession: resolvedMeetingSession,
-      persistedEvent,
+      persistedEvent: persistedEventRecord,
       event: input.event,
       source: input.source ?? 'worker',
     })
@@ -438,7 +449,7 @@ export class MeetingOrchestrationService {
         console.warn('[meetings] deferred post-ingestion work failed', {
           orgId: input.orgId,
           meetingSessionId: resolvedMeetingSession.id,
-          eventId: persistedEvent.id,
+          eventId: persistedEventRecord.id,
           error: error instanceof Error ? error.message : String(error),
         })
       })

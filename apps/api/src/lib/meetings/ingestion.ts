@@ -21,6 +21,8 @@ import {
   type MeetingSessionStatus,
 } from './status'
 
+type PersistedTranscriptSegment = typeof transcriptSegments.$inferSelect
+
 type ZoomWebhookEnvelope = {
   event?: string
   event_ts?: number
@@ -60,6 +62,17 @@ type TranscriptSegmentInput = {
   endOffsetMs?: number | null
   confidence?: number | null
   isPartial?: boolean
+}
+
+type TranscriptPersistenceResult = {
+  operation: 'created' | 'updated' | 'ignored'
+  segment: PersistedTranscriptSegment
+}
+
+export type AppendNormalizedMeetingEventResult = {
+  persistedEvent: Awaited<ReturnType<typeof appendMeetingEvent>> | null
+  transcriptOperation?: TranscriptPersistenceResult['operation']
+  shouldFanOut: boolean
 }
 
 export type MeetingIngestionSource =
@@ -457,7 +470,7 @@ export async function appendTranscriptSegments(
 ) {
   if (segments.length === 0) return []
 
-  const persisted = []
+  const persisted: TranscriptPersistenceResult[] = []
   for (const segment of segments) {
     let participantId: string | null = null
 
@@ -483,7 +496,11 @@ export async function appendTranscriptSegments(
       limit: 5,
     })
 
+    const normalizeContent = (value: string) =>
+      value.trim().replace(/\s+/g, ' ').toLowerCase()
+
     const currentSpeakerName = segment.speakerName ?? null
+    const normalizedContent = normalizeContent(segment.content)
     const recentPartial = recentSegments.find((existing) => {
       if (!existing.isPartial) return false
 
@@ -500,6 +517,27 @@ export async function appendTranscriptSegments(
       if (!sameParticipant && !sameSpeakerName) return false
 
       return Date.now() - existing.createdAt.getTime() <= 90_000
+    })
+
+    const recentCommittedDuplicate = recentSegments.find((existing) => {
+      if (existing.isPartial) return false
+
+      const sameParticipant =
+        participantId != null &&
+        existing.speakerParticipantId != null &&
+        existing.speakerParticipantId === participantId
+
+      const sameSpeakerName =
+        currentSpeakerName != null &&
+        existing.speakerName != null &&
+        existing.speakerName === currentSpeakerName
+
+      if (!sameParticipant && !sameSpeakerName) return false
+
+      const existingContent = normalizeContent(existing.content)
+      if (existingContent !== normalizedContent) return false
+
+      return Date.now() - existing.createdAt.getTime() <= 120_000
     })
 
     if (recentPartial) {
@@ -521,9 +559,25 @@ export async function appendTranscriptSegments(
         .returning()
 
       if (updated) {
-        persisted.push(updated)
+        await db
+          .update(meetingSessions)
+          .set({ updatedAt: new Date() })
+          .where(eq(meetingSessions.id as never, meetingSessionId as never) as never)
+
+        persisted.push({
+          operation: 'updated',
+          segment: updated,
+        })
         continue
       }
+    }
+
+    if (recentCommittedDuplicate) {
+      persisted.push({
+        operation: 'ignored',
+        segment: recentCommittedDuplicate,
+      })
+      continue
     }
 
     const [created] = await db
@@ -541,7 +595,19 @@ export async function appendTranscriptSegments(
       })
       .returning()
 
-    persisted.push(created)
+    if (!created) {
+      throw new Error('Failed to append transcript segment')
+    }
+
+    await db
+      .update(meetingSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(meetingSessions.id as never, meetingSessionId as never) as never)
+
+    persisted.push({
+      operation: 'created',
+      segment: created,
+    })
   }
 
   return persisted
@@ -601,7 +667,9 @@ export async function appendNormalizedMeetingEvent(
   meetingSessionId: string,
   event: MeetingProviderEvent,
   source: MeetingIngestionSource = 'worker'
-) {
+): Promise<AppendNormalizedMeetingEventResult> {
+  let transcriptOperation: TranscriptPersistenceResult['operation'] | undefined
+
   if (event.kind === 'participant') {
     await upsertMeetingParticipant(meetingSessionId, {
       providerParticipantId: event.participant.providerParticipantId ?? null,
@@ -614,7 +682,7 @@ export async function appendNormalizedMeetingEvent(
   }
 
   if (event.kind === 'transcript') {
-    await appendTranscriptSegments(meetingSessionId, [
+    const [persistedTranscript] = await appendTranscriptSegments(meetingSessionId, [
       {
         providerParticipantId:
           event.transcript.speaker?.providerParticipantId ?? null,
@@ -626,6 +694,19 @@ export async function appendNormalizedMeetingEvent(
         isPartial: event.transcript.isPartial ?? false,
       },
     ], source)
+
+    transcriptOperation = persistedTranscript?.operation ?? 'ignored'
+
+    const shouldFanOut =
+      transcriptOperation !== 'ignored' && !event.transcript.isPartial
+
+    if (!shouldFanOut) {
+      return {
+        persistedEvent: null,
+        transcriptOperation,
+        shouldFanOut: false,
+      }
+    }
   }
 
   if (event.kind === 'lifecycle') {
@@ -644,12 +725,18 @@ export async function appendNormalizedMeetingEvent(
     }
   }
 
-  return appendMeetingEvent(
+  const persistedEvent = await appendMeetingEvent(
     meetingSessionId,
     normalizedEventType(event),
     source,
     normalizedEventPayload(event)
   )
+
+  return {
+    persistedEvent,
+    transcriptOperation,
+    shouldFanOut: true,
+  }
 }
 
 export async function processZoomWebhookEvent(event: ZoomWebhookEnvelope) {

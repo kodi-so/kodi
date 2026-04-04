@@ -1,241 +1,337 @@
 import Image from 'next/image'
 import { Badge, Button, Card, CardContent } from '@kodi/ui'
 
-const integrations = [
-  'Zoom',
+const connectedTools = [
   'Google Meet',
+  'Zoom',
   'Slack',
-  'Microsoft Teams',
   'Linear',
   'Jira',
   'Notion',
   'HubSpot',
+  'Gmail',
 ]
 
-const valueCards = [
+const proofCards = [
   {
-    eyebrow: 'Decision capture',
-    title: 'Leave the meeting with work already moving.',
-    body: 'Kodi tracks decisions, owners, blockers, and open questions while your team is still talking, so nothing relies on memory after the call ends.',
+    title: 'Stay inside the conversation',
+    body: 'Kodi joins the meeting, captures decisions, and answers with live business context while the room is still deciding what matters.',
   },
   {
-    eyebrow: 'Live business context',
-    title: 'Answer the hard question before the room goes quiet.',
-    body: 'Ask Kodi about roadmap status, customer history, team capacity, or blockers and get an answer grounded in the systems your team already trusts.',
+    title: 'Delegate more over time',
+    body: 'Start with summaries and drafts, then let Kodi take on approvals, updates, and repeatable operational work as trust grows.',
   },
   {
-    eyebrow: 'Execution across tools',
-    title: 'Let Kodi carry the follow-through without changing your stack.',
-    body: 'Create tickets, send recaps, update docs, and complete repeatable next steps across the tools your team already uses instead of adding another workflow to manage.',
-  },
-]
-
-const roleCards = [
-  {
-    role: 'Founders',
-    body: 'Stay inside the critical conversations without becoming the person who has to remember every decision afterward.',
-  },
-  {
-    role: 'Ops leaders',
-    body: 'Turn recurring meetings into reliable systems with cleaner handoffs, better visibility, and less manual cleanup.',
-  },
-  {
-    role: 'Team leads',
-    body: 'Give people instant answers, clearer ownership, and one shared source of truth across meetings, chat, and tickets.',
+    title: 'Execute through your actual stack',
+    body: 'Kodi works through the tools and accounts your team already uses, so follow-through lands where the work already lives.',
   },
 ]
 
-const workflowSteps = [
+const autonomyModes = [
+  {
+    mode: 'Observe',
+    detail:
+      'Capture decisions, owners, blockers, and next steps without writing anywhere yet.',
+  },
+  {
+    mode: 'Prepare',
+    detail:
+      'Draft tickets, updates, recaps, and docs so the team can review before anything goes out.',
+  },
+  {
+    mode: 'Approve',
+    detail:
+      'Route sensitive actions through approvals so Kodi can execute with a clear audit trail.',
+  },
+  {
+    mode: 'Execute',
+    detail:
+      'Let Kodi complete trusted classes of work autonomously within the guardrails you set.',
+  },
+]
+
+const operatorFlow = [
   {
     step: '01',
-    title: 'Connect the tools your team already relies on',
-    body: 'Meetings, chat, docs, ticketing, and the internal systems your people use every day all become part of the same context layer.',
-    detail: 'Fast setup',
+    title: 'Bring Kodi into the room',
+    body: 'Meetings, chat, docs, CRM, ticketing, and internal tools become one context layer Kodi can reason over.',
   },
   {
     step: '02',
-    title: 'Bring Kodi into the conversation',
-    body: 'Kodi joins calls, listens for decisions, and answers live questions with business context when your team needs clarity in the moment.',
-    detail: 'Live support',
+    title: 'Let Kodi organize the operating picture',
+    body: 'It identifies decisions, owners, risks, open loops, and answers the hard question before the room moves on.',
   },
   {
     step: '03',
-    title: 'Let the agent carry the work forward',
-    body: 'Recaps, tickets, ownership, and next steps are pushed into the right tools so the meeting actually turns into execution.',
-    detail: 'Automatic follow-through',
+    title: 'Choose how the work moves forward',
+    body: 'Kodi can draft, request approval, or execute next steps directly inside the systems your team already trusts.',
   },
 ]
 
-const starterFeatures = [
-  'Up to 5 team members',
-  'Dedicated Kodi instance',
-  'Meeting and messaging integrations',
-  'Live answers with business context',
-  'Auto-created tasks and recaps',
-  '14-day free trial',
+const fitCards = [
+  {
+    label: 'Founders',
+    body: 'Spend less time routing every follow-up yourself and more time on system-level decisions.',
+  },
+  {
+    label: 'Operations leaders',
+    body: 'Turn recurring meetings into reliable execution systems without adding another process layer to maintain.',
+  },
+  {
+    label: 'Team leads',
+    body: 'Keep the team aligned with clearer ownership, fewer dropped decisions, and faster operational follow-through.',
+  },
 ]
 
-const proFeatures = [
-  'Unlimited team members',
-  'Everything in Starter',
-  'Advanced workflow automation',
-  'Priority model capacity',
-  'Expanded tool integrations',
-  'Priority support',
+const trustPoints = [
+  'Control exactly which accounts Kodi can use',
+  'Set which actions need review and which can run automatically',
+  'Keep execution visible with approvals, status, and clear audit trails',
 ]
 
 export default function HomePage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '#'
 
   return (
-    <div className="site-root">
-      <div className="page-glow page-glow-left" aria-hidden="true" />
-      <div className="page-glow page-glow-right" aria-hidden="true" />
-      <div className="grid-overlay" aria-hidden="true" />
+    <div className="relative min-h-screen overflow-hidden text-[#223239]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[44rem] bg-[radial-gradient(circle_at_top_left,rgba(223,174,86,0.2),transparent_34%),radial-gradient(circle_at_85%_12%,rgba(111,168,140,0.16),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.42),rgba(255,255,255,0))]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[-5rem] top-28 h-52 w-52 rounded-full bg-[#DFAE56]/20 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute right-[-6rem] top-40 h-72 w-72 rounded-full bg-[#6FA88C]/18 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(62,80,86,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(62,80,86,0.06)_1px,transparent_1px)] bg-[size:88px_88px] opacity-50 [mask-image:linear-gradient(180deg,rgba(0,0,0,0.4),transparent_78%)]"
+      />
 
-      <nav className="site-nav">
-        <div className="nav-shell">
-          <a href="#" className="brand-lockup" aria-label="Kodi home">
-            <span className="brand-mark" aria-hidden="true">
+      <header className="sticky top-0 z-50 border-b border-[#C9D2D4]/70 bg-[#F6F4EE]/88 backdrop-blur-xl">
+        <div className="mx-auto flex w-[min(1160px,calc(100vw-1.5rem))] items-center justify-between gap-4 py-4">
+          <a
+            href="#top"
+            aria-label="Kodi home"
+            className="flex items-center gap-3"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/80 shadow-[0_14px_30px_rgba(34,50,57,0.08)]">
               <Image
                 src="/brand/kodi-logo.png"
                 alt=""
-                width={56}
-                height={56}
-                className="brand-mark-image"
+                width={40}
+                height={40}
+                className="h-auto w-8 object-contain"
                 priority
               />
             </span>
-            <span className="brand-wordmark">Kodi</span>
+            <span className="text-[1.4rem] tracking-[-0.06em] text-[#223239]">
+              Kodi
+            </span>
           </a>
 
-          <div className="nav-links">
-            <a href="#features" className="nav-link">
+          <nav className="hidden items-center gap-8 text-sm text-[#52656b] lg:flex">
+            <a href="#why" className="transition hover:text-[#223239]">
               Why Kodi
             </a>
-            <a href="#how-it-works" className="nav-link">
-              How it works
+            <a href="#autonomy" className="transition hover:text-[#223239]">
+              Autonomy
             </a>
-            <a href="#pricing" className="nav-link">
-              Pricing
+            <a href="#workflow" className="transition hover:text-[#223239]">
+              Workflow
             </a>
-          </div>
+            <a href="#start" className="transition hover:text-[#223239]">
+              Start
+            </a>
+          </nav>
 
-          <div className="nav-actions">
-            <a href="mailto:hello@kodi.so" className="nav-text-link">
+          <div className="flex items-center gap-3">
+            <a
+              href="mailto:hello@kodi.so"
+              className="hidden text-sm text-[#52656b] transition hover:text-[#223239] sm:inline-flex"
+            >
               Book a walkthrough
             </a>
-            <Button asChild className="cta-button nav-cta">
-              <a href={appUrl}>Start free trial</a>
+            <Button
+              asChild
+              className="rounded-full bg-[#DFAE56] px-5 text-[#223239] shadow-[0_18px_30px_rgba(223,174,86,0.28)] hover:bg-[#e7bb68]"
+            >
+              <a href={appUrl}>Start free</a>
             </Button>
           </div>
         </div>
-      </nav>
+      </header>
 
-      <main>
-        <section className="hero-section">
-          <div className="section-shell hero-shell">
-            <div className="hero-copy">
-              <Badge className="hero-badge border-0">
+      <main id="top">
+        <section className="relative pb-14 pt-10 sm:pb-20 sm:pt-16">
+          <div className="mx-auto grid w-[min(1160px,calc(100vw-1.5rem))] gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] lg:items-center">
+            <div className="relative z-10">
+              <Badge className="rounded-full border border-[#DFAE56]/35 bg-white/80 px-4 py-2 text-[#6b5225] shadow-sm">
                 Built for startups and SMB teams
               </Badge>
 
-              <p className="hero-kicker">
-                AI teammate for meetings, execution, and controlled autonomy
+              <p className="mt-6 text-xs uppercase tracking-[0.22em] text-[#6b7f85]">
+                Meetings, execution, and controlled autonomy
               </p>
 
-              <h1 className="hero-title">
-                Turn conversations
-                <span className="hero-highlight"> into completed work.</span>
+              <h1 className="mt-4 max-w-[11ch] text-[clamp(3.35rem,8vw,6.4rem)] leading-[0.93] tracking-[-0.07em] text-[#223239]">
+                Let Kodi organize the work, then take it off your plate.
               </h1>
 
-              <p className="hero-body">
-                Kodi joins the room, answers with live business context, and
-                can organize, draft, or execute the next steps across the tools
-                your team already uses.
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-[#496067] sm:text-[1.15rem]">
+                Kodi joins meetings, answers with live business context, and
+                can prepare or execute the follow-through inside the tools and
+                accounts your team already trusts. You decide where it drafts,
+                where it asks, and where it just gets it done.
               </p>
 
-              <div className="hero-actions">
-                <Button asChild className="cta-button cta-button-lg">
-                  <a href={appUrl}>Start your 14-day trial</a>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button
+                  asChild
+                  size="lg"
+                  className="rounded-full bg-[#223239] px-7 text-[#F6F4EE] hover:bg-[#2a3d43]"
+                >
+                  <a href={appUrl}>Start your trial</a>
                 </Button>
                 <Button
                   asChild
+                  size="lg"
                   variant="outline"
-                  className="secondary-button cta-button-lg"
+                  className="rounded-full border-[#9db0b4] bg-white/70 px-7 text-[#223239] hover:bg-white"
                 >
                   <a href="mailto:hello@kodi.so">Book a walkthrough</a>
                 </Button>
               </div>
 
-              <div className="hero-proof-points">
-                <span>Launch in under 5 minutes</span>
-                <span>Choose exactly how autonomous Kodi is</span>
-                <span>No seat-based pricing</span>
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4 shadow-[0_16px_36px_rgba(34,50,57,0.08)]">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#72858a]">
+                    Set up
+                  </p>
+                  <p className="mt-3 text-base leading-7 text-[#223239]">
+                    Connect the stack you already run the business on.
+                  </p>
+                </div>
+                <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4 shadow-[0_16px_36px_rgba(34,50,57,0.08)]">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#72858a]">
+                    Control
+                  </p>
+                  <p className="mt-3 text-base leading-7 text-[#223239]">
+                    Choose exactly what Kodi can draft, route, or execute.
+                  </p>
+                </div>
+                <div className="rounded-[1.4rem] border border-white/80 bg-white/72 p-4 shadow-[0_16px_36px_rgba(34,50,57,0.08)]">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#72858a]">
+                    Outcome
+                  </p>
+                  <p className="mt-3 text-base leading-7 text-[#223239]">
+                    Give your team more space for bigger-picture thinking.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="hero-panel-wrap">
-              <div className="hero-panel">
-                <div className="panel-topbar">
+            <div className="relative">
+              <div className="absolute -left-4 top-10 hidden h-14 w-14 rounded-full bg-white/70 shadow-[0_20px_45px_rgba(34,50,57,0.12)] lg:block" />
+              <div className="absolute -right-4 bottom-10 hidden h-16 w-16 rounded-full bg-[#DFAE56]/18 blur-md lg:block" />
+
+              <div className="rounded-[2.3rem] border border-[#314247]/10 bg-[#223239] p-5 text-[#F6F4EE] shadow-[0_36px_80px_rgba(34,50,57,0.22)] sm:p-7">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="panel-label">Weekly operating review</p>
-                    <h2 className="panel-title">Kodi is in the room</h2>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#A6B7BA]">
+                      Weekly operating review
+                    </p>
+                    <h2 className="mt-3 text-[2rem] leading-none tracking-[-0.05em]">
+                      Kodi is already moving the work.
+                    </h2>
                   </div>
-                  <div className="live-pill">
-                    <span className="live-dot" />
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-2 text-xs text-[#F6F4EE]">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[#6FA88C] shadow-[0_0_0_7px_rgba(111,168,140,0.16)]" />
                     Live
                   </div>
                 </div>
 
-                <div className="panel-summary">
-                  <div className="summary-copy">
-                    <p className="summary-label">Conversation captured</p>
-                    <p className="summary-headline">
-                      3 decisions, 2 risks, 4 follow-ups already mapped.
-                    </p>
-                  </div>
-                  <div className="summary-stats">
-                    <div className="summary-stat">
-                      <strong>Jira</strong>
-                      <span>2 drafts ready</span>
+                <div className="mt-6 rounded-[1.6rem] border border-white/10 bg-white/6 p-5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#E7C27A]">
+                    Conversation captured
+                  </p>
+                  <p className="mt-3 text-xl leading-8 text-[#F6F4EE]">
+                    3 decisions, 2 risks, and 4 next actions are already mapped
+                    before the meeting ends.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-[1.15rem] bg-black/14 px-4 py-3">
+                      <p className="text-sm text-[#F6F4EE]">Linear</p>
+                      <p className="mt-1 text-xs text-[#A6B7BA]">
+                        Tickets drafted
+                      </p>
                     </div>
-                    <div className="summary-stat">
-                      <strong>Slack</strong>
-                      <span>Recap queued</span>
+                    <div className="rounded-[1.15rem] bg-black/14 px-4 py-3">
+                      <p className="text-sm text-[#F6F4EE]">Slack</p>
+                      <p className="mt-1 text-xs text-[#A6B7BA]">
+                        Recap queued
+                      </p>
                     </div>
-                    <div className="summary-stat">
-                      <strong>Notion</strong>
-                      <span>Notes synced</span>
+                    <div className="rounded-[1.15rem] bg-black/14 px-4 py-3">
+                      <p className="text-sm text-[#F6F4EE]">Notion</p>
+                      <p className="mt-1 text-xs text-[#A6B7BA]">
+                        Plan updated
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="panel-grid">
-                  <div className="panel-card panel-card-ink">
-                    <p className="panel-card-label">Asked in the meeting</p>
-                    <p className="panel-card-title">
-                      Can we still ship by Friday?
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-[1.6rem] border border-white/10 bg-black/14 p-5">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#A6B7BA]">
+                      What the team asked
                     </p>
-                    <p className="panel-card-body">
-                      Current sprint load is at 78%. Payments QA is the blocker.
-                      Kodi recommends pushing analytics cleanup to next week.
+                    <p className="mt-3 text-lg leading-8 text-[#F6F4EE]">
+                      “Can we still launch Friday if payments QA slips again?”
+                    </p>
+                    <p className="mt-4 text-sm leading-7 text-[#C7D3D6]">
+                      Kodi pulls sprint load, blocker history, and ownership
+                      from connected systems, then recommends moving analytics
+                      cleanup while it drafts the launch-risk update.
                     </p>
                   </div>
 
-                  <div className="panel-card panel-card-warm">
-                    <p className="panel-card-label">What Kodi is doing next</p>
-                    <ul className="task-list">
-                      <li>Create launch tasks in Linear</li>
-                      <li>Send owner recap to Slack</li>
-                      <li>Update the rollout doc in Notion</li>
-                    </ul>
+                  <div className="rounded-[1.6rem] border border-[#DFAE56]/20 bg-[linear-gradient(180deg,rgba(223,174,86,0.22),rgba(223,174,86,0.08))] p-5 text-[#223239]">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#6b5225]">
+                      Delegation state
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-[1.1rem] bg-white/70 px-4 py-3">
+                        <p className="text-sm">Draft launch tasks</p>
+                        <p className="mt-1 text-xs text-[#6d7a7e]">
+                          Auto-prepared
+                        </p>
+                      </div>
+                      <div className="rounded-[1.1rem] bg-white/70 px-4 py-3">
+                        <p className="text-sm">Send owner recap</p>
+                        <p className="mt-1 text-xs text-[#6d7a7e]">
+                          Awaiting approval
+                        </p>
+                      </div>
+                      <div className="rounded-[1.1rem] bg-white/70 px-4 py-3">
+                        <p className="text-sm">Update rollout doc</p>
+                        <p className="mt-1 text-xs text-[#6d7a7e]">
+                          Approved for auto-execution
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="tool-row">
-                  {integrations.map((tool) => (
-                    <span key={tool} className="tool-pill">
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {connectedTools.map((tool) => (
+                    <span
+                      key={tool}
+                      className="rounded-full border border-white/10 bg-white/7 px-3 py-1.5 text-xs text-[#D7E1E3]"
+                    >
                       {tool}
                     </span>
                   ))}
@@ -245,182 +341,263 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="integration-band">
-          <div className="section-shell integration-shell">
-            <p className="band-label">
-              Connects to the stack your team already uses
-            </p>
-            <div className="integration-row">
-              {integrations.map((tool) => (
-                <span key={tool} className="integration-name">
-                  {tool}
-                </span>
-              ))}
-            </div>
+        <section
+          id="why"
+          className="border-y border-[#C9D2D4]/60 bg-white/48 py-5 backdrop-blur-sm"
+        >
+          <div className="mx-auto flex w-[min(1160px,calc(100vw-1.5rem))] flex-wrap items-center gap-3 text-sm text-[#52656b]">
+            <span className="rounded-full border border-[#C9D2D4] bg-white px-4 py-2 text-[#223239]">
+              Shared AI teammate
+            </span>
+            <span className="rounded-full border border-[#C9D2D4] bg-white px-4 py-2 text-[#223239]">
+              Controlled autonomy
+            </span>
+            <span className="rounded-full border border-[#C9D2D4] bg-white px-4 py-2 text-[#223239]">
+              Connected-tool execution
+            </span>
+            <span className="rounded-full border border-[#C9D2D4] bg-white px-4 py-2 text-[#223239]">
+              Real operational follow-through
+            </span>
           </div>
         </section>
 
-        <section id="features" className="section-block">
-          <div className="section-shell">
-            <div className="section-head">
-              <p className="section-kicker">Why teams convert on Kodi</p>
-              <h2 className="section-title">
-                Better than another note taker. Better than another dashboard.
+        <section className="py-16 sm:py-24">
+          <div className="mx-auto w-[min(1160px,calc(100vw-1.5rem))]">
+            <div className="max-w-3xl">
+              <p className="text-xs uppercase tracking-[0.22em] text-[#73878d]">
+                Why teams switch
+              </p>
+              <h2 className="mt-4 text-[clamp(2.5rem,5vw,4.4rem)] leading-[0.97] tracking-[-0.06em] text-[#223239]">
+                Kodi is not another note taker and not another dashboard.
               </h2>
-              <p className="section-body">
-                Startups and SMB teams do not need more software to maintain.
-                They need one agent that can stay in the conversation and move
-                the work forward after it ends.
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-[#52656b]">
+                Lean teams need one system that can stay present in the room,
+                keep the context straight, and gradually absorb more of the
+                operational detail that normally falls back to humans.
               </p>
             </div>
 
-            <div className="value-grid">
-              {valueCards.map((card, index) => (
+            <div className="mt-10 grid gap-4 lg:grid-cols-3">
+              {proofCards.map((card, index) => (
                 <Card
                   key={card.title}
-                  className={`value-card ${index === 0 ? 'value-card-featured' : ''}`}
+                  className={`overflow-hidden rounded-[1.8rem] border-0 ${
+                    index === 1
+                      ? 'bg-[#223239] text-[#F6F4EE] shadow-[0_28px_70px_rgba(34,50,57,0.18)]'
+                      : 'bg-white/76 text-[#223239] shadow-[0_20px_50px_rgba(34,50,57,0.08)]'
+                  }`}
                 >
-                  <CardContent className="value-card-content">
-                    <p className="value-eyebrow">{card.eyebrow}</p>
-                    <h3 className="value-title">{card.title}</h3>
-                    <p className="value-body">{card.body}</p>
+                  <CardContent className="p-7">
+                    <div
+                      className={`h-1.5 w-14 rounded-full ${
+                        index === 1 ? 'bg-[#DFAE56]' : 'bg-[#6FA88C]'
+                      }`}
+                    />
+                    <h3 className="mt-6 text-[1.7rem] leading-[1.05] tracking-[-0.05em]">
+                      {card.title}
+                    </h3>
+                    <p
+                      className={`mt-4 text-base leading-8 ${
+                        index === 1 ? 'text-[#D9E1E3]' : 'text-[#52656b]'
+                      }`}
+                    >
+                      {card.body}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
             </div>
-
-            <div className="role-grid">
-              {roleCards.map((card) => (
-                <div key={card.role} className="role-card">
-                  <p className="role-title">{card.role}</p>
-                  <p className="role-body">{card.body}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </section>
 
-        <section id="how-it-works" className="section-block section-tinted">
-          <div className="section-shell">
-            <div className="section-head section-head-slim">
-              <p className="section-kicker">How it works</p>
-              <h2 className="section-title">
-                Set it up once. Let Kodi stay on top of the work.
-              </h2>
-            </div>
-
-            <div className="workflow-grid">
-              {workflowSteps.map((step) => (
-                <div key={step.step} className="workflow-card">
-                  <div className="workflow-step">{step.step}</div>
-                  <div className="workflow-detail">{step.detail}</div>
-                  <h3 className="workflow-title">{step.title}</h3>
-                  <p className="workflow-body">{step.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="pricing" className="section-block">
-          <div className="section-shell">
-            <div className="section-head section-head-slim">
-              <p className="section-kicker">Pricing</p>
-              <h2 className="section-title">
-                One shared agent. One team price.
-              </h2>
-              <p className="section-body">
-                Simple pricing for lean teams that want to move faster without
-                adding seat taxes or new operational overhead.
+        <section
+          id="autonomy"
+          className="relative overflow-hidden bg-[#223239] py-16 text-[#F6F4EE] sm:py-24"
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(223,174,86,0.18),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(111,168,140,0.12),transparent_24%)]"
+          />
+          <div className="mx-auto grid w-[min(1160px,calc(100vw-1.5rem))] gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+            <div className="relative z-10">
+              <p className="text-xs uppercase tracking-[0.22em] text-[#A6B7BA]">
+                Autonomy you control
               </p>
-            </div>
+              <h2 className="mt-4 max-w-[11ch] text-[clamp(2.5rem,5vw,4.4rem)] leading-[0.98] tracking-[-0.06em]">
+                Kodi grows from organizer to operator at your pace.
+              </h2>
+              <p className="mt-5 max-w-xl text-lg leading-8 text-[#C7D3D6]">
+                The brand promise is not “trust the black box.” It is completed
+                work at the autonomy level you choose, with explicit control
+                over what Kodi can and cannot do.
+              </p>
 
-            <div className="pricing-grid">
-              <Card className="pricing-card">
-                <CardContent className="pricing-content">
-                  <div className="pricing-tier">Starter</div>
-                  <div className="pricing-amount-row">
-                    <span className="pricing-amount">$49</span>
-                    <span className="pricing-period">/month</span>
-                  </div>
-                  <p className="pricing-copy">
-                    For teams getting their first shared AI teammate into calls
-                    and follow-through.
-                  </p>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="secondary-button pricing-button"
+              <div className="mt-8 space-y-3">
+                {trustPoints.map((point) => (
+                  <div
+                    key={point}
+                    className="rounded-[1.25rem] border border-white/10 bg-white/6 px-5 py-4 text-sm text-[#E4ECEE]"
                   >
-                    <a href={appUrl}>Start free trial</a>
-                  </Button>
-                  <ul className="pricing-list">
-                    {starterFeatures.map((feature) => (
-                      <li key={feature}>{feature}</li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-
-              <Card className="pricing-card pricing-card-featured">
-                <CardContent className="pricing-content">
-                  <Badge className="pricing-badge border-0">Most popular</Badge>
-                  <div className="pricing-tier">Pro</div>
-                  <div className="pricing-amount-row">
-                    <span className="pricing-amount">$99</span>
-                    <span className="pricing-period">/month</span>
+                    {point}
                   </div>
-                  <p className="pricing-copy">
-                    For teams ready to automate the handoff from conversation to
-                    execution across their stack.
-                  </p>
-                  <Button asChild className="cta-button pricing-button">
-                    <a href={appUrl}>Start free trial</a>
-                  </Button>
-                  <ul className="pricing-list">
-                    {proFeatures.map((feature) => (
-                      <li key={feature}>{feature}</li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+                ))}
+              </div>
             </div>
 
-            <div className="pricing-note">
-              <span>14-day trial</span>
-              <span>No credit card required</span>
-              <span>
-                Need a custom rollout?{' '}
-                <a href="mailto:hello@kodi.so">Talk to us</a>
-              </span>
+            <div className="relative z-10 grid gap-4 md:grid-cols-2">
+              {autonomyModes.map((mode, index) => (
+                <div
+                  key={mode.mode}
+                  className={`rounded-[1.8rem] border p-6 ${
+                    index === autonomyModes.length - 1
+                      ? 'border-[#DFAE56]/30 bg-[linear-gradient(180deg,rgba(223,174,86,0.24),rgba(223,174,86,0.08))] text-[#223239]'
+                      : 'border-white/10 bg-white/7'
+                  }`}
+                >
+                  <p
+                    className={`text-xs uppercase tracking-[0.2em] ${
+                      index === autonomyModes.length - 1
+                        ? 'text-[#7a6030]'
+                        : 'text-[#9fb1b5]'
+                    }`}
+                  >
+                    Level {index + 1}
+                  </p>
+                  <h3 className="mt-4 text-[1.75rem] tracking-[-0.05em]">
+                    {mode.mode}
+                  </h3>
+                  <p
+                    className={`mt-4 text-base leading-8 ${
+                      index === autonomyModes.length - 1
+                        ? 'text-[#314247]'
+                        : 'text-[#D0DBDD]'
+                    }`}
+                  >
+                    {mode.detail}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        <section className="section-block final-cta-section">
-          <div className="section-shell">
-            <div className="final-cta">
-              <div className="final-cta-copy">
-                <p className="section-kicker">
-                  Ready to try it on a real call?
+        <section id="workflow" className="py-16 sm:py-24">
+          <div className="mx-auto w-[min(1160px,calc(100vw-1.5rem))]">
+            <div className="max-w-3xl">
+              <p className="text-xs uppercase tracking-[0.22em] text-[#73878d]">
+                How Kodi works
+              </p>
+              <h2 className="mt-4 text-[clamp(2.4rem,5vw,4.1rem)] leading-[0.99] tracking-[-0.06em] text-[#223239]">
+                Move from conversation to execution without inventing a new
+                workflow.
+              </h2>
+            </div>
+
+            <div className="mt-10 grid gap-4 lg:grid-cols-3">
+              {operatorFlow.map((item) => (
+                <div
+                  key={item.step}
+                  className="rounded-[1.7rem] border border-[#C9D2D4] bg-white/78 p-6 shadow-[0_20px_45px_rgba(34,50,57,0.08)]"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#DFAE56] text-sm font-semibold text-[#223239]">
+                    {item.step}
+                  </div>
+                  <h3 className="mt-5 text-[1.8rem] leading-[1.03] tracking-[-0.05em] text-[#223239]">
+                    {item.title}
+                  </h3>
+                  <p className="mt-4 text-base leading-8 text-[#52656b]">
+                    {item.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-12 grid gap-4 lg:grid-cols-3">
+              {fitCards.map((card) => (
+                <div
+                  key={card.label}
+                  className="rounded-[1.5rem] border border-[#D8E0E2] bg-[#F0ECE1]/72 p-6"
+                >
+                  <p className="text-sm uppercase tracking-[0.18em] text-[#6f8287]">
+                    {card.label}
+                  </p>
+                  <p className="mt-4 text-base leading-8 text-[#314247]">
+                    {card.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="py-10">
+          <div className="mx-auto w-[min(1160px,calc(100vw-1.5rem))] rounded-[2.2rem] border border-[#C9D2D4] bg-white/78 p-7 shadow-[0_24px_60px_rgba(34,50,57,0.08)] sm:p-9">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-center">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#73878d]">
+                  Works through your stack
                 </p>
-                <h2 className="section-title">
-                  Put Kodi in your next meeting and let it handle the aftermath.
+                <h2 className="mt-4 text-[clamp(2.1rem,4vw,3.2rem)] leading-[1] tracking-[-0.06em] text-[#223239]">
+                  The systems your team already trusts become Kodi’s operating
+                  surface.
                 </h2>
-                <p className="section-body">
-                  Give your team clearer answers, cleaner handoffs, and one
-                  shared agent that can work across the tools you already use.
+                <p className="mt-5 text-base leading-8 text-[#52656b]">
+                  Meetings, messaging, docs, ticketing, CRM, and internal tools
+                  all stay in play. Kodi fits the stack your business already
+                  runs on instead of asking everyone to adopt a brand-new home
+                  for work.
                 </p>
               </div>
 
-              <div className="final-cta-actions">
-                <Button asChild className="cta-button cta-button-lg">
-                  <a href={appUrl}>Start your 14-day trial</a>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {connectedTools.map((tool, index) => (
+                  <div
+                    key={tool}
+                    className={`rounded-[1.25rem] border px-4 py-4 text-sm ${
+                      index % 3 === 0
+                        ? 'border-[#DFAE56]/30 bg-[#fff6e4] text-[#6d5323]'
+                        : 'border-[#D8E0E2] bg-[#fbfaf7] text-[#314247]'
+                    }`}
+                  >
+                    {tool}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="start" className="py-16 sm:py-24">
+          <div className="mx-auto w-[min(1160px,calc(100vw-1.5rem))] rounded-[2.4rem] bg-[#223239] px-6 py-8 text-[#F6F4EE] shadow-[0_36px_80px_rgba(34,50,57,0.2)] sm:px-10 sm:py-12">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#A6B7BA]">
+                  Ready for a real workload
+                </p>
+                <h2 className="mt-4 max-w-[12ch] text-[clamp(2.4rem,5vw,4.2rem)] leading-[0.98] tracking-[-0.06em]">
+                  Put Kodi in your next meeting and let it carry more of the
+                  follow-through.
+                </h2>
+                <p className="mt-5 max-w-2xl text-lg leading-8 text-[#D0DBDD]">
+                  Give your team a shared agent that can listen, clarify,
+                  prepare, and execute the work that normally gets stuck in the
+                  handoff between discussion and delivery.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:min-w-[16rem]">
+                <Button
+                  asChild
+                  size="lg"
+                  className="rounded-full bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
+                >
+                  <a href={appUrl}>Start your trial</a>
                 </Button>
                 <Button
                   asChild
+                  size="lg"
                   variant="outline"
-                  className="secondary-button cta-button-lg"
+                  className="rounded-full border-white/18 bg-white/6 text-[#F6F4EE] hover:bg-white/12"
                 >
                   <a href="mailto:hello@kodi.so">Book a walkthrough</a>
                 </Button>
@@ -430,1004 +607,38 @@ export default function HomePage() {
         </section>
       </main>
 
-      <footer className="site-footer">
-        <div className="section-shell footer-shell">
-          <div className="brand-lockup footer-brand">
-            <span className="brand-mark" aria-hidden="true">
-              <Image
-                src="/brand/kodi-logo.png"
-                alt=""
-                width={56}
-                height={56}
-                className="brand-mark-image"
-              />
-            </span>
-            <span className="brand-wordmark">Kodi</span>
+      <footer className="pb-10">
+        <div className="mx-auto flex w-[min(1160px,calc(100vw-1.5rem))] flex-col gap-4 border-t border-[#C9D2D4]/80 pt-6 text-sm text-[#607379] sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/brand/kodi-logo.png"
+              alt=""
+              width={28}
+              height={28}
+              className="h-auto w-7 object-contain"
+            />
+            <span className="text-[#223239]">Kodi</span>
           </div>
-          <p className="footer-copy">
+          <p>
             © <span suppressHydrationWarning>{new Date().getFullYear()}</span>{' '}
-            Kodi. Built for teams that need an agent in the room.
+            Kodi. The AI teammate that turns conversations into completed work.
           </p>
-          <div className="footer-links">
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
-            <a href="mailto:hello@kodi.so">Contact</a>
+          <div className="flex items-center gap-4">
+            <a href="/privacy" className="transition hover:text-[#223239]">
+              Privacy
+            </a>
+            <a href="/terms" className="transition hover:text-[#223239]">
+              Terms
+            </a>
+            <a
+              href="mailto:hello@kodi.so"
+              className="transition hover:text-[#223239]"
+            >
+              Contact
+            </a>
           </div>
         </div>
       </footer>
-
-      <style>{`
-        :root {
-          --bg: oklch(97.6% 0.018 92);
-          --bg-soft: oklch(95.7% 0.028 92);
-          --surface: oklch(99.1% 0.008 92 / 0.88);
-          --surface-strong: oklch(93.5% 0.035 88);
-          --surface-ink: oklch(26% 0.028 255);
-          --line: oklch(87.5% 0.02 92);
-          --line-strong: oklch(79% 0.03 84);
-          --text: oklch(24% 0.03 255);
-          --text-soft: oklch(43% 0.028 255);
-          --text-faint: oklch(58% 0.02 250);
-          --accent: oklch(74% 0.16 68);
-          --accent-strong: oklch(68% 0.18 62);
-          --accent-ink: oklch(30% 0.04 48);
-          --success: oklch(63% 0.12 168);
-          --success-soft: oklch(92% 0.05 168);
-          --shadow-soft: 0 18px 50px oklch(24% 0.03 255 / 0.08);
-          --shadow-strong: 0 32px 80px oklch(24% 0.03 255 / 0.16);
-          --radius-lg: 2rem;
-          --radius-md: 1.25rem;
-          --radius-sm: 0.85rem;
-          --font-display: var(--font-kodi-brand);
-          --font-body: var(--font-kodi-body);
-        }
-
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-        }
-
-        body {
-          background:
-            radial-gradient(circle at top left, oklch(94.2% 0.055 86) 0%, transparent 28%),
-            linear-gradient(180deg, oklch(98.1% 0.018 92) 0%, oklch(95.8% 0.025 92) 100%);
-          color: var(--text);
-          font-family: var(--font-body);
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-          overflow-x: hidden;
-        }
-
-        a {
-          color: inherit;
-          text-decoration: none;
-        }
-
-        button {
-          font-family: inherit;
-        }
-
-        .site-root {
-          position: relative;
-          min-height: 100vh;
-          overflow-x: hidden;
-        }
-
-        .page-glow {
-          position: absolute;
-          border-radius: 999px;
-          filter: blur(48px);
-          opacity: 0.45;
-          pointer-events: none;
-        }
-
-        .page-glow-left {
-          top: 6rem;
-          left: -10rem;
-          width: 22rem;
-          height: 22rem;
-          background: oklch(88% 0.09 80 / 0.8);
-        }
-
-        .page-glow-right {
-          top: 18rem;
-          right: -10rem;
-          width: 28rem;
-          height: 28rem;
-          background: oklch(86% 0.05 185 / 0.55);
-        }
-
-        .grid-overlay {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background-image:
-            linear-gradient(to right, oklch(86% 0.014 92 / 0.45) 1px, transparent 1px),
-            linear-gradient(to bottom, oklch(86% 0.014 92 / 0.45) 1px, transparent 1px);
-          background-size: 72px 72px;
-          mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 82%);
-        }
-
-        .section-shell,
-        .nav-shell {
-          width: min(1120px, calc(100vw - 2rem));
-          margin: 0 auto;
-        }
-
-        .site-nav {
-          position: sticky;
-          top: 0;
-          z-index: 50;
-          backdrop-filter: blur(18px);
-          background: oklch(98.5% 0.008 92 / 0.76);
-          border-bottom: 1px solid oklch(86% 0.02 92 / 0.8);
-        }
-
-        .nav-shell {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1rem;
-          padding: 1rem 0;
-        }
-
-        .brand-lockup {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.8rem;
-        }
-
-        .brand-mark {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 2.75rem;
-          height: 2.75rem;
-          flex-shrink: 0;
-        }
-
-        .brand-mark-image {
-          width: 100%;
-          height: auto;
-          filter: drop-shadow(0 10px 18px oklch(24% 0.03 255 / 0.16));
-        }
-
-        .brand-wordmark {
-          font-family: var(--font-display);
-          font-size: 1.35rem;
-          letter-spacing: -0.04em;
-          color: var(--text);
-        }
-
-        .nav-links,
-        .nav-actions,
-        .footer-links,
-        .hero-actions,
-        .hero-proof-points,
-        .pricing-note,
-        .integration-row,
-        .tool-row {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          flex-wrap: wrap;
-        }
-
-        .nav-links {
-          justify-content: center;
-        }
-
-        .nav-link,
-        .nav-text-link,
-        .footer-links a {
-          font-size: 0.95rem;
-          color: var(--text-soft);
-          transition: color 160ms ease;
-        }
-
-        .nav-link:hover,
-        .nav-text-link:hover,
-        .footer-links a:hover {
-          color: var(--text);
-        }
-
-        .cta-button,
-        .secondary-button {
-          border-radius: 999px;
-          height: auto;
-          padding: 0.95rem 1.35rem;
-          font-weight: 600;
-          font-size: 0.96rem;
-          transition:
-            transform 180ms ease,
-            box-shadow 180ms ease,
-            background 180ms ease,
-            border-color 180ms ease;
-        }
-
-        .cta-button {
-          background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-          color: var(--accent-ink);
-          box-shadow: 0 14px 30px oklch(74% 0.16 68 / 0.32);
-          border: none;
-        }
-
-        .cta-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 18px 36px oklch(74% 0.16 68 / 0.36);
-        }
-
-        .secondary-button {
-          background: oklch(100% 0 0 / 0.65);
-          color: var(--text);
-          border: 1px solid var(--line-strong);
-          box-shadow: none;
-        }
-
-        .secondary-button:hover {
-          transform: translateY(-2px);
-          border-color: var(--text-faint);
-          background: oklch(100% 0 0 / 0.92);
-        }
-
-        .cta-button-lg {
-          padding: 1.05rem 1.55rem;
-          font-size: 1rem;
-        }
-
-        .hero-section {
-          position: relative;
-          padding: clamp(4rem, 10vw, 7rem) 0 2rem;
-        }
-
-        .hero-shell {
-          display: grid;
-          grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
-          gap: clamp(2.5rem, 5vw, 4.5rem);
-          align-items: center;
-        }
-
-        .hero-copy {
-          position: relative;
-          z-index: 1;
-        }
-
-        .hero-badge {
-          display: inline-flex;
-          border-radius: 999px;
-          padding: 0.55rem 0.95rem;
-          background: oklch(100% 0 0 / 0.7);
-          color: var(--accent-ink);
-          box-shadow: inset 0 0 0 1px oklch(81% 0.06 74 / 0.32);
-          margin-bottom: 1.25rem;
-          font-weight: 600;
-        }
-
-        .hero-kicker,
-        .section-kicker,
-        .band-label,
-        .panel-label,
-        .summary-label,
-        .panel-card-label,
-        .value-eyebrow,
-        .pricing-tier,
-        .workflow-detail {
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          font-size: 0.76rem;
-          font-weight: 700;
-        }
-
-        .hero-kicker,
-        .section-kicker,
-        .band-label {
-          color: var(--text-faint);
-        }
-
-        .hero-title,
-        .section-title,
-        .workflow-title,
-        .value-title,
-        .pricing-amount,
-        .panel-title {
-          font-family: var(--font-display);
-          line-height: 1;
-        }
-
-        .hero-title {
-          font-size: clamp(3rem, 8vw, 5.8rem);
-          letter-spacing: 0.01em;
-          margin: 0.85rem 0 1.2rem;
-          max-width: 11ch;
-        }
-
-        .hero-highlight {
-          color: var(--accent-strong);
-        }
-
-        .hero-body,
-        .section-body,
-        .value-body,
-        .role-body,
-        .workflow-body,
-        .pricing-copy,
-        .panel-card-body,
-        .footer-copy {
-          color: var(--text-soft);
-          font-size: 1.03rem;
-          line-height: 1.7;
-        }
-
-        .hero-body {
-          max-width: 34rem;
-          font-size: 1.12rem;
-          margin-bottom: 1.65rem;
-        }
-
-        .hero-proof-points {
-          margin-top: 1.25rem;
-          color: var(--text-faint);
-          font-size: 0.9rem;
-        }
-
-        .hero-proof-points span {
-          position: relative;
-          padding-left: 1rem;
-        }
-
-        .hero-proof-points span::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 0.42rem;
-          width: 0.42rem;
-          height: 0.42rem;
-          border-radius: 50%;
-          background: var(--success);
-        }
-
-        .hero-panel-wrap {
-          position: relative;
-        }
-
-        .hero-panel {
-          position: relative;
-          padding: 1.25rem;
-          border-radius: var(--radius-lg);
-          background:
-            linear-gradient(180deg, oklch(30% 0.026 255), oklch(24% 0.024 255));
-          border: 1px solid oklch(43% 0.04 245 / 0.2);
-          box-shadow: var(--shadow-strong);
-          color: oklch(95% 0.01 95);
-          overflow: hidden;
-        }
-
-        .hero-panel::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(circle at top right, oklch(74% 0.16 68 / 0.18), transparent 36%),
-            linear-gradient(135deg, oklch(100% 0 0 / 0.05), transparent 50%);
-          pointer-events: none;
-        }
-
-        .panel-topbar,
-        .summary-stats,
-        .summary-stat,
-        .live-pill {
-          display: flex;
-          align-items: center;
-        }
-
-        .panel-topbar {
-          justify-content: space-between;
-          gap: 1rem;
-          position: relative;
-          z-index: 1;
-        }
-
-        .panel-label {
-          color: oklch(77% 0.02 245);
-          margin-bottom: 0.4rem;
-        }
-
-        .panel-title {
-          font-size: clamp(1.65rem, 2vw, 2.2rem);
-          color: oklch(98% 0.01 90);
-        }
-
-        .live-pill {
-          gap: 0.5rem;
-          padding: 0.55rem 0.9rem;
-          border-radius: 999px;
-          background: oklch(100% 0 0 / 0.08);
-          color: oklch(92% 0.01 95);
-          font-size: 0.86rem;
-          font-weight: 600;
-        }
-
-        .live-dot {
-          width: 0.55rem;
-          height: 0.55rem;
-          border-radius: 50%;
-          background: var(--success);
-          box-shadow: 0 0 0 6px oklch(63% 0.12 168 / 0.16);
-          animation: pulse 1.8s ease-in-out infinite;
-        }
-
-        .panel-summary {
-          position: relative;
-          z-index: 1;
-          margin-top: 1.25rem;
-          padding: 1.2rem;
-          border-radius: 1.35rem;
-          background: oklch(100% 0 0 / 0.08);
-          border: 1px solid oklch(100% 0 0 / 0.08);
-        }
-
-        .summary-copy {
-          margin-bottom: 1rem;
-        }
-
-        .summary-label {
-          color: oklch(80% 0.03 88);
-          margin-bottom: 0.55rem;
-        }
-
-        .summary-headline {
-          font-size: 1.3rem;
-          line-height: 1.4;
-          color: oklch(98% 0.01 90);
-          font-weight: 600;
-        }
-
-        .summary-stats {
-          gap: 0.75rem;
-          flex-wrap: wrap;
-        }
-
-        .summary-stat {
-          gap: 0.5rem;
-          padding: 0.8rem 0.95rem;
-          border-radius: 1rem;
-          background: oklch(0% 0 0 / 0.14);
-          min-width: 9rem;
-          justify-content: space-between;
-        }
-
-        .summary-stat strong {
-          font-size: 0.88rem;
-          color: oklch(98% 0.01 90);
-        }
-
-        .summary-stat span {
-          font-size: 0.78rem;
-          color: oklch(77% 0.02 245);
-        }
-
-        .panel-grid {
-          position: relative;
-          z-index: 1;
-          display: grid;
-          grid-template-columns: 1.08fr 0.92fr;
-          gap: 0.9rem;
-          margin-top: 0.95rem;
-        }
-
-        .panel-card {
-          border-radius: 1.35rem;
-          padding: 1.1rem;
-        }
-
-        .panel-card-ink {
-          background: oklch(0% 0 0 / 0.16);
-          border: 1px solid oklch(100% 0 0 / 0.06);
-        }
-
-        .panel-card-warm {
-          background: linear-gradient(180deg, oklch(96% 0.03 90), oklch(92% 0.04 88));
-          color: var(--text);
-        }
-
-        .panel-card-label {
-          margin-bottom: 0.65rem;
-          color: inherit;
-          opacity: 0.72;
-        }
-
-        .panel-card-title {
-          font-size: 1.08rem;
-          line-height: 1.4;
-          font-weight: 600;
-          margin-bottom: 0.6rem;
-        }
-
-        .task-list {
-          list-style: none;
-          display: grid;
-          gap: 0.65rem;
-        }
-
-        .task-list li {
-          position: relative;
-          padding-left: 1rem;
-          color: var(--text-soft);
-          line-height: 1.55;
-        }
-
-        .task-list li::before,
-        .pricing-list li::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 0.62rem;
-          width: 0.42rem;
-          height: 0.42rem;
-          border-radius: 50%;
-          background: var(--accent-strong);
-        }
-
-        .tool-row {
-          position: relative;
-          z-index: 1;
-          margin-top: 1rem;
-        }
-
-        .tool-pill,
-        .integration-name {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 999px;
-          font-size: 0.84rem;
-          font-weight: 600;
-        }
-
-        .tool-pill {
-          padding: 0.6rem 0.85rem;
-          background: oklch(100% 0 0 / 0.08);
-          color: oklch(90% 0.01 92);
-          border: 1px solid oklch(100% 0 0 / 0.07);
-        }
-
-        .integration-band,
-        .section-tinted,
-        .final-cta-section {
-          position: relative;
-        }
-
-        .integration-band {
-          padding: 0.8rem 0 2rem;
-        }
-
-        .integration-shell {
-          border-radius: 1.6rem;
-          border: 1px solid var(--line);
-          background: oklch(100% 0 0 / 0.5);
-          padding: 1rem 1.1rem;
-          box-shadow: var(--shadow-soft);
-        }
-
-        .integration-row {
-          margin-top: 0.65rem;
-          gap: 0.75rem;
-        }
-
-        .integration-name {
-          padding: 0.65rem 0.85rem;
-          background: var(--bg);
-          border: 1px solid var(--line);
-          color: var(--text-soft);
-        }
-
-        .section-block {
-          padding: clamp(4rem, 10vw, 6rem) 0;
-        }
-
-        .section-tinted::before,
-        .final-cta-section::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(180deg, oklch(98% 0.014 92 / 0), oklch(93.8% 0.035 90 / 0.7));
-          pointer-events: none;
-        }
-
-        .section-head {
-          max-width: 48rem;
-          margin-bottom: 2.4rem;
-        }
-
-        .section-head-slim {
-          max-width: 42rem;
-        }
-
-        .section-title {
-          font-size: clamp(2rem, 5vw, 3.5rem);
-          margin: 0.65rem 0 1rem;
-          letter-spacing: 0.01em;
-        }
-
-        .value-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 1rem;
-        }
-
-        .value-card,
-        .workflow-card,
-        .role-card,
-        .pricing-card,
-        .final-cta {
-          border-radius: var(--radius-md);
-          border: 1px solid var(--line);
-          background: oklch(100% 0 0 / 0.74);
-          box-shadow: var(--shadow-soft);
-        }
-
-        .value-card {
-          overflow: hidden;
-        }
-
-        .value-card-featured {
-          background: linear-gradient(135deg, oklch(29% 0.025 255), oklch(33% 0.03 250));
-          border-color: oklch(38% 0.04 248 / 0.35);
-        }
-
-        .value-card-content {
-          padding: 1.5rem;
-        }
-
-        .value-card-featured .value-eyebrow,
-        .value-card-featured .value-title,
-        .value-card-featured .value-body {
-          color: oklch(97% 0.01 92);
-        }
-
-        .value-card-featured .value-eyebrow {
-          opacity: 0.8;
-        }
-
-        .value-title {
-          font-size: 1.65rem;
-          margin: 0.55rem 0 0.8rem;
-          letter-spacing: 0.01em;
-        }
-
-        .role-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 1rem;
-          margin-top: 1rem;
-        }
-
-        .role-card {
-          padding: 1.35rem;
-          background: oklch(100% 0 0 / 0.56);
-        }
-
-        .role-title {
-          font-weight: 700;
-          font-size: 1rem;
-          margin-bottom: 0.55rem;
-          color: var(--text);
-        }
-
-        .workflow-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 1rem;
-          position: relative;
-          z-index: 1;
-        }
-
-        .workflow-card {
-          padding: 1.45rem;
-        }
-
-        .workflow-step {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 2.6rem;
-          height: 2.6rem;
-          border-radius: 999px;
-          background: var(--accent);
-          color: var(--accent-ink);
-          font-weight: 800;
-          margin-bottom: 0.9rem;
-        }
-
-        .workflow-detail {
-          color: var(--text-faint);
-          margin-bottom: 0.7rem;
-        }
-
-        .workflow-title {
-          font-size: 1.48rem;
-          margin-bottom: 0.75rem;
-          letter-spacing: 0.01em;
-        }
-
-        .pricing-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 1rem;
-        }
-
-        .pricing-card {
-          overflow: hidden;
-        }
-
-        .pricing-card-featured {
-          background: linear-gradient(180deg, oklch(97% 0.03 92), oklch(93.8% 0.045 88));
-          border-color: oklch(80% 0.06 74);
-        }
-
-        .pricing-content {
-          padding: 1.5rem;
-        }
-
-        .pricing-badge {
-          display: inline-flex;
-          border-radius: 999px;
-          padding: 0.45rem 0.75rem;
-          background: var(--accent);
-          color: var(--accent-ink);
-          font-weight: 700;
-          margin-bottom: 0.85rem;
-        }
-
-        .pricing-tier {
-          color: var(--text-faint);
-        }
-
-        .pricing-amount-row {
-          display: flex;
-          align-items: flex-end;
-          gap: 0.45rem;
-          margin: 0.55rem 0 0.9rem;
-        }
-
-        .pricing-amount {
-          font-size: clamp(2.7rem, 5vw, 4rem);
-          letter-spacing: 0.01em;
-        }
-
-        .pricing-period {
-          color: var(--text-faint);
-          font-size: 0.95rem;
-          margin-bottom: 0.55rem;
-        }
-
-        .pricing-copy {
-          margin-bottom: 1.25rem;
-        }
-
-        .pricing-button {
-          width: 100%;
-          justify-content: center;
-          margin-bottom: 1.25rem;
-        }
-
-        .pricing-list {
-          list-style: none;
-          display: grid;
-          gap: 0.85rem;
-        }
-
-        .pricing-list li {
-          position: relative;
-          padding-left: 1rem;
-          color: var(--text-soft);
-          line-height: 1.5;
-        }
-
-        .pricing-note {
-          margin-top: 1rem;
-          padding: 1rem 1.1rem;
-          border-radius: 999px;
-          background: oklch(100% 0 0 / 0.58);
-          border: 1px solid var(--line);
-          color: var(--text-soft);
-          font-size: 0.94rem;
-          justify-content: space-between;
-        }
-
-        .pricing-note a {
-          color: var(--accent-ink);
-          font-weight: 600;
-        }
-
-        .final-cta {
-          position: relative;
-          z-index: 1;
-          display: grid;
-          grid-template-columns: 1.1fr auto;
-          gap: 2rem;
-          align-items: center;
-          padding: clamp(1.5rem, 4vw, 2.4rem);
-          background:
-            linear-gradient(135deg, oklch(29% 0.024 255), oklch(22% 0.02 255));
-          border-color: oklch(38% 0.04 248 / 0.35);
-        }
-
-        .final-cta .section-kicker,
-        .final-cta .section-title,
-        .final-cta .section-body {
-          color: oklch(97% 0.01 92);
-        }
-
-        .final-cta .section-kicker,
-        .final-cta .section-body {
-          opacity: 0.82;
-        }
-
-        .final-cta-actions {
-          display: grid;
-          gap: 0.85rem;
-          min-width: min(100%, 18rem);
-        }
-
-        .site-footer {
-          padding: 0 0 2.5rem;
-        }
-
-        .footer-shell {
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          gap: 1rem;
-          align-items: center;
-          padding-top: 1.5rem;
-          border-top: 1px solid var(--line);
-        }
-
-        .footer-copy {
-          font-size: 0.94rem;
-          text-align: center;
-        }
-
-        @keyframes pulse {
-          0%,
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          50% {
-            transform: scale(0.86);
-            opacity: 0.72;
-          }
-        }
-
-        @media (max-width: 1024px) {
-          .hero-shell,
-          .workflow-grid,
-          .role-grid,
-          .pricing-grid,
-          .final-cta,
-          .footer-shell {
-            grid-template-columns: 1fr;
-          }
-
-          .hero-panel {
-            max-width: 42rem;
-          }
-
-          .final-cta-actions,
-          .footer-copy {
-            text-align: left;
-          }
-        }
-
-        @media (max-width: 900px) {
-          .nav-links,
-          .nav-text-link {
-            display: none;
-          }
-
-          .value-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .value-card-featured {
-            order: -1;
-          }
-
-          .panel-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .pricing-note {
-            border-radius: 1.2rem;
-            align-items: flex-start;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .section-shell,
-          .nav-shell {
-            width: min(1120px, calc(100vw - 1.25rem));
-          }
-
-          .site-nav {
-            position: static;
-          }
-
-          .nav-shell {
-            padding: 0.9rem 0;
-          }
-
-          .brand-mark {
-            width: 2.35rem;
-            height: 2.35rem;
-          }
-
-          .brand-wordmark {
-            font-size: 1.15rem;
-          }
-
-          .nav-actions {
-            width: auto;
-          }
-
-          .nav-cta,
-          .cta-button-lg,
-          .secondary-button {
-            width: 100%;
-            justify-content: center;
-          }
-
-          .hero-actions,
-          .pricing-note,
-          .footer-links {
-            display: grid;
-            gap: 0.75rem;
-          }
-
-          .hero-title {
-            max-width: 10ch;
-          }
-
-          .hero-proof-points {
-            display: grid;
-            gap: 0.55rem;
-          }
-
-          .hero-proof-points span {
-            padding-left: 1rem;
-          }
-
-          .panel-summary,
-          .panel-card,
-          .workflow-card,
-          .value-card-content,
-          .pricing-content,
-          .role-card,
-          .final-cta {
-            padding: 1.15rem;
-          }
-
-          .summary-stats {
-            display: grid;
-            grid-template-columns: 1fr;
-          }
-
-          .summary-stat {
-            width: 100%;
-          }
-
-          .tool-row,
-          .integration-row {
-            gap: 0.6rem;
-          }
-
-          .footer-shell {
-            padding-top: 1.2rem;
-          }
-        }
-      `}</style>
     </div>
   )
 }

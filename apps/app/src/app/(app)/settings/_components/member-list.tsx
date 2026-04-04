@@ -55,8 +55,8 @@ export function MemberList({
 
   return (
     <>
-      <Card className="overflow-hidden rounded-xl border-zinc-800 bg-zinc-900">
-        <CardContent className="divide-y divide-zinc-800 p-0">
+      <Card className="overflow-hidden rounded-xl border-white/10 bg-[rgba(49,66,71,0.78)]">
+        <CardContent className="divide-y divide-white/10 p-0">
           {members.map((member) => {
             const isSelf = member.userId === currentUserId
             const canRemove = isOwner && !isSelf && member.role !== 'owner'
@@ -64,50 +64,45 @@ export function MemberList({
             return (
               <div
                 key={member.id}
-                className="flex items-center gap-4 px-5 py-4 bg-zinc-900 hover:bg-zinc-800/50 transition-colors"
+                className="flex items-center gap-4 bg-transparent px-5 py-4 transition-colors hover:bg-white/6"
               >
-                {/* Avatar */}
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#DFAE56] to-[#6FA88C]">
                   <span className="text-white text-xs font-bold">
                     {getInitials(member.name)}
                   </span>
                 </div>
 
-                {/* Name + email */}
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-sm font-medium truncate">
                     {member.name}
                     {isSelf && (
-                      <span className="text-zinc-500 font-normal ml-1">
+                      <span className="ml-1 font-normal text-[#8ea3a8]">
                         (you)
                       </span>
                     )}
                   </p>
-                  <p className="text-zinc-500 text-xs truncate">
+                  <p className="text-xs truncate text-[#8ea3a8]">
                     {member.email}
                   </p>
                 </div>
 
-                {/* Join date */}
-                <p className="text-zinc-500 text-xs hidden sm:block flex-shrink-0">
+                <p className="hidden flex-shrink-0 text-xs text-[#8ea3a8] sm:block">
                   Joined {formatDate(member.joinedAt)}
                 </p>
 
-                {/* Role badge */}
                 {member.role === 'owner' ? (
-                  <Badge className="flex-shrink-0 border border-indigo-500/20 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/15">
+                  <Badge className="flex-shrink-0 border border-[#DFAE56]/24 bg-[#DFAE56]/14 text-[#F0C570] hover:bg-[#DFAE56]/14">
                     Owner
                   </Badge>
                 ) : (
                   <Badge
                     variant="outline"
-                    className="flex-shrink-0 border-zinc-700 bg-zinc-800 text-zinc-400"
+                    className="flex-shrink-0 border-white/12 bg-white/8 text-[#9bb0b5]"
                   >
                     Member
                   </Badge>
                 )}
 
-                {/* Remove button — owner only, not self */}
                 {isOwner && (
                   <Button
                     onClick={() => canRemove && setRemoveTarget(member)}
@@ -123,8 +118,8 @@ export function MemberList({
                     size="sm"
                     className={`flex-shrink-0 text-xs ${
                       canRemove
-                        ? 'border-zinc-700 text-zinc-400 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
-                        : 'border-zinc-800 text-zinc-600'
+                        ? 'border-white/12 text-[#9bb0b5] hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
+                        : 'border-white/10 text-[#7d9196]'
                     }`}
                   >
                     Remove
@@ -135,7 +130,7 @@ export function MemberList({
           })}
 
           {members.length === 0 && (
-            <div className="px-5 py-10 text-center text-zinc-500 text-sm bg-zinc-900">
+            <div className="bg-transparent px-5 py-10 text-center text-sm text-[#8ea3a8]">
               No members yet.
             </div>
           )}

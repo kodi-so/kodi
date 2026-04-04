@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from '@/lib/auth-client'
@@ -23,10 +24,8 @@ function InvitePageInner() {
       return
     }
 
-    // Wait for session to resolve
     if (sessionLoading) return
 
-    // Not logged in — redirect to login with ?redirect back here
     if (!session?.user) {
       setState('unauthenticated')
       const redirect = encodeURIComponent(`/invite?token=${encodeURIComponent(token)}`)
@@ -34,13 +33,11 @@ function InvitePageInner() {
       return
     }
 
-    // Logged in — accept the invite
     setState('accepting')
     trpc.invite.accept
       .mutate({ token })
-      .then(({ orgId: _orgId }) => {
+      .then(() => {
         setState('success')
-        // Short delay so user sees the success state, then redirect
         setTimeout(() => router.replace('/dashboard'), 1500)
       })
       .catch((err: unknown) => {
@@ -57,73 +54,99 @@ function InvitePageInner() {
   }, [token, session, sessionLoading])
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4">
-      {/* Background glow */}
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
       <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(99,102,241,0.12) 0%, transparent 70%)',
-        }}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(223,174,86,0.2),transparent_26%),radial-gradient(circle_at_82%_18%,rgba(111,168,140,0.12),transparent_22%),linear-gradient(180deg,#f9f7f0_0%,#f6f4ee_36%,#f0ece1_100%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(62,80,86,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(62,80,86,0.05)_1px,transparent_1px)] bg-[size:88px_88px] opacity-40 [mask-image:linear-gradient(180deg,rgba(0,0,0,0.28),transparent_82%)]"
       />
 
-      <div className="relative z-10 w-full max-w-md">
-        <div className="bg-[#12121a] border border-[#2a2a3a] rounded-2xl p-8 shadow-2xl text-center">
-          {/* Logo / icon */}
-          <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-6 text-2xl">
-            ✉️
-          </div>
-
-          {(state === 'loading' || state === 'accepting' || state === 'unauthenticated') && (
-            <>
-              <h1 className="text-xl font-semibold text-white mb-2">
-                {state === 'unauthenticated' ? 'Redirecting to sign in…' : 'Accepting invite…'}
-              </h1>
-              <p className="text-zinc-500 text-sm">Just a moment.</p>
-              <div className="mt-6 flex justify-center">
-                <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            </>
-          )}
-
-          {state === 'success' && (
-            <>
-              <div className="text-4xl mb-4">🎉</div>
-              <h1 className="text-xl font-semibold text-white mb-2">You're in!</h1>
-              <p className="text-zinc-500 text-sm">Taking you to the dashboard…</p>
-            </>
-          )}
-
-          {state === 'error' && (
-            <>
-              <h1 className="text-xl font-semibold text-white mb-2">Invite issue</h1>
-              <p className="text-zinc-400 text-sm mb-6 leading-relaxed">{errorMessage}</p>
-              <p className="text-zinc-600 text-xs">
-                If you think this is a mistake, ask the org owner to send a new invite.
-              </p>
-              <button
-                onClick={() => router.replace('/dashboard')}
-                className="mt-6 text-indigo-400 hover:text-indigo-300 text-sm underline transition-colors"
-              >
-                Go to dashboard
-              </button>
-            </>
-          )}
+      <div className="relative z-10 w-full max-w-xl rounded-[2rem] border border-white/80 bg-white/76 p-8 text-center text-[#223239] shadow-[0_30px_80px_rgba(34,50,57,0.14)] backdrop-blur-sm">
+        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-[0_14px_28px_rgba(34,50,57,0.08)]">
+          <Image
+            src="/brand/kodi-logo.png"
+            alt=""
+            width={42}
+            height={42}
+            className="h-auto w-9 object-contain"
+            priority
+          />
         </div>
+
+        {(state === 'loading' ||
+          state === 'accepting' ||
+          state === 'unauthenticated') && (
+          <>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#6f8388]">
+              Workspace invite
+            </p>
+            <h1 className="mt-4 font-brand text-[2.3rem] leading-none tracking-[-0.05em] text-[#223239]">
+              {state === 'unauthenticated'
+                ? 'Redirecting you to sign in'
+                : 'Accepting your invite'}
+            </h1>
+            <p className="mt-4 text-sm leading-7 text-[#4d6369]">
+              Kodi is preparing the workspace access so you land in the right
+              control room without extra setup.
+            </p>
+            <div className="mt-8 flex justify-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#DFAE56]/25 bg-[#DFAE56]/12">
+                <div className="h-6 w-6 rounded-full border-2 border-[#DFAE56]/35 border-t-[#DFAE56] animate-spin" />
+              </div>
+            </div>
+          </>
+        )}
+
+        {state === 'success' && (
+          <>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#6f8388]">
+              Invite accepted
+            </p>
+            <h1 className="mt-4 font-brand text-[2.3rem] leading-none tracking-[-0.05em] text-[#223239]">
+              You&apos;re in.
+            </h1>
+            <p className="mt-4 text-sm leading-7 text-[#4d6369]">
+              Taking you to the dashboard so you can start working with Kodi.
+            </p>
+          </>
+        )}
+
+        {state === 'error' && (
+          <>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#d9a697]">
+              Invite issue
+            </p>
+            <h1 className="mt-4 font-brand text-[2.3rem] leading-none tracking-[-0.05em] text-[#223239]">
+              This invite needs attention.
+            </h1>
+            <p className="mt-4 text-sm leading-7 text-[#ffd8ce]">
+              {errorMessage}
+            </p>
+            <p className="mt-3 text-sm leading-7 text-[#5d7379]">
+              If this looks wrong, ask the workspace owner to send a new invite.
+            </p>
+            <button
+              onClick={() => router.replace('/dashboard')}
+              className="mt-8 rounded-full border border-[#c9d2d4] bg-white px-5 py-2 text-sm text-[#223239] transition hover:bg-[#f6f4ee]"
+            >
+              Go to dashboard
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-// Wrap in Suspense — required by Next.js when using useSearchParams() in a
-// client component, otherwise Next.js bails to SSR and initialises the entire
-// module graph (including auth.ts) before runtime env vars are available.
 export default function InvitePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex min-h-screen items-center justify-center bg-[#F6F4EE]">
+          <div className="h-6 w-6 rounded-full border-2 border-[#DFAE56]/35 border-t-[#DFAE56] animate-spin" />
         </div>
       }
     >

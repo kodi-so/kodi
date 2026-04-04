@@ -46,26 +46,26 @@ export function getStatusTone(status: string) {
   const normalized = status.trim().toLowerCase()
 
   if (normalized === 'connected' || normalized.endsWith(' connected')) {
-    return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+    return 'border-[#6FA88C]/24 bg-[#6FA88C]/12 text-[#d6eadf]'
   }
 
   if (normalized.includes('ready') || normalized.includes('browse')) {
-    return 'border-sky-500/20 bg-sky-500/10 text-sky-200'
+    return 'border-white/12 bg-white/8 text-[#dbeaf0]'
   }
 
   if (normalized.includes('connecting')) {
-    return 'border-sky-500/20 bg-sky-500/10 text-sky-200'
+    return 'border-white/12 bg-white/8 text-[#dbeaf0]'
   }
 
   if (normalized.includes('needs') || normalized.includes('blocked')) {
-    return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+    return 'border-[#DFAE56]/24 bg-[#DFAE56]/12 text-[#f6d289]'
   }
 
   if (normalized.includes('attention') || normalized.includes('error')) {
     return 'border-red-500/20 bg-red-500/10 text-red-200'
   }
 
-  return 'border-zinc-700 bg-zinc-900 text-zinc-300'
+  return 'border-white/12 bg-white/8 text-[#dce5e7]'
 }
 
 export function getToolkitMonogram(name: string) {
@@ -281,7 +281,7 @@ export function getPolicyState(policy: {
   if (!policy.chatReadsEnabled || !policy.meetingReadsEnabled) {
     return {
       label: 'Limited reads',
-      tone: 'border-amber-500/20 bg-amber-500/10 text-amber-100',
+      tone: 'border-[#DFAE56]/24 bg-[#DFAE56]/12 text-[#f6d289]',
       detail:
         'Some read contexts are disabled, so availability depends on where Kodi is acting.',
     }
@@ -299,14 +299,14 @@ export function getPolicyState(policy: {
   if (policy.writesRequireApproval) {
     return {
       label: 'Writes reviewed',
-      tone: 'border-sky-500/20 bg-sky-500/10 text-sky-200',
+      tone: 'border-white/12 bg-white/8 text-[#dbeaf0]',
       detail: 'Writes stay behind approval before execution.',
     }
   }
 
   return {
     label: 'Direct writes allowed',
-    tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+    tone: 'border-[#6FA88C]/24 bg-[#6FA88C]/12 text-[#d6eadf]',
     detail: 'Writes can proceed directly once the runtime supports them.',
   }
 }

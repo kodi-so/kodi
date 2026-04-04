@@ -15,9 +15,8 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-full min-h-0">
-      {/* Left nav sidebar */}
-      <aside className="w-52 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 p-4">
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-3">
+      <aside className="w-56 flex-shrink-0 border-r border-white/10 bg-[rgba(27,40,45,0.82)] p-4">
+        <h2 className="mb-3 px-3 text-xs uppercase tracking-[0.18em] text-[#8ea3a8]">
           Settings
         </h2>
         <nav className="space-y-1">
@@ -28,10 +27,10 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
                 key={href}
                 asChild
                 variant={active ? 'secondary' : 'ghost'}
-                className={`w-full justify-start gap-3 px-3 py-2.5 text-sm font-medium ${
+                className={`w-full justify-start gap-3 rounded-2xl px-3 py-3 text-sm ${
                   active
-                    ? 'border border-indigo-500/20 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                    ? 'border border-[#DFAE56]/24 bg-[#DFAE56]/14 text-[#F0C570] hover:bg-[#DFAE56]/18 hover:text-[#f6d289]'
+                    : 'text-[#9eb1b5] hover:bg-white/6 hover:text-white'
                 }`}
               >
                 <Link href={href}>

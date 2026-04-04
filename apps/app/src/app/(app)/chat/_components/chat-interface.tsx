@@ -152,7 +152,7 @@ function MarkdownContent({
           if (isBlock) {
             return (
               <pre
-                className={`my-2 rounded-lg p-3 text-xs overflow-x-auto ${isUser ? 'bg-indigo-700/50' : 'bg-zinc-900/80'}`}
+                className={`my-2 rounded-lg p-3 text-xs overflow-x-auto ${isUser ? 'bg-[#DFAE56]/20 text-[#223239]' : 'bg-[rgba(49,66,71,0.92)] text-[#eef2ea]'}`}
               >
                 <code className={className} {...props}>
                   {children}
@@ -163,7 +163,7 @@ function MarkdownContent({
           return (
             <code
               className={`px-1.5 py-0.5 rounded text-xs font-mono ${
-                isUser ? 'bg-indigo-700/50' : 'bg-zinc-700/60'
+                isUser ? 'bg-[#DFAE56]/20 text-[#223239]' : 'bg-white/10 text-[#eef2ea]'
               }`}
               {...props}
             >
@@ -177,14 +177,14 @@ function MarkdownContent({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className={`underline underline-offset-2 ${isUser ? 'text-indigo-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'}`}
+            className={`underline underline-offset-2 ${isUser ? 'text-[#9a6e19] hover:text-[#223239]' : 'text-[#F0C570] hover:text-[#f6d289]'}`}
           >
             {children}
           </a>
         ),
         blockquote: ({ children }) => (
           <blockquote
-            className={`border-l-2 pl-3 my-2 ${isUser ? 'border-indigo-400/50 text-indigo-100' : 'border-zinc-600 text-zinc-300'}`}
+            className={`border-l-2 pl-3 my-2 ${isUser ? 'border-[#DFAE56]/45 text-[#4b5f65]' : 'border-white/12 text-[#dce5e7]'}`}
           >
             {children}
           </blockquote>
@@ -200,13 +200,13 @@ function MarkdownContent({
         ),
         hr: () => (
           <hr
-            className={`my-2 ${isUser ? 'border-indigo-500/30' : 'border-zinc-700'}`}
+            className={`my-2 ${isUser ? 'border-[#DFAE56]/30' : 'border-white/12'}`}
           />
         ),
         table: ({ children }) => (
           <div className="overflow-x-auto my-2">
             <table
-              className={`text-xs border-collapse ${isUser ? 'border-indigo-500/30' : 'border-zinc-700'}`}
+              className={`text-xs border-collapse ${isUser ? 'border-[#DFAE56]/30' : 'border-white/12'}`}
             >
               {children}
             </table>
@@ -214,14 +214,14 @@ function MarkdownContent({
         ),
         th: ({ children }) => (
           <th
-            className={`px-2 py-1 text-left font-semibold border-b ${isUser ? 'border-indigo-500/30' : 'border-zinc-700'}`}
+            className={`px-2 py-1 text-left font-semibold border-b ${isUser ? 'border-[#DFAE56]/30' : 'border-white/12'}`}
           >
             {children}
           </th>
         ),
         td: ({ children }) => (
           <td
-            className={`px-2 py-1 border-b ${isUser ? 'border-indigo-500/20' : 'border-zinc-800'}`}
+            className={`px-2 py-1 border-b ${isUser ? 'border-[#DFAE56]/24' : 'border-white/10'}`}
           >
             {children}
           </td>
@@ -268,7 +268,7 @@ function ContextMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-50 min-w-[160px] rounded-lg border border-white/10 bg-[#314247] py-1 shadow-xl animate-in fade-in zoom-in-95 duration-100"
       style={{ left: `${x}px`, top: `${y}px` }}
     >
       <button
@@ -276,7 +276,7 @@ function ContextMenu({
           onCopy()
           onClose()
         }}
-        className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-700/50 transition-colors flex items-center gap-2"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#eef2ea] transition-colors hover:bg-white/8"
       >
         <svg
           className="w-4 h-4"
@@ -292,14 +292,14 @@ function ContextMenu({
           />
         </svg>
         Copy text
-        <span className="ml-auto text-xs text-zinc-500">⌘C</span>
+        <span className="ml-auto text-xs text-[#8ea3a8]">⌘C</span>
       </button>
       <button
         onClick={() => {
           onDelete()
           onClose()
         }}
-        className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-700/50 transition-colors flex items-center gap-2"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-white/8"
       >
         <svg
           className="w-4 h-4"
@@ -315,7 +315,7 @@ function ContextMenu({
           />
         </svg>
         Delete message
-        <span className="ml-auto text-xs text-zinc-500">Del</span>
+        <span className="ml-auto text-xs text-[#8ea3a8]">Del</span>
       </button>
     </div>
   )
@@ -340,14 +340,14 @@ function DeleteConfirmationModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-150">
-      <Card className="mx-4 max-w-sm border-zinc-700 bg-zinc-900 shadow-2xl animate-in zoom-in-95 duration-150">
+      <Card className="mx-4 max-w-sm border-white/10 bg-[#314247] shadow-2xl animate-in zoom-in-95 duration-150">
         <CardContent className="p-6">
           <h3 className="text-white font-semibold text-lg mb-2">
             Delete Message
           </h3>
-          <p className="text-zinc-400 text-sm mb-6">
+          <p className="mb-6 text-sm text-[#9bb0b5]">
             Are you sure you want to delete this message? You can undo with{' '}
-            <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-xs font-mono">
+            <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-mono text-[#dce5e7]">
               ⌘Z
             </kbd>
           </p>
@@ -355,7 +355,7 @@ function DeleteConfirmationModal({
             <Button
               onClick={onCancel}
               variant="outline"
-              className="border-zinc-700 bg-zinc-800 text-white hover:bg-zinc-700"
+              className="border-white/10 bg-white/8 text-white hover:bg-white/10"
             >
               Cancel
             </Button>
@@ -378,11 +378,11 @@ function DeleteConfirmationModal({
 function DaySeparator({ date }: { date: Date }) {
   return (
     <div className="flex items-center gap-3 my-4 first:mt-0">
-      <Separator className="flex-1 bg-zinc-800" />
-      <span className="text-xs font-medium text-zinc-500 px-2">
+      <Separator className="flex-1 bg-white/10" />
+      <span className="px-2 text-xs font-medium text-[#8ea3a8]">
         {formatDayLabel(date)}
       </span>
-      <Separator className="flex-1 bg-zinc-800" />
+      <Separator className="flex-1 bg-white/10" />
     </div>
   )
 }
@@ -400,7 +400,7 @@ function Avatar({
 }) {
   if (isAssistant) {
     return (
-      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#DFAE56] to-[#6FA88C]">
         <svg
           className="w-4 h-4 text-white"
           fill="none"
@@ -429,8 +429,8 @@ function Avatar({
   }
 
   return (
-    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center shrink-0">
-      <span className="text-xs font-medium text-zinc-300">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10">
+      <span className="text-xs font-medium text-[#dce5e7]">
         {getInitials(name)}
       </span>
     </div>
@@ -505,7 +505,7 @@ function MessageBubble({
     <>
       <div
         className={`flex gap-3 mb-1 group animate-in fade-in slide-in-from-bottom-2 duration-300 px-2 py-1.5 rounded-lg transition-colors ${
-          isSelected ? 'bg-zinc-800/50' : 'hover:bg-zinc-900/50'
+          isSelected ? 'bg-white/8' : 'hover:bg-white/6'
         }`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -525,11 +525,11 @@ function MessageBubble({
           {/* Sender name + timestamp */}
           <div className="flex items-baseline gap-2 mb-0.5">
             <span
-              className={`text-sm font-semibold ${isUser ? 'text-zinc-100' : 'text-indigo-400'}`}
+              className={`text-sm font-semibold ${isUser ? 'text-white' : 'text-[#F0C570]'}`}
             >
               {senderName}
             </span>
-            <span className="text-xs text-zinc-600">
+            <span className="text-xs text-[#7d9196]">
               {formatTime(timestamp)}
             </span>
           </div>
@@ -538,7 +538,7 @@ function MessageBubble({
           <div
             className={`text-sm leading-relaxed break-words ${
               message.status === 'error' ? 'opacity-60' : ''
-            } ${isUser ? 'text-zinc-200' : 'text-zinc-300'} prose-sm`}
+            } ${isUser ? 'text-[#eef2ea]' : 'text-[#dce5e7]'} prose-sm`}
           >
             <MarkdownContent content={text} isUser={isUser} />
             {message.status === 'error' && (
@@ -560,7 +560,7 @@ function MessageBubble({
               e.stopPropagation()
               handleCopy()
             }}
-            className="text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-md p-1.5 transition-all shrink-0"
+            className="rounded-md p-1.5 text-[#8ea3a8] transition-all shrink-0 hover:bg-white/10 hover:text-[#dce5e7]"
             title="Copy text (⌘C)"
             aria-label="Copy text"
           >
@@ -583,7 +583,7 @@ function MessageBubble({
               e.stopPropagation()
               handleDelete()
             }}
-            className="text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded-md p-1.5 transition-all shrink-0"
+            className="rounded-md p-1.5 text-[#8ea3a8] transition-all shrink-0 hover:bg-white/10 hover:text-red-400"
             title="Delete message (Del)"
             aria-label="Delete message"
           >
@@ -633,11 +633,11 @@ function TypingIndicator() {
     <div className="flex gap-3 mb-1 px-2 py-1.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <Avatar name="Kodi" isAssistant />
       <div className="flex items-center">
-        <div className="bg-zinc-800/60 rounded-xl px-4 py-2.5 flex items-center gap-1">
+        <div className="flex items-center gap-1 rounded-xl bg-white/10 px-4 py-2.5">
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce"
+              className="h-1.5 w-1.5 rounded-full bg-[#DFAE56] animate-bounce"
               style={{ animationDelay: `${i * 150}ms` }}
             />
           ))}
@@ -664,8 +664,8 @@ function ToastList({
           key={t.id}
           className={`flex items-start gap-3 border rounded-xl px-4 py-3 shadow-xl text-sm animate-in slide-in-from-right duration-200 ${
             t.type === 'success'
-              ? 'bg-emerald-950/90 border-emerald-800 text-emerald-100'
-              : 'bg-zinc-900 border-zinc-700 text-zinc-100'
+              ? 'border-[#6FA88C]/24 bg-[#29443c]/90 text-[#e5f5eb]'
+              : 'border-white/10 bg-[#314247] text-white'
           }`}
         >
           <AlertDescription className="flex-1 p-0">
@@ -675,7 +675,7 @@ function ToastList({
                 {' '}
                 <a
                   href={t.link.href}
-                  className="text-indigo-400 hover:underline font-medium"
+                  className="font-medium text-[#F0C570] hover:underline"
                 >
                   {t.link.label}
                 </a>
@@ -684,7 +684,7 @@ function ToastList({
           </AlertDescription>
           <button
             onClick={() => onDismiss(t.id)}
-            className="text-zinc-500 hover:text-white transition-colors shrink-0 mt-0.5"
+            className="mt-0.5 shrink-0 text-[#8ea3a8] transition-colors hover:text-white"
             aria-label="Dismiss"
           >
             ✕
@@ -699,7 +699,7 @@ function ToastList({
 
 function ShortcutsHelp() {
   return (
-    <div className="text-center text-zinc-600 text-xs mt-2 space-x-3">
+    <div className="mt-2 space-x-3 text-center text-xs text-[#7d9196]">
       <span>Enter to send</span>
       <span>·</span>
       <span>Shift+Enter for new line</span>
@@ -1119,7 +1119,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
 
   return (
     <div
-      className="flex flex-col h-full bg-zinc-950"
+      className="flex h-full flex-col bg-transparent"
       onClick={() => setSelectedMessageId(null)}
     >
       {/* Message thread */}
@@ -1130,7 +1130,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
         <div className="max-w-3xl mx-auto">
           {loading ? (
             <div className="flex justify-center items-center h-24">
-              <Skeleton className="h-6 w-6 rounded-full bg-indigo-400/40" />
+              <Skeleton className="h-6 w-6 rounded-full bg-[#DFAE56]/30" />
             </div>
           ) : (
             <>
@@ -1143,7 +1143,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
       </div>
 
       {/* Input bar */}
-      <div className="shrink-0 border-t border-zinc-800 bg-zinc-900 px-4 py-3 sm:px-8">
+      <div className="shrink-0 border-t border-white/10 bg-[rgba(34,50,57,0.88)] px-4 py-3 backdrop-blur sm:px-8">
         <div className="flex items-end gap-3 max-w-3xl mx-auto">
           <Textarea
             ref={textareaRef}
@@ -1153,7 +1153,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
             placeholder="Message your agent…"
             rows={1}
             disabled={sending || loading}
-            className="min-h-0 flex-1 resize-none rounded-xl border-zinc-700 bg-zinc-800 px-4 py-3 text-sm leading-relaxed text-white placeholder:text-zinc-500 focus-visible:ring-indigo-500 overflow-y-auto"
+            className="min-h-0 flex-1 resize-none rounded-xl border-white/10 bg-white/6 px-4 py-3 text-sm leading-relaxed text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56] overflow-y-auto"
             style={{ maxHeight: '120px' }}
             aria-label="Message input"
             onClick={(e) => e.stopPropagation()}
@@ -1164,7 +1164,7 @@ export function ChatInterface({ orgId }: { orgId: string }) {
               void send()
             }}
             disabled={sending || loading || !input.trim()}
-            className="h-11 shrink-0 rounded-xl bg-indigo-600 px-5 text-white hover:bg-indigo-500 disabled:opacity-40"
+            className="h-11 shrink-0 rounded-xl bg-[#DFAE56] px-5 text-[#223239] hover:bg-[#e8bf70] disabled:opacity-40"
             aria-label="Send message"
           >
             Send

@@ -52,11 +52,11 @@ function PolicyToggleRow({
   disabled?: boolean
 }) {
   return (
-    <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 p-4">
+    <div className="rounded-[1.2rem] border border-white/10 bg-black/12 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium text-white">{title}</p>
-          <p className="text-sm leading-6 text-zinc-400">{description}</p>
+          <p className="text-sm leading-6 text-[#9bb0b5]">{description}</p>
         </div>
 
         <Button
@@ -65,8 +65,8 @@ function PolicyToggleRow({
           className={cn(
             'w-full justify-center border sm:w-auto',
             value
-              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:text-emerald-200'
-              : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white'
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-[#d6eadf] hover:bg-emerald-500/20 hover:text-emerald-200'
+              : 'border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white'
           )}
           disabled={disabled}
           onClick={onToggle}
@@ -96,7 +96,7 @@ function CollapsibleSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))]">
+    <section className="rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,63,69,0.96),rgba(31,44,49,0.98))]">
       <div className="p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-3">
@@ -105,7 +105,7 @@ function CollapsibleSection({
               onClick={onToggle}
               className="group inline-flex items-center gap-3 text-left"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800 bg-zinc-950 text-zinc-400 transition group-hover:border-zinc-700 group-hover:text-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#223239] text-[#9bb0b5] transition group-hover:border-white/12 group-hover:text-white">
                 <ChevronDown
                   size={16}
                   className={cn(
@@ -116,7 +116,7 @@ function CollapsibleSection({
               </div>
               <div className="space-y-1">
                 <h2 className="text-xl font-semibold text-white">{title}</h2>
-                <p className="text-sm text-zinc-400">{description}</p>
+                <p className="text-sm text-[#9bb0b5]">{description}</p>
               </div>
             </button>
 
@@ -137,7 +137,7 @@ function CollapsibleSection({
               type="button"
               variant="ghost"
               onClick={onToggle}
-              className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+              className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
             >
               {expanded ? 'Collapse' : 'Expand'}
             </Button>
@@ -152,7 +152,7 @@ function CollapsibleSection({
         )}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-zinc-800 px-6 pb-6 pt-2">
+          <div className="border-t border-white/10 px-6 pb-6 pt-2">
             {children}
           </div>
         </div>
@@ -431,7 +431,7 @@ export default function IntegrationDetailPage() {
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
+        <Skeleton className="h-6 w-6 rounded-full bg-white/10" />
       </div>
     )
   }
@@ -444,7 +444,7 @@ export default function IntegrationDetailPage() {
             <Button
               asChild
               variant="ghost"
-              className="w-fit gap-2 px-0 text-zinc-400 hover:bg-transparent hover:text-white"
+              className="w-fit gap-2 px-0 text-[#9bb0b5] hover:bg-transparent hover:text-white"
             >
               <Link href="/integrations">
                 <ArrowLeft size={16} />
@@ -454,17 +454,17 @@ export default function IntegrationDetailPage() {
 
             {loading ? (
               <div className="space-y-2">
-                <Skeleton className="h-4 w-28 bg-zinc-800" />
-                <Skeleton className="h-10 w-56 bg-zinc-800" />
+                <Skeleton className="h-4 w-28 bg-white/10" />
+                <Skeleton className="h-10 w-56 bg-white/10" />
               </div>
             ) : detail ? (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
                   <Badge className={getStatusTone(status)}>{status}</Badge>
-                  <Badge className="border-zinc-700 bg-zinc-950 text-zinc-300">
+                  <Badge className="border-white/12 bg-[#223239] text-[#dce5e7]">
                     {formatSupportTier(detail.toolkit.supportTier)}
                   </Badge>
-                  <Badge className="border-zinc-700 bg-zinc-950 text-zinc-300">
+                  <Badge className="border-white/12 bg-[#223239] text-[#dce5e7]">
                     {formatAuthMode(detail.toolkit.authMode)}
                   </Badge>
                   {policyState && (
@@ -475,14 +475,14 @@ export default function IntegrationDetailPage() {
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[1.35rem] border border-zinc-800 bg-zinc-950 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-200">
+                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[1.35rem] border border-white/10 bg-[#223239] text-sm font-semibold uppercase tracking-[0.18em] text-[#eef2ea]">
                     {getToolkitMonogram(detail.toolkit.name)}
                   </div>
                   <div className="space-y-2">
                     <h1 className="text-3xl font-semibold tracking-tight text-white">
                       {detail.toolkit.name}
                     </h1>
-                    <p className="max-w-3xl text-sm leading-7 text-zinc-400">
+                    <p className="max-w-3xl text-sm leading-7 text-[#9bb0b5]">
                       {detail.toolkit.description ??
                         'No provider description is available yet for this integration.'}
                     </p>
@@ -491,7 +491,7 @@ export default function IntegrationDetailPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-zinc-500">Integration detail</p>
+                <p className="text-sm text-[#8ea3a8]">Integration detail</p>
                 <h1 className="text-3xl font-semibold tracking-tight text-white">
                   Integration not found
                 </h1>
@@ -503,7 +503,7 @@ export default function IntegrationDetailPage() {
             <Button
               onClick={() => void refresh()}
               variant="ghost"
-              className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+              className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
               disabled={loading || actionKey === 'refresh'}
             >
               <RefreshCcw
@@ -516,7 +516,7 @@ export default function IntegrationDetailPage() {
             <Button
               asChild
               variant="ghost"
-              className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+              className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
             >
               <Link href="/integrations/add">Browse catalog</Link>
             </Button>
@@ -527,9 +527,9 @@ export default function IntegrationDetailPage() {
           <Alert
             className={
               callbackBanner.tone === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                ? 'border-[#6FA88C]/30 bg-emerald-500/10 text-emerald-200'
                 : callbackBanner.tone === 'warning'
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                  ? 'border-[#DFAE56]/28 bg-amber-500/10 text-amber-100'
                   : 'border-red-500/30 bg-red-500/10 text-red-200'
             }
           >
@@ -545,16 +545,16 @@ export default function IntegrationDetailPage() {
 
         {loading ? (
           <div className="space-y-4">
-            <Skeleton className="h-44 rounded-[1.6rem] bg-zinc-900/70" />
-            <Skeleton className="h-72 rounded-[1.6rem] bg-zinc-900/70" />
-            <Skeleton className="h-[28rem] rounded-[1.6rem] bg-zinc-900/70" />
+            <Skeleton className="h-44 rounded-[1.6rem] bg-[rgba(49,66,71,0.82)]" />
+            <Skeleton className="h-72 rounded-[1.6rem] bg-[rgba(49,66,71,0.82)]" />
+            <Skeleton className="h-[28rem] rounded-[1.6rem] bg-[rgba(49,66,71,0.82)]" />
           </div>
         ) : !detail ? (
-          <div className="rounded-[1.6rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-8">
+          <div className="rounded-[1.6rem] border border-dashed border-white/10 bg-[#223239]/40 p-8">
             <p className="text-xl font-medium text-white">
               This integration could not be loaded.
             </p>
-            <p className="mt-2 max-w-xl text-sm leading-7 text-zinc-400">
+            <p className="mt-2 max-w-xl text-sm leading-7 text-[#9bb0b5]">
               Go back to the catalog and pick another integration, or refresh if
               the connection state just changed.
             </p>
@@ -562,10 +562,10 @@ export default function IntegrationDetailPage() {
         ) : (
           <div className="space-y-6">
             <div className="space-y-6">
-              <section className="rounded-[1.6rem] border border-zinc-800 bg-[linear-gradient(180deg,rgba(19,21,27,0.98),rgba(11,13,18,1))] p-6">
+              <section className="rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,63,69,0.96),rgba(31,44,49,0.98))] p-6">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#8ea3a8]">
                       Overview
                     </p>
                     <div className="space-y-2">
@@ -576,7 +576,7 @@ export default function IntegrationDetailPage() {
                             ? 'No connected identity required'
                             : 'No identity connected yet'}
                       </p>
-                      <p className="text-sm leading-7 text-zinc-400">
+                      <p className="text-sm leading-7 text-[#9bb0b5]">
                         {getCapabilitySummary(detail.toolkit)}.{' '}
                         {policyState?.detail}
                       </p>
@@ -603,7 +603,7 @@ export default function IntegrationDetailPage() {
                     ) : (
                       <Button
                         onClick={() => void connectToolkit()}
-                        className="gap-2 bg-teal-500 text-zinc-950 hover:bg-teal-400"
+                        className="gap-2 bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
                         disabled={!canRunPrimaryAction || actionKey !== null}
                       >
                         <Link2 size={16} />
@@ -617,7 +617,7 @@ export default function IntegrationDetailPage() {
                       <Button
                         asChild
                         variant="ghost"
-                        className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                        className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
                       >
                         <a
                           href={detail.toolkit.appUrl}
@@ -637,7 +637,7 @@ export default function IntegrationDetailPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                  className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
                   onClick={() => {
                     setIdentitiesExpanded(true)
                     setDefaultsExpanded(true)
@@ -648,7 +648,7 @@ export default function IntegrationDetailPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                  className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
                   onClick={() => {
                     setIdentitiesExpanded(false)
                     setDefaultsExpanded(false)
@@ -668,14 +668,14 @@ export default function IntegrationDetailPage() {
                         ? 'active identity'
                         : 'active identities'
                     }`,
-                    className: 'border-zinc-700 bg-zinc-900 text-zinc-300',
+                    className: 'border-white/12 bg-[#314247] text-[#dce5e7]',
                   },
                   ...(detail.selectedConnectedAccountId
                     ? [
                         {
                           label: 'Preferred identity set',
                           className:
-                            'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+                            'border-emerald-500/20 bg-emerald-500/10 text-[#d6eadf]',
                         },
                       ]
                     : []),
@@ -686,7 +686,7 @@ export default function IntegrationDetailPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        className="gap-2 border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                        className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
                         disabled={preferenceActionKey !== null}
                         onClick={() => void selectPreferredConnection(null)}
                       >
@@ -695,7 +695,7 @@ export default function IntegrationDetailPage() {
                     )}
                     <Button
                       type="button"
-                      className="gap-2 bg-teal-500 text-zinc-950 hover:bg-teal-400"
+                      className="gap-2 bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
                       disabled={!canRunPrimaryAction || actionKey !== null}
                       onClick={() => void connectToolkit()}
                     >
@@ -710,11 +710,11 @@ export default function IntegrationDetailPage() {
                 onToggle={() => setIdentitiesExpanded((current) => !current)}
               >
                 {visibleConnections.length === 0 ? (
-                  <div className="mt-4 rounded-[1.2rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-5">
+                  <div className="mt-4 rounded-[1.2rem] border border-dashed border-white/10 bg-[#223239]/40 p-5">
                     <p className="text-sm font-medium text-white">
                       No identities connected yet.
                     </p>
-                    <p className="mt-2 text-sm leading-7 text-zinc-400">
+                    <p className="mt-2 text-sm leading-7 text-[#9bb0b5]">
                       Connect an account first so Kodi can scope runtime access
                       to the right identity when it uses this integration.
                     </p>
@@ -741,7 +741,7 @@ export default function IntegrationDetailPage() {
                               'rounded-[1.2rem] border p-4',
                               connection.isPreferred
                                 ? 'border-emerald-500/20 bg-emerald-500/10'
-                                : 'border-zinc-800 bg-zinc-950/70'
+                                : 'border-white/10 bg-black/12'
                             )}
                           >
                             <div className="flex flex-col gap-4">
@@ -759,13 +759,13 @@ export default function IntegrationDetailPage() {
                                       {connection.status}
                                     </Badge>
                                     {connection.isPreferred && (
-                                      <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                                      <Badge className="border-emerald-500/20 bg-emerald-500/10 text-[#d6eadf]">
                                         Preferred
                                       </Badge>
                                     )}
                                   </div>
 
-                                  <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
+                                  <div className="flex flex-wrap gap-3 text-xs text-[#8ea3a8]">
                                     {connection.lastValidatedAt && (
                                       <span>
                                         Validated{' '}
@@ -790,7 +790,7 @@ export default function IntegrationDetailPage() {
                                     <Button
                                       type="button"
                                       variant="ghost"
-                                      className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                                      className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
                                       disabled={actionKey !== null}
                                       onClick={() =>
                                         void revalidateConnection(
@@ -809,7 +809,7 @@ export default function IntegrationDetailPage() {
                                       <Button
                                         type="button"
                                         variant="ghost"
-                                        className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                                        className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
                                         disabled={preferenceActionKey !== null}
                                         onClick={() =>
                                           void selectPreferredConnection(
@@ -848,13 +848,13 @@ export default function IntegrationDetailPage() {
                                     .map((scope: string) => (
                                       <Badge
                                         key={scope}
-                                        className="max-w-full border-zinc-700 bg-zinc-900 text-zinc-300"
+                                        className="max-w-full border-white/12 bg-[#314247] text-[#dce5e7]"
                                       >
                                         {formatScope(scope)}
                                       </Badge>
                                     ))}
                                   {connection.scopes.length > 8 && (
-                                    <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                                    <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
                                       +{connection.scopes.length - 8} more
                                       scopes
                                     </Badge>
@@ -890,7 +890,7 @@ export default function IntegrationDetailPage() {
                     label: policyState?.label ?? 'Policy',
                     className:
                       policyState?.tone ??
-                      'border-zinc-700 bg-zinc-900 text-zinc-300',
+                      'border-white/12 bg-[#314247] text-[#dce5e7]',
                   },
                   {
                     label: `${detail.connectionSummary.activeCount} ${
@@ -898,12 +898,12 @@ export default function IntegrationDetailPage() {
                         ? 'active identity'
                         : 'active identities'
                     }`,
-                    className: 'border-zinc-700 bg-zinc-900 text-zinc-300',
+                    className: 'border-white/12 bg-[#314247] text-[#dce5e7]',
                   },
                 ]}
                 actions={
-                  <div className="flex items-center gap-2 text-sm text-zinc-400">
-                    <ShieldCheck size={16} className="text-zinc-500" />
+                  <div className="flex items-center gap-2 text-sm text-[#9bb0b5]">
+                    <ShieldCheck size={16} className="text-[#8ea3a8]" />
                     {isOwner ? 'Owner controls' : 'View only'}
                   </div>
                 }
@@ -1024,10 +1024,10 @@ export default function IntegrationDetailPage() {
                       disabled={policySaving}
                     />
 
-                    <div className="flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
+                    <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
                       <Button
                         onClick={() => void savePolicy()}
-                        className="bg-teal-500 text-zinc-950 hover:bg-teal-400"
+                        className="bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
                         disabled={!policyDirty || policySaving}
                       >
                         {policySaving ? 'Saving...' : 'Save defaults'}
@@ -1035,7 +1035,7 @@ export default function IntegrationDetailPage() {
                       <Button
                         onClick={resetPolicyDraft}
                         variant="ghost"
-                        className="border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                        className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
                         disabled={!policyDirty || policySaving}
                       >
                         Reset
@@ -1043,11 +1043,11 @@ export default function IntegrationDetailPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 p-5">
+                  <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-black/12 p-5">
                     <p className="text-sm font-medium text-white">
                       Workspace policy is view-only here.
                     </p>
-                    <p className="mt-2 text-sm leading-7 text-zinc-400">
+                    <p className="mt-2 text-sm leading-7 text-[#9bb0b5]">
                       Owners can change defaults for chat reads, meeting reads,
                       drafts, approval gating, and administrative actions.
                     </p>

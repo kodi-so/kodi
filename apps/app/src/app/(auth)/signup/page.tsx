@@ -1,10 +1,10 @@
 'use client'
 
 import Image from 'next/image'
-import { Suspense, useState } from 'react'
-import { signIn, signUp } from '@/lib/auth-client'
 import Link from 'next/link'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { signIn, signUp } from '@/lib/auth-client'
 import {
   Alert,
   AlertDescription,
@@ -22,7 +22,6 @@ function SignUpForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectParam = searchParams.get('redirect')
-  // After onboarding creates the personal org, forward any pending redirect
   const onboardingUrl = redirectParam
     ? `/onboarding?redirect=${encodeURIComponent(redirectParam)}`
     : '/onboarding'
@@ -39,7 +38,7 @@ function SignUpForm() {
     setError('')
     try {
       await signIn.social({ provider: 'google', callbackURL: onboardingUrl })
-    } catch (e) {
+    } catch {
       setError('Failed to sign in with Google. Please try again.')
       setGoogleLoading(false)
     }
@@ -62,63 +61,103 @@ function SignUpForm() {
       } else {
         router.push(onboardingUrl)
       }
-    } catch (e) {
+    } catch {
       setError('Something went wrong. Please try again.')
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4">
-      {/* Background glow */}
+    <div className="relative min-h-screen overflow-hidden px-4 py-8 text-[#223239]">
       <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(223,174,86,0.14) 0%, transparent 70%), radial-gradient(circle at 18% 18%, rgba(62,80,86,0.2) 0%, transparent 38%)',
-        }}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(223,174,86,0.2),transparent_26%),radial-gradient(circle_at_82%_18%,rgba(111,168,140,0.12),transparent_22%),linear-gradient(180deg,#f9f7f0_0%,#f6f4ee_36%,#f0ece1_100%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(62,80,86,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(62,80,86,0.05)_1px,transparent_1px)] bg-[size:88px_88px] opacity-40 [mask-image:linear-gradient(180deg,rgba(0,0,0,0.28),transparent_82%)]"
       />
 
-      <div className="relative w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <span className="flex h-9 w-9 items-center justify-center">
-            <Image
-              src="/brand/kodi-logo.png"
-              alt=""
-              width={36}
-              height={36}
-              className="h-auto w-full object-contain invert drop-shadow-[0_12px_22px_rgba(255,255,255,0.08)]"
-              priority
-            />
-          </span>
-          <span className="font-brand text-xl tracking-[-0.04em] text-white">
-            Kodi
-          </span>
-        </div>
+      <div className="relative mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,0.8fr)] lg:items-center">
+        <section className="rounded-[2rem] border border-white/80 bg-white/74 p-7 shadow-[0_28px_70px_rgba(34,50,57,0.12)] backdrop-blur-sm sm:p-10">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-[0_14px_28px_rgba(34,50,57,0.08)]">
+              <Image
+                src="/brand/kodi-logo.png"
+                alt=""
+                width={34}
+                height={34}
+                className="h-auto w-8 object-contain"
+                priority
+              />
+            </span>
+            <div>
+              <p className="font-brand text-xl tracking-[-0.05em] text-[#223239]">
+                Kodi
+              </p>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f8388]">
+                Shared AI teammate
+              </p>
+            </div>
+          </div>
 
-        <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
-          <CardHeader className="space-y-1 pb-7 text-center">
-            <CardTitle className="font-brand text-center text-[2rem] tracking-[-0.04em] text-white">
-              Create your account
+          <p className="mt-10 text-xs uppercase tracking-[0.22em] text-[#6f8388]">
+            Start with the right system
+          </p>
+          <h1 className="mt-4 max-w-[11ch] font-brand text-[clamp(2.8rem,6vw,4.8rem)] leading-[0.95] tracking-[-0.06em] text-[#223239]">
+            Give your team one place where meetings become execution.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg leading-8 text-[#4d6369]">
+            Kodi helps lean teams organize the room, push work into motion, and
+            gradually take on more real execution so humans can stay focused on
+            the highest-leverage decisions.
+          </p>
+
+          <div className="mt-8 grid gap-3">
+            <div className="rounded-[1.35rem] border border-[#c9d2d4] bg-white/80 px-5 py-4">
+              <p className="text-sm text-[#223239]">Join calls with context</p>
+              <p className="mt-1 text-sm leading-7 text-[#5d7379]">
+                Kodi listens, captures decisions, and answers with live company
+                context.
+              </p>
+            </div>
+            <div className="rounded-[1.35rem] border border-[#c9d2d4] bg-white/80 px-5 py-4">
+              <p className="text-sm text-[#223239]">Operate through connected tools</p>
+              <p className="mt-1 text-sm leading-7 text-[#5d7379]">
+                Use the accounts and systems your team already trusts.
+              </p>
+            </div>
+            <div className="rounded-[1.35rem] border border-[#DFAE56]/18 bg-[linear-gradient(180deg,rgba(223,174,86,0.2),rgba(223,174,86,0.08))] px-5 py-4 text-[#223239]">
+              <p className="text-sm">Set the autonomy level you want</p>
+              <p className="mt-1 text-sm leading-7 text-[#4b5f65]">
+                Start with drafts and approvals, then expand execution with
+                guardrails.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <Card className="rounded-[2rem] border-white/10 bg-[linear-gradient(180deg,rgba(46,63,69,0.96),rgba(31,44,49,0.98))] shadow-[0_30px_80px_rgba(8,13,16,0.28)]">
+          <CardHeader className="space-y-2 pb-8">
+            <CardTitle className="font-brand text-[2.35rem] tracking-[-0.05em] text-white">
+              Create account
             </CardTitle>
-            <CardDescription className="text-center text-zinc-500">
-              Join thousands of teams on Kodi
+            <CardDescription className="text-[#9db0b4]">
+              Set up your workspace and bring Kodi into your operating rhythm.
             </CardDescription>
           </CardHeader>
 
-          {/* Google Sign Up */}
           <CardContent className="space-y-4">
             <Button
               onClick={handleGoogleSignIn}
               disabled={googleLoading || loading}
               variant="outline"
-              className="mb-4 h-10 w-full gap-3 border-zinc-700 bg-zinc-800 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-700 hover:text-zinc-100"
+              className="h-11 w-full gap-3 rounded-xl border-white/10 bg-white/6 text-[#f4f1e8] hover:border-white/16 hover:bg-white/10"
             >
               {googleLoading ? (
-                <span className="w-4 h-4 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
+                <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
               ) : (
-                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+                <svg className="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     fill="#4285F4"
@@ -140,17 +179,17 @@ function SignUpForm() {
               Continue with Google
             </Button>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3 mb-4">
-              <Separator className="flex-1 bg-zinc-800" />
-              <span className="text-zinc-600 text-xs">or</span>
-              <Separator className="flex-1 bg-zinc-800" />
+            <div className="flex items-center gap-3">
+              <Separator className="flex-1 bg-white/10" />
+              <span className="text-xs uppercase tracking-[0.18em] text-[#81959a]">
+                Or
+              </span>
+              <Separator className="flex-1 bg-white/10" />
             </div>
 
-            {/* Sign Up form */}
             <form onSubmit={handleSignUp} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                <label className="mb-1.5 block text-xs uppercase tracking-[0.16em] text-[#9db0b4]">
                   Full name
                 </label>
                 <Input
@@ -159,11 +198,12 @@ function SignUpForm() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Jane Smith"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-[#DFAE56]"
+                  className="h-11 rounded-xl border-white/10 bg-white/6 text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56]"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                <label className="mb-1.5 block text-xs uppercase tracking-[0.16em] text-[#9db0b4]">
                   Email
                 </label>
                 <Input
@@ -172,11 +212,12 @@ function SignUpForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-[#DFAE56]"
+                  className="h-11 rounded-xl border-white/10 bg-white/6 text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56]"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                <label className="mb-1.5 block text-xs uppercase tracking-[0.16em] text-[#9db0b4]">
                   Password
                 </label>
                 <Input
@@ -185,16 +226,13 @@ function SignUpForm() {
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min. 8 characters"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-[#DFAE56]"
+                  placeholder="Minimum 8 characters"
+                  className="h-11 rounded-xl border-white/10 bg-white/6 text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56]"
                 />
               </div>
 
               {error && (
-                <Alert
-                  variant="destructive"
-                  className="border-red-500/20 bg-red-500/10 text-center text-red-400 [&>div]:pl-0"
-                >
+                <Alert className="border-[#D97A63]/30 bg-[#D97A63]/12 text-[#ffd8ce]">
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
@@ -202,53 +240,53 @@ function SignUpForm() {
               <Button
                 type="submit"
                 disabled={loading || googleLoading}
-                className="h-11 w-full rounded-lg bg-[#DFAE56] text-sm font-semibold text-[#223239] hover:bg-[#e6b86a]"
+                className="h-11 w-full rounded-xl bg-[#DFAE56] text-sm text-[#223239] hover:bg-[#e8bf70]"
               >
                 {loading ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                    <span className="h-4 w-4 rounded-full border-2 border-[#223239]/30 border-t-[#223239] animate-spin" />
                     Creating account…
                   </span>
                 ) : (
-                  'Create Account'
+                  'Create account'
                 )}
               </Button>
             </form>
 
-            <p className="text-center text-zinc-500 text-sm mt-6">
+            <p className="text-center text-sm text-[#9db0b4]">
               Already have an account?{' '}
               <Link
                 href="/login"
-                className="font-medium text-[#DFAE56] transition-colors hover:text-[#edc786]"
+                className="text-[#F0C570] transition hover:text-[#f6d289]"
               >
                 Sign in
               </Link>
             </p>
+
+            <p className="text-center text-xs leading-6 text-[#7d9196]">
+              By continuing, you agree to Kodi&apos;s{' '}
+              <Link href="/terms" className="underline hover:text-[#9db0b4]">
+                Terms
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" className="underline hover:text-[#9db0b4]">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </CardContent>
         </Card>
-
-        <p className="text-center text-zinc-700 text-xs mt-6">
-          By creating an account, you agree to our{' '}
-          <Link href="/terms" className="underline hover:text-zinc-500">
-            Terms
-          </Link>{' '}
-          and{' '}
-          <Link href="/privacy" className="underline hover:text-zinc-500">
-            Privacy Policy
-          </Link>
-          .
-        </p>
       </div>
     </div>
   )
 }
 
-export default function SignUpPage() {
+export default function SignupPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex min-h-screen items-center justify-center bg-[#F6F4EE]">
+          <div className="h-6 w-6 rounded-full border-2 border-[#DFAE56]/40 border-t-[#DFAE56] animate-spin" />
         </div>
       }
     >

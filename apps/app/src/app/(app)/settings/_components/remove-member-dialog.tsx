@@ -59,11 +59,11 @@ export function RemoveMemberDialog({
       />
 
       {/* Dialog */}
-      <Card className="relative z-10 w-full max-w-md rounded-2xl border-zinc-800 bg-zinc-900 shadow-2xl">
+      <Card className="relative z-10 w-full max-w-md rounded-2xl border-white/10 bg-[#314247] shadow-2xl">
         <CardHeader className="mb-2 flex-row items-start justify-between space-y-0">
           <div>
             <CardTitle className="text-lg text-white">Remove member</CardTitle>
-            <CardDescription className="mt-1 text-zinc-400">
+            <CardDescription className="mt-1 text-[#9bb0b5]">
               Remove{' '}
               <span className="text-white font-medium">{member.name}</span> from{' '}
               <span className="text-white font-medium">{orgName}</span>?
@@ -71,7 +71,7 @@ export function RemoveMemberDialog({
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-500 hover:text-white transition-colors -mt-1"
+            className="-mt-1 text-[#8ea3a8] transition-colors hover:text-white"
             aria-label="Close"
           >
             <X size={20} />
@@ -79,7 +79,7 @@ export function RemoveMemberDialog({
         </CardHeader>
 
         <CardContent>
-          <p className="mb-6 text-sm text-zinc-500">
+          <p className="mb-6 text-sm text-[#8ea3a8]">
             They will lose access immediately. This action cannot be undone.
           </p>
 
@@ -97,7 +97,7 @@ export function RemoveMemberDialog({
               onClick={onClose}
               disabled={loading}
               variant="outline"
-              className="border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              className="border-white/12 text-[#9bb0b5] hover:bg-white/10 hover:text-white"
             >
               Cancel
             </Button>

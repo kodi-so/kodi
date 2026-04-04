@@ -91,7 +91,7 @@ export default function MembersPage() {
     return (
       <SettingsLayout>
         <div className="flex items-center justify-center py-20">
-          <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
+          <Skeleton className="h-6 w-6 rounded-full bg-white/10" />
         </div>
       </SettingsLayout>
     )
@@ -114,7 +114,7 @@ export default function MembersPage() {
               void refresh()
             }}
             variant="link"
-            className="mt-3 text-sm text-zinc-400 hover:text-white"
+            className="mt-3 text-sm text-[#9bb0b5] hover:text-white"
           >
             Retry
           </Button>
@@ -127,9 +127,9 @@ export default function MembersPage() {
     return (
       <SettingsLayout>
         <div className="max-w-2xl mx-auto py-10">
-          <Card className="rounded-2xl border-zinc-800 bg-zinc-900/60">
+          <Card className="rounded-2xl border-white/10 bg-[rgba(49,66,71,0.78)]">
             <CardContent className="p-6">
-              <p className="text-zinc-400 text-sm">No organisation found.</p>
+              <p className="text-sm text-[#9bb0b5]">No organisation found.</p>
             </CardContent>
           </Card>
         </div>
@@ -145,12 +145,12 @@ export default function MembersPage() {
       <div className="max-w-2xl mx-auto space-y-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-              <Users size={16} className="text-indigo-400" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#DFAE56]/22 bg-[#DFAE56]/12">
+              <Users size={16} className="text-[#F0C570]" />
             </div>
             <h1 className="text-xl font-semibold text-white">Members</h1>
           </div>
-          <p className="text-zinc-500 text-sm ml-11">
+          <p className="ml-11 text-sm text-[#8ea3a8]">
             {members.length} member{members.length !== 1 ? 's' : ''} in{' '}
             {activeOrg.orgName}
           </p>
@@ -158,7 +158,7 @@ export default function MembersPage() {
 
         {isOwner && (
           <section>
-            <h2 className="text-sm font-medium text-zinc-300 mb-3">
+            <h2 className="mb-3 text-sm font-medium text-[#dce5e7]">
               Invite a teammate
             </h2>
             <InviteForm
@@ -171,7 +171,7 @@ export default function MembersPage() {
         )}
 
         <section>
-          <h2 className="text-sm font-medium text-zinc-300 mb-3">
+          <h2 className="mb-3 text-sm font-medium text-[#dce5e7]">
             {isOwner ? 'Current members' : 'Team members'}
           </h2>
           <MemberList

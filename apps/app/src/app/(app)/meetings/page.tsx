@@ -371,9 +371,9 @@ export default function MeetingsPage() {
 
   return (
     <div className="min-h-full bg-background">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <div className="overflow-hidden rounded-[2rem] border border-border bg-card p-6 lg:p-8">
+      <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-6 px-4 py-8">
+        <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,28rem)]">
+          <div className="min-w-0 overflow-hidden rounded-[2rem] border border-border bg-card p-6 lg:p-8">
             <Badge variant="outline">Meetings</Badge>
             <div className="mt-5 max-w-2xl space-y-4">
               <h1 className="text-4xl font-semibold tracking-tight text-foreground">
@@ -386,8 +386,8 @@ export default function MeetingsPage() {
               </p>
             </div>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+            <div className="mt-8 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   Live now
                 </p>
@@ -398,7 +398,7 @@ export default function MeetingsPage() {
                   Sessions currently joining, listening, or summarizing.
                 </p>
               </div>
-              <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+              <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   Workflow
                 </p>
@@ -407,7 +407,7 @@ export default function MeetingsPage() {
                   transcript here.
                 </p>
               </div>
-              <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+              <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4 md:col-span-2 2xl:col-span-1">
                 <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   Current scope
                 </p>
@@ -420,11 +420,11 @@ export default function MeetingsPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <Card className="border-border bg-card">
+          <div className="min-w-0 space-y-4">
+            <Card className="min-w-0 border-border bg-card">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-2">
                     <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                       Start meeting
                     </p>
@@ -475,9 +475,9 @@ export default function MeetingsPage() {
                     <p>3. Review the summary, notes, and transcript in Kodi.</p>
                   </div>
 
-                  <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+                  <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                           Workspace meeting agent
                         </p>
@@ -493,17 +493,17 @@ export default function MeetingsPage() {
                     </div>
 
                     <div className="mt-5 grid gap-3">
-                      <div className="rounded-[1.2rem] border border-border bg-background p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
+                      <div className="min-w-0 rounded-[1.2rem] border border-border bg-background p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-border bg-secondary text-foreground">
                               <UserRound size={17} />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                                 Display name
                               </p>
-                              <p className="mt-1 text-sm font-medium text-foreground">
+                              <p className="mt-1 break-words text-sm font-medium text-foreground">
                                 {workspaceMeetingBotIdentity.displayName}
                               </p>
                             </div>
@@ -512,7 +512,7 @@ export default function MeetingsPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            className="gap-2"
+                            className="gap-2 self-start sm:self-center"
                             onClick={() =>
                               void copyIdentityValue(
                                 workspaceMeetingBotIdentity.displayName,
@@ -530,17 +530,17 @@ export default function MeetingsPage() {
                         </div>
                       </div>
 
-                      <div className="rounded-[1.2rem] border border-border bg-background p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
+                      <div className="min-w-0 rounded-[1.2rem] border border-border bg-background p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-border bg-secondary text-foreground">
                               <Mail size={17} />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                                 Invite address
                               </p>
-                              <p className="mt-1 text-sm font-medium text-foreground">
+                              <p className="mt-1 break-all text-sm font-medium text-foreground">
                                 {workspaceMeetingBotIdentity.inviteEmail}
                               </p>
                             </div>
@@ -549,7 +549,7 @@ export default function MeetingsPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            className="gap-2"
+                            className="gap-2 self-start sm:self-center"
                             onClick={() =>
                               void copyIdentityValue(
                                 workspaceMeetingBotIdentity.inviteEmail,
@@ -570,7 +570,9 @@ export default function MeetingsPage() {
 
                     <div className="mt-4 rounded-[1.2rem] border border-dashed border-border bg-background p-4 text-sm leading-6 text-foreground">
                       {workspaceMeetingBotIdentity.inviteInstructions.map((instruction) => (
-                        <p key={instruction}>{instruction}</p>
+                        <p key={instruction} className="break-words">
+                          {instruction}
+                        </p>
                       ))}
                     </div>
                   </div>

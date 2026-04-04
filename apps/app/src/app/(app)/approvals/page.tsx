@@ -25,32 +25,32 @@ function formatDate(value: Date | string | null | undefined) {
 function getStatusTone(status: ApprovalItem['status']) {
   switch (status) {
     case 'pending':
-      return 'border-[#DFAE56]/24 bg-[#DFAE56]/12 text-[#f6d289]'
+      return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
     case 'approved':
-      return 'border-[#6FA88C]/24 bg-[#6FA88C]/12 text-[#d6eadf]'
+      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
     case 'rejected':
       return 'border-red-500/20 bg-red-500/10 text-red-200'
     case 'expired':
-      return 'border-white/12 bg-white/8 text-[#dce5e7]'
+      return 'border-zinc-700 bg-zinc-900 text-zinc-300'
     default:
-      return 'border-white/12 bg-white/8 text-[#dce5e7]'
+      return 'border-zinc-700 bg-zinc-900 text-zinc-300'
   }
 }
 
 function getExecutionTone(status: ApprovalItem['executionStatus']) {
   switch (status) {
     case 'succeeded':
-      return 'border-[#6FA88C]/24 bg-[#6FA88C]/12 text-[#d6eadf]'
+      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
     case 'failed':
       return 'border-red-500/20 bg-red-500/10 text-red-200'
     case 'running':
-      return 'border-white/12 bg-white/8 text-[#dbeaf0]'
+      return 'border-sky-500/20 bg-sky-500/10 text-sky-200'
     case 'cancelled':
-      return 'border-white/12 bg-white/8 text-[#dce5e7]'
+      return 'border-zinc-700 bg-zinc-900 text-zinc-300'
     case 'pending':
-      return 'border-[#DFAE56]/24 bg-[#DFAE56]/12 text-[#f6d289]'
+      return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
     default:
-      return 'border-white/12 bg-black/12 text-[#9bb0b5]'
+      return 'border-zinc-700 bg-zinc-950 text-zinc-400'
   }
 }
 
@@ -178,22 +178,22 @@ export default function ApprovalsPage() {
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-white/10" />
+        <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
       </div>
     )
   }
 
   return (
-    <div className="kodi-shell-bg min-h-full">
+    <div className="min-h-full bg-background">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <div className="kodi-panel rounded-[2rem] p-6 lg:p-8">
-          <p className="kodi-kicker">
+        <div className="space-y-2">
+          <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
             Approvals
           </p>
-          <h1 className="mt-3 font-brand text-3xl tracking-[-0.05em] text-white">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
             Review external actions before they run
           </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-[#c7d3d6]">
+          <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
             Kodi routes policy-gated writes and administrative actions here so
             someone can review the exact payload before execution.
           </p>
@@ -206,30 +206,28 @@ export default function ApprovalsPage() {
         )}
 
         {successMessage && (
-          <Alert className="border-[#6FA88C]/30 bg-[#6FA88C]/12 text-[#d6eadf]">
+          <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
             <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
 
         {loading ? (
           <div className="space-y-4">
-            <Skeleton className="h-40 rounded-[1.6rem] bg-white/10" />
-            <Skeleton className="h-40 rounded-[1.6rem] bg-white/10" />
+            <Skeleton className="h-40 rounded-[1.6rem]" />
+            <Skeleton className="h-40 rounded-[1.6rem]" />
           </div>
         ) : (
           <>
             <section className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-[#223239]">
+                <h2 className="text-xl font-semibold text-foreground">
                   Pending approvals
                 </h2>
-                <Badge className="border-[#c9d2d4] bg-white/82 text-[#223239]">
-                  {pendingItems.length} pending
-                </Badge>
+                <Badge variant="outline">{pendingItems.length} pending</Badge>
               </div>
 
               {pendingItems.length === 0 ? (
-                <div className="rounded-[1.4rem] border border-dashed border-[#c9d2d4] bg-white/72 p-6 text-sm text-[#5d7379]">
+                <div className="rounded-[1.4rem] border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
                   Nothing is waiting for approval right now.
                 </div>
               ) : (
@@ -247,10 +245,10 @@ export default function ApprovalsPage() {
                       <section
                         key={item.id}
                         className={cn(
-                          'rounded-[1.6rem] border bg-[linear-gradient(180deg,rgba(46,63,69,0.96),rgba(31,44,49,0.98))] p-6',
+                          'rounded-[1.6rem] border bg-card p-6',
                           isHighlighted
-                            ? 'border-[#DFAE56]/28 shadow-[0_0_0_1px_rgba(223,174,86,0.18)]'
-                            : 'border-white/10'
+                            ? 'border-amber-500/30'
+                            : 'border-border'
                         )}
                       >
                         <div className="flex flex-col gap-4">
@@ -261,22 +259,22 @@ export default function ApprovalsPage() {
                                   {item.status}
                                 </Badge>
                                 {item.toolkitSlug && (
-                                  <Badge className="border-white/12 bg-black/12 text-[#dce5e7]">
+                                  <Badge variant="outline">
                                     {item.toolkitSlug}
                                   </Badge>
                                 )}
                                 {item.actionCategory && (
-                                  <Badge className="border-white/12 bg-black/12 text-[#dce5e7]">
+                                  <Badge variant="outline">
                                     {item.actionCategory}
                                   </Badge>
                                 )}
                               </div>
-                              <h3 className="text-xl font-semibold text-white">
+                              <h3 className="text-xl font-semibold text-foreground">
                                 {preview && typeof preview.title === 'string'
                                   ? preview.title
                                   : (item.action ?? 'External action approval')}
                               </h3>
-                              <p className="max-w-3xl text-sm leading-7 text-[#9bb0b5]">
+                              <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
                                 {getPreviewSummary(item)}
                               </p>
                             </div>
@@ -297,7 +295,7 @@ export default function ApprovalsPage() {
                               </Button>
                               <Button
                                 type="button"
-                                className="bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
+                                className="bg-primary text-primary-foreground hover:bg-primary/90"
                                 disabled={actionKey !== null}
                                 onClick={() =>
                                   void decideApproval(item.id, 'approved')
@@ -311,25 +309,25 @@ export default function ApprovalsPage() {
                           </div>
 
                           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-                            <div className="rounded-[1.2rem] border border-white/10 bg-black/12 p-4">
-                              <p className="text-sm font-medium text-white">
+                            <div className="rounded-[1.2rem] border border-border bg-secondary p-4">
+                              <p className="text-sm font-medium text-foreground">
                                 Requested action
                               </p>
-                              <div className="mt-3 space-y-2 text-sm text-[#dce5e7]">
+                              <div className="mt-3 space-y-2 text-sm text-foreground">
                                 <p>
-                                  <span className="text-[#8ea3a8]">Action:</span>{' '}
+                                  <span className="text-zinc-500">Action:</span>{' '}
                                   {item.action ?? 'Unknown'}
                                 </p>
                                 {targetText && (
                                   <p>
-                                    <span className="text-[#8ea3a8]">
+                                    <span className="text-zinc-500">
                                       Target:
                                     </span>{' '}
                                     {targetText}
                                   </p>
                                 )}
                                 <p>
-                                  <span className="text-[#8ea3a8]">
+                                  <span className="text-zinc-500">
                                     Requested by:
                                   </span>{' '}
                                   {item.requestedByUser?.name ??
@@ -337,14 +335,14 @@ export default function ApprovalsPage() {
                                     'Unknown'}
                                 </p>
                                 <p>
-                                  <span className="text-[#8ea3a8]">
+                                  <span className="text-zinc-500">
                                     Created:
                                   </span>{' '}
                                   {formatDate(item.createdAt)}
                                 </p>
                                 {item.expiresAt && (
                                   <p>
-                                    <span className="text-[#8ea3a8]">
+                                    <span className="text-zinc-500">
                                       Expires:
                                     </span>{' '}
                                     {formatDate(item.expiresAt)}
@@ -353,12 +351,12 @@ export default function ApprovalsPage() {
                               </div>
                             </div>
 
-                            <div className="rounded-[1.2rem] border border-white/10 bg-black/12 p-4">
+                            <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 p-4">
                               <p className="text-sm font-medium text-white">
                                 Payload preview
                               </p>
                               {fields.length === 0 ? (
-                                <p className="mt-3 text-sm leading-7 text-[#9bb0b5]">
+                                <p className="mt-3 text-sm leading-7 text-zinc-400">
                                   No structured preview fields were extracted
                                   for this action.
                                 </p>
@@ -366,10 +364,10 @@ export default function ApprovalsPage() {
                                 <div className="mt-3 space-y-3">
                                   {fields.map((field) => (
                                     <div key={`${item.id}:${field.label}`}>
-                                      <p className="text-xs uppercase tracking-[0.16em] text-[#8ea3a8]">
+                                      <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
                                         {field.label}
                                       </p>
-                                      <p className="mt-1 text-sm leading-6 text-[#dce5e7]">
+                                      <p className="mt-1 text-sm leading-6 text-zinc-300">
                                         {field.value}
                                       </p>
                                     </div>
@@ -388,16 +386,16 @@ export default function ApprovalsPage() {
 
             <section className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-[#223239]">
+                <h2 className="text-xl font-semibold text-white">
                   Recent decisions
                 </h2>
-                <Badge className="border-[#c9d2d4] bg-white/82 text-[#223239]">
+                <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
                   {recentItems.length} items
                 </Badge>
               </div>
 
               {recentItems.length === 0 ? (
-                <div className="rounded-[1.4rem] border border-dashed border-[#c9d2d4] bg-white/72 p-6 text-sm text-[#5d7379]">
+                <div className="rounded-[1.4rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
                   No approvals have been decided yet.
                 </div>
               ) : (
@@ -405,7 +403,7 @@ export default function ApprovalsPage() {
                   {recentItems.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-[1.2rem] border border-white/10 bg-black/12 p-4"
+                      className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 p-4"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-2">
@@ -423,7 +421,7 @@ export default function ApprovalsPage() {
                               </Badge>
                             )}
                             {item.toolkitSlug && (
-                              <Badge className="border-white/12 bg-black/12 text-[#dce5e7]">
+                              <Badge className="border-zinc-700 bg-zinc-950 text-zinc-300">
                                 {item.toolkitSlug}
                               </Badge>
                             )}
@@ -431,17 +429,17 @@ export default function ApprovalsPage() {
                           <p className="text-sm font-medium text-white">
                             {item.action ?? 'External action'}
                           </p>
-                          <p className="text-sm text-[#9bb0b5]">
+                          <p className="text-sm text-zinc-400">
                             {getPreviewSummary(item)}
                           </p>
                           {item.targetText && (
-                            <p className="text-sm text-[#8ea3a8]">
+                            <p className="text-sm text-zinc-500">
                               Target: {item.targetText}
                             </p>
                           )}
                           {typeof item.attemptCount === 'number' &&
                             item.attemptCount > 0 && (
-                              <p className="text-sm text-[#8ea3a8]">
+                              <p className="text-sm text-zinc-500">
                                 Attempts: {item.attemptCount}
                               </p>
                             )}
@@ -452,7 +450,7 @@ export default function ApprovalsPage() {
                           )}
                         </div>
 
-                        <div className="text-sm text-[#8ea3a8]">
+                        <div className="text-sm text-zinc-500">
                           {item.decidedAt
                             ? `Decided ${formatDate(item.decidedAt)}`
                             : `Created ${formatDate(item.createdAt)}`}

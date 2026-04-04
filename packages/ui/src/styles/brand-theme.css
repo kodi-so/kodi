@@ -1,0 +1,35 @@
+:root {
+  --kodi-canvas: 204 28% 12%;
+  --kodi-panel: 205 23% 16%;
+  --kodi-panel-muted: 204 18% 20%;
+  --kodi-border: 204 16% 28%;
+  --kodi-text: 38 43% 95%;
+  --kodi-text-muted: 37 18% 72%;
+  --kodi-accent: 42 58% 66%;
+  --kodi-accent-strong: 42 68% 58%;
+  --kodi-accent-foreground: 204 28% 12%;
+  --kodi-success: 143 44% 46%;
+  --kodi-warning: 42 89% 63%;
+  --kodi-danger: 0 68% 60%;
+
+  --background: var(--kodi-canvas);
+  --foreground: var(--kodi-text);
+  --card: var(--kodi-panel);
+  --card-foreground: var(--kodi-text);
+  --popover: var(--kodi-panel);
+  --popover-foreground: var(--kodi-text);
+  --primary: var(--kodi-accent);
+  --primary-foreground: var(--kodi-accent-foreground);
+  --secondary: var(--kodi-panel-muted);
+  --secondary-foreground: var(--kodi-text);
+  --muted: var(--kodi-panel-muted);
+  --muted-foreground: var(--kodi-text-muted);
+  --accent: var(--kodi-panel-muted);
+  --accent-foreground: var(--kodi-text);
+  --destructive: var(--kodi-danger);
+  --destructive-foreground: 38 43% 95%;
+  --border: var(--kodi-border);
+  --input: var(--kodi-border);
+  --ring: var(--kodi-accent);
+  --radius: 1rem;
+}

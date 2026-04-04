@@ -4,7 +4,9 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./components/*": "./src/components/*.tsx"
+    "./components/*": "./src/components/*.tsx",
+    "./styles/brand-theme.css": "./src/styles/brand-theme.css",
+    "./tailwind-theme": "./src/tailwind-theme.ts"
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",

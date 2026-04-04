@@ -3,17 +3,7 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import {
-  ArrowRight,
-  Check,
-  Copy,
-  Mail,
-  RefreshCcw,
-  Sparkles,
-  UserRound,
-  Video,
-} from 'lucide-react'
-import { deriveMeetingBotIdentity } from '@kodi/db/meeting-bot-identity'
+import { ArrowRight, RefreshCcw, Sparkles, Video } from 'lucide-react'
 import {
   Alert,
   AlertDescription,
@@ -50,21 +40,21 @@ function formatDate(value: Date | string | null | undefined) {
 function statusTone(status: string) {
   switch (status) {
     case 'listening':
-      return 'border-[#6FA88C]/30 bg-[#6FA88C]/14 text-[#d6eadf]'
+      return 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
     case 'admitted':
-      return 'border-white/12 bg-white/8 text-[#dbeaf0]'
+      return 'border-cyan-500/30 bg-cyan-500/15 text-cyan-200'
     case 'processing':
-      return 'border-[#DFAE56]/30 bg-[#DFAE56]/14 text-[#f6d289]'
+      return 'border-indigo-500/30 bg-indigo-500/15 text-indigo-200'
     case 'joining':
     case 'scheduled':
     case 'preparing':
-      return 'border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]'
+      return 'border-amber-500/30 bg-amber-500/15 text-amber-200'
     case 'ended':
-      return 'border-white/12 bg-white/8 text-[#dce5e7]'
+      return 'border-zinc-700 bg-zinc-800 text-zinc-300'
     case 'failed':
       return 'border-red-500/30 bg-red-500/15 text-red-200'
     default:
-      return 'border-white/12 bg-white/8 text-[#dce5e7]'
+      return 'border-zinc-700 bg-zinc-800 text-zinc-300'
   }
 }
 
@@ -141,9 +131,6 @@ export default function MeetingsPage() {
   const [title, setTitle] = useState('')
   const [isStarting, startStartTransition] = useTransition()
   const [isRefreshing, startRefreshTransition] = useTransition()
-  const [copiedField, setCopiedField] = useState<'display-name' | 'invite-email' | null>(
-    null
-  )
   const [zoomAction, setZoomAction] = useState<
     'connect' | 'disconnect' | 'refresh' | null
   >(null)
@@ -251,16 +238,6 @@ export default function MeetingsPage() {
   const zoomInstallation = zoomInstallStatus?.installation ?? null
   const missingZoomSetup = zoomInstallStatus?.setup.missing ?? []
   const isOwner = activeOrg?.role === 'owner'
-  const meetingBotIdentity = useMemo(
-    () =>
-      activeOrg
-        ? deriveMeetingBotIdentity({
-            orgName: activeOrg.orgName,
-            orgSlug: activeOrg.orgSlug,
-          })
-        : null,
-    [activeOrg]
-  )
   const zoomCallbackStatus = searchParams.get('zoom')
 
   const zoomCallbackBanner = useMemo(() => {
@@ -282,23 +259,6 @@ export default function MeetingsPage() {
 
     return null
   }, [zoomCallbackStatus])
-
-  async function copyIdentityValue(
-    value: string,
-    field: 'display-name' | 'invite-email'
-  ) {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopiedField(field)
-      window.setTimeout(() => {
-        setCopiedField((current) => (current === field ? null : current))
-      }, 1800)
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to copy to clipboard.'
-      )
-    }
-  }
 
   async function refreshZoomStatus() {
     if (!activeOrg) return
@@ -356,33 +316,23 @@ export default function MeetingsPage() {
 
   if (!activeOrg) {
     return (
-      <div className="flex min-h-full items-center justify-center p-6 text-sm text-[#8ea3a8]">
+      <div className="flex min-h-full items-center justify-center p-6 text-sm text-zinc-500">
         Select a workspace to work with meetings.
       </div>
     )
   }
 
-  const workspaceMeetingBotIdentity =
-    meetingBotIdentity ??
-    deriveMeetingBotIdentity({
-      orgName: activeOrg.orgName,
-      orgSlug: activeOrg.orgSlug,
-    })
-
   return (
-    <div className="kodi-shell-bg min-h-full">
+    <div className="min-h-full bg-background">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <div className="kodi-panel overflow-hidden rounded-[2rem] p-6 lg:p-8">
-            <Badge className="border-white/12 bg-white/8 text-[#dce5e7]">
-              Meetings
-            </Badge>
+          <div className="overflow-hidden rounded-[2rem] border border-border bg-card p-6 lg:p-8">
+            <Badge variant="outline">Meetings</Badge>
             <div className="mt-5 max-w-2xl space-y-4">
-              <p className="kodi-kicker">Live operating support</p>
-              <h1 className="font-brand text-4xl tracking-[-0.05em] text-white">
+              <h1 className="text-4xl font-semibold tracking-tight text-foreground">
                 Start a meeting. Keep the output that matters.
               </h1>
-              <p className="text-sm leading-7 text-[#c7d3d6]">
+              <p className="text-sm leading-7 text-muted-foreground">
                 Kodi joins the call, captures the transcript, and turns the
                 conversation into a useful summary for the team. This page is
                 for two jobs only: start the bot, then review the meeting.
@@ -390,64 +340,63 @@ export default function MeetingsPage() {
             </div>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+              <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   Live now
                 </p>
-                <p className="mt-3 text-3xl font-semibold text-white">
+                <p className="mt-3 text-3xl font-semibold text-foreground">
                   {liveCount}
                 </p>
-                <p className="mt-2 text-sm text-[#8ea3a8]">
+                <p className="mt-2 text-sm text-muted-foreground">
                   Sessions currently joining, listening, or summarizing.
                 </p>
               </div>
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+              <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   Workflow
                 </p>
-                <p className="mt-3 text-sm leading-6 text-[#eef2ea]">
+                <p className="mt-3 text-sm leading-6 text-foreground">
                   Paste the Meet link, admit Kodi, then review the summary and
                   transcript here.
                 </p>
               </div>
-              <div className="rounded-[1.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(223,174,86,0.18),rgba(223,174,86,0.08))] p-4 text-[#223239]">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#7a6030]">
+              <div className="rounded-[1.4rem] border border-border bg-secondary p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                   Current scope
                 </p>
-                <p className="mt-3 text-sm leading-6">
-                  Google Meet live start is ready now. Stable invite identity is
-                  in place, with invite-by-email automation and auto-join rules
-                  coming next.
+                <p className="mt-3 text-sm leading-6 text-foreground">
+                  Google Meet first. Invite-by-email and automatic join rules
+                  come next.
                 </p>
               </div>
             </div>
           </div>
 
           <div className="space-y-4">
-            <Card className="rounded-[2rem] border-white/10 bg-[linear-gradient(180deg,rgba(49,66,71,0.96),rgba(31,44,49,0.98))]">
+            <Card className="border-border bg-card">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.2em] text-[#8ea3a8]">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                       Start meeting
                     </p>
-                    <h2 className="font-brand text-2xl tracking-[-0.05em] text-white">
+                    <h2 className="text-2xl font-semibold text-foreground">
                       Bring Kodi into a live Meet
                     </h2>
-                    <p className="text-sm leading-6 text-[#c7d3d6]">
+                    <p className="text-sm leading-6 text-muted-foreground">
                       Start from a live Google Meet URL. The meeting page will
                       become the control room once Kodi gets in.
                     </p>
                   </div>
 
-                  <div className="hidden h-11 w-11 items-center justify-center rounded-[1.1rem] border border-white/10 bg-black/12 text-[#eef2ea] sm:flex">
+                  <div className="hidden h-11 w-11 items-center justify-center rounded-[1.1rem] border border-border bg-secondary text-foreground sm:flex">
                     <Video size={18} />
                   </div>
                 </div>
 
                 <div className="mt-6 space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="meeting-url" className="text-[#dce5e7]">
+                    <Label htmlFor="meeting-url" className="text-foreground">
                       Google Meet URL
                     </Label>
                     <Input
@@ -455,12 +404,12 @@ export default function MeetingsPage() {
                       value={meetingUrl}
                       onChange={(event) => setMeetingUrl(event.target.value)}
                       placeholder="https://meet.google.com/abc-defg-hij"
-                      className="h-11 border-white/10 bg-white/6 text-white placeholder:text-[#7f9398]"
+                      className="h-11"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="meeting-title" className="text-[#dce5e7]">
+                    <Label htmlFor="meeting-title" className="text-foreground">
                       Meeting title
                     </Label>
                     <Input
@@ -468,123 +417,21 @@ export default function MeetingsPage() {
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
                       placeholder="Weekly product sync"
-                      className="h-11 border-white/10 bg-white/6 text-white placeholder:text-[#7f9398]"
+                      className="h-11"
                     />
                   </div>
 
-                  <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4 text-sm leading-6 text-[#dce5e7]">
+                  <div className="rounded-[1.4rem] border border-border bg-secondary p-4 text-sm leading-6 text-foreground">
                     <p>1. Start the meeting here.</p>
                     <p>2. Admit Kodi when Google Meet asks.</p>
                     <p>3. Review the summary, notes, and transcript in Kodi.</p>
-                  </div>
-
-                  <div className="rounded-[1.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(111,168,140,0.12),rgba(49,66,71,0.12))] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-2">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[#8ea3a8]">
-                          Workspace meeting agent
-                        </p>
-                        <h3 className="font-brand text-xl tracking-[-0.04em] text-white">
-                          Stable identity for invites
-                        </h3>
-                        <p className="text-sm leading-6 text-[#c7d3d6]">
-                          This is the workspace-specific meeting agent identity
-                          Kodi will keep using as invite-by-email comes online.
-                        </p>
-                      </div>
-                      <Badge className="border-white/12 bg-white/8 text-[#dce5e7]">
-                        Phase F1
-                      </Badge>
-                    </div>
-
-                    <div className="mt-5 grid gap-3">
-                      <div className="rounded-[1.2rem] border border-white/10 bg-black/12 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-white/10 bg-white/8 text-[#dce5e7]">
-                              <UserRound size={17} />
-                            </div>
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                                Display name
-                              </p>
-                              <p className="mt-1 text-sm font-medium text-white">
-                                {workspaceMeetingBotIdentity.displayName}
-                              </p>
-                            </div>
-                          </div>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="gap-2 border border-white/10 bg-black/12 text-[#dce5e7] hover:bg-white/10 hover:text-white"
-                            onClick={() =>
-                              void copyIdentityValue(
-                                workspaceMeetingBotIdentity.displayName,
-                                'display-name'
-                              )
-                            }
-                          >
-                            {copiedField === 'display-name' ? (
-                              <Check size={15} />
-                            ) : (
-                              <Copy size={15} />
-                            )}
-                            {copiedField === 'display-name' ? 'Copied' : 'Copy'}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="rounded-[1.2rem] border border-white/10 bg-black/12 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-white/10 bg-white/8 text-[#dce5e7]">
-                              <Mail size={17} />
-                            </div>
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                                Invite address
-                              </p>
-                              <p className="mt-1 text-sm font-medium text-white">
-                                {workspaceMeetingBotIdentity.inviteEmail}
-                              </p>
-                            </div>
-                          </div>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="gap-2 border border-white/10 bg-black/12 text-[#dce5e7] hover:bg-white/10 hover:text-white"
-                            onClick={() =>
-                              void copyIdentityValue(
-                                workspaceMeetingBotIdentity.inviteEmail,
-                                'invite-email'
-                              )
-                            }
-                          >
-                            {copiedField === 'invite-email' ? (
-                              <Check size={15} />
-                            ) : (
-                              <Copy size={15} />
-                            )}
-                            {copiedField === 'invite-email' ? 'Copied' : 'Copy'}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-[1.2rem] border border-dashed border-white/10 bg-black/10 p-4 text-sm leading-6 text-[#dce5e7]">
-                      {workspaceMeetingBotIdentity.inviteInstructions.map((instruction) => (
-                        <p key={instruction}>{instruction}</p>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
                     <Button
                       onClick={() => void startMeeting()}
                       disabled={isStarting || meetingUrl.trim().length === 0}
-                      className="gap-2 bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
+                      className="gap-2"
                     >
                       <Sparkles size={16} />
                       {isStarting ? 'Starting Kodi…' : 'Start meeting bot'}
@@ -594,7 +441,7 @@ export default function MeetingsPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-[2rem] border-white/10 bg-[linear-gradient(180deg,rgba(49,66,71,0.96),rgba(31,44,49,0.98))]">
+            <Card className="border-border bg-card">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
@@ -602,14 +449,12 @@ export default function MeetingsPage() {
                       <Badge className={getStatusTone(zoomStatus)}>
                         {zoomStatus}
                       </Badge>
-                      <Badge className="border-white/12 bg-white/8 text-[#dce5e7]">
-                        Meeting connection
-                      </Badge>
+                      <Badge variant="outline">Meeting connection</Badge>
                     </div>
-                    <h2 className="font-brand text-2xl tracking-[-0.05em] text-white">
+                    <h2 className="text-2xl font-semibold text-foreground">
                       Zoom belongs here
                     </h2>
-                    <p className="text-sm leading-6 text-[#c7d3d6]">
+                    <p className="text-sm leading-6 text-muted-foreground">
                       Zoom is a meeting integration, not a tool integration, so
                       it lives on the Meetings page. Tool integrations stay in
                       the separate Integrations surface.
@@ -617,8 +462,8 @@ export default function MeetingsPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                  <p className="text-sm font-medium text-white">
+                <div className="mt-6 rounded-[1.4rem] border border-border bg-secondary p-4">
+                  <p className="text-sm font-medium text-foreground">
                     {zoomInstallation
                       ? zoomInstallation.externalAccountEmail
                         ? `Connected account: ${zoomInstallation.externalAccountEmail}`
@@ -627,7 +472,7 @@ export default function MeetingsPage() {
                         ? 'Zoom is not connected yet.'
                         : 'A workspace owner needs to connect Zoom.'}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-[#9bb0b5]">
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
                     {zoomInstallation
                       ? `Last updated ${formatDate(zoomInstallation.updatedAt)}.`
                       : zoomInstallStatus?.setup.configured
@@ -652,7 +497,6 @@ export default function MeetingsPage() {
                     <Button
                       onClick={() => void connectZoom()}
                       disabled={!isOwner || zoomAction !== null}
-                      className="bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
                     >
                       {zoomAction === 'connect'
                         ? 'Connecting...'
@@ -662,8 +506,8 @@ export default function MeetingsPage() {
 
                   <Button
                     onClick={() => void refreshZoomStatus()}
-                    variant="ghost"
-                    className="gap-2 border border-white/10 bg-black/12 text-[#dce5e7] hover:bg-white/10 hover:text-white"
+                    variant="outline"
+                    className="gap-2"
                     disabled={zoomAction !== null}
                   >
                     <RefreshCcw
@@ -682,7 +526,7 @@ export default function MeetingsPage() {
           <Alert
             className={
               zoomCallbackBanner.tone === 'success'
-                ? 'border-[#6FA88C]/30 bg-[#6FA88C]/12 text-[#d6eadf]'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
                 : 'border-red-500/30 bg-red-500/10 text-red-200'
             }
           >
@@ -699,10 +543,10 @@ export default function MeetingsPage() {
         <section className="space-y-4">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 className="font-brand text-2xl tracking-[-0.05em] text-[#223239]">
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
                 Recent meetings
               </h2>
-              <p className="mt-1 text-sm text-[#5d7379]">
+              <p className="mt-1 text-sm text-zinc-400">
                 Open any session to review what was said, what Kodi understood,
                 and what deserves follow-through.
               </p>
@@ -711,7 +555,7 @@ export default function MeetingsPage() {
             <Button
               onClick={() => void refresh()}
               variant="ghost"
-              className="gap-2 border border-[#c9d2d4] bg-white/82 text-[#223239] hover:bg-white"
+              className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
               disabled={isRefreshing}
             >
               <RefreshCcw
@@ -725,29 +569,26 @@ export default function MeetingsPage() {
           {loading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, index) => (
-                <Card
-                  key={index}
-                  className="border-white/10 bg-[rgba(49,66,71,0.78)]"
-                >
+                <Card key={index} className="border-zinc-800 bg-zinc-900/60">
                   <CardContent className="space-y-4 p-5">
-                    <Skeleton className="h-4 w-28 bg-white/10" />
-                    <Skeleton className="h-5 w-56 bg-white/10" />
-                    <Skeleton className="h-10 bg-white/10" />
+                    <Skeleton className="h-4 w-28 bg-zinc-800" />
+                    <Skeleton className="h-5 w-56 bg-zinc-800" />
+                    <Skeleton className="h-10 bg-zinc-800" />
                   </CardContent>
                 </Card>
               ))}
             </div>
           ) : meetings.length === 0 ? (
-            <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
+            <Card className="border-zinc-800 bg-zinc-900/60">
               <CardContent className="flex flex-col gap-5 p-8">
-                <div className="flex h-12 w-12 items-center justify-center rounded-[1.15rem] border border-white/10 bg-black/12 text-[#dce5e7]">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[1.15rem] border border-zinc-800 bg-zinc-950 text-zinc-300">
                   <Video size={18} />
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-xl font-medium text-white">
                     No meetings yet
                   </h3>
-                  <p className="max-w-xl text-sm leading-6 text-[#9bb0b5]">
+                  <p className="max-w-xl text-sm leading-6 text-zinc-400">
                     Start with a Meet link above. Once Kodi joins, this page
                     becomes the running record of summary, transcript, and
                     follow-up for the workspace.
@@ -761,7 +602,7 @@ export default function MeetingsPage() {
                 <Link
                   key={meeting.id}
                   href={`/meetings/${meeting.id}`}
-                  className="group block rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,63,69,0.94),rgba(31,44,49,0.98))] p-5 transition hover:border-white/16 hover:bg-[rgba(49,66,71,0.95)]"
+                  className="group block rounded-[1.75rem] border border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,19,23,0.95),_rgba(11,12,15,0.92))] p-5 transition hover:border-zinc-700 hover:bg-zinc-900/90"
                 >
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1">
@@ -769,7 +610,7 @@ export default function MeetingsPage() {
                         <Badge className={statusTone(meeting.status)}>
                           {statusLabel(meeting.status)}
                         </Badge>
-                        <Badge className="border-white/12 bg-white/8 text-[#9bb0b5]">
+                        <Badge className="border-zinc-700 bg-zinc-900 text-zinc-400">
                           {meetingOutcomeLabel(meeting)}
                         </Badge>
                       </div>
@@ -778,40 +619,40 @@ export default function MeetingsPage() {
                         {meeting.title ?? 'Untitled meeting'}
                       </h3>
 
-                      <p className="mt-3 max-w-3xl text-sm leading-7 text-[#dce5e7]">
+                      <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-300">
                         {meetingSnapshot(meeting)}
                       </p>
                     </div>
 
-                    <div className="flex shrink-0 flex-col gap-3 text-sm text-[#9bb0b5] lg:items-end">
-                      <div className="rounded-[1.2rem] border border-white/10 bg-black/12 px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+                    <div className="flex shrink-0 flex-col gap-3 text-sm text-zinc-400 lg:items-end">
+                      <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
                           Started
                         </p>
-                        <p className="mt-2 text-[#eef2ea]">
+                        <p className="mt-2 text-zinc-200">
                           {formatDate(
                             meeting.actualStartAt ?? meeting.createdAt
                           )}
                         </p>
                       </div>
-                      <div className="rounded-[1.2rem] border border-white/10 bg-black/12 px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+                      <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
                           Updated
                         </p>
-                        <p className="mt-2 text-[#eef2ea]">
+                        <p className="mt-2 text-zinc-200">
                           {formatDate(meeting.updatedAt)}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/10 pt-4 text-sm">
-                    <span className="text-[#8ea3a8]">
+                  <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-800/80 pt-4 text-sm">
+                    <span className="text-zinc-500">
                       {meeting.provider === 'google_meet'
                         ? 'Google Meet'
                         : 'Meeting'}
                     </span>
-                    <span className="inline-flex items-center gap-2 text-white transition group-hover:translate-x-0.5">
+                    <span className="inline-flex items-center gap-2 text-zinc-100 transition group-hover:translate-x-0.5">
                       Open meeting
                       <ArrowRight size={15} />
                     </span>

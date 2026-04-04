@@ -34,39 +34,39 @@ function OrgSwitcher() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Close on outside click
   const handleBlur = () => setTimeout(() => setOpen(false), 150)
 
   if (orgs.length === 0) return null
 
   if (orgs.length === 1 && activeOrg) {
     return (
-      <div className="px-4 py-3 border-b border-zinc-800">
-        <p className="text-xs text-zinc-500 mb-0.5">Workspace</p>
-        <p className="text-sm font-medium text-white truncate">
-          {activeOrg.orgName}
+      <div className="border-b border-white/10 px-4 py-3">
+        <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-[#8da2a7]">
+          Workspace
         </p>
+        <p className="truncate text-sm text-white">{activeOrg.orgName}</p>
       </div>
     )
   }
 
   return (
-    <div ref={ref} className="relative px-3 py-2 border-b border-zinc-800">
+    <div ref={ref} className="relative border-b border-white/10 px-3 py-3">
       <button
         onClick={() => setOpen((o) => !o)}
         onBlur={handleBlur}
-        className="w-full flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm transition-colors hover:border-zinc-700"
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/6 px-3 py-2.5 text-sm transition-colors hover:border-white/18 hover:bg-white/8"
       >
-        <span className="text-white font-medium truncate">
+        <span className="truncate text-white">
           {activeOrg?.orgName ?? 'Select workspace'}
         </span>
         <ChevronDown
           size={14}
-          className={`text-zinc-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`flex-shrink-0 text-[#9bb0b5] transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
+
       {open && (
-        <Card className="absolute left-3 right-3 top-full z-50 mt-1 overflow-hidden rounded-xl border-zinc-700 bg-zinc-900 shadow-xl">
+        <Card className="absolute left-3 right-3 top-full z-50 mt-2 overflow-hidden rounded-2xl border-white/10 bg-[#314247] shadow-[0_22px_50px_rgba(8,13,16,0.28)]">
           {orgs.map((org) => (
             <button
               key={org.orgId}
@@ -74,14 +74,14 @@ function OrgSwitcher() {
                 setActiveOrg(org)
                 setOpen(false)
               }}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-zinc-800 transition-colors"
+              className="flex w-full items-center justify-between gap-2 px-3 py-3 text-sm transition-colors hover:bg-white/8"
             >
-              <div className="text-left min-w-0">
-                <p className="text-white font-medium truncate">{org.orgName}</p>
-                <p className="text-zinc-500 text-xs capitalize">{org.role}</p>
+              <div className="min-w-0 text-left">
+                <p className="truncate text-white">{org.orgName}</p>
+                <p className="text-xs capitalize text-[#9bb0b5]">{org.role}</p>
               </div>
               {org.orgId === activeOrg?.orgId && (
-                <Check size={14} className="text-indigo-400 flex-shrink-0" />
+                <Check size={14} className="flex-shrink-0 text-[#F0C570]" />
               )}
             </button>
           ))}
@@ -103,28 +103,46 @@ export function Sidebar() {
   }
 
   const navContent = (
-    <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="px-4 py-5 flex items-center gap-3 border-b border-zinc-800">
-        <span className="flex h-8 w-8 items-center justify-center flex-shrink-0">
-          <Image
-            src="/brand/kodi-logo.png"
-            alt=""
-            width={32}
-            height={32}
-            className="h-auto w-full object-contain invert drop-shadow-[0_10px_18px_rgba(255,255,255,0.08)]"
-          />
-        </span>
-        <span className="font-brand text-lg tracking-[-0.04em] text-white">
-          Kodi
-        </span>
+    <div className="flex h-full flex-col">
+      <div className="border-b border-white/10 px-4 py-5">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/88 shadow-[0_14px_28px_rgba(8,13,16,0.18)]">
+            <Image
+              src="/brand/kodi-logo.png"
+              alt=""
+              width={32}
+              height={32}
+              className="h-auto w-7 object-contain"
+            />
+          </span>
+          <div className="min-w-0">
+            <span className="block font-brand text-lg tracking-[-0.05em] text-white">
+              Kodi
+            </span>
+            <span className="block text-[11px] uppercase tracking-[0.18em] text-[#8ea3a8]">
+              Control room
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Org switcher */}
-      <OrgSwitcher />
+      <div className="px-4 pt-4">
+        <div className="rounded-[1.35rem] border border-[#DFAE56]/18 bg-[linear-gradient(180deg,rgba(223,174,86,0.2),rgba(223,174,86,0.08))] px-4 py-3 text-[#223239]">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[#7a6030]">
+            Delegation
+          </p>
+          <p className="mt-2 text-sm leading-6">
+            Kodi can draft, request approval, or execute work based on your
+            workspace guardrails.
+          </p>
+        </div>
+      </div>
 
-      {/* Nav links */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <div className="mt-4">
+        <OrgSwitcher />
+      </div>
+
+      <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
@@ -132,10 +150,10 @@ export function Sidebar() {
               key={href}
               asChild
               variant={active ? 'secondary' : 'ghost'}
-              className={`w-full justify-start gap-3 px-3 py-2.5 text-sm font-medium ${
+              className={`w-full justify-start gap-3 rounded-2xl px-3 py-3 text-sm ${
                 active
-                  ? 'border border-indigo-500/20 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300'
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                  ? 'border border-[#DFAE56]/25 bg-[#DFAE56]/14 text-[#F6D18A] hover:bg-[#DFAE56]/18 hover:text-[#F9D896]'
+                  : 'text-[#9eb1b5] hover:bg-white/6 hover:text-white'
               }`}
             >
               <Link href={href} onClick={() => setMobileOpen(false)}>
@@ -147,29 +165,27 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User footer */}
-      <div className="px-3 py-4 border-t border-zinc-800">
-        <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold">
-              {session?.user?.name?.[0]?.toUpperCase() ??
-                session?.user?.email?.[0]?.toUpperCase() ??
-                '?'}
-            </span>
+      <div className="border-t border-white/10 px-3 py-4">
+        <div className="mb-3 flex items-center gap-3 rounded-[1.25rem] bg-white/5 px-3 py-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#DFAE56] text-xs font-semibold text-[#223239]">
+            {session?.user?.name?.[0]?.toUpperCase() ??
+              session?.user?.email?.[0]?.toUpperCase() ??
+              '?'}
           </div>
           <div className="min-w-0">
-            <p className="text-white text-sm font-medium truncate">
+            <p className="truncate text-sm text-white">
               {session?.user?.name ?? 'User'}
             </p>
-            <p className="text-zinc-500 text-xs truncate">
+            <p className="truncate text-xs text-[#93a7ac]">
               {session?.user?.email}
             </p>
           </div>
         </div>
+
         <Button
           onClick={handleSignOut}
           variant="ghost"
-          className="w-full justify-center gap-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          className="w-full justify-center gap-2 rounded-2xl text-[#9eb1b5] hover:bg-white/6 hover:text-white"
         >
           Sign out
         </Button>
@@ -179,39 +195,35 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-60 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 h-screen sticky top-0">
+      <aside className="sticky top-0 hidden h-screen w-64 flex-shrink-0 flex-col border-r border-white/10 bg-[linear-gradient(180deg,rgba(34,50,57,0.98),rgba(27,40,45,0.98))] md:flex">
         {navContent}
       </aside>
 
-      {/* Mobile: hamburger button */}
       <Button
         onClick={() => setMobileOpen(true)}
         variant="outline"
         size="icon"
-        className="fixed left-4 top-4 z-50 border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-900 hover:text-white md:hidden"
+        className="fixed left-4 top-4 z-50 rounded-full border-white/12 bg-[#223239]/92 text-[#d7e1e3] backdrop-blur md:hidden hover:bg-[#2a3d43] hover:text-white"
         aria-label="Open menu"
       >
         <Menu size={20} />
       </Button>
 
-      {/* Mobile: drawer overlay */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-[#152126]/72 backdrop-blur-sm md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* Mobile: drawer panel */}
       <aside
-        className={`md:hidden fixed inset-y-0 left-0 z-50 w-60 bg-zinc-950 border-r border-zinc-800 transform transition-transform duration-200 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-white/10 bg-[linear-gradient(180deg,rgba(34,50,57,0.98),rgba(27,40,45,0.98))] transition-transform duration-200 md:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 p-1 text-zinc-500 hover:text-white"
+          className="absolute right-4 top-4 p-1 text-[#8da2a7] hover:text-white"
           aria-label="Close menu"
         >
           <X size={20} />

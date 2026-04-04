@@ -113,7 +113,7 @@ export function InviteForm({
         <div className="relative flex-1">
           <Mail
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8ea3a8]"
           />
           <Input
             type="email"
@@ -121,13 +121,13 @@ export function InviteForm({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="colleague@company.com"
             required
-            className="h-11 border-zinc-700 bg-zinc-900 pl-9 pr-4 text-white placeholder:text-zinc-500 focus-visible:ring-indigo-500"
+            className="h-11 border-white/10 bg-white/6 pl-9 pr-4 text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56]"
           />
         </div>
         <Button
           type="submit"
           disabled={inviting || !email.trim()}
-          className="h-11 shrink-0 gap-2 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="h-11 shrink-0 gap-2 bg-[#DFAE56] text-[#223239] hover:bg-[#c99d4d] disabled:opacity-50"
         >
           {inviting && (
             <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -139,27 +139,27 @@ export function InviteForm({
       {/* Pending invites */}
       {pendingInvites.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[#8ea3a8]">
             Pending invites
           </p>
-          <Card className="overflow-hidden rounded-xl border-zinc-800 bg-zinc-900">
-            <CardContent className="divide-y divide-zinc-800 p-0">
+          <Card className="overflow-hidden rounded-xl border-white/10 bg-[rgba(49,66,71,0.78)]">
+            <CardContent className="divide-y divide-white/10 p-0">
               {pendingInvites.map((invite) => (
                 <div
                   key={invite.id}
-                  className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-zinc-800/50"
+                  className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-white/6"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm truncate">
                       {invite.email}
                     </p>
-                    <p className="text-zinc-500 text-xs">
+                    <p className="text-xs text-[#8ea3a8]">
                       Expires {formatExpiry(invite.expiresAt)}
                     </p>
                   </div>
                   <Badge
                     variant="outline"
-                    className="hidden border-zinc-700 text-zinc-500 sm:inline-flex"
+                    className="hidden border-white/12 text-[#8ea3a8] sm:inline-flex"
                   >
                     Pending
                   </Badge>
@@ -168,7 +168,7 @@ export function InviteForm({
                     disabled={revoking === invite.id}
                     variant="outline"
                     size="sm"
-                    className="border-zinc-700 text-zinc-400 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                    className="border-white/12 text-[#9bb0b5] hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
                   >
                     {revoking === invite.id && (
                       <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />

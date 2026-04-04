@@ -4,34 +4,62 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --radius: 0.5rem;
+    --kodi-ink: 196 16% 29%;
+    --kodi-room-dark: 193 23% 18%;
+    --kodi-room: 195 18% 25%;
+    --kodi-room-soft: 194 16% 31%;
+    --kodi-canvas: 48 25% 95%;
+    --kodi-warm-sand: 40 35% 86%;
+    --kodi-signal: 38 67% 61%;
+    --kodi-signal-soft: 39 72% 80%;
+    --kodi-moss: 148 24% 55%;
+    --kodi-coral: 14 59% 62%;
+    --kodi-mist: 194 12% 81%;
+    --background: var(--kodi-room-dark);
+    --foreground: 40 33% 96%;
+    --card: 194 18% 24%;
+    --card-foreground: 40 33% 96%;
+    --popover: 194 18% 23%;
+    --popover-foreground: 40 33% 96%;
+    --primary: var(--kodi-signal);
+    --primary-foreground: var(--kodi-room-dark);
+    --secondary: 194 16% 31%;
+    --secondary-foreground: 40 33% 96%;
+    --muted: 194 14% 27%;
+    --muted-foreground: 193 14% 73%;
+    --accent: 194 15% 29%;
+    --accent-foreground: 40 33% 96%;
+    --destructive: var(--kodi-coral);
+    --destructive-foreground: 40 33% 96%;
+    --border: 195 13% 33%;
+    --input: 195 13% 33%;
+    --ring: var(--kodi-signal);
+    --radius: 1rem;
   }
 }
 
 @layer base {
-  * { @apply border-border; }
+  * {
+    @apply border-border;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-kodi-body), sans-serif;
+    background:
+      radial-gradient(circle at top left, rgba(223, 174, 86, 0.18), transparent 26%),
+      radial-gradient(circle at 85% 12%, rgba(111, 168, 140, 0.14), transparent 24%),
+      linear-gradient(180deg, #f9f7f0 0%, #f6f4ee 36%, #f0ece1 100%);
+    color: #223239;
+    font-family: var(--font-kodi-brand), sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgba(223, 174, 86, 0.3);
+    color: #223239;
   }
 }
 
@@ -41,6 +69,58 @@
   }
 
   .font-body {
+    font-family: var(--font-kodi-brand), sans-serif;
+  }
+
+  .font-support {
     font-family: var(--font-kodi-body), sans-serif;
+  }
+}
+
+@layer components {
+  .kodi-shell-bg {
+    background:
+      radial-gradient(circle at top left, rgba(223, 174, 86, 0.16), transparent 22%),
+      radial-gradient(circle at 86% 10%, rgba(111, 168, 140, 0.12), transparent 20%),
+      linear-gradient(180deg, rgba(249, 247, 240, 0.98), rgba(246, 244, 238, 1) 34%, rgba(240, 236, 225, 1));
+  }
+
+  .kodi-panel {
+    background: linear-gradient(
+      180deg,
+      rgba(46, 63, 69, 0.94),
+      rgba(31, 44, 49, 0.98)
+    );
+    border: 1px solid rgba(201, 210, 212, 0.14);
+    box-shadow: 0 24px 70px rgba(8, 13, 16, 0.28);
+  }
+
+  .kodi-panel-soft {
+    background: rgba(40, 55, 60, 0.78);
+    border: 1px solid rgba(201, 210, 212, 0.12);
+  }
+
+  .kodi-panel-warm {
+    background: linear-gradient(
+      180deg,
+      rgba(223, 174, 86, 0.22),
+      rgba(223, 174, 86, 0.08)
+    );
+    border: 1px solid rgba(223, 174, 86, 0.24);
+  }
+
+  .kodi-kicker {
+    color: #9db0b4;
+    font-size: 0.74rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .kodi-copy {
+    color: #c7d3d6;
+  }
+
+  .kodi-dim {
+    color: #91a4a9;
   }
 }

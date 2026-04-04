@@ -23,4 +23,5 @@ export const db = new Proxy({} as ReturnType<typeof createDb>, {
 
 export * from './schema'
 export { encrypt, decrypt, encryptJson, decryptJson } from './lib/crypto'
+export { deriveMeetingBotIdentity } from './lib/meeting-bot-identity'
 export { ensurePersonalOrganizationForUser } from './lib/personal-org'

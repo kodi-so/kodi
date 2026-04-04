@@ -3,6 +3,7 @@ import { router, memberProcedure } from '../../trpc'
 import { MeetingOrchestrationService } from '../../lib/meetings/orchestration-service'
 import { createDefaultMeetingProviderGateway } from '../../lib/meetings/provider-runtime'
 import { TRPCError } from '@trpc/server'
+import { deriveMeetingBotIdentity } from '@kodi/db'
 
 export const meetingRouter = router({
   list: memberProcedure
@@ -188,6 +189,10 @@ export const meetingRouter = router({
       const orchestration = new MeetingOrchestrationService(
         createDefaultMeetingProviderGateway()
       )
+      const meetingBotIdentity = deriveMeetingBotIdentity({
+        orgName: ctx.org.name,
+        orgSlug: ctx.org.slug,
+      })
 
       const result = await orchestration.requestBotJoin({
         orgId: ctx.org.id,
@@ -198,7 +203,7 @@ export const meetingRouter = router({
           title: input.title?.trim() || null,
         },
         botIdentity: {
-          displayName: 'Kodi',
+          displayName: meetingBotIdentity.displayName,
         },
       })
 

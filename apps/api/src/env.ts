@@ -72,6 +72,7 @@ const envSchema = z.object({
   // Composio tool access
   COMPOSIO_API_KEY: z.string().optional(),
   COMPOSIO_WEBHOOK_SECRET: z.string().optional(),
+  TOOL_ACCESS_INTERNAL_TOKEN: z.string().optional(),
   COMPOSIO_BASE_URL: z.string().url().optional(),
   COMPOSIO_OAUTH_REDIRECT_URL: z.string().url().optional(),
   COMPOSIO_AUTH_CALLBACK_URL: z.string().url().optional(),

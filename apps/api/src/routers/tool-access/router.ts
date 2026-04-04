@@ -17,6 +17,7 @@ import {
   listToolkitPolicies,
   listToolkits,
   markPersistedConnectionInactive,
+  revalidatePersistedConnection,
   syncUserConnectionsForOrg,
   upsertToolkitAccountPreference,
 } from '../../lib/composio'
@@ -32,16 +33,25 @@ type PersistedPreference = Awaited<
   ReturnType<typeof listToolkitAccountPreferences>
 >[number]
 
+function getDisplayableConnections<
+  T extends { connectedAccountStatus?: string | null },
+>(connections: T[]) {
+  return connections.filter(
+    (connection) => connection.connectedAccountStatus !== 'INACTIVE'
+  )
+}
+
 function buildConnectionSummary(connections: PersistedConnection[]) {
-  const activeCount = connections.filter(
+  const displayableConnections = getDisplayableConnections(connections)
+  const activeCount = displayableConnections.filter(
     (connection) => connection.connectedAccountStatus === 'ACTIVE'
   ).length
-  const attentionCount = connections.filter((connection) =>
+  const attentionCount = displayableConnections.filter((connection) =>
     attentionStatuses.has(connection.connectedAccountStatus ?? 'UNKNOWN')
   ).length
 
   return {
-    totalCount: connections.length,
+    totalCount: displayableConnections.length,
     activeCount,
     attentionCount,
   }
@@ -194,7 +204,9 @@ export const toolAccessRouter = router({
         : []
 
       const items = toolkits.map((toolkit) => {
-        const connections = connectionsByToolkit.get(toolkit.slug) ?? []
+        const connections = getDisplayableConnections(
+          connectionsByToolkit.get(toolkit.slug) ?? []
+        )
         const preference = preferencesByToolkit.get(toolkit.slug) ?? null
         const effectivePolicy = getEffectiveToolkitPolicy(
           policiesByToolkit.get(toolkit.slug) ?? null,
@@ -268,6 +280,7 @@ export const toolAccessRouter = router({
       const connections = result.connections.filter(
         (connection) => connection.toolkitSlug === toolkit.slug
       )
+      const displayableConnections = getDisplayableConnections(connections)
       const preference =
         result.preferences.find((item) => item.toolkitSlug === toolkit.slug) ??
         null
@@ -275,7 +288,7 @@ export const toolAccessRouter = router({
         result.policies.find((item) => item.toolkitSlug === toolkit.slug) ??
         null
       const sortedConnections = sortConnectionsForDetail(
-        connections,
+        displayableConnections,
         preference?.preferredConnectedAccountId ?? null
       )
 
@@ -287,7 +300,7 @@ export const toolAccessRouter = router({
           ...toolkit,
           ...getToolAccessPresentation(toolkit),
         },
-        connectionSummary: buildConnectionSummary(connections),
+        connectionSummary: buildConnectionSummary(displayableConnections),
         selectedConnectedAccountId:
           preference?.preferredConnectedAccountId ?? null,
         connections: sortedConnections.map((connection) =>
@@ -539,5 +552,49 @@ export const toolAccessRouter = router({
       )
 
       return { success: true }
+    }),
+
+  revalidateConnection: memberProcedure
+    .input(
+      z.object({
+        connectedAccountId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.toolkitConnections.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.userId, ctx.session.user.id),
+            eq(fields.connectedAccountId, input.connectedAccountId)
+          ),
+      })
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tool connection not found for this workspace.',
+        })
+      }
+
+      const refreshed = await revalidatePersistedConnection(ctx.db, existing)
+
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'tool_access.connection_revalidated',
+        {
+          toolkitSlug: existing.toolkitSlug,
+          connectedAccountId: existing.connectedAccountId,
+          resultingStatus: refreshed?.connectedAccountStatus ?? 'INACTIVE',
+        },
+        ctx.session.user.id
+      )
+
+      return {
+        connection: refreshed
+          ? serializeConnection(refreshed, null)
+          : null,
+      }
     }),
 })

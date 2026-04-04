@@ -68,6 +68,17 @@ type ConnectionSummary = {
 
 const ACCOUNT_ATTENTION_STATUSES = new Set(['FAILED', 'EXPIRED'])
 
+function getConnectionErrorMessage(status: string) {
+  switch (status) {
+    case 'FAILED':
+      return 'Connection requires attention in Composio.'
+    case 'EXPIRED':
+      return 'Connection expired and needs to be reconnected.'
+    default:
+      return null
+  }
+}
+
 export type EffectiveToolkitPolicy = {
   id: string | null
   toolkitSlug: string
@@ -444,9 +455,7 @@ function buildToolkitConnectionValues(
     lastErrorAt: ACCOUNT_ATTENTION_STATUSES.has(account.status)
       ? new Date()
       : null,
-    errorMessage: ACCOUNT_ATTENTION_STATUSES.has(account.status)
-      ? 'Connection requires attention in Composio.'
-      : null,
+    errorMessage: getConnectionErrorMessage(account.status),
   }
 }
 
@@ -567,9 +576,33 @@ export async function syncConnectedAccounts(
   dbInstance: AnyDb,
   orgId: string,
   userId: string,
-  accounts: ConnectionSummary[]
+  accounts: ConnectionSummary[],
+  toolkitSlugs?: string[]
 ) {
+  const existingConnections =
+    await dbInstance.query.toolkitConnections.findMany({
+      where: (fields, operators) => {
+        const clauses = [
+          operators.eq(fields.orgId, orgId),
+          operators.eq(fields.userId, userId),
+        ]
+
+        if ((toolkitSlugs?.length ?? 0) > 0) {
+          clauses.push(
+            operators.or(
+              ...toolkitSlugs!.map((toolkitSlug) =>
+                operators.eq(fields.toolkitSlug, toolkitSlug)
+              )
+            )!
+          )
+        }
+
+        return operators.and(...clauses)
+      },
+    })
+
   const persisted: ToolkitConnection[] = []
+  const remoteAccountIds = new Set(accounts.map((account) => account.id))
 
   for (const account of accounts) {
     await ensureToolkitPolicyRow(dbInstance, orgId, userId, account.toolkitSlug)
@@ -595,6 +628,60 @@ export async function syncConnectedAccounts(
     persisted.push(saved)
   }
 
+  const staleConnections = existingConnections.filter(
+    (connection) => !remoteAccountIds.has(connection.connectedAccountId)
+  )
+
+  for (const staleConnection of staleConnections) {
+    const updated = await markPersistedConnectionInactive(
+      dbInstance,
+      staleConnection.id
+    )
+
+    if (updated) {
+      persisted.push(updated)
+    }
+  }
+
+  const preferences = await listToolkitAccountPreferences(
+    dbInstance,
+    orgId,
+    userId
+  )
+
+  for (const preference of preferences) {
+    if (
+      (toolkitSlugs?.length ?? 0) > 0 &&
+      !toolkitSlugs?.includes(preference.toolkitSlug)
+    ) {
+      continue
+    }
+
+    const connectionsForToolkit = [
+      ...existingConnections.filter(
+        (connection) => connection.toolkitSlug === preference.toolkitSlug
+      ),
+      ...persisted.filter(
+        (connection) => connection.toolkitSlug === preference.toolkitSlug
+      ),
+    ]
+
+    const activePreferredExists = connectionsForToolkit.some(
+      (connection) =>
+        connection.connectedAccountId ===
+          preference.preferredConnectedAccountId &&
+        connection.connectedAccountStatus === 'ACTIVE'
+    )
+
+    if (!activePreferredExists) {
+      await clearToolkitAccountPreference(dbInstance, {
+        orgId,
+        userId,
+        toolkitSlug: preference.toolkitSlug,
+      })
+    }
+  }
+
   return persisted
 }
 
@@ -605,7 +692,13 @@ export async function syncUserConnectionsForOrg(
   toolkitSlugs?: string[]
 ) {
   const accounts = await listConnectedAccounts(userId, toolkitSlugs)
-  return syncConnectedAccounts(dbInstance, orgId, userId, accounts)
+  return syncConnectedAccounts(
+    dbInstance,
+    orgId,
+    userId,
+    accounts,
+    toolkitSlugs
+  )
 }
 
 export async function listPersistedConnections(
@@ -629,7 +722,8 @@ export function choosePrimaryConnection(
   if (preferredConnectedAccountId) {
     const preferred = connections.find(
       (connection) =>
-        connection.connectedAccountId === preferredConnectedAccountId
+        connection.connectedAccountId === preferredConnectedAccountId &&
+        connection.connectedAccountStatus === 'ACTIVE'
     )
 
     if (preferred) return preferred
@@ -638,6 +732,10 @@ export function choosePrimaryConnection(
   return (
     connections.find(
       (connection) => connection.connectedAccountStatus === 'ACTIVE'
+    ) ??
+    connections.find(
+      (connection) =>
+        connection.connectedAccountId === preferredConnectedAccountId
     ) ??
     connections[0] ??
     null
@@ -690,9 +788,7 @@ async function ensureAuthConfigId(toolkit: ToolkitSummary) {
 }
 
 function resolveCallbackUrl(returnPath?: string) {
-  const path = returnPath?.startsWith('/')
-    ? returnPath
-    : '/settings/integrations/tool-access'
+  const path = returnPath?.startsWith('/') ? returnPath : '/integrations'
 
   if (env.COMPOSIO_AUTH_CALLBACK_URL) {
     const url = new URL(env.COMPOSIO_AUTH_CALLBACK_URL)
@@ -744,7 +840,20 @@ export async function createConnectLink(params: {
 
 export async function disableConnectedAccount(connectedAccountId: string) {
   const composio = getComposioClient()
-  await composio.connectedAccounts.disable(connectedAccountId)
+  try {
+    await composio.connectedAccounts.disable(connectedAccountId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    if (
+      message.includes('ConnectedAccount_ResourceNotFound') ||
+      message.includes('Connected account not found')
+    ) {
+      return
+    }
+
+    throw error
+  }
 }
 
 export async function markPersistedConnectionInactive(
@@ -763,6 +872,176 @@ export async function markPersistedConnectionInactive(
     .returning()
 
   return updated ?? null
+}
+
+export async function markPersistedConnectionAttention(
+  dbInstance: AnyDb,
+  id: string,
+  params: {
+    status?: string | null
+    errorMessage?: string | null
+  }
+) {
+  const [updated] = await dbInstance
+    .update(toolkitConnections)
+    .set({
+      connectedAccountStatus: params.status ?? 'FAILED',
+      errorMessage:
+        params.errorMessage ??
+        getConnectionErrorMessage(params.status ?? 'FAILED') ??
+        'Connection requires attention in Composio.',
+      lastErrorAt: new Date(),
+      lastValidatedAt: new Date(),
+    })
+    .where(eq(toolkitConnections.id as never, id as never) as never)
+    .returning()
+
+  return updated ?? null
+}
+
+export async function revalidatePersistedConnection(
+  dbInstance: AnyDb,
+  connection: ToolkitConnection
+) {
+  const accounts = await listConnectedAccounts(connection.userId, [
+    connection.toolkitSlug,
+  ])
+  const matchingAccount = accounts.find(
+    (account) => account.id === connection.connectedAccountId
+  )
+
+  if (!matchingAccount) {
+    return markPersistedConnectionInactive(dbInstance, connection.id)
+  }
+
+  const persisted = await syncConnectedAccounts(
+    dbInstance,
+    connection.orgId,
+    connection.userId,
+    [matchingAccount],
+    [connection.toolkitSlug]
+  )
+
+  return (
+    persisted.find(
+      (item) => item.connectedAccountId === connection.connectedAccountId
+    ) ?? null
+  )
+}
+
+export async function revalidatePersistedConnectionsBatch(params: {
+  db: AnyDb
+  orgId?: string
+  userId?: string
+  toolkitSlug?: string
+  limit?: number
+  staleBefore?: Date | null
+  forceAll?: boolean
+}) {
+  const candidates = await params.db.query.toolkitConnections.findMany({
+    where: (fields, operators) => {
+      const clauses = [operators.ne(fields.connectedAccountStatus, 'INACTIVE')]
+
+      if (params.orgId) {
+        clauses.push(operators.eq(fields.orgId, params.orgId))
+      }
+
+      if (params.userId) {
+        clauses.push(operators.eq(fields.userId, params.userId))
+      }
+
+      if (params.toolkitSlug) {
+        clauses.push(operators.eq(fields.toolkitSlug, params.toolkitSlug))
+      }
+
+      if (!params.forceAll) {
+        const staleClauses = [
+          operators.eq(fields.connectedAccountStatus, 'FAILED'),
+          operators.eq(fields.connectedAccountStatus, 'EXPIRED'),
+          operators.eq(fields.connectedAccountStatus, 'INITIATED'),
+          operators.isNull(fields.lastValidatedAt),
+        ]
+
+        if (params.staleBefore) {
+          staleClauses.push(
+            operators.lt(fields.lastValidatedAt, params.staleBefore)
+          )
+        }
+
+        clauses.push(operators.or(...staleClauses)!)
+      }
+
+      return operators.and(...clauses)
+    },
+    orderBy: (fields, operators) => [
+      operators.asc(fields.lastValidatedAt),
+      operators.desc(fields.updatedAt),
+    ],
+    limit: params.limit ?? 100,
+  })
+
+  const results: Array<{
+    id: string
+    orgId: string
+    userId: string
+    toolkitSlug: string
+    connectedAccountId: string
+    previousStatus: string
+    nextStatus: string
+    changed: boolean
+    error: string | null
+  }> = []
+
+  for (const connection of candidates) {
+    try {
+      const refreshed = await revalidatePersistedConnection(
+        params.db,
+        connection
+      )
+      const nextStatus = refreshed?.connectedAccountStatus ?? 'INACTIVE'
+      results.push({
+        id: connection.id,
+        orgId: connection.orgId,
+        userId: connection.userId,
+        toolkitSlug: connection.toolkitSlug,
+        connectedAccountId: connection.connectedAccountId,
+        previousStatus: connection.connectedAccountStatus ?? 'UNKNOWN',
+        nextStatus,
+        changed:
+          (connection.connectedAccountStatus ?? 'UNKNOWN') !== nextStatus,
+        error: null,
+      })
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to revalidate the connected account.'
+
+      await markPersistedConnectionAttention(params.db, connection.id, {
+        status: 'FAILED',
+        errorMessage: message,
+      })
+
+      results.push({
+        id: connection.id,
+        orgId: connection.orgId,
+        userId: connection.userId,
+        toolkitSlug: connection.toolkitSlug,
+        connectedAccountId: connection.connectedAccountId,
+        previousStatus: connection.connectedAccountStatus ?? 'UNKNOWN',
+        nextStatus: 'FAILED',
+        changed: (connection.connectedAccountStatus ?? 'UNKNOWN') !== 'FAILED',
+        error: message,
+      })
+    }
+  }
+
+  return {
+    scannedCount: candidates.length,
+    changedCount: results.filter((item) => item.changed).length,
+    failureCount: results.filter((item) => item.error).length,
+    results,
+  }
 }
 
 export async function syncWebhookConnectionUpdate(

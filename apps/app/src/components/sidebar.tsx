@@ -6,6 +6,8 @@ import {
   LayoutDashboard,
   MessageSquare,
   Video,
+  Link2,
+  ShieldCheck,
   Settings,
   Menu,
   X,
@@ -21,6 +23,8 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/meetings', label: 'Meetings', icon: Video },
+  { href: '/integrations', label: 'Integrations', icon: Link2 },
+  { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 

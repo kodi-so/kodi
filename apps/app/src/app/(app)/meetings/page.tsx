@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { ArrowRight, Link2, RefreshCcw, Sparkles, Video } from 'lucide-react'
+import { ArrowRight, RefreshCcw, Sparkles, Video } from 'lucide-react'
 import {
   Alert,
   AlertDescription,
@@ -17,6 +17,11 @@ import {
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import {
+  getStatusTone,
+  getZoomStatus,
+  type ZoomInstallStatus,
+} from '../integrations/_lib/tool-access-ui'
 
 type MeetingListItem = Awaited<ReturnType<typeof trpc.meeting.list.query>>
 
@@ -115,14 +120,20 @@ function meetingOutcomeLabel(meeting: MeetingListItem[number]) {
 
 export default function MeetingsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { activeOrg } = useOrg()
   const [meetings, setMeetings] = useState<MeetingListItem>([])
+  const [zoomInstallStatus, setZoomInstallStatus] =
+    useState<ZoomInstallStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [meetingUrl, setMeetingUrl] = useState('')
   const [title, setTitle] = useState('')
   const [isStarting, startStartTransition] = useTransition()
   const [isRefreshing, startRefreshTransition] = useTransition()
+  const [zoomAction, setZoomAction] = useState<
+    'connect' | 'disconnect' | 'refresh' | null
+  >(null)
 
   useEffect(() => {
     if (!activeOrg) {
@@ -138,9 +149,13 @@ export default function MeetingsPage() {
 
     async function load() {
       try {
-        const meetingItems = await trpc.meeting.list.query({ orgId, limit: 20 })
+        const [meetingItems, installStatus] = await Promise.all([
+          trpc.meeting.list.query({ orgId, limit: 20 }),
+          trpc.zoom.getInstallStatus.query({ orgId }),
+        ])
         if (cancelled) return
         setMeetings(meetingItems)
+        setZoomInstallStatus(installStatus)
       } catch (err) {
         if (cancelled) return
         setError(
@@ -208,12 +223,96 @@ export default function MeetingsPage() {
   const liveCount = useMemo(
     () =>
       meetings.filter((meeting) =>
-        ['preparing', 'joining', 'admitted', 'listening', 'processing'].includes(
-          meeting.status
-        )
+        [
+          'preparing',
+          'joining',
+          'admitted',
+          'listening',
+          'processing',
+        ].includes(meeting.status)
       ).length,
     [meetings]
   )
+
+  const zoomStatus = getZoomStatus(zoomInstallStatus)
+  const zoomInstallation = zoomInstallStatus?.installation ?? null
+  const missingZoomSetup = zoomInstallStatus?.setup.missing ?? []
+  const isOwner = activeOrg?.role === 'owner'
+  const zoomCallbackStatus = searchParams.get('zoom')
+
+  const zoomCallbackBanner = useMemo(() => {
+    if (zoomCallbackStatus === 'connected') {
+      return {
+        tone: 'success' as const,
+        message:
+          'Zoom connected. Kodi can now use meeting events for this workspace.',
+      }
+    }
+
+    if (zoomCallbackStatus === 'error') {
+      return {
+        tone: 'error' as const,
+        message:
+          'Zoom connection did not finish. Check the meeting connection card and try again.',
+      }
+    }
+
+    return null
+  }, [zoomCallbackStatus])
+
+  async function refreshZoomStatus() {
+    if (!activeOrg) return
+    setZoomAction('refresh')
+
+    try {
+      const status = await trpc.zoom.getInstallStatus.query({
+        orgId: activeOrg.orgId,
+      })
+      setZoomInstallStatus(status)
+      setError(null)
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to refresh Zoom status.'
+      )
+    } finally {
+      setZoomAction(null)
+    }
+  }
+
+  async function connectZoom() {
+    if (!activeOrg) return
+    setZoomAction('connect')
+
+    try {
+      const result = await trpc.zoom.getInstallUrl.mutate({
+        orgId: activeOrg.orgId,
+        returnPath: '/meetings',
+      })
+      window.location.assign(result.url)
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to start the Zoom install flow.'
+      )
+      setZoomAction(null)
+    }
+  }
+
+  async function disconnectZoom() {
+    if (!activeOrg) return
+    setZoomAction('disconnect')
+
+    try {
+      await trpc.zoom.disconnect.mutate({ orgId: activeOrg.orgId })
+      await refreshZoomStatus()
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to disconnect Zoom.'
+      )
+      setZoomAction(null)
+    }
+  }
 
   if (!activeOrg) {
     return (
@@ -275,84 +374,170 @@ export default function MeetingsPage() {
             </div>
           </div>
 
-          <Card className="border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,19,23,0.98),_rgba(10,11,14,0.98))]">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                    Start meeting
+          <div className="space-y-4">
+            <Card className="border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,19,23,0.98),_rgba(10,11,14,0.98))]">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                      Start meeting
+                    </p>
+                    <h2 className="text-2xl font-semibold text-white">
+                      Bring Kodi into a live Meet
+                    </h2>
+                    <p className="text-sm leading-6 text-zinc-400">
+                      Start from a live Google Meet URL. The meeting page will
+                      become the control room once Kodi gets in.
+                    </p>
+                  </div>
+
+                  <div className="hidden h-11 w-11 items-center justify-center rounded-[1.1rem] border border-zinc-800 bg-zinc-900 text-zinc-200 sm:flex">
+                    <Video size={18} />
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="meeting-url" className="text-zinc-300">
+                      Google Meet URL
+                    </Label>
+                    <Input
+                      id="meeting-url"
+                      value={meetingUrl}
+                      onChange={(event) => setMeetingUrl(event.target.value)}
+                      placeholder="https://meet.google.com/abc-defg-hij"
+                      className="h-11 border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="meeting-title" className="text-zinc-300">
+                      Meeting title
+                    </Label>
+                    <Input
+                      id="meeting-title"
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                      placeholder="Weekly product sync"
+                      className="h-11 border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500"
+                    />
+                  </div>
+
+                  <div className="rounded-[1.4rem] border border-zinc-800 bg-zinc-950/70 p-4 text-sm leading-6 text-zinc-300">
+                    <p>1. Start the meeting here.</p>
+                    <p>2. Admit Kodi when Google Meet asks.</p>
+                    <p>3. Review the summary, notes, and transcript in Kodi.</p>
+                  </div>
+
+                  <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+                    <Button
+                      onClick={() => void startMeeting()}
+                      disabled={isStarting || meetingUrl.trim().length === 0}
+                      className="gap-2 bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+                    >
+                      <Sparkles size={16} />
+                      {isStarting ? 'Starting Kodi…' : 'Start meeting bot'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-zinc-800 bg-[linear-gradient(180deg,_rgba(18,19,23,0.98),_rgba(10,11,14,0.98))]">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className={getStatusTone(zoomStatus)}>
+                        {zoomStatus}
+                      </Badge>
+                      <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                        Meeting connection
+                      </Badge>
+                    </div>
+                    <h2 className="text-2xl font-semibold text-white">
+                      Zoom belongs here
+                    </h2>
+                    <p className="text-sm leading-6 text-zinc-400">
+                      Zoom is a meeting integration, not a tool integration, so
+                      it lives on the Meetings page. Tool integrations stay in
+                      the separate Integrations surface.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-[1.4rem] border border-zinc-800 bg-zinc-950/70 p-4">
+                  <p className="text-sm font-medium text-white">
+                    {zoomInstallation
+                      ? zoomInstallation.externalAccountEmail
+                        ? `Connected account: ${zoomInstallation.externalAccountEmail}`
+                        : 'A Zoom account is connected for this workspace.'
+                      : isOwner
+                        ? 'Zoom is not connected yet.'
+                        : 'A workspace owner needs to connect Zoom.'}
                   </p>
-                  <h2 className="text-2xl font-semibold text-white">
-                    Bring Kodi into a live Meet
-                  </h2>
-                  <p className="text-sm leading-6 text-zinc-400">
-                    Start from a live Google Meet URL. The meeting page will
-                    become the control room once Kodi gets in.
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">
+                    {zoomInstallation
+                      ? `Last updated ${formatDate(zoomInstallation.updatedAt)}.`
+                      : zoomInstallStatus?.setup.configured
+                        ? 'Connect Zoom to unlock Zoom-based meeting events and callbacks.'
+                        : `Zoom still needs setup: ${(missingZoomSetup.length > 0 ? missingZoomSetup : ['Zoom config']).join(', ')}.`}
                   </p>
                 </div>
 
-                <div className="hidden h-11 w-11 items-center justify-center rounded-[1.1rem] border border-zinc-800 bg-zinc-900 text-zinc-200 sm:flex">
-                  <Video size={18} />
-                </div>
-              </div>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {zoomInstallation ? (
+                    <Button
+                      onClick={() => void disconnectZoom()}
+                      variant="outline"
+                      className="border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+                      disabled={zoomAction !== null}
+                    >
+                      {zoomAction === 'disconnect'
+                        ? 'Disconnecting...'
+                        : 'Disconnect Zoom'}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => void connectZoom()}
+                      disabled={!isOwner || zoomAction !== null}
+                      className="bg-teal-500 text-zinc-950 hover:bg-teal-400"
+                    >
+                      {zoomAction === 'connect'
+                        ? 'Connecting...'
+                        : 'Connect Zoom'}
+                    </Button>
+                  )}
 
-              <div className="mt-6 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="meeting-url" className="text-zinc-300">
-                    Google Meet URL
-                  </Label>
-                  <Input
-                    id="meeting-url"
-                    value={meetingUrl}
-                    onChange={(event) => setMeetingUrl(event.target.value)}
-                    placeholder="https://meet.google.com/abc-defg-hij"
-                    className="h-11 border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="meeting-title" className="text-zinc-300">
-                    Meeting title
-                  </Label>
-                  <Input
-                    id="meeting-title"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder="Weekly product sync"
-                    className="h-11 border-zinc-800 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500"
-                  />
-                </div>
-
-                <div className="rounded-[1.4rem] border border-zinc-800 bg-zinc-950/70 p-4 text-sm leading-6 text-zinc-300">
-                  <p>1. Start the meeting here.</p>
-                  <p>2. Admit Kodi when Google Meet asks.</p>
-                  <p>3. Review the summary, notes, and transcript in Kodi.</p>
-                </div>
-
-                <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
                   <Button
-                    onClick={() => void startMeeting()}
-                    disabled={isStarting || meetingUrl.trim().length === 0}
-                    className="gap-2 bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
-                  >
-                    <Sparkles size={16} />
-                    {isStarting ? 'Starting Kodi…' : 'Start meeting bot'}
-                  </Button>
-                  <Button
-                    asChild
+                    onClick={() => void refreshZoomStatus()}
                     variant="ghost"
                     className="gap-2 border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                    disabled={zoomAction !== null}
                   >
-                    <Link href="/settings/integrations">
-                      <Link2 size={16} />
-                      Integrations
-                    </Link>
+                    <RefreshCcw
+                      size={16}
+                      className={zoomAction === 'refresh' ? 'animate-spin' : ''}
+                    />
+                    Refresh Zoom
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </section>
+
+        {zoomCallbackBanner && (
+          <Alert
+            className={
+              zoomCallbackBanner.tone === 'success'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                : 'border-red-500/30 bg-red-500/10 text-red-200'
+            }
+          >
+            <AlertDescription>{zoomCallbackBanner.message}</AlertDescription>
+          </Alert>
+        )}
 
         {error && (
           <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
@@ -450,7 +635,9 @@ export default function MeetingsPage() {
                           Started
                         </p>
                         <p className="mt-2 text-zinc-200">
-                          {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+                          {formatDate(
+                            meeting.actualStartAt ?? meeting.createdAt
+                          )}
                         </p>
                       </div>
                       <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 px-4 py-3">
@@ -466,7 +653,9 @@ export default function MeetingsPage() {
 
                   <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-800/80 pt-4 text-sm">
                     <span className="text-zinc-500">
-                      {meeting.provider === 'google_meet' ? 'Google Meet' : 'Meeting'}
+                      {meeting.provider === 'google_meet'
+                        ? 'Google Meet'
+                        : 'Meeting'}
                     </span>
                     <span className="inline-flex items-center gap-2 text-zinc-100 transition group-hover:translate-x-0.5">
                       Open meeting

@@ -53,7 +53,7 @@ export const kodiTailwindTheme = {
     sm: 'calc(var(--radius) - 6px)',
   },
   boxShadow: {
-    soft: '0 18px 42px -28px rgba(0, 0, 0, 0.45)',
+    soft: '0 28px 60px -36px rgba(68, 49, 16, 0.24)',
   },
   fontFamily: {
     sans: ['var(--font-abeezee)', 'system-ui', 'sans-serif'],

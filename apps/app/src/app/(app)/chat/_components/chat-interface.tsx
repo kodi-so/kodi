@@ -1,24 +1,23 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import {
+  Bot,
+  CornerUpRight,
+  Hash,
+  Loader2,
+  MessageSquareText,
+  Send,
+  Sparkles,
+} from 'lucide-react'
+import { Button, Skeleton, Textarea, cn } from '@kodi/ui'
 import { trpc } from '@/lib/trpc'
 import { useSession } from '@/lib/auth-client'
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Card,
-  CardContent,
-  Separator,
-  Skeleton,
-  Textarea,
-} from '@kodi/ui'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Message {
+type Message = {
   id: string
   role: 'user' | 'assistant'
   content: string
@@ -26,101 +25,137 @@ interface Message {
   createdAt?: string | Date | null
   userName?: string | null
   userImage?: string | null
-  /** Marks messages that should have typewriter animation */
-  animate?: boolean
 }
 
-interface Toast {
+type ThreadPreview = {
   id: string
-  message: string
-  type?: 'info' | 'success'
-  link?: { href: string; label: string }
+  channelId: string
+  title: string
+  preview: string
+  messageIds: string[]
+  createdAt: Date
 }
 
-interface DeletedMessage {
-  message: Message
-  index: number
-  timestamp: number
-}
+const channels = [
+  {
+    id: 'all',
+    label: 'All conversations',
+    description: 'Everything happening in this workspace',
+  },
+  {
+    id: 'planning',
+    label: 'Planning',
+    description: 'Questions, decisions, and strategy',
+  },
+  {
+    id: 'meetings',
+    label: 'Meetings',
+    description: 'Calls, recaps, and meeting follow-through',
+  },
+  {
+    id: 'follow-up',
+    label: 'Follow-up',
+    description: 'Tasks, tickets, owners, and next steps',
+  },
+  {
+    id: 'customer',
+    label: 'Customer',
+    description: 'Accounts, pipelines, and customer context',
+  },
+] as const
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatTime(date: Date): string {
+function formatTime(date: Date) {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-function formatDayLabel(date: Date): string {
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const diff = today.getTime() - target.getTime()
-  const dayMs = 86400000
-
-  if (diff === 0) return 'Today'
-  if (diff === dayMs) return 'Yesterday'
-  if (diff < 7 * dayMs) {
-    return date.toLocaleDateString([], { weekday: 'long' })
-  }
+function formatDay(date: Date) {
   return date.toLocaleDateString([], {
-    weekday: 'long',
-    month: 'long',
+    month: 'short',
     day: 'numeric',
-    year: today.getFullYear() !== date.getFullYear() ? 'numeric' : undefined,
+    year:
+      date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
   })
 }
 
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  )
+function getMessageDate(value?: string | Date | null) {
+  return value ? new Date(value) : new Date()
 }
 
-function getMessageDate(msg: Message): Date {
-  if (msg.createdAt) return new Date(msg.createdAt)
-  return new Date()
+function trimCopy(value: string, limit: number) {
+  if (value.length <= limit) return value
+  return `${value.slice(0, limit).trimEnd()}...`
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+function getChannelId(content: string) {
+  const normalized = content.toLowerCase()
+
+  if (
+    normalized.includes('meeting') ||
+    normalized.includes('zoom') ||
+    normalized.includes('call') ||
+    normalized.includes('recap')
+  ) {
+    return 'meetings'
+  }
+
+  if (
+    normalized.includes('ticket') ||
+    normalized.includes('task') ||
+    normalized.includes('owner') ||
+    normalized.includes('follow-up') ||
+    normalized.includes('next step') ||
+    normalized.includes('linear')
+  ) {
+    return 'follow-up'
+  }
+
+  if (
+    normalized.includes('customer') ||
+    normalized.includes('client') ||
+    normalized.includes('sales') ||
+    normalized.includes('deal') ||
+    normalized.includes('pipeline') ||
+    normalized.includes('hubspot')
+  ) {
+    return 'customer'
+  }
+
+  return 'planning'
 }
 
-// ── Typewriter hook ───────────────────────────────────────────────────────────
+function buildThreads(messages: Message[]) {
+  const items: ThreadPreview[] = []
 
-function useTypewriter(fullText: string, active: boolean): string {
-  const [displayed, setDisplayed] = useState('')
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index]
+    if (!message || message.role !== 'user') continue
 
-  useEffect(() => {
-    if (!active) {
-      setDisplayed(fullText)
-      return
-    }
-    setDisplayed('')
-    let i = 0
-    const interval = setInterval(() => {
-      i += 30
-      if (i >= fullText.length) {
-        setDisplayed(fullText)
-        clearInterval(interval)
-      } else {
-        setDisplayed(fullText.slice(0, i))
-      }
-    }, 30)
-    return () => clearInterval(interval)
-  }, [fullText, active])
+    const nextUserIndex = messages.findIndex(
+      (candidate, candidateIndex) =>
+        candidateIndex > index && candidate.role === 'user'
+    )
+    const endIndex = nextUserIndex === -1 ? messages.length : nextUserIndex
+    const slice = messages.slice(index, endIndex)
+    const assistantReply = slice.find(
+      (candidate) => candidate.role === 'assistant'
+    )
 
-  return displayed
+    items.push({
+      id: message.id,
+      channelId: getChannelId(message.content),
+      title: trimCopy(message.content, 60),
+      preview: trimCopy(assistantReply?.content ?? message.content, 92),
+      messageIds: slice.map((candidate) => candidate.id),
+      createdAt: getMessageDate(
+        slice[slice.length - 1]?.createdAt ?? message.createdAt
+      ),
+    })
+  }
+
+  return items.reverse()
 }
 
-// ── Markdown renderer ─────────────────────────────────────────────────────────
-
-function MarkdownContent({
+function MarkdownMessage({
   content,
   isUser,
 }: {
@@ -131,28 +166,30 @@ function MarkdownContent({
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-        strong: ({ children }) => (
-          <strong className="font-semibold">{children}</strong>
-        ),
-        em: ({ children }) => <em className="italic">{children}</em>,
+        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
         ul: ({ children }) => (
-          <ul className="list-disc list-inside mb-2 last:mb-0 space-y-0.5">
+          <ul className="mb-3 list-disc space-y-1 pl-5 last:mb-0">
             {children}
           </ul>
         ),
         ol: ({ children }) => (
-          <ol className="list-decimal list-inside mb-2 last:mb-0 space-y-0.5">
+          <ol className="mb-3 list-decimal space-y-1 pl-5 last:mb-0">
             {children}
           </ol>
         ),
-        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+        li: ({ children }) => <li className="leading-7">{children}</li>,
         code: ({ className, children, ...props }) => {
-          const isBlock = className?.includes('language-')
+          const isBlock = Boolean(className?.includes('language-'))
+
           if (isBlock) {
             return (
               <pre
-                className={`my-2 rounded-lg p-3 text-xs overflow-x-auto ${isUser ? 'bg-[#DFAE56]/20 text-[#223239]' : 'bg-[rgba(49,66,71,0.92)] text-[#eef2ea]'}`}
+                className={cn(
+                  'my-3 overflow-x-auto rounded-2xl px-4 py-3 text-xs',
+                  isUser
+                    ? 'bg-[rgba(200,146,44,0.14)] text-foreground'
+                    : 'bg-secondary/80 text-foreground'
+                )}
               >
                 <code className={className} {...props}>
                   {children}
@@ -160,11 +197,15 @@ function MarkdownContent({
               </pre>
             )
           }
+
           return (
             <code
-              className={`px-1.5 py-0.5 rounded text-xs font-mono ${
-                isUser ? 'bg-[#DFAE56]/20 text-[#223239]' : 'bg-white/10 text-[#eef2ea]'
-              }`}
+              className={cn(
+                'rounded-md px-1.5 py-0.5 text-xs',
+                isUser
+                  ? 'bg-[rgba(200,146,44,0.14)] text-foreground'
+                  : 'bg-secondary/80 text-foreground'
+              )}
               {...props}
             >
               {children}
@@ -176,55 +217,16 @@ function MarkdownContent({
           <a
             href={href}
             target="_blank"
-            rel="noopener noreferrer"
-            className={`underline underline-offset-2 ${isUser ? 'text-[#9a6e19] hover:text-[#223239]' : 'text-[#F0C570] hover:text-[#f6d289]'}`}
+            rel="noreferrer"
+            className="text-[hsl(var(--kodi-accent-strong))] underline decoration-[color:rgba(160,107,17,0.35)] underline-offset-4"
           >
             {children}
           </a>
         ),
         blockquote: ({ children }) => (
-          <blockquote
-            className={`border-l-2 pl-3 my-2 ${isUser ? 'border-[#DFAE56]/45 text-[#4b5f65]' : 'border-white/12 text-[#dce5e7]'}`}
-          >
+          <blockquote className="my-3 border-l-2 border-border pl-4 text-muted-foreground">
             {children}
           </blockquote>
-        ),
-        h1: ({ children }) => (
-          <h1 className="text-base font-bold mb-1">{children}</h1>
-        ),
-        h2: ({ children }) => (
-          <h2 className="text-sm font-bold mb-1">{children}</h2>
-        ),
-        h3: ({ children }) => (
-          <h3 className="text-sm font-semibold mb-1">{children}</h3>
-        ),
-        hr: () => (
-          <hr
-            className={`my-2 ${isUser ? 'border-[#DFAE56]/30' : 'border-white/12'}`}
-          />
-        ),
-        table: ({ children }) => (
-          <div className="overflow-x-auto my-2">
-            <table
-              className={`text-xs border-collapse ${isUser ? 'border-[#DFAE56]/30' : 'border-white/12'}`}
-            >
-              {children}
-            </table>
-          </div>
-        ),
-        th: ({ children }) => (
-          <th
-            className={`px-2 py-1 text-left font-semibold border-b ${isUser ? 'border-[#DFAE56]/30' : 'border-white/12'}`}
-          >
-            {children}
-          </th>
-        ),
-        td: ({ children }) => (
-          <td
-            className={`px-2 py-1 border-b ${isUser ? 'border-[#DFAE56]/24' : 'border-white/10'}`}
-          >
-            {children}
-          </td>
         ),
       }}
     >
@@ -233,948 +235,540 @@ function MarkdownContent({
   )
 }
 
-// ── Context Menu ──────────────────────────────────────────────────────────────
-
-function ContextMenu({
-  x,
-  y,
-  onCopy,
-  onDelete,
-  onClose,
+export function ChatInterface({
+  orgId,
+  initialPrompt,
+  focusMessageId,
 }: {
-  x: number
-  y: number
-  onCopy: () => void
-  onDelete: () => void
-  onClose: () => void
+  orgId: string
+  initialPrompt?: string | null
+  focusMessageId?: string | null
 }) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('keydown', handleEscape)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleEscape)
-    }
-  }, [onClose])
-
-  return (
-    <div
-      ref={ref}
-      className="fixed z-50 min-w-[160px] rounded-lg border border-white/10 bg-[#314247] py-1 shadow-xl animate-in fade-in zoom-in-95 duration-100"
-      style={{ left: `${x}px`, top: `${y}px` }}
-    >
-      <button
-        onClick={() => {
-          onCopy()
-          onClose()
-        }}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#eef2ea] transition-colors hover:bg-white/8"
-      >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-          />
-        </svg>
-        Copy text
-        <span className="ml-auto text-xs text-[#8ea3a8]">⌘C</span>
-      </button>
-      <button
-        onClick={() => {
-          onDelete()
-          onClose()
-        }}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-white/8"
-      >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-          />
-        </svg>
-        Delete message
-        <span className="ml-auto text-xs text-[#8ea3a8]">Del</span>
-      </button>
-    </div>
-  )
-}
-
-// ── Delete Confirmation Modal ─────────────────────────────────────────────────
-
-function DeleteConfirmationModal({
-  onConfirm,
-  onCancel,
-}: {
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel()
-    }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [onCancel])
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-150">
-      <Card className="mx-4 max-w-sm border-white/10 bg-[#314247] shadow-2xl animate-in zoom-in-95 duration-150">
-        <CardContent className="p-6">
-          <h3 className="text-white font-semibold text-lg mb-2">
-            Delete Message
-          </h3>
-          <p className="mb-6 text-sm text-[#9bb0b5]">
-            Are you sure you want to delete this message? You can undo with{' '}
-            <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-mono text-[#dce5e7]">
-              ⌘Z
-            </kbd>
-          </p>
-          <div className="flex gap-3 justify-end">
-            <Button
-              onClick={onCancel}
-              variant="outline"
-              className="border-white/10 bg-white/8 text-white hover:bg-white/10"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={onConfirm}
-              variant="destructive"
-              className="bg-red-600 text-white hover:bg-red-500"
-            >
-              Delete
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-// ── Day Separator ─────────────────────────────────────────────────────────────
-
-function DaySeparator({ date }: { date: Date }) {
-  return (
-    <div className="flex items-center gap-3 my-4 first:mt-0">
-      <Separator className="flex-1 bg-white/10" />
-      <span className="px-2 text-xs font-medium text-[#8ea3a8]">
-        {formatDayLabel(date)}
-      </span>
-      <Separator className="flex-1 bg-white/10" />
-    </div>
-  )
-}
-
-// ── Avatar ────────────────────────────────────────────────────────────────────
-
-function Avatar({
-  name,
-  image,
-  isAssistant,
-}: {
-  name: string
-  image?: string | null
-  isAssistant?: boolean
-}) {
-  if (isAssistant) {
-    return (
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#DFAE56] to-[#6FA88C]">
-        <svg
-          className="w-4 h-4 text-white"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M13 10V3L4 14h7v7l9-11h-7z"
-          />
-        </svg>
-      </div>
-    )
-  }
-
-  if (image) {
-    return (
-      <img
-        src={image}
-        alt={name}
-        className="w-8 h-8 rounded-full object-cover shrink-0"
-      />
-    )
-  }
-
-  return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10">
-      <span className="text-xs font-medium text-[#dce5e7]">
-        {getInitials(name)}
-      </span>
-    </div>
-  )
-}
-
-// ── MessageBubble ─────────────────────────────────────────────────────────────
-
-function MessageBubble({
-  message,
-  isSelected,
-  onSelect,
-  onHover,
-  onDelete,
-  onCopy,
-}: {
-  message: Message
-  isSelected: boolean
-  onSelect: (id: string) => void
-  onHover: (id: string | null) => void
-  onDelete: (messageId: string) => void
-  onCopy: (messageId: string) => void
-}) {
-  const isUser = message.role === 'user'
-  const text = useTypewriter(message.content, message.animate === true)
-  const [isHovered, setIsHovered] = useState(false)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [contextMenu, setContextMenu] = useState<{
-    x: number
-    y: number
-  } | null>(null)
-
-  // Notify parent when hover state changes
-  // Only call onHover when entering, not when leaving (parent will handle multiple hovers)
-  const handleMouseEnter = useCallback(() => {
-    setIsHovered(true)
-    onHover(message.id)
-  }, [message.id, onHover])
-
-  const handleMouseLeave = useCallback(() => {
-    setIsHovered(false)
-    // Don't call onHover(null) here — let the next message's hover take over
-  }, [])
-
-  const senderName = isUser ? message.userName || 'You' : 'Kodi'
-  const timestamp = getMessageDate(message)
-
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      onSelect(message.id)
-      setContextMenu({ x: e.clientX, y: e.clientY })
-    },
-    [message.id, onSelect]
-  )
-
-  const handleDelete = useCallback(() => {
-    setShowConfirmation(true)
-    setContextMenu(null)
-  }, [])
-
-  const handleConfirmDelete = useCallback(() => {
-    onDelete(message.id)
-    setShowConfirmation(false)
-  }, [message.id, onDelete])
-
-  const handleCopy = useCallback(() => {
-    onCopy(message.id)
-  }, [message.id, onCopy])
-
-  return (
-    <>
-      <div
-        className={`flex gap-3 mb-1 group animate-in fade-in slide-in-from-bottom-2 duration-300 px-2 py-1.5 rounded-lg transition-colors ${
-          isSelected ? 'bg-white/8' : 'hover:bg-white/6'
-        }`}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onContextMenu={handleContextMenu}
-        onClick={() => onSelect(message.id)}
-        data-message-id={message.id}
-      >
-        {/* Avatar */}
-        <Avatar
-          name={senderName}
-          image={isUser ? message.userImage : undefined}
-          isAssistant={!isUser}
-        />
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* Sender name + timestamp */}
-          <div className="flex items-baseline gap-2 mb-0.5">
-            <span
-              className={`text-sm font-semibold ${isUser ? 'text-white' : 'text-[#F0C570]'}`}
-            >
-              {senderName}
-            </span>
-            <span className="text-xs text-[#7d9196]">
-              {formatTime(timestamp)}
-            </span>
-          </div>
-
-          {/* Message content with markdown */}
-          <div
-            className={`text-sm leading-relaxed break-words ${
-              message.status === 'error' ? 'opacity-60' : ''
-            } ${isUser ? 'text-[#eef2ea]' : 'text-[#dce5e7]'} prose-sm`}
-          >
-            <MarkdownContent content={text} isUser={isUser} />
-            {message.status === 'error' && (
-              <span className="block mt-1 text-xs text-red-400 font-medium">
-                ⚠ Failed to send
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Hover action buttons */}
-        <div
-          className={`flex items-start gap-0.5 pt-1 transition-all duration-150 ${
-            isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleCopy()
-            }}
-            className="rounded-md p-1.5 text-[#8ea3a8] transition-all shrink-0 hover:bg-white/10 hover:text-[#dce5e7]"
-            title="Copy text (⌘C)"
-            aria-label="Copy text"
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleDelete()
-            }}
-            className="rounded-md p-1.5 text-[#8ea3a8] transition-all shrink-0 hover:bg-white/10 hover:text-red-400"
-            title="Delete message (Del)"
-            aria-label="Delete message"
-          >
-            <svg
-              className="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Context menu */}
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onCopy={handleCopy}
-          onDelete={handleDelete}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-
-      {/* Delete confirmation modal */}
-      {showConfirmation && (
-        <DeleteConfirmationModal
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setShowConfirmation(false)}
-        />
-      )}
-    </>
-  )
-}
-
-// ── TypingIndicator ───────────────────────────────────────────────────────────
-
-function TypingIndicator() {
-  return (
-    <div className="flex gap-3 mb-1 px-2 py-1.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <Avatar name="Kodi" isAssistant />
-      <div className="flex items-center">
-        <div className="flex items-center gap-1 rounded-xl bg-white/10 px-4 py-2.5">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="h-1.5 w-1.5 rounded-full bg-[#DFAE56] animate-bounce"
-              style={{ animationDelay: `${i * 150}ms` }}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── ToastList ─────────────────────────────────────────────────────────────────
-
-function ToastList({
-  toasts,
-  onDismiss,
-}: {
-  toasts: Toast[]
-  onDismiss: (id: string) => void
-}) {
-  if (toasts.length === 0) return null
-  return (
-    <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-2 max-w-sm">
-      {toasts.map((t) => (
-        <Alert
-          key={t.id}
-          className={`flex items-start gap-3 border rounded-xl px-4 py-3 shadow-xl text-sm animate-in slide-in-from-right duration-200 ${
-            t.type === 'success'
-              ? 'border-[#6FA88C]/24 bg-[#29443c]/90 text-[#e5f5eb]'
-              : 'border-white/10 bg-[#314247] text-white'
-          }`}
-        >
-          <AlertDescription className="flex-1 p-0">
-            {t.message}
-            {t.link && (
-              <>
-                {' '}
-                <a
-                  href={t.link.href}
-                  className="font-medium text-[#F0C570] hover:underline"
-                >
-                  {t.link.label}
-                </a>
-              </>
-            )}
-          </AlertDescription>
-          <button
-            onClick={() => onDismiss(t.id)}
-            className="mt-0.5 shrink-0 text-[#8ea3a8] transition-colors hover:text-white"
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </Alert>
-      ))}
-    </div>
-  )
-}
-
-// ── Keyboard Shortcuts Help ───────────────────────────────────────────────────
-
-function ShortcutsHelp() {
-  return (
-    <div className="mt-2 space-x-3 text-center text-xs text-[#7d9196]">
-      <span>Enter to send</span>
-      <span>·</span>
-      <span>Shift+Enter for new line</span>
-      <span>·</span>
-      <span>⌘C copy</span>
-      <span>·</span>
-      <span>Del delete</span>
-      <span>·</span>
-      <span>⌘Z undo</span>
-    </div>
-  )
-}
-
-// ── ChatInterface ─────────────────────────────────────────────────────────────
-
-export function ChatInterface({ orgId }: { orgId: string }) {
+  const router = useRouter()
+  const pathname = usePathname()
   const { data: session } = useSession()
   const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  const [toasts, setToasts] = useState<Toast[]>([])
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
-    null
-  )
-  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null)
-  const [deletedMessages, setDeletedMessages] = useState<DeletedMessage[]>([])
-
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [input, setInput] = useState('')
+  const [selectedChannel, setSelectedChannel] = useState('all')
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
+  const [composerHint, setComposerHint] = useState<string | null>(null)
+  const [autoPromptHandled, setAutoPromptHandled] = useState(false)
+  const messageContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const messagesRef = useRef<Message[]>(messages)
-  messagesRef.current = messages
-
-  // ── Toast helpers ────────────────────────────────────────────────────────
-
-  const addToast = useCallback(
-    (
-      message: string,
-      opts?: {
-        link?: { href: string; label: string }
-        type?: 'info' | 'success'
-      }
-    ) => {
-      const id = Math.random().toString(36).slice(2)
-      setToasts((prev) => [
-        ...prev,
-        { id, message, link: opts?.link, type: opts?.type },
-      ])
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id))
-      }, 6000)
-    },
-    []
-  )
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
-
-  // ── Load history ─────────────────────────────────────────────────────────
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    setMessages([])
+    setError(null)
 
-    trpc.chat.getHistory
-      .query({ orgId, limit: 50 })
-      .then((rows) => {
+    async function loadHistory() {
+      try {
+        const rows = await trpc.chat.getHistory.query({ orgId, limit: 80 })
         if (cancelled) return
+
         setMessages(
-          rows.map((r) => ({
-            id: r.id,
-            role: r.role as 'user' | 'assistant',
-            content: r.content,
-            status: r.status,
-            createdAt: r.createdAt,
-            userName: 'userName' in r ? (r as any).userName : null,
-            userImage: 'userImage' in r ? (r as any).userImage : null,
-            animate: false,
+          rows.map((row) => ({
+            id: row.id,
+            role: row.role as 'user' | 'assistant',
+            content: row.content,
+            status: row.status,
+            createdAt: row.createdAt,
+            userName: 'userName' in row ? (row as Message).userName : null,
+            userImage: 'userImage' in row ? (row as Message).userImage : null,
           }))
         )
-      })
-      .catch(() => {
-        if (!cancelled) addToast('Failed to load chat history.')
-      })
-      .finally(() => {
+      } catch (loadError) {
+        if (cancelled) return
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'We could not load this conversation.'
+        )
+      } finally {
         if (!cancelled) setLoading(false)
-      })
+      }
+    }
+
+    void loadHistory()
 
     return () => {
       cancelled = true
     }
-  }, [orgId, addToast])
-
-  // ── Scroll to bottom when messages change ────────────────────────────────
+  }, [orgId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!messageContainerRef.current) return
+
+    const container = messageContainerRef.current
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
   }, [messages, sending])
 
-  // ── Auto-resize textarea ─────────────────────────────────────────────────
+  useEffect(() => {
+    const element = textareaRef.current
+    if (!element) return
 
-  const resizeTextarea = useCallback(() => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
-  }, [])
+    element.style.height = 'auto'
+    element.style.height = `${Math.min(element.scrollHeight, 176)}px`
+  }, [input])
+
+  const threads = buildThreads(messages)
+  const visibleThreads =
+    selectedChannel === 'all'
+      ? threads
+      : threads.filter((thread) => thread.channelId === selectedChannel)
+  const selectedThread =
+    visibleThreads.find((thread) => thread.id === selectedThreadId) ??
+    visibleThreads[0] ??
+    null
+  const selectedThreadMessageIds = new Set(selectedThread?.messageIds ?? [])
 
   useEffect(() => {
-    resizeTextarea()
-  }, [input, resizeTextarea])
-
-  // ── Copy message ─────────────────────────────────────────────────────────
-
-  const handleCopyMessage = useCallback(
-    (messageId: string) => {
-      const msg = messagesRef.current.find((m) => m.id === messageId)
-      if (!msg) return
-      navigator.clipboard.writeText(msg.content).then(() => {
-        addToast('Copied to clipboard', { type: 'success' })
-      })
-    },
-    [addToast]
-  )
-
-  // ── Send message ─────────────────────────────────────────────────────────
-
-  const send = useCallback(async () => {
-    const text = input.trim()
-    if (!text || sending) return
-
-    const optimisticId = `opt-${Date.now()}`
-    const optimistic: Message = {
-      id: optimisticId,
-      role: 'user',
-      content: text,
-      status: 'sending',
-      createdAt: new Date().toISOString(),
-      userName: session?.user?.name || 'You',
-      userImage: session?.user?.image || null,
-      animate: false,
+    if (!selectedThreadId && visibleThreads[0]) {
+      setSelectedThreadId(visibleThreads[0].id)
+      return
     }
 
-    setMessages((prev) => [...prev, optimistic])
+    if (
+      selectedThreadId &&
+      visibleThreads.length > 0 &&
+      !visibleThreads.some((thread) => thread.id === selectedThreadId)
+    ) {
+      setSelectedThreadId(visibleThreads[0]!.id)
+    }
+  }, [selectedThreadId, visibleThreads])
+
+  useEffect(() => {
+    if (loading || !focusMessageId) return
+
+    const thread = threads.find((candidate) =>
+      candidate.messageIds.includes(focusMessageId)
+    )
+
+    if (thread) {
+      setSelectedChannel(thread.channelId)
+      setSelectedThreadId(thread.id)
+    }
+
+    const timer = window.setTimeout(() => {
+      const element = document.getElementById(`message-${focusMessageId}`)
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      router.replace(pathname)
+    }, 120)
+
+    return () => window.clearTimeout(timer)
+  }, [focusMessageId, loading, pathname, router, threads])
+
+  async function sendMessage(nextMessage?: string) {
+    const messageText = (nextMessage ?? input).trim()
+    if (!messageText || sending) return
+
+    const optimisticId = `optimistic-${Date.now()}`
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: optimisticId,
+        role: 'user',
+        content: messageText,
+        status: 'sending',
+        createdAt: new Date().toISOString(),
+        userName: session?.user?.name ?? 'You',
+        userImage: session?.user?.image ?? null,
+      },
+    ])
     setInput('')
+    setError(null)
     setSending(true)
 
     try {
       const result = await trpc.chat.sendMessage.mutate({
         orgId,
-        message: text,
+        message: messageText,
       })
+      const assistantMessage = result.assistantMessage
 
-      setMessages((prev) => {
-        const updated = prev.map((m) =>
-          m.id === optimisticId
+      if (!assistantMessage) {
+        throw new Error('Kodi did not return a reply.')
+      }
+
+      setMessages((current) => {
+        const replaced = current.map((message) =>
+          message.id === optimisticId
             ? {
                 id: result.userMessage.id,
                 role: 'user' as const,
                 content: result.userMessage.content,
                 status: result.userMessage.status,
                 createdAt: result.userMessage.createdAt,
-                userName: session?.user?.name || 'You',
-                userImage: session?.user?.image || null,
-                animate: false,
+                userName: session?.user?.name ?? 'You',
+                userImage: session?.user?.image ?? null,
               }
-            : m
+            : message
         )
+
         return [
-          ...updated,
+          ...replaced,
           {
-            id: result.assistantMessage!.id,
+            id: assistantMessage.id,
             role: 'assistant' as const,
-            content: result.assistantMessage!.content,
-            status: result.assistantMessage!.status,
-            createdAt: result.assistantMessage!.createdAt,
+            content: assistantMessage.content,
+            status: assistantMessage.status,
+            createdAt: assistantMessage.createdAt,
             userName: null,
             userImage: null,
-            animate: true,
           },
         ]
       })
-    } catch (err: unknown) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === optimisticId ? { ...m, status: 'error' } : m))
+
+      setComposerHint(null)
+    } catch (sendError) {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, status: 'error' }
+            : message
+        )
       )
-
-      const msg = err instanceof Error ? err.message : String(err)
-      const isOffline =
-        msg.toLowerCase().includes('instance') ||
-        msg.toLowerCase().includes('status') ||
-        msg.toLowerCase().includes('precondition')
-
-      if (isOffline) {
-        addToast('Your agent is offline.', {
-          link: { href: '/dashboard', label: 'Check status →' },
-        })
-      } else {
-        addToast('Failed to send message. Your text has been preserved.')
-      }
-      setInput(text)
+      setInput(messageText)
+      setError(
+        sendError instanceof Error
+          ? sendError.message
+          : 'We could not send that message.'
+      )
     } finally {
       setSending(false)
     }
-  }, [input, orgId, sending, addToast, session])
-
-  // ── Delete message ──────────────────────────────────────────────────────
-
-  const handleDeleteMessage = useCallback(
-    async (messageId: string) => {
-      const msgIndex = messagesRef.current.findIndex((m) => m.id === messageId)
-      const msg = messagesRef.current[msgIndex]
-      if (!msg || msgIndex === -1) return
-
-      // Save for undo
-      setDeletedMessages((prev) => [
-        ...prev,
-        { message: msg, index: msgIndex, timestamp: Date.now() },
-      ])
-
-      // Optimistic removal
-      setMessages((prev) => prev.filter((m) => m.id !== messageId))
-      setSelectedMessageId(null)
-
-      try {
-        await trpc.chat.deleteMessage.mutate({ messageId, orgId })
-        addToast('Message deleted. Press ⌘Z to undo.', { type: 'info' })
-      } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : String(err)
-        addToast(`Failed to delete message: ${errorMsg}`)
-        // Restore on error
-        const history = await trpc.chat.getHistory.query({ orgId, limit: 50 })
-        setMessages(
-          history.map((r) => ({
-            id: r.id,
-            role: r.role as 'user' | 'assistant',
-            content: r.content,
-            status: r.status,
-            createdAt: r.createdAt,
-            userName: 'userName' in r ? (r as any).userName : null,
-            userImage: 'userImage' in r ? (r as any).userImage : null,
-            animate: false,
-          }))
-        )
-        // Remove from undo stack
-        setDeletedMessages((prev) =>
-          prev.filter((d) => d.message.id !== messageId)
-        )
-      }
-    },
-    [orgId, addToast]
-  )
-
-  // ── Undo delete ──────────────────────────────────────────────────────────
-
-  const undoLastDelete = useCallback(async () => {
-    setDeletedMessages((prev) => {
-      if (prev.length === 0) return prev
-      const last = prev[prev.length - 1]!
-      const rest = prev.slice(0, -1)
-
-      // Restore the message in the UI at its original position
-      setMessages((msgs) => {
-        const newMsgs = [...msgs]
-        const insertAt = Math.min(last.index, newMsgs.length)
-        newMsgs.splice(insertAt, 0, last.message)
-        return newMsgs
-      })
-
-      // Re-fetch to get server state (message was soft-deleted, we can't un-delete via API yet, but at least UI is restored)
-      // In a production app, you'd call an undelete API here
-      addToast('Message restored', { type: 'success' })
-
-      return rest
-    })
-  }, [addToast])
-
-  // ── Global keyboard shortcuts ────────────────────────────────────────────
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isMod = e.metaKey || e.ctrlKey
-      // Prioritize hovered message over selected (so hover + shortcut works without clicking)
-      const targetMessageId = hoveredMessageId || selectedMessageId
-
-      // ⌘Z — undo last deletion
-      if (isMod && e.key === 'z' && !e.shiftKey) {
-        if (deletedMessages.length > 0) {
-          e.preventDefault()
-          void undoLastDelete()
-          return
-        }
-      }
-
-      // ⌘C — copy hovered/selected message (only when no text is selected)
-      if (isMod && e.key === 'c' && targetMessageId) {
-        const selection = window.getSelection()
-        if (!selection || selection.toString().length === 0) {
-          e.preventDefault()
-          handleCopyMessage(targetMessageId)
-          return
-        }
-      }
-
-      // Delete / Backspace — delete hovered/selected message
-      if ((e.key === 'Delete' || e.key === 'Backspace') && targetMessageId) {
-        // Don't trigger if user is typing in textarea
-        if ((e.target as HTMLElement)?.tagName === 'TEXTAREA') return
-        e.preventDefault()
-        void handleDeleteMessage(targetMessageId)
-        return
-      }
-
-      // Escape — deselect
-      if (e.key === 'Escape') {
-        setSelectedMessageId(null)
-        setHoveredMessageId(null)
-      }
-
-      // Arrow keys — navigate messages
-      if (
-        (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
-        !e.target?.toString().includes('textarea')
-      ) {
-        if ((e.target as HTMLElement)?.tagName === 'TEXTAREA') return
-        e.preventDefault()
-        const msgs = messagesRef.current
-        if (msgs.length === 0) return
-
-        if (!targetMessageId) {
-          const newId = msgs[msgs.length - 1]!.id
-          setSelectedMessageId(newId)
-          setHoveredMessageId(newId)
-          return
-        }
-
-        const idx = msgs.findIndex((m) => m.id === targetMessageId)
-        if (e.key === 'ArrowUp' && idx > 0) {
-          const newId = msgs[idx - 1]!.id
-          setSelectedMessageId(newId)
-          setHoveredMessageId(newId)
-        } else if (e.key === 'ArrowDown' && idx < msgs.length - 1) {
-          const newId = msgs[idx + 1]!.id
-          setSelectedMessageId(newId)
-          setHoveredMessageId(newId)
-        }
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [
-    selectedMessageId,
-    hoveredMessageId,
-    deletedMessages,
-    handleDeleteMessage,
-    handleCopyMessage,
-    undoLastDelete,
-  ])
-
-  // ── Clean up old undo entries (>30s) ────────────────────────────────────
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDeletedMessages((prev) =>
-        prev.filter((d) => Date.now() - d.timestamp < 30000)
-      )
-    }, 10000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // ── Textarea keyboard handling ───────────────────────────────────────────
-
-  const handleTextareaKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        void send()
-      }
-    },
-    [send]
-  )
-
-  // ── Render messages with day separators ──────────────────────────────────
-
-  const renderMessages = () => {
-    const elements: JSX.Element[] = []
-    let lastDate: Date | null = null
-
-    for (const m of messages) {
-      const msgDate = getMessageDate(m)
-      if (!lastDate || !isSameDay(lastDate, msgDate)) {
-        elements.push(
-          <DaySeparator key={`day-${msgDate.toDateString()}`} date={msgDate} />
-        )
-      }
-      lastDate = msgDate
-
-      elements.push(
-        <MessageBubble
-          key={m.id}
-          message={m}
-          isSelected={selectedMessageId === m.id}
-          onSelect={setSelectedMessageId}
-          onHover={setHoveredMessageId}
-          onDelete={handleDeleteMessage}
-          onCopy={handleCopyMessage}
-        />
-      )
-    }
-    return elements
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!initialPrompt || loading || autoPromptHandled) return
+
+    setAutoPromptHandled(true)
+    setComposerHint('Started from the dashboard')
+    void sendMessage(initialPrompt).finally(() => {
+      router.replace(pathname)
+    })
+  }, [autoPromptHandled, initialPrompt, loading, pathname, router, sendMessage])
+
+  function handleThreadSelect(threadId: string) {
+    setSelectedThreadId(threadId)
+    const element = document.getElementById(`message-${threadId}`)
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  function handleChannelSelect(channelId: string) {
+    setSelectedChannel(channelId)
+  }
 
   return (
-    <div
-      className="flex h-full flex-col bg-transparent"
-      onClick={() => setSelectedMessageId(null)}
-    >
-      {/* Message thread */}
-      <div
-        className="flex-1 overflow-y-auto px-4 py-4 sm:px-8"
-        onMouseLeave={() => setHoveredMessageId(null)}
-      >
-        <div className="max-w-3xl mx-auto">
+    <div className="grid min-h-screen gap-4 px-4 py-4 lg:grid-cols-[220px_minmax(0,1fr)_320px] lg:px-6 lg:py-6">
+      <aside className="order-2 rounded-[1.8rem] border border-border/80 bg-card/78 p-4 shadow-soft lg:order-1 lg:max-h-[calc(100vh-3rem)] lg:overflow-auto">
+        <div className="flex items-center gap-2 text-sm uppercase tracking-[0.18em] text-muted-foreground">
+          <Hash size={14} />
+          Channels
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {channels.map((channel) => {
+            const count =
+              channel.id === 'all'
+                ? threads.length
+                : threads.filter((thread) => thread.channelId === channel.id)
+                    .length
+
+            return (
+              <button
+                key={channel.id}
+                onClick={() => handleChannelSelect(channel.id)}
+                className={cn(
+                  'w-full rounded-[1.2rem] border px-4 py-3 text-left transition-colors',
+                  selectedChannel === channel.id
+                    ? 'border-border bg-secondary text-foreground'
+                    : 'border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-secondary/55 hover:text-foreground'
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm">{channel.label}</p>
+                  <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs text-muted-foreground">
+                    {count}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {channel.description}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-6 rounded-[1.4rem] border border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.6),rgba(245,239,228,0.92))] p-4">
+          <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
+            Rhythm
+          </p>
+          <p className="mt-3 text-xl tracking-[-0.04em] text-foreground">
+            Keep threads focused and short.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Use the dashboard for a fresh ask, then keep related follow-up in
+            the same thread here.
+          </p>
+        </div>
+      </aside>
+
+      <section className="order-1 flex min-h-[78vh] flex-col overflow-hidden rounded-[2rem] border border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(248,242,232,0.96))] shadow-soft lg:order-2 lg:min-h-[calc(100vh-3rem)]">
+        <div className="border-b border-border/80 px-5 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/80 px-3 py-1 text-sm text-muted-foreground">
+                <Sparkles size={14} className="text-primary" />
+                Workspace chat
+              </div>
+              <h1 className="mt-3 text-2xl tracking-[-0.05em] text-foreground sm:text-3xl">
+                Keep the conversation moving
+              </h1>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Slack-like organization on top of your existing Kodi thread.
+              </p>
+            </div>
+
+            {selectedThread ? (
+              <div className="rounded-[1.2rem] border border-border/80 bg-card/70 px-4 py-3 text-sm text-muted-foreground">
+                <p className="text-xs uppercase tracking-[0.18em]">
+                  Active thread
+                </p>
+                <p className="mt-1 text-foreground">{selectedThread.title}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div
+          ref={messageContainerRef}
+          className="flex-1 overflow-y-auto px-4 py-5 sm:px-6"
+        >
           {loading ? (
-            <div className="flex justify-center items-center h-24">
-              <Skeleton className="h-6 w-6 rounded-full bg-[#DFAE56]/30" />
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-20 rounded-[1.4rem]" />
+                </div>
+              ))}
+            </div>
+          ) : error && messages.length === 0 ? (
+            <div className="rounded-[1.4rem] border border-border/80 bg-card/70 px-5 py-4 text-sm text-muted-foreground">
+              {error}
             </div>
           ) : (
-            <>
-              {renderMessages()}
-              {sending && <TypingIndicator />}
-            </>
+            <div className="space-y-5">
+              {messages.map((message, index) => {
+                const createdAt = getMessageDate(message.createdAt)
+                const previous = index > 0 ? messages[index - 1] : null
+                const showDayLabel =
+                  !previous ||
+                  formatDay(createdAt) !==
+                    formatDay(getMessageDate(previous.createdAt))
+                const isUser = message.role === 'user'
+                const isSelected =
+                  selectedThreadMessageIds.size > 0 &&
+                  selectedThreadMessageIds.has(message.id)
+
+                return (
+                  <div key={message.id} id={`message-${message.id}`}>
+                    {showDayLabel ? (
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className="h-px flex-1 bg-border/80" />
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          {formatDay(createdAt)}
+                        </p>
+                        <div className="h-px flex-1 bg-border/80" />
+                      </div>
+                    ) : null}
+
+                    <div
+                      className={cn(
+                        'flex gap-3',
+                        isUser ? 'justify-end' : 'justify-start'
+                      )}
+                    >
+                      {!isUser ? (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border/80 bg-secondary/70 text-foreground">
+                          <Bot size={18} />
+                        </div>
+                      ) : null}
+
+                      <div
+                        className={cn(
+                          'max-w-3xl rounded-[1.5rem] border px-4 py-3 shadow-soft',
+                          isUser
+                            ? 'border-[rgba(202,155,61,0.28)] bg-[rgba(240,209,145,0.55)]'
+                            : 'border-border/80 bg-card/86',
+                          isSelected && 'ring-2 ring-[rgba(202,155,61,0.22)]'
+                        )}
+                      >
+                        <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          <span
+                            className={cn(
+                              isUser && 'text-[rgba(101,72,17,0.88)]'
+                            )}
+                          >
+                            {isUser ? (message.userName ?? 'You') : 'Kodi'}
+                          </span>
+                          <span className="text-border">•</span>
+                          <span>{formatTime(createdAt)}</span>
+                          {message.status === 'error' ? (
+                            <>
+                              <span className="text-border">•</span>
+                              <span className="text-[hsl(var(--destructive))]">
+                                failed
+                              </span>
+                            </>
+                          ) : null}
+                        </div>
+
+                        <div className="text-sm leading-7 text-foreground">
+                          <MarkdownMessage
+                            content={message.content}
+                            isUser={isUser}
+                          />
+                        </div>
+                      </div>
+
+                      {isUser ? (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border/80 bg-card/90 text-sm text-foreground">
+                          {session?.user?.name?.[0]?.toUpperCase() ??
+                            session?.user?.email?.[0]?.toUpperCase() ??
+                            'Y'}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {sending ? (
+                <div className="flex items-center gap-3 rounded-[1.4rem] border border-border/80 bg-card/76 px-4 py-3 text-sm text-muted-foreground">
+                  <Loader2 size={16} className="animate-spin text-primary" />
+                  Kodi is working through that request.
+                </div>
+              ) : null}
+            </div>
           )}
-          <div ref={bottomRef} />
         </div>
-      </div>
 
-      {/* Input bar */}
-      <div className="shrink-0 border-t border-white/10 bg-[rgba(34,50,57,0.88)] px-4 py-3 backdrop-blur sm:px-8">
-        <div className="flex items-end gap-3 max-w-3xl mx-auto">
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleTextareaKeyDown}
-            placeholder="Message your agent…"
-            rows={1}
-            disabled={sending || loading}
-            className="min-h-0 flex-1 resize-none rounded-xl border-white/10 bg-white/6 px-4 py-3 text-sm leading-relaxed text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56] overflow-y-auto"
-            style={{ maxHeight: '120px' }}
-            aria-label="Message input"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <Button
-            onClick={(e) => {
-              e.stopPropagation()
-              void send()
-            }}
-            disabled={sending || loading || !input.trim()}
-            className="h-11 shrink-0 rounded-xl bg-[#DFAE56] px-5 text-[#223239] hover:bg-[#e8bf70] disabled:opacity-40"
-            aria-label="Send message"
-          >
-            Send
-          </Button>
+        <div className="border-t border-border/80 bg-[rgba(248,242,232,0.92)] px-4 py-4 backdrop-blur sm:px-6">
+          <div className="rounded-[1.6rem] border border-border/80 bg-card/88 p-3 shadow-soft">
+            {composerHint ? (
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                {composerHint}
+              </p>
+            ) : null}
+
+            <div className="flex items-end gap-3">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    void sendMessage()
+                  }
+                }}
+                placeholder="Message Kodi about the next move, a blocker, or work that should happen now."
+                rows={1}
+                disabled={sending || loading}
+                className="min-h-0 flex-1 resize-none border-0 bg-transparent px-1 py-1 text-base leading-7 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                style={{ maxHeight: '176px' }}
+              />
+              <Button
+                onClick={() => void sendMessage()}
+                size="icon"
+                className="h-12 w-12 rounded-2xl"
+                disabled={!input.trim() || sending || loading}
+                aria-label="Send message"
+              >
+                <Send size={18} />
+              </Button>
+            </div>
+
+            {error ? (
+              <p className="mt-2 text-sm text-[hsl(var(--destructive))]">
+                {error}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <ShortcutsHelp />
-      </div>
+      </section>
 
-      {/* Toasts */}
-      <ToastList toasts={toasts} onDismiss={dismissToast} />
+      <aside className="order-3 rounded-[1.8rem] border border-border/80 bg-card/78 p-4 shadow-soft lg:max-h-[calc(100vh-3rem)] lg:overflow-auto">
+        <div className="flex items-center gap-2 text-sm uppercase tracking-[0.18em] text-muted-foreground">
+          <MessageSquareText size={14} />
+          Threads
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-20 rounded-[1.3rem]" />
+            ))
+          ) : visibleThreads.length === 0 ? (
+            <div className="rounded-[1.3rem] border border-border/80 bg-secondary/45 px-4 py-4 text-sm leading-6 text-muted-foreground">
+              No threads match this channel yet.
+            </div>
+          ) : (
+            visibleThreads.map((thread) => (
+              <button
+                key={thread.id}
+                onClick={() => handleThreadSelect(thread.id)}
+                className={cn(
+                  'w-full rounded-[1.3rem] border px-4 py-3 text-left transition-colors',
+                  selectedThread?.id === thread.id
+                    ? 'border-border bg-secondary/80'
+                    : 'border-border/65 bg-secondary/42 hover:bg-secondary/65'
+                )}
+              >
+                <p className="text-sm text-foreground">{thread.title}</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  {thread.preview}
+                </p>
+                <div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  <CornerUpRight size={12} />
+                  {formatDay(thread.createdAt)}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="mt-6 rounded-[1.4rem] border border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.56),rgba(245,239,228,0.92))] p-4">
+          <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
+            Thread focus
+          </p>
+
+          {selectedThread ? (
+            <>
+              <p className="mt-3 text-xl tracking-[-0.04em] text-foreground">
+                {selectedThread.title}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {selectedThread.preview}
+              </p>
+              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                {selectedThread.messageIds.length} messages in this thread
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Start with the dashboard or send a message here to open your next
+              thread.
+            </p>
+          )}
+        </div>
+      </aside>
     </div>
   )
 }

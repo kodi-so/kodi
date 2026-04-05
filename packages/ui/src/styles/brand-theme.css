@@ -1,16 +1,16 @@
 :root {
-  --kodi-canvas: 204 28% 12%;
-  --kodi-panel: 205 23% 16%;
-  --kodi-panel-muted: 204 18% 20%;
-  --kodi-border: 204 16% 28%;
-  --kodi-text: 38 43% 95%;
-  --kodi-text-muted: 37 18% 72%;
-  --kodi-accent: 42 58% 66%;
-  --kodi-accent-strong: 42 68% 58%;
-  --kodi-accent-foreground: 204 28% 12%;
-  --kodi-success: 143 44% 46%;
-  --kodi-warning: 42 89% 63%;
-  --kodi-danger: 0 68% 60%;
+  --kodi-canvas: 44 40% 96%;
+  --kodi-panel: 42 33% 99%;
+  --kodi-panel-muted: 40 28% 92%;
+  --kodi-border: 36 28% 82%;
+  --kodi-text: 201 28% 16%;
+  --kodi-text-muted: 198 16% 39%;
+  --kodi-accent: 39 74% 58%;
+  --kodi-accent-strong: 35 79% 49%;
+  --kodi-accent-foreground: 201 28% 16%;
+  --kodi-success: 150 36% 42%;
+  --kodi-warning: 37 84% 54%;
+  --kodi-danger: 5 63% 54%;
 
   --background: var(--kodi-canvas);
   --foreground: var(--kodi-text);
@@ -27,7 +27,7 @@
   --accent: var(--kodi-panel-muted);
   --accent-foreground: var(--kodi-text);
   --destructive: var(--kodi-danger);
-  --destructive-foreground: 38 43% 95%;
+  --destructive-foreground: 42 33% 99%;
   --border: var(--kodi-border);
   --input: var(--kodi-border);
   --ring: var(--kodi-accent);

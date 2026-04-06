@@ -32,14 +32,14 @@ type Message = {
   userImage?: string | null
 }
 
-function formatTimestamp(value: string | Date) {
+function formatTime(value: string | Date) {
   return new Date(value).toLocaleTimeString([], {
     hour: 'numeric',
     minute: '2-digit',
   })
 }
 
-function formatDay(value: string | Date) {
+function formatDate(value: string | Date) {
   return new Date(value).toLocaleDateString([], {
     month: 'short',
     day: 'numeric',
@@ -62,30 +62,30 @@ function MessageBody({ content }: { content: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
         ul: ({ children }) => (
-          <ul className="mb-3 list-disc pl-5 last:mb-0">{children}</ul>
+          <ul className="mb-2 list-disc pl-5 last:mb-0">{children}</ul>
         ),
         ol: ({ children }) => (
-          <ol className="mb-3 list-decimal pl-5 last:mb-0">{children}</ol>
+          <ol className="mb-2 list-decimal pl-5 last:mb-0">{children}</ol>
         ),
         a: ({ href, children }) => (
           <a
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="text-[hsl(var(--kodi-accent-strong))] underline underline-offset-4"
+            className="text-[#1264a3] underline underline-offset-2"
           >
             {children}
           </a>
         ),
         code: ({ children }) => (
-          <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">
+          <code className="rounded bg-[#f1f1f1] px-1.5 py-0.5 text-xs">
             {children}
           </code>
         ),
         pre: ({ children }) => (
-          <pre className="overflow-x-auto rounded-xl bg-secondary p-3 text-xs">
+          <pre className="overflow-x-auto rounded-lg bg-[#f1f1f1] p-3 text-xs">
             {children}
           </pre>
         ),
@@ -93,6 +93,21 @@ function MessageBody({ content }: { content: string }) {
     >
       {content}
     </ReactMarkdown>
+  )
+}
+
+function SlackAvatar({ message }: { message: Message }) {
+  return (
+    <div
+      className={cn(
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
+        message.role === 'assistant'
+          ? 'bg-[#e9d9f3] text-[#4a154b]'
+          : 'bg-[#dfe7f2] text-[#28436b]'
+      )}
+    >
+      {message.role === 'assistant' ? 'K' : initials(message.userName ?? 'You')}
+    </div>
   )
 }
 
@@ -106,49 +121,40 @@ function MessageRow({
   onOpenThread: () => void
 }) {
   return (
-    <div className="px-5 py-4 hover:bg-[#f8f8f8] sm:px-7">
+    <div className="px-4 py-3 hover:bg-[#f8f8f8] sm:px-6">
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ede7f6] text-xs font-semibold text-[#4a154b]">
-          {message.role === 'assistant'
-            ? 'K'
-            : initials(message.userName ?? 'You')}
-        </div>
+        <SlackAvatar message={message} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-[15px] font-semibold text-[#1d1c1d]">
               {message.role === 'assistant'
                 ? 'Kodi'
                 : (message.userName ?? 'You')}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {formatTimestamp(message.createdAt)}
+            <p className="text-xs text-[#616061]">
+              {formatTime(message.createdAt)}
             </p>
           </div>
 
-          <div className="mt-1 text-sm leading-7 text-foreground">
+          <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
             <MessageBody content={message.content} />
           </div>
 
-          {replies.length > 0 ? (
-            <button
-              onClick={onOpenThread}
-              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#1264a3] hover:underline"
-            >
-              <CornerUpRight size={15} />
-              {replies.length} repl{replies.length === 1 ? 'y' : 'ies'}
-              <span className="text-muted-foreground">
-                Last reply {formatDay(replies[replies.length - 1]!.createdAt)}
+          <button
+            onClick={onOpenThread}
+            className="mt-2 inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-[#1264a3] hover:bg-[#edf5fb]"
+          >
+            <CornerUpRight size={14} />
+            {replies.length > 0
+              ? `${replies.length} repl${replies.length === 1 ? 'y' : 'ies'}`
+              : 'Reply in thread'}
+            {replies.length > 0 ? (
+              <span className="text-[#616061]">
+                Last reply {formatDate(replies[replies.length - 1]!.createdAt)}
               </span>
-            </button>
-          ) : (
-            <button
-              onClick={onOpenThread}
-              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#1264a3] hover:underline"
-            >
-              Reply in thread
-            </button>
-          )}
+            ) : null}
+          </button>
         </div>
       </div>
     </div>
@@ -175,8 +181,8 @@ export function ChatInterface({
   )
   const [messages, setMessages] = useState<Message[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
-  const [channelDraft, setChannelDraft] = useState('')
   const [showChannelComposer, setShowChannelComposer] = useState(false)
+  const [channelDraft, setChannelDraft] = useState('')
   const [messageDraft, setMessageDraft] = useState('')
   const [threadDraft, setThreadDraft] = useState('')
   const [loadingChannels, setLoadingChannels] = useState(true)
@@ -198,12 +204,15 @@ export function ChatInterface({
         const rows = await trpc.chat.listChannels.query({ orgId })
         if (cancelled) return
 
-        setChannels(rows as Channel[])
+        const nextChannels = rows as Channel[]
+        setChannels(nextChannels)
 
-        const targetChannel =
-          rows.find((item) => item.id === initialChannelId) ?? rows[0] ?? null
+        const initial =
+          nextChannels.find((channel) => channel.id === initialChannelId) ??
+          nextChannels[0] ??
+          null
 
-        setSelectedChannelId(targetChannel?.id ?? null)
+        setSelectedChannelId(initial?.id ?? null)
       } catch (loadError) {
         if (!cancelled) {
           setError(
@@ -243,7 +252,6 @@ export function ChatInterface({
         })
 
         if (cancelled) return
-
         setMessages(rows as Message[])
       } catch (loadError) {
         if (!cancelled) {
@@ -287,6 +295,8 @@ export function ChatInterface({
   const selectedThreadReplies = selectedThreadRoot
     ? (repliesByThread[selectedThreadRoot.id] ?? [])
     : []
+  const selectedChannel =
+    channels.find((channel) => channel.id === selectedChannelId) ?? null
 
   useEffect(() => {
     if (!selectedThreadId) return
@@ -302,10 +312,7 @@ export function ChatInterface({
   useEffect(() => {
     if (!initialThreadId || loadingMessages) return
 
-    const exists = rootMessages.some(
-      (message) => message.id === initialThreadId
-    )
-    if (exists) {
+    if (rootMessages.some((message) => message.id === initialThreadId)) {
       setSelectedThreadId(initialThreadId)
       router.replace(pathname)
     }
@@ -335,14 +342,17 @@ export function ChatInterface({
     setError(null)
 
     try {
-      const created = await trpc.chat.createChannel.mutate({ orgId, name })
-      const next = created as Channel
-      setChannels((current) => [...current, next])
-      setSelectedChannelId(next.id)
+      const created = (await trpc.chat.createChannel.mutate({
+        orgId,
+        name,
+      })) as Channel
+
+      setChannels((current) => [...current, created])
+      setSelectedChannelId(created.id)
       setSelectedThreadId(null)
+      setMessages([])
       setChannelDraft('')
       setShowChannelComposer(false)
-      setMessages([])
     } catch (createError) {
       setError(
         createError instanceof Error
@@ -363,9 +373,8 @@ export function ChatInterface({
     const content = options.message.trim()
     if (!content) return
 
-    const sendingThreadReply = Boolean(options.threadRootMessageId)
-
-    if (sendingThreadReply) {
+    const isThreadReply = Boolean(options.threadRootMessageId)
+    if (isThreadReply) {
       setSendingThread(true)
     } else {
       setSendingMain(true)
@@ -381,15 +390,14 @@ export function ChatInterface({
         threadRootMessageId: options.threadRootMessageId,
       })
 
-      const nextMessages = [
+      setMessages((current) => [
+        ...current,
         result.userMessage as Message,
         result.assistantMessage as Message,
-      ]
-
-      setMessages((current) => [...current, ...nextMessages])
+      ])
       setSelectedThreadId(result.threadRootMessageId)
 
-      if (sendingThreadReply) {
+      if (isThreadReply) {
         setThreadDraft('')
       } else {
         setMessageDraft('')
@@ -401,7 +409,7 @@ export function ChatInterface({
           : 'Failed to send message.'
       )
     } finally {
-      if (sendingThreadReply) {
+      if (isThreadReply) {
         setSendingThread(false)
       } else {
         setSendingMain(false)
@@ -432,25 +440,27 @@ export function ChatInterface({
     selectedChannelId,
   ])
 
-  const selectedChannel =
-    channels.find((channel) => channel.id === selectedChannelId) ?? null
-
   return (
-    <div className="grid h-[calc(100vh-2rem)] grid-cols-1 overflow-hidden px-4 py-4 lg:grid-cols-[260px_minmax(0,1fr)_360px] lg:px-6">
-      <aside className="hidden border-r border-[#4f3756] bg-[#3f0e40] text-white lg:flex lg:flex-col">
-        <div className="border-b border-[#5c4563] px-4 py-4">
-          <p className="text-base font-semibold">
-            {session?.user?.name ?? 'Kodi'}
-          </p>
+    <div className="grid h-[calc(100vh-2rem)] grid-cols-1 overflow-hidden rounded-[1.2rem] border border-[#d8d8d8] bg-white lg:grid-cols-[280px_minmax(0,1fr)_380px]">
+      <aside className="hidden flex-col bg-[#4a154b] text-white lg:flex">
+        <div className="border-b border-white/12 px-4 py-4">
+          <div className="rounded-lg bg-white/10 px-3 py-2.5">
+            <p className="truncate text-sm font-semibold">
+              {selectedChannel?.name ?? session?.user?.name ?? 'Workspace'}
+            </p>
+            <p className="mt-1 text-xs text-white/72">
+              {session?.user?.email ?? 'Kodi workspace'}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center justify-between px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#cabfd0]">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/68">
             Channels
           </p>
           <button
             onClick={() => setShowChannelComposer((current) => !current)}
-            className="rounded-md p-1 text-[#cabfd0] transition-colors hover:bg-[#5c365f] hover:text-white"
+            className="rounded-md p-1 text-white/72 transition-colors hover:bg-white/10 hover:text-white"
             aria-label="Create channel"
           >
             <Plus size={16} />
@@ -459,7 +469,7 @@ export function ChatInterface({
 
         {showChannelComposer ? (
           <div className="px-4 pb-3">
-            <div className="space-y-2 rounded-lg bg-[#512753] p-3">
+            <div className="space-y-2 rounded-lg bg-white/10 p-3">
               <input
                 value={channelDraft}
                 onChange={(event) => setChannelDraft(event.target.value)}
@@ -470,7 +480,7 @@ export function ChatInterface({
                   }
                 }}
                 placeholder="channel-name"
-                className="w-full rounded-md border border-[#75507b] bg-[#6a3d70] px-3 py-2 text-sm text-white outline-none placeholder:text-[#cabfd0]"
+                className="w-full rounded-md border border-white/14 bg-white/12 px-3 py-2 text-sm text-white outline-none placeholder:text-white/58"
               />
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -478,14 +488,14 @@ export function ChatInterface({
                     setShowChannelComposer(false)
                     setChannelDraft('')
                   }}
-                  className="text-sm text-[#cabfd0] hover:text-white"
+                  className="text-sm text-white/68 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => void createChannel()}
                   disabled={!channelDraft.trim() || creatingChannel}
-                  className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-[#3f0e40] disabled:opacity-60"
+                  className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-[#4a154b] disabled:opacity-60"
                 >
                   Create
                 </button>
@@ -503,14 +513,14 @@ export function ChatInterface({
                 setSelectedThreadId(null)
               }}
               className={cn(
-                'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
                 selectedChannelId === channel.id
                   ? 'bg-[#1164a3] text-white'
-                  : 'text-[#f2e9f7] hover:bg-[#5c365f]'
+                  : 'text-white/86 hover:bg-white/10'
               )}
             >
               <Hash size={15} />
-              {channel.slug}
+              <span className="truncate">{channel.slug}</span>
             </button>
           ))}
         </div>
@@ -518,11 +528,11 @@ export function ChatInterface({
 
       <section
         className={cn(
-          'min-w-0 flex-col border-x border-border bg-white',
+          'min-w-0 flex-col bg-white',
           selectedThreadRoot ? 'hidden lg:flex' : 'flex'
         )}
       >
-        <div className="border-b border-border px-4 py-3 lg:hidden">
+        <div className="border-b border-[#dddddd] px-4 py-3 lg:hidden">
           <div className="flex items-center gap-2 overflow-x-auto">
             {channels.map((channel) => (
               <button
@@ -534,62 +544,35 @@ export function ChatInterface({
                 className={cn(
                   'whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
                   selectedChannelId === channel.id
-                    ? 'border-[#1264a3] bg-[#e8f2fb] text-[#1264a3]'
-                    : 'border-border bg-card text-muted-foreground'
+                    ? 'border-[#1264a3] bg-[#edf5fb] text-[#1264a3]'
+                    : 'border-[#dddddd] bg-white text-[#616061]'
                 )}
               >
                 #{channel.slug}
               </button>
             ))}
-            <button
-              onClick={() => setShowChannelComposer((current) => !current)}
-              className="rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground"
-            >
-              <Plus size={14} className="inline-block" />
-            </button>
           </div>
-
-          {showChannelComposer ? (
-            <div className="mt-3 flex gap-2">
-              <input
-                value={channelDraft}
-                onChange={(event) => setChannelDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void createChannel()
-                  }
-                }}
-                placeholder="channel-name"
-                className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none"
-              />
-              <Button
-                size="sm"
-                disabled={!channelDraft.trim() || creatingChannel}
-                onClick={() => void createChannel()}
-              >
-                Create
-              </Button>
-            </div>
-          ) : null}
         </div>
 
-        <div className="border-b border-border px-5 py-4 sm:px-7">
+        <div className="border-b border-[#dddddd] px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
-            <Hash size={18} className="text-muted-foreground" />
-            <h1 className="text-lg font-semibold text-foreground">
+            <Hash size={18} className="text-[#616061]" />
+            <h1 className="text-[18px] font-semibold text-[#1d1c1d]">
               {selectedChannel?.slug ?? 'general'}
             </h1>
           </div>
+          <p className="mt-1 text-sm text-[#616061]">
+            Conversation and follow-through for this channel.
+          </p>
         </div>
 
         <div ref={channelScrollRef} className="flex-1 overflow-y-auto">
           {loadingMessages ? (
-            <div className="px-5 py-6 text-sm text-muted-foreground sm:px-7">
+            <div className="px-4 py-6 text-sm text-[#616061] sm:px-6">
               Loading messages...
             </div>
           ) : rootMessages.length === 0 ? (
-            <div className="px-5 py-12 text-sm text-muted-foreground sm:px-7">
+            <div className="px-4 py-12 text-sm text-[#616061] sm:px-6">
               Start the conversation in #{selectedChannel?.slug ?? 'general'}.
             </div>
           ) : (
@@ -604,8 +587,8 @@ export function ChatInterface({
           )}
         </div>
 
-        <div className="border-t border-border bg-white px-4 py-4 sm:px-6">
-          <div className="rounded-xl border border-border bg-card p-3">
+        <div className="border-t border-[#dddddd] bg-white px-4 py-4 sm:px-6">
+          <div className="rounded-xl border border-[#d8d8d8] bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
             <Textarea
               value={messageDraft}
               onChange={(event) => setMessageDraft(event.target.value)}
@@ -617,20 +600,28 @@ export function ChatInterface({
               }}
               placeholder={`Message #${selectedChannel?.slug ?? 'general'}`}
               rows={1}
-              className="min-h-0 resize-none border-0 bg-transparent px-1 py-1 text-base shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="min-h-0 resize-none border-0 bg-transparent px-0 py-0 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />
 
-            <div className="mt-3 flex items-center justify-end border-t border-border pt-3">
+            <div className="mt-3 flex items-center justify-between border-t border-[#ececec] pt-3">
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[#616061] transition-colors hover:bg-[#f3f3f3] hover:text-[#1d1c1d]"
+                aria-label="Add item"
+              >
+                <Plus size={16} />
+              </button>
+
               <Button
                 size="icon"
-                className="h-10 w-10 rounded-xl"
+                className="h-9 w-9 rounded-md"
                 disabled={
                   !messageDraft.trim() || sendingMain || !selectedChannelId
                 }
                 onClick={() => void sendMessage({ message: messageDraft })}
                 aria-label="Send message"
               >
-                <Send size={16} />
+                <Send size={15} />
               </Button>
             </div>
           </div>
@@ -645,22 +636,22 @@ export function ChatInterface({
 
       <aside
         className={cn(
-          'min-w-0 flex-col bg-[#fbfbfb]',
-          selectedThreadRoot ? 'flex' : 'hidden lg:flex'
+          'min-w-0 border-l border-[#dddddd] bg-[#fbfbfb]',
+          selectedThreadRoot ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
         )}
       >
         {selectedThreadRoot ? (
           <>
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[#dddddd] px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">Thread</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-semibold text-[#1d1c1d]">Thread</p>
+                <p className="text-xs text-[#616061]">
                   #{selectedChannel?.slug ?? 'general'}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedThreadId(null)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                className="rounded-md p-1 text-[#616061] hover:bg-[#ededed] hover:text-[#1d1c1d]"
                 aria-label="Close thread"
               >
                 <X size={16} />
@@ -668,25 +659,21 @@ export function ChatInterface({
             </div>
 
             <div ref={threadScrollRef} className="flex-1 overflow-y-auto">
-              <div className="border-b border-border px-5 py-4">
+              <div className="border-b border-[#e6e6e6] px-4 py-4">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ede7f6] text-xs font-semibold text-[#4a154b]">
-                    {selectedThreadRoot.role === 'assistant'
-                      ? 'K'
-                      : initials(selectedThreadRoot.userName ?? 'You')}
-                  </div>
+                  <SlackAvatar message={selectedThreadRoot} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
-                      <p className="text-sm font-semibold text-foreground">
+                      <p className="text-[15px] font-semibold text-[#1d1c1d]">
                         {selectedThreadRoot.role === 'assistant'
                           ? 'Kodi'
                           : (selectedThreadRoot.userName ?? 'You')}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatTimestamp(selectedThreadRoot.createdAt)}
+                      <p className="text-xs text-[#616061]">
+                        {formatTime(selectedThreadRoot.createdAt)}
                       </p>
                     </div>
-                    <div className="mt-1 text-sm leading-7 text-foreground">
+                    <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
                       <MessageBody content={selectedThreadRoot.content} />
                     </div>
                   </div>
@@ -696,26 +683,22 @@ export function ChatInterface({
               {selectedThreadReplies.map((message) => (
                 <div
                   key={message.id}
-                  className="border-b border-border px-5 py-4"
+                  className="border-b border-[#e6e6e6] px-4 py-4"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ede7f6] text-xs font-semibold text-[#4a154b]">
-                      {message.role === 'assistant'
-                        ? 'K'
-                        : initials(message.userName ?? 'You')}
-                    </div>
+                    <SlackAvatar message={message} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <p className="text-sm font-semibold text-foreground">
+                        <p className="text-[15px] font-semibold text-[#1d1c1d]">
                           {message.role === 'assistant'
                             ? 'Kodi'
                             : (message.userName ?? 'You')}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatTimestamp(message.createdAt)}
+                        <p className="text-xs text-[#616061]">
+                          {formatTime(message.createdAt)}
                         </p>
                       </div>
-                      <div className="mt-1 text-sm leading-7 text-foreground">
+                      <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
                         <MessageBody content={message.content} />
                       </div>
                     </div>
@@ -724,8 +707,8 @@ export function ChatInterface({
               ))}
             </div>
 
-            <div className="border-t border-border bg-white px-4 py-4">
-              <div className="rounded-xl border border-border bg-card p-3">
+            <div className="border-t border-[#dddddd] bg-white px-4 py-4">
+              <div className="rounded-xl border border-[#d8d8d8] bg-white p-3">
                 <Textarea
                   value={threadDraft}
                   onChange={(event) => setThreadDraft(event.target.value)}
@@ -740,13 +723,21 @@ export function ChatInterface({
                   }}
                   placeholder="Reply in thread"
                   rows={1}
-                  className="min-h-0 resize-none border-0 bg-transparent px-1 py-1 text-base shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="min-h-0 resize-none border-0 bg-transparent px-0 py-0 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
 
-                <div className="mt-3 flex items-center justify-end border-t border-border pt-3">
+                <div className="mt-3 flex items-center justify-between border-t border-[#ececec] pt-3">
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[#616061] transition-colors hover:bg-[#f3f3f3] hover:text-[#1d1c1d]"
+                    aria-label="Add item"
+                  >
+                    <Plus size={16} />
+                  </button>
+
                   <Button
                     size="icon"
-                    className="h-10 w-10 rounded-xl"
+                    className="h-9 w-9 rounded-md"
                     disabled={!threadDraft.trim() || sendingThread}
                     onClick={() =>
                       void sendMessage({
@@ -756,14 +747,14 @@ export function ChatInterface({
                     }
                     aria-label="Send thread reply"
                   >
-                    <Send size={16} />
+                    <Send size={15} />
                   </Button>
                 </div>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex h-full items-center justify-center px-8 text-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-8 text-center text-sm text-[#616061]">
             Select a message to open its thread.
           </div>
         )}

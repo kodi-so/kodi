@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, Plus } from 'lucide-react'
 import { Button, Textarea } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { useState } from 'react'
@@ -19,18 +19,18 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center">
-        <div className="mb-8 text-center">
+    <div className="flex min-h-screen flex-col px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center">
+        <div className="mb-10 text-center">
           <p className="text-sm text-muted-foreground">
             {activeOrg?.orgName ?? 'Workspace'}
           </p>
-          <h1 className="mt-4 text-4xl tracking-[-0.05em] text-foreground sm:text-5xl">
-            What can Kodi help with?
+          <h1 className="mt-6 text-4xl tracking-[-0.06em] text-foreground sm:text-5xl">
+            What can I help with?
           </h1>
         </div>
 
-        <div className="rounded-[1.75rem] border border-border bg-card p-4 shadow-soft sm:p-5">
+        <div className="rounded-[1.9rem] border border-[#d9d3ca] bg-[#fffdfa] p-4 shadow-[0_18px_48px_-30px_rgba(38,32,18,0.28)]">
           <Textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
@@ -40,23 +40,35 @@ export default function DashboardPage() {
                 openChat(prompt)
               }
             }}
-            placeholder="Ask anything with the context your agent already has."
-            rows={5}
-            className="min-h-[180px] resize-none border-0 bg-transparent px-1 py-1 text-lg leading-8 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            placeholder="Ask anything"
+            rows={4}
+            className="min-h-[144px] resize-none border-0 bg-transparent px-1 py-1 text-[17px] leading-8 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
 
-          <div className="mt-4 flex items-center justify-end border-t border-border pt-4">
+          <div className="mt-3 flex items-center justify-between border-t border-[#e8e2d7] pt-3">
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#ddd6cb] bg-white text-[#6e665b] transition-colors hover:bg-[#f5f1ea]"
+              aria-label="New chat action"
+            >
+              <Plus size={16} />
+            </button>
+
             <Button
               size="icon"
-              className="h-12 w-12 rounded-2xl"
+              className="h-10 w-10 rounded-full"
               disabled={!prompt.trim()}
               onClick={() => openChat(prompt)}
               aria-label="Ask Kodi"
             >
-              <ArrowUp size={18} />
+              <ArrowUp size={16} />
             </Button>
           </div>
         </div>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Kodi responds using the context already connected to this workspace.
+        </p>
       </div>
     </div>
   )

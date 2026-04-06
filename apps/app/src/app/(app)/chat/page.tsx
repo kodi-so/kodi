@@ -8,7 +8,8 @@ export default function ChatPage() {
   const { activeOrg } = useOrg()
   const searchParams = useSearchParams()
   const initialPrompt = searchParams.get('prompt')
-  const focusMessageId = searchParams.get('focus')
+  const initialChannelId = searchParams.get('channel')
+  const initialThreadId = searchParams.get('thread')
 
   if (!activeOrg) {
     return (
@@ -23,7 +24,8 @@ export default function ChatPage() {
       <ChatInterface
         orgId={activeOrg.orgId}
         initialPrompt={initialPrompt}
-        focusMessageId={focusMessageId}
+        initialChannelId={initialChannelId}
+        initialThreadId={initialThreadId}
       />
     </div>
   )

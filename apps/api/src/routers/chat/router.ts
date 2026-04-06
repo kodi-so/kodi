@@ -318,6 +318,13 @@ export const chatRouter = router({
         })
         .returning()
 
+      if (!userMessage) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to store the user message.',
+        })
+      }
+
       const messages = buildMessagesWithHistory(historyRows, input.message)
 
       const headers: Record<string, string> = {
@@ -378,6 +385,13 @@ export const chatRouter = router({
           status: 'sent',
         })
         .returning()
+
+      if (!assistantMessage) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to store the assistant reply.',
+        })
+      }
 
       return {
         userMessage,

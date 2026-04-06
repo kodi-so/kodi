@@ -121,7 +121,7 @@ export function InviteForm({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="colleague@company.com"
             required
-            className="h-11 border-white/10 bg-white/6 pl-9 pr-4 text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56]"
+            className="h-11 border-border/80 bg-card/90 pl-9 pr-4"
           />
         </div>
         <Button

@@ -168,7 +168,7 @@ export default function AddIntegrationsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search integrations"
-              className="h-12 border-white/10 bg-black/12 pl-10 text-white placeholder:text-[#7f9398] focus-visible:ring-[#DFAE56]"
+              className="h-12 border-border/80 bg-card/90 pl-10"
             />
           </div>
         </section>

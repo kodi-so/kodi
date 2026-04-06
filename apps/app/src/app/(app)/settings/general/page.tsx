@@ -109,7 +109,7 @@ export default function GeneralSettingsPage() {
                   disabled={!isOwner || saving}
                   maxLength={80}
                   placeholder="My Workspace"
-                  className="h-11 rounded-lg border-white/10 bg-white/6 text-white placeholder:text-[#7d9196] focus-visible:ring-[#DFAE56]"
+                  className="h-11 rounded-lg border-border/80 bg-card/90"
                 />
                 {!isOwner && (
                   <p className="mt-1.5 text-xs text-[#7d9196]">

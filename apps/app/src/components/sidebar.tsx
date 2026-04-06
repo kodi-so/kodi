@@ -40,7 +40,7 @@ function OrgSwitcher() {
 
   if (orgs.length === 1 && activeOrg) {
     return (
-      <div className="border-b px-4 py-4">
+      <div className="border-b border-border/80 px-5 py-4">
         <p className="mb-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
           Workspace
         </p>
@@ -50,11 +50,11 @@ function OrgSwitcher() {
   }
 
   return (
-    <div ref={ref} className="relative border-b px-3 py-3">
+    <div ref={ref} className="relative border-b border-border/80 px-4 py-4">
       <button
         onClick={() => setOpen((o) => !o)}
         onBlur={handleBlur}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2.5 text-sm transition-colors hover:bg-secondary"
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 py-3 text-sm shadow-soft transition-colors hover:bg-secondary/80"
       >
         <span className="truncate text-foreground">
           {activeOrg?.orgName ?? 'Select workspace'}
@@ -65,7 +65,7 @@ function OrgSwitcher() {
         />
       </button>
       {open && (
-        <Card className="absolute left-3 right-3 top-full z-50 mt-2 overflow-hidden border-border/80">
+        <Card className="absolute left-4 right-4 top-full z-50 mt-2 overflow-hidden border-border/80 bg-card/95">
           {orgs.map((org) => (
             <button
               key={org.orgId}
@@ -104,14 +104,14 @@ export function Sidebar() {
   }
 
   const navContent = (
-    <div className="flex flex-col h-full">
-      <div className="border-b px-4 py-5">
+    <div className="flex h-full flex-col">
+      <div className="border-b border-border/80 px-5 py-5">
         <BrandLogo size={34} />
       </div>
 
       <OrgSwitcher />
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 space-y-1 px-4 py-5">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
@@ -119,10 +119,10 @@ export function Sidebar() {
               key={href}
               asChild
               variant={active ? 'secondary' : 'ghost'}
-              className={`w-full justify-start gap-3 px-3 py-2.5 text-sm font-medium ${
+              className={`h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sm font-medium ${
                 active
-                  ? 'border border-border bg-secondary text-foreground hover:bg-secondary'
-                  : 'text-muted-foreground'
+                  ? 'border border-border/80 bg-secondary/80 text-foreground shadow-soft hover:bg-secondary'
+                  : 'text-muted-foreground hover:bg-card/80'
               }`}
             >
               <Link href={href} onClick={() => setMobileOpen(false)}>
@@ -134,9 +134,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t px-3 py-4">
-        <div className="mb-2 flex items-center gap-3 rounded-xl border bg-card px-3 py-3">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-secondary text-xs text-foreground">
+      <div className="border-t border-border/80 px-4 py-4">
+        <div className="mb-3 flex items-center gap-3 rounded-2xl border border-border/80 bg-card/85 px-3 py-3 shadow-soft">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-secondary text-xs text-foreground">
             <span>
               {session?.user?.name?.[0]?.toUpperCase() ??
                 session?.user?.email?.[0]?.toUpperCase() ??
@@ -155,7 +155,7 @@ export function Sidebar() {
         <Button
           onClick={handleSignOut}
           variant="ghost"
-          className="w-full justify-center gap-2"
+          className="w-full justify-center gap-2 rounded-2xl"
         >
           Sign out
         </Button>
@@ -165,7 +165,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-64 flex-shrink-0 flex-col border-r bg-card/40 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col border-r border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(250,245,235,0.9))] md:flex">
         {navContent}
       </aside>
 
@@ -181,13 +181,13 @@ export function Sidebar() {
 
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          className="fixed inset-0 z-40 bg-[rgba(30,35,38,0.18)] backdrop-blur-sm md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r bg-background transition-transform duration-200 md:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 border-r border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(250,245,235,0.98))] transition-transform duration-200 md:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

@@ -10,6 +10,22 @@
     font-family: var(--font-abeezee), system-ui, sans-serif;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply text-foreground antialiased;
+    background:
+      radial-gradient(
+        circle at top,
+        rgba(236, 197, 120, 0.18),
+        transparent 28%
+      ),
+      radial-gradient(
+        circle at right 20%,
+        rgba(212, 223, 229, 0.46),
+        transparent 22%
+      ),
+      hsl(var(--background));
+  }
+  ::selection {
+    background: rgba(231, 185, 88, 0.3);
+    color: hsl(var(--foreground));
   }
 }

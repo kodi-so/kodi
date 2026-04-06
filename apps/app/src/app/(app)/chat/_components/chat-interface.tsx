@@ -4,229 +4,90 @@ import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import {
-  Bot,
-  CornerUpRight,
-  Hash,
-  Loader2,
-  MessageSquareText,
-  Send,
-  Sparkles,
-} from 'lucide-react'
-import { Button, Skeleton, Textarea, cn } from '@kodi/ui'
+import { CornerUpRight, Hash, Plus, Send, X } from 'lucide-react'
+import { Button, Textarea, cn } from '@kodi/ui'
 import { trpc } from '@/lib/trpc'
 import { useSession } from '@/lib/auth-client'
 
+type Channel = {
+  id: string
+  orgId: string
+  name: string
+  slug: string
+  createdBy: string | null
+  createdAt: string | Date
+}
+
 type Message = {
   id: string
+  orgId: string
+  channelId: string
+  threadRootMessageId: string | null
+  userId: string | null
   role: 'user' | 'assistant'
   content: string
-  status?: string | null
-  createdAt?: string | Date | null
+  status: string | null
+  createdAt: string | Date
   userName?: string | null
   userImage?: string | null
 }
 
-type ThreadPreview = {
-  id: string
-  channelId: string
-  title: string
-  preview: string
-  messageIds: string[]
-  createdAt: Date
-}
-
-const channels = [
-  {
-    id: 'all',
-    label: 'All conversations',
-    description: 'Everything happening in this workspace',
-  },
-  {
-    id: 'planning',
-    label: 'Planning',
-    description: 'Questions, decisions, and strategy',
-  },
-  {
-    id: 'meetings',
-    label: 'Meetings',
-    description: 'Calls, recaps, and meeting follow-through',
-  },
-  {
-    id: 'follow-up',
-    label: 'Follow-up',
-    description: 'Tasks, tickets, owners, and next steps',
-  },
-  {
-    id: 'customer',
-    label: 'Customer',
-    description: 'Accounts, pipelines, and customer context',
-  },
-] as const
-
-function formatTime(date: Date) {
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-}
-
-function formatDay(date: Date) {
-  return date.toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric',
-    year:
-      date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+function formatTime(value: string | Date) {
+  return new Date(value).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
   })
 }
 
-function getMessageDate(value?: string | Date | null) {
-  return value ? new Date(value) : new Date()
+function formatDate(value: string | Date) {
+  return new Date(value).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
-function trimCopy(value: string, limit: number) {
-  if (value.length <= limit) return value
-  return `${value.slice(0, limit).trimEnd()}...`
+function initials(name?: string | null) {
+  if (!name) return 'K'
+
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 }
 
-function getChannelId(content: string) {
-  const normalized = content.toLowerCase()
-
-  if (
-    normalized.includes('meeting') ||
-    normalized.includes('zoom') ||
-    normalized.includes('call') ||
-    normalized.includes('recap')
-  ) {
-    return 'meetings'
-  }
-
-  if (
-    normalized.includes('ticket') ||
-    normalized.includes('task') ||
-    normalized.includes('owner') ||
-    normalized.includes('follow-up') ||
-    normalized.includes('next step') ||
-    normalized.includes('linear')
-  ) {
-    return 'follow-up'
-  }
-
-  if (
-    normalized.includes('customer') ||
-    normalized.includes('client') ||
-    normalized.includes('sales') ||
-    normalized.includes('deal') ||
-    normalized.includes('pipeline') ||
-    normalized.includes('hubspot')
-  ) {
-    return 'customer'
-  }
-
-  return 'planning'
-}
-
-function buildThreads(messages: Message[]) {
-  const items: ThreadPreview[] = []
-
-  for (let index = 0; index < messages.length; index += 1) {
-    const message = messages[index]
-    if (!message || message.role !== 'user') continue
-
-    const nextUserIndex = messages.findIndex(
-      (candidate, candidateIndex) =>
-        candidateIndex > index && candidate.role === 'user'
-    )
-    const endIndex = nextUserIndex === -1 ? messages.length : nextUserIndex
-    const slice = messages.slice(index, endIndex)
-    const assistantReply = slice.find(
-      (candidate) => candidate.role === 'assistant'
-    )
-
-    items.push({
-      id: message.id,
-      channelId: getChannelId(message.content),
-      title: trimCopy(message.content, 60),
-      preview: trimCopy(assistantReply?.content ?? message.content, 92),
-      messageIds: slice.map((candidate) => candidate.id),
-      createdAt: getMessageDate(
-        slice[slice.length - 1]?.createdAt ?? message.createdAt
-      ),
-    })
-  }
-
-  return items.reverse()
-}
-
-function MarkdownMessage({
-  content,
-  isUser,
-}: {
-  content: string
-  isUser: boolean
-}) {
+function MessageBody({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
         ul: ({ children }) => (
-          <ul className="mb-3 list-disc space-y-1 pl-5 last:mb-0">
-            {children}
-          </ul>
+          <ul className="mb-2 list-disc pl-5 last:mb-0">{children}</ul>
         ),
         ol: ({ children }) => (
-          <ol className="mb-3 list-decimal space-y-1 pl-5 last:mb-0">
-            {children}
-          </ol>
+          <ol className="mb-2 list-decimal pl-5 last:mb-0">{children}</ol>
         ),
-        li: ({ children }) => <li className="leading-7">{children}</li>,
-        code: ({ className, children, ...props }) => {
-          const isBlock = Boolean(className?.includes('language-'))
-
-          if (isBlock) {
-            return (
-              <pre
-                className={cn(
-                  'my-3 overflow-x-auto rounded-2xl px-4 py-3 text-xs',
-                  isUser
-                    ? 'bg-[rgba(200,146,44,0.14)] text-foreground'
-                    : 'bg-secondary/80 text-foreground'
-                )}
-              >
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              </pre>
-            )
-          }
-
-          return (
-            <code
-              className={cn(
-                'rounded-md px-1.5 py-0.5 text-xs',
-                isUser
-                  ? 'bg-[rgba(200,146,44,0.14)] text-foreground'
-                  : 'bg-secondary/80 text-foreground'
-              )}
-              {...props}
-            >
-              {children}
-            </code>
-          )
-        },
-        pre: ({ children }) => <>{children}</>,
         a: ({ href, children }) => (
           <a
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="text-[hsl(var(--kodi-accent-strong))] underline decoration-[color:rgba(160,107,17,0.35)] underline-offset-4"
+            className="text-[#1264a3] underline underline-offset-2"
           >
             {children}
           </a>
         ),
-        blockquote: ({ children }) => (
-          <blockquote className="my-3 border-l-2 border-border pl-4 text-muted-foreground">
+        code: ({ children }) => (
+          <code className="rounded bg-[#f1f1f1] px-1.5 py-0.5 text-xs">
             {children}
-          </blockquote>
+          </code>
+        ),
+        pre: ({ children }) => (
+          <pre className="overflow-x-auto rounded-lg bg-[#f1f1f1] p-3 text-xs">
+            {children}
+          </pre>
         ),
       }}
     >
@@ -235,539 +96,668 @@ function MarkdownMessage({
   )
 }
 
+function SlackAvatar({ message }: { message: Message }) {
+  return (
+    <div
+      className={cn(
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
+        message.role === 'assistant'
+          ? 'bg-[#e9d9f3] text-[#4a154b]'
+          : 'bg-[#dfe7f2] text-[#28436b]'
+      )}
+    >
+      {message.role === 'assistant' ? 'K' : initials(message.userName ?? 'You')}
+    </div>
+  )
+}
+
+function MessageRow({
+  message,
+  replies,
+  onOpenThread,
+}: {
+  message: Message
+  replies: Message[]
+  onOpenThread: () => void
+}) {
+  return (
+    <div className="px-4 py-3 hover:bg-[#f8f8f8] sm:px-6">
+      <div className="flex items-start gap-3">
+        <SlackAvatar message={message} />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <p className="text-[15px] font-semibold text-[#1d1c1d]">
+              {message.role === 'assistant'
+                ? 'Kodi'
+                : (message.userName ?? 'You')}
+            </p>
+            <p className="text-xs text-[#616061]">
+              {formatTime(message.createdAt)}
+            </p>
+          </div>
+
+          <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
+            <MessageBody content={message.content} />
+          </div>
+
+          <button
+            onClick={onOpenThread}
+            className="mt-2 inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-[#1264a3] hover:bg-[#edf5fb]"
+          >
+            <CornerUpRight size={14} />
+            {replies.length > 0
+              ? `${replies.length} repl${replies.length === 1 ? 'y' : 'ies'}`
+              : 'Reply in thread'}
+            {replies.length > 0 ? (
+              <span className="text-[#616061]">
+                Last reply {formatDate(replies[replies.length - 1]!.createdAt)}
+              </span>
+            ) : null}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ChatInterface({
   orgId,
   initialPrompt,
-  focusMessageId,
+  initialChannelId,
+  initialThreadId,
 }: {
   orgId: string
   initialPrompt?: string | null
-  focusMessageId?: string | null
+  initialChannelId?: string | null
+  initialThreadId?: string | null
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const { data: session } = useSession()
+  const [channels, setChannels] = useState<Channel[]>([])
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(
+    null
+  )
   const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [input, setInput] = useState('')
-  const [selectedChannel, setSelectedChannel] = useState('all')
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
-  const [composerHint, setComposerHint] = useState<string | null>(null)
-  const [autoPromptHandled, setAutoPromptHandled] = useState(false)
-  const messageContainerRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [showChannelComposer, setShowChannelComposer] = useState(false)
+  const [channelDraft, setChannelDraft] = useState('')
+  const [messageDraft, setMessageDraft] = useState('')
+  const [threadDraft, setThreadDraft] = useState('')
+  const [loadingChannels, setLoadingChannels] = useState(true)
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [creatingChannel, setCreatingChannel] = useState(false)
+  const [sendingMain, setSendingMain] = useState(false)
+  const [sendingThread, setSendingThread] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [promptHandled, setPromptHandled] = useState(false)
+  const channelScrollRef = useRef<HTMLDivElement>(null)
+  const threadScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
+    setLoadingChannels(true)
 
-    async function loadHistory() {
+    async function loadChannels() {
       try {
-        const rows = await trpc.chat.getHistory.query({ orgId, limit: 80 })
+        const rows = await trpc.chat.listChannels.query({ orgId })
         if (cancelled) return
 
-        setMessages(
-          rows.map((row) => ({
-            id: row.id,
-            role: row.role as 'user' | 'assistant',
-            content: row.content,
-            status: row.status,
-            createdAt: row.createdAt,
-            userName: 'userName' in row ? (row as Message).userName : null,
-            userImage: 'userImage' in row ? (row as Message).userImage : null,
-          }))
-        )
+        const nextChannels = rows as Channel[]
+        setChannels(nextChannels)
+
+        const initial =
+          nextChannels.find((channel) => channel.id === initialChannelId) ??
+          nextChannels[0] ??
+          null
+
+        setSelectedChannelId(initial?.id ?? null)
       } catch (loadError) {
-        if (cancelled) return
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : 'We could not load this conversation.'
-        )
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Failed to load channels.'
+          )
+        }
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setLoadingChannels(false)
       }
     }
 
-    void loadHistory()
+    void loadChannels()
 
     return () => {
       cancelled = true
     }
-  }, [orgId])
+  }, [initialChannelId, orgId])
 
   useEffect(() => {
-    if (!messageContainerRef.current) return
-
-    const container = messageContainerRef.current
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
-  }, [messages, sending])
-
-  useEffect(() => {
-    const element = textareaRef.current
-    if (!element) return
-
-    element.style.height = 'auto'
-    element.style.height = `${Math.min(element.scrollHeight, 176)}px`
-  }, [input])
-
-  const threads = buildThreads(messages)
-  const visibleThreads =
-    selectedChannel === 'all'
-      ? threads
-      : threads.filter((thread) => thread.channelId === selectedChannel)
-  const selectedThread =
-    visibleThreads.find((thread) => thread.id === selectedThreadId) ??
-    visibleThreads[0] ??
-    null
-  const selectedThreadMessageIds = new Set(selectedThread?.messageIds ?? [])
-
-  useEffect(() => {
-    if (!selectedThreadId && visibleThreads[0]) {
-      setSelectedThreadId(visibleThreads[0].id)
+    if (!selectedChannelId) {
+      setMessages([])
       return
     }
 
-    if (
-      selectedThreadId &&
-      visibleThreads.length > 0 &&
-      !visibleThreads.some((thread) => thread.id === selectedThreadId)
-    ) {
-      setSelectedThreadId(visibleThreads[0]!.id)
+    let cancelled = false
+    const channelId = selectedChannelId
+    setLoadingMessages(true)
+    setError(null)
+
+    async function loadMessages() {
+      try {
+        const rows = await trpc.chat.getChannelMessages.query({
+          orgId,
+          channelId,
+        })
+
+        if (cancelled) return
+        setMessages(rows as Message[])
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : 'Failed to load messages.'
+          )
+        }
+      } finally {
+        if (!cancelled) setLoadingMessages(false)
+      }
     }
-  }, [selectedThreadId, visibleThreads])
+
+    void loadMessages()
+
+    return () => {
+      cancelled = true
+    }
+  }, [orgId, selectedChannelId])
+
+  const rootMessages = messages.filter(
+    (message) => !message.threadRootMessageId
+  )
+  const repliesByThread = messages.reduce<Record<string, Message[]>>(
+    (accumulator, message) => {
+      if (!message.threadRootMessageId) return accumulator
+
+      if (!accumulator[message.threadRootMessageId]) {
+        accumulator[message.threadRootMessageId] = []
+      }
+
+      accumulator[message.threadRootMessageId]!.push(message)
+      return accumulator
+    },
+    {}
+  )
+
+  const selectedThreadRoot =
+    rootMessages.find((message) => message.id === selectedThreadId) ?? null
+  const selectedThreadReplies = selectedThreadRoot
+    ? (repliesByThread[selectedThreadRoot.id] ?? [])
+    : []
+  const selectedChannel =
+    channels.find((channel) => channel.id === selectedChannelId) ?? null
 
   useEffect(() => {
-    if (loading || !focusMessageId) return
+    if (!selectedThreadId) return
 
-    const thread = threads.find((candidate) =>
-      candidate.messageIds.includes(focusMessageId)
+    const exists = rootMessages.some(
+      (message) => message.id === selectedThreadId
     )
+    if (!exists) {
+      setSelectedThreadId(null)
+    }
+  }, [rootMessages, selectedThreadId])
 
-    if (thread) {
-      setSelectedChannel(thread.channelId)
-      setSelectedThreadId(thread.id)
+  useEffect(() => {
+    if (!initialThreadId || loadingMessages) return
+
+    if (rootMessages.some((message) => message.id === initialThreadId)) {
+      setSelectedThreadId(initialThreadId)
+      router.replace(pathname)
+    }
+  }, [initialThreadId, loadingMessages, pathname, rootMessages, router])
+
+  useEffect(() => {
+    if (!channelScrollRef.current) return
+    channelScrollRef.current.scrollTo({
+      top: channelScrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    })
+  }, [messages, sendingMain])
+
+  useEffect(() => {
+    if (!threadScrollRef.current) return
+    threadScrollRef.current.scrollTo({
+      top: threadScrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    })
+  }, [selectedThreadReplies, sendingThread])
+
+  async function createChannel() {
+    const name = channelDraft.trim()
+    if (!name || creatingChannel) return
+
+    setCreatingChannel(true)
+    setError(null)
+
+    try {
+      const created = (await trpc.chat.createChannel.mutate({
+        orgId,
+        name,
+      })) as Channel
+
+      setChannels((current) => [...current, created])
+      setSelectedChannelId(created.id)
+      setSelectedThreadId(null)
+      setMessages([])
+      setChannelDraft('')
+      setShowChannelComposer(false)
+    } catch (createError) {
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : 'Failed to create channel.'
+      )
+    } finally {
+      setCreatingChannel(false)
+    }
+  }
+
+  async function sendMessage(options: {
+    message: string
+    threadRootMessageId?: string
+  }) {
+    if (!selectedChannelId) return
+
+    const content = options.message.trim()
+    if (!content) return
+
+    const isThreadReply = Boolean(options.threadRootMessageId)
+    if (isThreadReply) {
+      setSendingThread(true)
+    } else {
+      setSendingMain(true)
     }
 
-    const timer = window.setTimeout(() => {
-      const element = document.getElementById(`message-${focusMessageId}`)
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      router.replace(pathname)
-    }, 120)
-
-    return () => window.clearTimeout(timer)
-  }, [focusMessageId, loading, pathname, router, threads])
-
-  async function sendMessage(nextMessage?: string) {
-    const messageText = (nextMessage ?? input).trim()
-    if (!messageText || sending) return
-
-    const optimisticId = `optimistic-${Date.now()}`
-
-    setMessages((current) => [
-      ...current,
-      {
-        id: optimisticId,
-        role: 'user',
-        content: messageText,
-        status: 'sending',
-        createdAt: new Date().toISOString(),
-        userName: session?.user?.name ?? 'You',
-        userImage: session?.user?.image ?? null,
-      },
-    ])
-    setInput('')
     setError(null)
-    setSending(true)
 
     try {
       const result = await trpc.chat.sendMessage.mutate({
         orgId,
-        message: messageText,
+        channelId: selectedChannelId,
+        message: content,
+        threadRootMessageId: options.threadRootMessageId,
       })
-      const assistantMessage = result.assistantMessage
 
-      if (!assistantMessage) {
-        throw new Error('Kodi did not return a reply.')
+      setMessages((current) => [
+        ...current,
+        result.userMessage as Message,
+        result.assistantMessage as Message,
+      ])
+      setSelectedThreadId(result.threadRootMessageId)
+
+      if (isThreadReply) {
+        setThreadDraft('')
+      } else {
+        setMessageDraft('')
       }
-
-      setMessages((current) => {
-        const replaced = current.map((message) =>
-          message.id === optimisticId
-            ? {
-                id: result.userMessage.id,
-                role: 'user' as const,
-                content: result.userMessage.content,
-                status: result.userMessage.status,
-                createdAt: result.userMessage.createdAt,
-                userName: session?.user?.name ?? 'You',
-                userImage: session?.user?.image ?? null,
-              }
-            : message
-        )
-
-        return [
-          ...replaced,
-          {
-            id: assistantMessage.id,
-            role: 'assistant' as const,
-            content: assistantMessage.content,
-            status: assistantMessage.status,
-            createdAt: assistantMessage.createdAt,
-            userName: null,
-            userImage: null,
-          },
-        ]
-      })
-
-      setComposerHint(null)
     } catch (sendError) {
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === optimisticId
-            ? { ...message, status: 'error' }
-            : message
-        )
-      )
-      setInput(messageText)
       setError(
         sendError instanceof Error
           ? sendError.message
-          : 'We could not send that message.'
+          : 'Failed to send message.'
       )
     } finally {
-      setSending(false)
+      if (isThreadReply) {
+        setSendingThread(false)
+      } else {
+        setSendingMain(false)
+      }
     }
   }
 
   useEffect(() => {
-    if (!initialPrompt || loading || autoPromptHandled) return
+    if (
+      !initialPrompt ||
+      !selectedChannelId ||
+      loadingChannels ||
+      promptHandled
+    ) {
+      return
+    }
 
-    setAutoPromptHandled(true)
-    setComposerHint('Started from the dashboard')
-    void sendMessage(initialPrompt).finally(() => {
+    setPromptHandled(true)
+    void sendMessage({ message: initialPrompt }).finally(() => {
       router.replace(pathname)
     })
-  }, [autoPromptHandled, initialPrompt, loading, pathname, router, sendMessage])
-
-  function handleThreadSelect(threadId: string) {
-    setSelectedThreadId(threadId)
-    const element = document.getElementById(`message-${threadId}`)
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
-
-  function handleChannelSelect(channelId: string) {
-    setSelectedChannel(channelId)
-  }
+  }, [
+    initialPrompt,
+    loadingChannels,
+    pathname,
+    promptHandled,
+    router,
+    selectedChannelId,
+  ])
 
   return (
-    <div className="grid min-h-screen gap-4 px-4 py-4 lg:grid-cols-[220px_minmax(0,1fr)_320px] lg:px-6 lg:py-6">
-      <aside className="order-2 rounded-[1.8rem] border border-border/80 bg-card/78 p-4 shadow-soft lg:order-1 lg:max-h-[calc(100vh-3rem)] lg:overflow-auto">
-        <div className="flex items-center gap-2 text-sm uppercase tracking-[0.18em] text-muted-foreground">
-          <Hash size={14} />
-          Channels
+    <div className="grid h-[calc(100vh-2rem)] grid-cols-1 overflow-hidden rounded-[1.2rem] border border-[#d8d8d8] bg-white lg:grid-cols-[280px_minmax(0,1fr)_380px]">
+      <aside className="hidden flex-col bg-[#4a154b] text-white lg:flex">
+        <div className="border-b border-white/12 px-4 py-4">
+          <div className="rounded-lg bg-white/10 px-3 py-2.5">
+            <p className="truncate text-sm font-semibold">
+              {selectedChannel?.name ?? session?.user?.name ?? 'Workspace'}
+            </p>
+            <p className="mt-1 text-xs text-white/72">
+              {session?.user?.email ?? 'Kodi workspace'}
+            </p>
+          </div>
         </div>
 
-        <div className="mt-4 space-y-2">
-          {channels.map((channel) => {
-            const count =
-              channel.id === 'all'
-                ? threads.length
-                : threads.filter((thread) => thread.channelId === channel.id)
-                    .length
-
-            return (
-              <button
-                key={channel.id}
-                onClick={() => handleChannelSelect(channel.id)}
-                className={cn(
-                  'w-full rounded-[1.2rem] border px-4 py-3 text-left transition-colors',
-                  selectedChannel === channel.id
-                    ? 'border-border bg-secondary text-foreground'
-                    : 'border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-secondary/55 hover:text-foreground'
-                )}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm">{channel.label}</p>
-                  <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs text-muted-foreground">
-                    {count}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {channel.description}
-                </p>
-              </button>
-            )
-          })}
+        <div className="flex items-center justify-between px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/68">
+            Channels
+          </p>
+          <button
+            onClick={() => setShowChannelComposer((current) => !current)}
+            className="rounded-md p-1 text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="Create channel"
+          >
+            <Plus size={16} />
+          </button>
         </div>
 
-        <div className="mt-6 rounded-[1.4rem] border border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.6),rgba(245,239,228,0.92))] p-4">
-          <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
-            Rhythm
-          </p>
-          <p className="mt-3 text-xl tracking-[-0.04em] text-foreground">
-            Keep threads focused and short.
-          </p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Use the dashboard for a fresh ask, then keep related follow-up in
-            the same thread here.
-          </p>
+        {showChannelComposer ? (
+          <div className="px-4 pb-3">
+            <div className="space-y-2 rounded-lg bg-white/10 p-3">
+              <input
+                value={channelDraft}
+                onChange={(event) => setChannelDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void createChannel()
+                  }
+                }}
+                placeholder="channel-name"
+                className="w-full rounded-md border border-white/14 bg-white/12 px-3 py-2 text-sm text-white outline-none placeholder:text-white/58"
+              />
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowChannelComposer(false)
+                    setChannelDraft('')
+                  }}
+                  className="text-sm text-white/68 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void createChannel()}
+                  disabled={!channelDraft.trim() || creatingChannel}
+                  className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-[#4a154b] disabled:opacity-60"
+                >
+                  Create
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex-1 overflow-y-auto px-2 pb-4">
+          {channels.map((channel) => (
+            <button
+              key={channel.id}
+              onClick={() => {
+                setSelectedChannelId(channel.id)
+                setSelectedThreadId(null)
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                selectedChannelId === channel.id
+                  ? 'bg-[#1164a3] text-white'
+                  : 'text-white/86 hover:bg-white/10'
+              )}
+            >
+              <Hash size={15} />
+              <span className="truncate">{channel.slug}</span>
+            </button>
+          ))}
         </div>
       </aside>
 
-      <section className="order-1 flex min-h-[78vh] flex-col overflow-hidden rounded-[2rem] border border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(248,242,232,0.96))] shadow-soft lg:order-2 lg:min-h-[calc(100vh-3rem)]">
-        <div className="border-b border-border/80 px-5 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/80 px-3 py-1 text-sm text-muted-foreground">
-                <Sparkles size={14} className="text-primary" />
-                Workspace chat
-              </div>
-              <h1 className="mt-3 text-2xl tracking-[-0.05em] text-foreground sm:text-3xl">
-                Keep the conversation moving
-              </h1>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Slack-like organization on top of your existing Kodi thread.
-              </p>
-            </div>
-
-            {selectedThread ? (
-              <div className="rounded-[1.2rem] border border-border/80 bg-card/70 px-4 py-3 text-sm text-muted-foreground">
-                <p className="text-xs uppercase tracking-[0.18em]">
-                  Active thread
-                </p>
-                <p className="mt-1 text-foreground">{selectedThread.title}</p>
-              </div>
-            ) : null}
+      <section
+        className={cn(
+          'min-w-0 flex-col bg-white',
+          selectedThreadRoot ? 'hidden lg:flex' : 'flex'
+        )}
+      >
+        <div className="border-b border-[#dddddd] px-4 py-3 lg:hidden">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            {channels.map((channel) => (
+              <button
+                key={channel.id}
+                onClick={() => {
+                  setSelectedChannelId(channel.id)
+                  setSelectedThreadId(null)
+                }}
+                className={cn(
+                  'whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
+                  selectedChannelId === channel.id
+                    ? 'border-[#1264a3] bg-[#edf5fb] text-[#1264a3]'
+                    : 'border-[#dddddd] bg-white text-[#616061]'
+                )}
+              >
+                #{channel.slug}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div
-          ref={messageContainerRef}
-          className="flex-1 overflow-y-auto px-4 py-5 sm:px-6"
-        >
-          {loading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-20 rounded-[1.4rem]" />
-                </div>
-              ))}
+        <div className="border-b border-[#dddddd] px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <Hash size={18} className="text-[#616061]" />
+            <h1 className="text-[18px] font-semibold text-[#1d1c1d]">
+              {selectedChannel?.slug ?? 'general'}
+            </h1>
+          </div>
+          <p className="mt-1 text-sm text-[#616061]">
+            Conversation and follow-through for this channel.
+          </p>
+        </div>
+
+        <div ref={channelScrollRef} className="flex-1 overflow-y-auto">
+          {loadingMessages ? (
+            <div className="px-4 py-6 text-sm text-[#616061] sm:px-6">
+              Loading messages...
             </div>
-          ) : error && messages.length === 0 ? (
-            <div className="rounded-[1.4rem] border border-border/80 bg-card/70 px-5 py-4 text-sm text-muted-foreground">
-              {error}
+          ) : rootMessages.length === 0 ? (
+            <div className="px-4 py-12 text-sm text-[#616061] sm:px-6">
+              Start the conversation in #{selectedChannel?.slug ?? 'general'}.
             </div>
           ) : (
-            <div className="space-y-5">
-              {messages.map((message, index) => {
-                const createdAt = getMessageDate(message.createdAt)
-                const previous = index > 0 ? messages[index - 1] : null
-                const showDayLabel =
-                  !previous ||
-                  formatDay(createdAt) !==
-                    formatDay(getMessageDate(previous.createdAt))
-                const isUser = message.role === 'user'
-                const isSelected =
-                  selectedThreadMessageIds.size > 0 &&
-                  selectedThreadMessageIds.has(message.id)
-
-                return (
-                  <div key={message.id} id={`message-${message.id}`}>
-                    {showDayLabel ? (
-                      <div className="mb-4 flex items-center gap-3">
-                        <div className="h-px flex-1 bg-border/80" />
-                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                          {formatDay(createdAt)}
-                        </p>
-                        <div className="h-px flex-1 bg-border/80" />
-                      </div>
-                    ) : null}
-
-                    <div
-                      className={cn(
-                        'flex gap-3',
-                        isUser ? 'justify-end' : 'justify-start'
-                      )}
-                    >
-                      {!isUser ? (
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border/80 bg-secondary/70 text-foreground">
-                          <Bot size={18} />
-                        </div>
-                      ) : null}
-
-                      <div
-                        className={cn(
-                          'max-w-3xl rounded-[1.5rem] border px-4 py-3 shadow-soft',
-                          isUser
-                            ? 'border-[rgba(202,155,61,0.28)] bg-[rgba(240,209,145,0.55)]'
-                            : 'border-border/80 bg-card/86',
-                          isSelected && 'ring-2 ring-[rgba(202,155,61,0.22)]'
-                        )}
-                      >
-                        <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                          <span
-                            className={cn(
-                              isUser && 'text-[rgba(101,72,17,0.88)]'
-                            )}
-                          >
-                            {isUser ? (message.userName ?? 'You') : 'Kodi'}
-                          </span>
-                          <span className="text-border">•</span>
-                          <span>{formatTime(createdAt)}</span>
-                          {message.status === 'error' ? (
-                            <>
-                              <span className="text-border">•</span>
-                              <span className="text-[hsl(var(--destructive))]">
-                                failed
-                              </span>
-                            </>
-                          ) : null}
-                        </div>
-
-                        <div className="text-sm leading-7 text-foreground">
-                          <MarkdownMessage
-                            content={message.content}
-                            isUser={isUser}
-                          />
-                        </div>
-                      </div>
-
-                      {isUser ? (
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border/80 bg-card/90 text-sm text-foreground">
-                          {session?.user?.name?.[0]?.toUpperCase() ??
-                            session?.user?.email?.[0]?.toUpperCase() ??
-                            'Y'}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                )
-              })}
-
-              {sending ? (
-                <div className="flex items-center gap-3 rounded-[1.4rem] border border-border/80 bg-card/76 px-4 py-3 text-sm text-muted-foreground">
-                  <Loader2 size={16} className="animate-spin text-primary" />
-                  Kodi is working through that request.
-                </div>
-              ) : null}
-            </div>
+            rootMessages.map((message) => (
+              <MessageRow
+                key={message.id}
+                message={message}
+                replies={repliesByThread[message.id] ?? []}
+                onOpenThread={() => setSelectedThreadId(message.id)}
+              />
+            ))
           )}
         </div>
 
-        <div className="border-t border-border/80 bg-[rgba(248,242,232,0.92)] px-4 py-4 backdrop-blur sm:px-6">
-          <div className="rounded-[1.6rem] border border-border/80 bg-card/88 p-3 shadow-soft">
-            {composerHint ? (
-              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                {composerHint}
-              </p>
-            ) : null}
+        <div className="border-t border-[#dddddd] bg-white px-4 py-4 sm:px-6">
+          <div className="rounded-xl border border-[#d8d8d8] bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+            <Textarea
+              value={messageDraft}
+              onChange={(event) => setMessageDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  void sendMessage({ message: messageDraft })
+                }
+              }}
+              placeholder={`Message #${selectedChannel?.slug ?? 'general'}`}
+              rows={1}
+              className="min-h-0 resize-none border-0 bg-transparent px-0 py-0 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
 
-            <div className="flex items-end gap-3">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    void sendMessage()
-                  }
-                }}
-                placeholder="Message Kodi about the next move, a blocker, or work that should happen now."
-                rows={1}
-                disabled={sending || loading}
-                className="min-h-0 flex-1 resize-none border-0 bg-transparent px-1 py-1 text-base leading-7 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                style={{ maxHeight: '176px' }}
-              />
+            <div className="mt-3 flex items-center justify-between border-t border-[#ececec] pt-3">
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[#616061] transition-colors hover:bg-[#f3f3f3] hover:text-[#1d1c1d]"
+                aria-label="Add item"
+              >
+                <Plus size={16} />
+              </button>
+
               <Button
-                onClick={() => void sendMessage()}
                 size="icon"
-                className="h-12 w-12 rounded-2xl"
-                disabled={!input.trim() || sending || loading}
+                className="h-9 w-9 rounded-md"
+                disabled={
+                  !messageDraft.trim() || sendingMain || !selectedChannelId
+                }
+                onClick={() => void sendMessage({ message: messageDraft })}
                 aria-label="Send message"
               >
-                <Send size={18} />
+                <Send size={15} />
               </Button>
             </div>
-
-            {error ? (
-              <p className="mt-2 text-sm text-[hsl(var(--destructive))]">
-                {error}
-              </p>
-            ) : null}
           </div>
+
+          {error ? (
+            <p className="mt-2 text-sm text-[hsl(var(--destructive))]">
+              {error}
+            </p>
+          ) : null}
         </div>
       </section>
 
-      <aside className="order-3 rounded-[1.8rem] border border-border/80 bg-card/78 p-4 shadow-soft lg:max-h-[calc(100vh-3rem)] lg:overflow-auto">
-        <div className="flex items-center gap-2 text-sm uppercase tracking-[0.18em] text-muted-foreground">
-          <MessageSquareText size={14} />
-          Threads
-        </div>
-
-        <div className="mt-4 space-y-2">
-          {loading ? (
-            Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-20 rounded-[1.3rem]" />
-            ))
-          ) : visibleThreads.length === 0 ? (
-            <div className="rounded-[1.3rem] border border-border/80 bg-secondary/45 px-4 py-4 text-sm leading-6 text-muted-foreground">
-              No threads match this channel yet.
-            </div>
-          ) : (
-            visibleThreads.map((thread) => (
-              <button
-                key={thread.id}
-                onClick={() => handleThreadSelect(thread.id)}
-                className={cn(
-                  'w-full rounded-[1.3rem] border px-4 py-3 text-left transition-colors',
-                  selectedThread?.id === thread.id
-                    ? 'border-border bg-secondary/80'
-                    : 'border-border/65 bg-secondary/42 hover:bg-secondary/65'
-                )}
-              >
-                <p className="text-sm text-foreground">{thread.title}</p>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  {thread.preview}
+      <aside
+        className={cn(
+          'min-w-0 border-l border-[#dddddd] bg-[#fbfbfb]',
+          selectedThreadRoot ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
+        )}
+      >
+        {selectedThreadRoot ? (
+          <>
+            <div className="flex items-center justify-between border-b border-[#dddddd] px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-[#1d1c1d]">Thread</p>
+                <p className="text-xs text-[#616061]">
+                  #{selectedChannel?.slug ?? 'general'}
                 </p>
-                <div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                  <CornerUpRight size={12} />
-                  {formatDay(thread.createdAt)}
-                </div>
+              </div>
+              <button
+                onClick={() => setSelectedThreadId(null)}
+                className="rounded-md p-1 text-[#616061] hover:bg-[#ededed] hover:text-[#1d1c1d]"
+                aria-label="Close thread"
+              >
+                <X size={16} />
               </button>
-            ))
-          )}
-        </div>
+            </div>
 
-        <div className="mt-6 rounded-[1.4rem] border border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.56),rgba(245,239,228,0.92))] p-4">
-          <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
-            Thread focus
-          </p>
+            <div ref={threadScrollRef} className="flex-1 overflow-y-auto">
+              <div className="border-b border-[#e6e6e6] px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <SlackAvatar message={selectedThreadRoot} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-[15px] font-semibold text-[#1d1c1d]">
+                        {selectedThreadRoot.role === 'assistant'
+                          ? 'Kodi'
+                          : (selectedThreadRoot.userName ?? 'You')}
+                      </p>
+                      <p className="text-xs text-[#616061]">
+                        {formatTime(selectedThreadRoot.createdAt)}
+                      </p>
+                    </div>
+                    <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
+                      <MessageBody content={selectedThreadRoot.content} />
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-          {selectedThread ? (
-            <>
-              <p className="mt-3 text-xl tracking-[-0.04em] text-foreground">
-                {selectedThread.title}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {selectedThread.preview}
-              </p>
-              <p className="mt-4 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                {selectedThread.messageIds.length} messages in this thread
-              </p>
-            </>
-          ) : (
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Start with the dashboard or send a message here to open your next
-              thread.
-            </p>
-          )}
-        </div>
+              {selectedThreadReplies.map((message) => (
+                <div
+                  key={message.id}
+                  className="border-b border-[#e6e6e6] px-4 py-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <SlackAvatar message={message} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-[15px] font-semibold text-[#1d1c1d]">
+                          {message.role === 'assistant'
+                            ? 'Kodi'
+                            : (message.userName ?? 'You')}
+                        </p>
+                        <p className="text-xs text-[#616061]">
+                          {formatTime(message.createdAt)}
+                        </p>
+                      </div>
+                      <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
+                        <MessageBody content={message.content} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-[#dddddd] bg-white px-4 py-4">
+              <div className="rounded-xl border border-[#d8d8d8] bg-white p-3">
+                <Textarea
+                  value={threadDraft}
+                  onChange={(event) => setThreadDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      void sendMessage({
+                        message: threadDraft,
+                        threadRootMessageId: selectedThreadRoot.id,
+                      })
+                    }
+                  }}
+                  placeholder="Reply in thread"
+                  rows={1}
+                  className="min-h-0 resize-none border-0 bg-transparent px-0 py-0 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+
+                <div className="mt-3 flex items-center justify-between border-t border-[#ececec] pt-3">
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[#616061] transition-colors hover:bg-[#f3f3f3] hover:text-[#1d1c1d]"
+                    aria-label="Add item"
+                  >
+                    <Plus size={16} />
+                  </button>
+
+                  <Button
+                    size="icon"
+                    className="h-9 w-9 rounded-md"
+                    disabled={!threadDraft.trim() || sendingThread}
+                    onClick={() =>
+                      void sendMessage({
+                        message: threadDraft,
+                        threadRootMessageId: selectedThreadRoot.id,
+                      })
+                    }
+                    aria-label="Send thread reply"
+                  >
+                    <Send size={15} />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex h-full items-center justify-center px-8 text-center text-sm text-[#616061]">
+            Select a message to open its thread.
+          </div>
+        )}
       </aside>
     </div>
   )

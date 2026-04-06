@@ -134,6 +134,13 @@
       "when": 1775215200000,
       "tag": "0019_phase_4_tool_access_approvals_reliability",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1775346000000,
+      "tag": "0020_chat_channels_threads",
+      "breakpoints": true
     }
   ]
 }

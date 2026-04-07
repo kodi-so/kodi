@@ -60,7 +60,7 @@ A billing system where:
 
 | Package | What changes |
 |---------|-------------|
-| `packages/db` | New schema: `subscriptions`, `usage_sync_log`, new columns on `organizations` |
+| `packages/db` | New schema: `subscriptions`, `organization_settings`, `usage_sync_log`, new columns on `organizations` |
 | `apps/api` | New `billing` tRPC router, usage sync cron logic, enhanced LiteLLM helpers |
 | `apps/app` | Stripe env vars, billing settings UI, usage dashboard, checkout/portal redirects, webhook handler updates |
 
@@ -153,7 +153,6 @@ CREATE TABLE subscriptions (
   current_period_start  TIMESTAMPTZ,
   current_period_end    TIMESTAMPTZ,
   cancel_at_period_end  BOOLEAN NOT NULL DEFAULT FALSE,
-  spending_cap_cents    INTEGER,                      -- org owner sets this; null = plan default
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -174,6 +173,20 @@ CREATE TABLE usage_sync_log (
 );
 CREATE INDEX usage_sync_log_org_period_idx ON usage_sync_log(org_id, period_end);
 ```
+
+**New table: `organization_settings`** — org-level preferences that persist across subscription changes:
+
+```sql
+CREATE TABLE organization_settings (
+  id              TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id          TEXT NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
+  spending_cap_cents    INTEGER,                      -- org owner sets this; null = plan default
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+> **Why a separate table?** `spending_cap_cents` is an org owner preference, not a subscription attribute. It should survive plan changes, cancellations, and re-subscriptions. This table will also host future org-level settings (BYOK config, notification preferences, etc.).
 
 **New columns on `organizations` table:**
 
@@ -223,7 +236,6 @@ export const subscriptions = pgTable('subscriptions', {
   currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
   currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
   cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
-  spendingCapCents: integer('spending_cap_cents'),  // null = use plan default
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
     .$onUpdate(() => new Date()),
@@ -261,10 +273,29 @@ export const usageSyncLogRelations = relations(usageSyncLog, ({ one }) => ({
   }),
 }))
 
+export const organizationSettings = pgTable('organization_settings', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orgId: text('org_id').notNull().unique()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  spendingCapCents: integer('spending_cap_cents'),  // null = use plan default
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+    .$onUpdate(() => new Date()),
+})
+
+export const organizationSettingsRelations = relations(organizationSettings, ({ one }) => ({
+  org: one(organizations, {
+    fields: [organizationSettings.orgId],
+    references: [organizations.id],
+  }),
+}))
+
 // Types
 export type Subscription = typeof subscriptions.$inferSelect
 export type NewSubscription = typeof subscriptions.$inferInsert
 export type UsageSyncLogEntry = typeof usageSyncLog.$inferSelect
+export type OrganizationSettings = typeof organizationSettings.$inferSelect
+export type NewOrganizationSettings = typeof organizationSettings.$inferInsert
 ```
 
 Also add `stripeCustomerId` to the `organizations` table in `packages/db/src/schema/orgs.ts`:
@@ -295,7 +326,7 @@ Procedures:
 | `billing.getStatus` | memberProcedure | Returns subscription status, plan, current period, spending cap, and current usage for the org |
 | `billing.createCheckoutSession` | ownerProcedure | Creates a Stripe Checkout Session for the selected plan. Includes flat fee price + metered usage price as line items. Redirects user to Stripe. |
 | `billing.createPortalSession` | ownerProcedure | Creates a Stripe Billing Portal session so the owner can manage payment method, view invoices, cancel. |
-| `billing.updateSpendingCap` | ownerProcedure | Updates the `spending_cap_cents` on the subscription and recalculates the LiteLLM key budget accordingly. |
+| `billing.updateSpendingCap` | ownerProcedure | Updates `spending_cap_cents` on `organization_settings` and recalculates the LiteLLM key budget accordingly. |
 | `billing.getUsageHistory` | memberProcedure | Returns usage sync log entries for the current billing period (for the usage dashboard). |
 
 ### 4.2 Checkout Flow
@@ -398,9 +429,9 @@ Every hour (cron):
 ### 5.2 Usage Sync Logic (Pseudocode)
 
 ```typescript
-async function syncUsageForOrg(org, subscription, instance) {
+async function syncUsageForOrg(org, subscription, orgSettings, instance) {
   const plan = PLANS[subscription.planId]
-  const spendingCapCents = subscription.spendingCapCents ?? plan.defaultSpendingCapCents
+  const spendingCapCents = orgSettings?.spendingCapCents ?? plan.defaultSpendingCapCents
 
   // 1. Get current LiteLLM spend (in dollars)
   const keyInfo = await litellm.getKeyInfo(decrypt(instance.litellmVirtualKey))
@@ -582,7 +613,7 @@ The usage data comes from two sources:
    - `includedCreditsUsedCents`: min(markedUpSpend, plan.includedCreditsCents)
    - `includedCreditsTotalCents`: plan.includedCreditsCents
    - `overageCents`: max(0, markedUpSpend - plan.includedCreditsCents)
-   - `spendingCapCents`: subscription.spendingCapCents ?? plan.defaultSpendingCapCents
+   - `spendingCapCents`: orgSettings.spendingCapCents ?? plan.defaultSpendingCapCents
 
 2. **Historical**: `billing.getUsageHistory` returns usage_sync_log entries for charts/details.
 
@@ -592,7 +623,7 @@ A simple input + save button within the billing settings card. Owner-only.
 
 - Input: dollar amount (min $0, max TBD — maybe $1000 for Pro, $5000 for Business)
 - On save: calls `billing.updateSpendingCap({ orgId, capCents })`
-- API updates `subscriptions.spending_cap_cents` AND recalculates LiteLLM key budget
+- API updates `organization_settings.spending_cap_cents` AND recalculates LiteLLM key budget
 
 ### 6.5 Plan Selection / Upgrade Flow
 
@@ -713,7 +744,7 @@ Stripe: invoice.payment_succeeded webhook
 ```
 Owner → UI: changes spending cap to $75
   → API: billing.updateSpendingCap({ capCents: 7500 })
-    → DB: UPDATE subscriptions SET spending_cap_cents = 7500
+    → DB: UPSERT organization_settings SET spending_cap_cents = 7500
     → LiteLLM: set key max_budget = toRealBudget(7500) / 100 = $62.50
     → Return: success
 ```

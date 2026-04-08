@@ -1,6 +1,7 @@
 import { router } from '../trpc'
 import { instanceRouter } from './instance/router'
 import { chatRouter } from './chat/router'
+import { dashboardAssistantRouter } from './dashboard-assistant/router'
 import { inviteRouter } from './invite/router'
 import { orgRouter } from './org/router'
 import { zoomRouter } from './zoom/router'
@@ -12,6 +13,7 @@ import { approvalRouter } from './approval/router'
 export const appRouter = router({
   instance: instanceRouter,
   chat: chatRouter,
+  dashboardAssistant: dashboardAssistantRouter,
   approval: approvalRouter,
   invite: inviteRouter,
   org: orgRouter,

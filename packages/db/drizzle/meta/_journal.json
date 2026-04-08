@@ -141,6 +141,13 @@
       "when": 1775346000000,
       "tag": "0020_chat_channels_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1775620800000,
+      "tag": "0021_dashboard_assistant_threads",
+      "breakpoints": true
     }
   ]
 }

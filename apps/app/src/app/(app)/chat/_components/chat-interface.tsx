@@ -820,17 +820,7 @@ export function ChatInterface({
             />
 
             <div className="min-h-0 flex-1">
-              <DashboardAssistant
-                orgId={orgId}
-                orgName={orgName}
-                embedded
-                initialThreadId={
-                  initialDirectId === KODI_DM_ID ? initialThreadId : null
-                }
-                buildThreadUrl={(threadId) =>
-                  buildChatUrl({ directId: KODI_DM_ID, threadId })
-                }
-              />
+              <DashboardAssistant orgId={orgId} orgName={orgName} embedded />
             </div>
           </div>
         ) : !selectedThreadId ? (

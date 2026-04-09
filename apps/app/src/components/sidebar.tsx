@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard,
   MessageSquare,
   Video,
   Link2,
@@ -20,7 +19,6 @@ import { useOrg } from '@/lib/org-context'
 import { BrandLogo, Button, Card } from '@kodi/ui'
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/meetings', label: 'Meetings', icon: Video },
   { href: '/integrations', label: 'Integrations', icon: Link2 },

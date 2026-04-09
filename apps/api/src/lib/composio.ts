@@ -67,6 +67,41 @@ type ConnectionSummary = {
 }
 
 const ACCOUNT_ATTENTION_STATUSES = new Set(['FAILED', 'EXPIRED'])
+const USER_DISCONNECTED_METADATA_KEY = 'kodiDisconnectedAt'
+
+function asMetadataRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function hasUserDisconnectedMarker(metadata: Record<string, unknown> | null) {
+  return (
+    typeof asMetadataRecord(metadata)[USER_DISCONNECTED_METADATA_KEY] ===
+    'string'
+  )
+}
+
+export function markMetadataUserDisconnected(
+  metadata: Record<string, unknown> | null,
+  disconnectedAt = new Date()
+) {
+  return {
+    ...asMetadataRecord(metadata),
+    [USER_DISCONNECTED_METADATA_KEY]: disconnectedAt.toISOString(),
+  }
+}
+
+function shouldKeepConnectionHidden(
+  existingConnection: ToolkitConnection | undefined,
+  account: ConnectionSummary
+) {
+  if (!existingConnection) return false
+  if (existingConnection.connectedAccountStatus !== 'INACTIVE') return false
+  if (!hasUserDisconnectedMarker(existingConnection.metadata)) return false
+
+  return account.status !== 'ACTIVE'
+}
 
 function getConnectionErrorMessage(status: string) {
   switch (status) {
@@ -603,8 +638,20 @@ export async function syncConnectedAccounts(
 
   const persisted: ToolkitConnection[] = []
   const remoteAccountIds = new Set(accounts.map((account) => account.id))
+  const existingConnectionsByAccountId = new Map(
+    existingConnections.map((connection) => [
+      connection.connectedAccountId,
+      connection,
+    ])
+  )
 
   for (const account of accounts) {
+    const existingConnection = existingConnectionsByAccountId.get(account.id)
+
+    if (shouldKeepConnectionHidden(existingConnection, account)) {
+      continue
+    }
+
     await ensureToolkitPolicyRow(dbInstance, orgId, userId, account.toolkitSlug)
     const [saved] = await dbInstance
       .insert(toolkitConnections)
@@ -858,12 +905,14 @@ export async function disableConnectedAccount(connectedAccountId: string) {
 
 export async function markPersistedConnectionInactive(
   dbInstance: AnyDb,
-  id: string
+  id: string,
+  metadata?: Record<string, unknown> | null
 ) {
   const [updated] = await dbInstance
     .update(toolkitConnections)
     .set({
       connectedAccountStatus: 'INACTIVE',
+      ...(metadata !== undefined ? { metadata } : {}),
       errorMessage: null,
       lastErrorAt: null,
       lastValidatedAt: new Date(),
@@ -1061,6 +1110,11 @@ export async function syncWebhookConnectionUpdate(
   const updated: ToolkitConnection[] = []
 
   for (const association of existingAssociations) {
+    if (shouldKeepConnectionHidden(association, account)) {
+      updated.push(association)
+      continue
+    }
+
     await ensureToolkitPolicyRow(
       dbInstance,
       association.orgId,

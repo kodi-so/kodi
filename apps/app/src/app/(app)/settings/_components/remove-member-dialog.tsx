@@ -52,26 +52,27 @@ export function RemoveMemberDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="kodi-overlay-scrim absolute inset-0 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Dialog */}
-      <Card className="relative z-10 w-full max-w-md rounded-2xl border-white/10 bg-[#314247] shadow-2xl">
+      <Card className="relative z-10 w-full max-w-md rounded-2xl border-brand-line shadow-2xl">
         <CardHeader className="mb-2 flex-row items-start justify-between space-y-0">
           <div>
-            <CardTitle className="text-lg text-white">Remove member</CardTitle>
-            <CardDescription className="mt-1 text-[#9bb0b5]">
+            <CardTitle className="text-lg text-foreground">
+              Remove member
+            </CardTitle>
+            <CardDescription className="mt-1 text-brand-quiet">
               Remove{' '}
-              <span className="text-white font-medium">{member.name}</span> from{' '}
-              <span className="text-white font-medium">{orgName}</span>?
+              <span className="font-medium text-foreground">{member.name}</span>{' '}
+              from{' '}
+              <span className="font-medium text-foreground">{orgName}</span>?
             </CardDescription>
           </div>
           <button
             onClick={onClose}
-            className="-mt-1 text-[#8ea3a8] transition-colors hover:text-white"
+            className="-mt-1 text-brand-subtle transition-colors hover:text-foreground"
             aria-label="Close"
           >
             <X size={20} />
@@ -79,25 +80,22 @@ export function RemoveMemberDialog({
         </CardHeader>
 
         <CardContent>
-          <p className="mb-6 text-sm text-[#8ea3a8]">
+          <p className="mb-6 text-sm text-brand-quiet">
             They will lose access immediately. This action cannot be undone.
           </p>
 
           {error && (
-            <Alert
-              variant="destructive"
-              className="mb-4 border-red-500/20 bg-red-500/10 text-red-400"
-            >
+            <Alert variant="destructive" className="mb-4">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          <div className="flex gap-3 justify-end">
+          <div className="flex justify-end gap-3">
             <Button
               onClick={onClose}
               disabled={loading}
               variant="outline"
-              className="border-white/12 text-[#9bb0b5] hover:bg-white/10 hover:text-white"
+              className="text-brand-quiet"
             >
               Cancel
             </Button>
@@ -105,10 +103,10 @@ export function RemoveMemberDialog({
               onClick={handleConfirm}
               disabled={loading}
               variant="destructive"
-              className="gap-2 bg-red-600 text-white hover:bg-red-700"
+              className="gap-2"
             >
               {loading && (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />
               )}
               Remove member
             </Button>

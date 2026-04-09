@@ -9,7 +9,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <OrgProvider>
       <div className="flex min-h-screen bg-background text-foreground">
         <Sidebar />
-        <main className="min-w-0 flex-1 overflow-auto bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent_18rem)]">
+        <main className="kodi-app-shell min-w-0 flex-1 overflow-auto">
           {children}
         </main>
       </div>

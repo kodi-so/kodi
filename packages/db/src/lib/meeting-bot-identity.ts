@@ -48,7 +48,7 @@ export function deriveMeetingBotIdentity(
     inviteEmailLocalPart,
     inviteInstructions: [
       'Use this as the stable workspace meeting-agent identity.',
-      'For a live meeting right now, start Kodi from a Google Meet URL on the Meetings page.',
+      'For a live meeting right now, start Kodi from a Google Meet or Zoom URL on the Meetings page.',
       'Invite-by-email automation will build on this same address in the next phase.',
     ],
   }

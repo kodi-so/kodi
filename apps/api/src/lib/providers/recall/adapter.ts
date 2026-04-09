@@ -24,22 +24,15 @@ import {
   type RecallCreateBotRequest,
 } from './client'
 import { getRecallClientConfig } from './config'
-
-function parseGoogleMeetId(joinUrl: string) {
-  try {
-    const url = new URL(joinUrl)
-    if (!url.hostname.includes('meet.google.com')) return null
-
-    const match = url.pathname.match(/\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i)
-    return match?.[1] ?? null
-  } catch {
-    return null
-  }
-}
+import {
+  inferMeetingProviderFromUrl,
+  resolveMeetingIdFromJoinUrl,
+} from '../../meetings/provider-url'
 
 function resolveRecallMeetingId(
   responseMeetingUrl: unknown,
-  fallbackJoinUrl: string
+  fallbackJoinUrl: string,
+  provider: MeetingProviderJoinRequest['provider']
 ) {
   if (
     responseMeetingUrl &&
@@ -51,7 +44,7 @@ function resolveRecallMeetingId(
     return (responseMeetingUrl as { meeting_id: string }).meeting_id
   }
 
-  return parseGoogleMeetId(fallbackJoinUrl)
+  return resolveMeetingIdFromJoinUrl(fallbackJoinUrl, provider)
 }
 
 function asRecord(value: unknown) {
@@ -100,6 +93,60 @@ function extractOccurredAt(payload: Record<string, unknown>) {
   return new Date()
 }
 
+function describeRecallProviderJoinState(eventName: string) {
+  switch (eventName) {
+    case 'bot.joining_call':
+      return {
+        providerJoinState: 'joining_call',
+        lifecycleMessage: 'Kodi is joining the meeting provider.',
+      } as const
+    case 'bot.in_waiting_room':
+      return {
+        providerJoinState: 'waiting_room',
+        lifecycleMessage:
+          'Kodi is waiting for the host to admit it from the waiting room.',
+      } as const
+    case 'bot.in_call_not_recording':
+      return {
+        providerJoinState: 'awaiting_recording_permission',
+        consentState: 'pending',
+        lifecycleMessage:
+          'Kodi is in the call and waiting for recording permission before it can listen.',
+      } as const
+    case 'bot.recording_permission_allowed':
+      return {
+        providerJoinState: 'recording_permission_granted',
+        consentState: 'granted',
+        lifecycleMessage:
+          'Recording permission was granted. Kodi is finishing setup before listening starts.',
+      } as const
+    case 'bot.recording_permission_denied':
+      return {
+        providerJoinState: 'recording_permission_denied',
+        consentState: 'denied',
+        lifecycleMessage:
+          'Recording permission was denied, so Kodi cannot listen to the meeting.',
+      } as const
+    case 'bot.in_call_recording':
+      return {
+        providerJoinState: 'listening',
+        consentState: 'granted',
+        lifecycleMessage: 'Kodi is now listening to the meeting.',
+      } as const
+    case 'bot.call_ended':
+    case 'bot.done':
+      return {
+        providerJoinState: 'ended',
+      } as const
+    case 'bot.fatal':
+      return {
+        providerJoinState: 'failed',
+      } as const
+    default:
+      return null
+  }
+}
+
 function mapRecallBotEventToLifecycleState(eventName: string, subCode?: string | null) {
   const failure = classifyRecallFailure({ subCode })
 
@@ -140,7 +187,19 @@ function buildRecallJoinPayload(
   request: MeetingProviderJoinRequest
 ): RecallCreateBotRequest {
   if (!request.meeting.joinUrl) {
-    throw new Error('Recall bot joins require a Google Meet URL.')
+    throw new Error('Recall bot joins require a supported meeting URL.')
+  }
+
+  const inferredProvider = inferMeetingProviderFromUrl(request.meeting.joinUrl)
+  if (!inferredProvider) {
+    throw new Error(
+      'Recall bot joins currently support Google Meet and Zoom meeting URLs.'
+    )
+  }
+  if (inferredProvider !== request.provider) {
+    throw new Error(
+      `Meeting URL provider mismatch. Expected "${request.provider}" but received "${inferredProvider}".`
+    )
   }
 
   const recall = getRecallClientConfig()
@@ -191,8 +250,8 @@ function buildRecallJoinPayload(
   }
 }
 
-export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
-  readonly provider = 'google_meet'
+export class RecallMeetingAdapter implements MeetingProviderAdapter {
+  constructor(readonly provider: MeetingProviderJoinRequest['provider']) {}
 
   async prepare(
     request: MeetingProviderPrepareRequest
@@ -286,7 +345,8 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
     }
     const externalMeetingId = resolveRecallMeetingId(
       response.meeting_url,
-      request.meeting.joinUrl ?? ''
+      request.meeting.joinUrl ?? '',
+      request.provider
     )
 
     return {
@@ -363,6 +423,9 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
         lifecycle.state === 'failed'
           ? classifyRecallFailure({ subCode })
           : null
+      const providerJoinDetail = describeRecallProviderJoinState(payload.event)
+      const providerMessage =
+        typeof eventData?.message === 'string' ? eventData.message : null
 
       return [
         {
@@ -375,13 +438,16 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
           errorCode: lifecycle.state === 'failed' ? subCode : null,
           errorMessage:
             lifecycle.state === 'failed'
-              ? typeof eventData?.message === 'string'
-                ? eventData.message
-                : null
+              ? providerMessage
               : null,
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
+            ...(providerJoinDetail ?? {}),
+            lifecycleMessage:
+              providerMessage ??
+              providerJoinDetail?.lifecycleMessage ??
+              null,
             failure,
           },
         },

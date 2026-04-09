@@ -1,20 +1,16 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { useOrg } from '@/lib/org-context'
-import { DashboardAssistant } from './_components/dashboard-assistant'
+export default function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: { thread?: string }
+}) {
+  const params = new URLSearchParams()
+  params.set('dm', 'kodi')
 
-export default function DashboardPage() {
-  const { activeOrg } = useOrg()
-
-  if (!activeOrg) {
-    return (
-      <div className="flex h-full items-center justify-center px-4 text-sm text-muted-foreground">
-        Select a team to start a private assistant thread.
-      </div>
-    )
+  if (searchParams?.thread) {
+    params.set('thread', searchParams.thread)
   }
 
-  return (
-    <DashboardAssistant orgId={activeOrg.orgId} orgName={activeOrg.orgName} />
-  )
+  redirect(`/chat?${params.toString()}`)
 }

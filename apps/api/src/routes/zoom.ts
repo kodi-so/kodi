@@ -1,6 +1,5 @@
 import type { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
-import { db, encrypt, providerInstallations } from '@kodi/db'
+import { db, encrypt, eq, providerInstallations } from '@kodi/db'
 import {
   appendMeetingEvent,
   appendTranscriptSegments,

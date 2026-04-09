@@ -1,5 +1,4 @@
-import { desc, eq } from 'drizzle-orm'
-import { db, transcriptSegments } from '@kodi/db'
+import { db, desc, eq, transcriptSegments } from '@kodi/db'
 import type { MeetingParticipant, MeetingSession, TranscriptSegment } from '@kodi/db'
 import { z } from 'zod'
 import { openClawChatCompletion } from '../openclaw/client'

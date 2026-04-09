@@ -1,10 +1,17 @@
-import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { getFeatureFlags } from '../../lib/features'
 import { getZoomSetupStatus } from '../../lib/zoom-config'
 import { createZoomInstallUrl } from '../../lib/zoom'
-import { providerInstallations } from '@kodi/db'
+import { eq, providerInstallations } from '@kodi/db'
+
+function hasZoomZakScope(scopes: string[] | null | undefined) {
+  if (!scopes || scopes.length === 0) return false
+
+  return scopes.some(
+    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
+  )
+}
 
 function hasZoomZakScope(scopes: string[] | null | undefined) {
   if (!scopes || scopes.length === 0) return false

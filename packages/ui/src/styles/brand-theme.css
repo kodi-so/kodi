@@ -50,46 +50,44 @@
   --radius: 1rem;
 }
 
-@layer utilities {
-  .kodi-app-shell {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--kodi-panel-elevated) / 0.52),
-      transparent 18rem
-    );
-  }
+.kodi-app-shell {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-panel-elevated) / 0.52),
+    transparent 18rem
+  );
+}
 
-  .kodi-sidebar-surface {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--kodi-sidebar-elevated)),
-      hsl(var(--kodi-sidebar))
-    );
-  }
+.kodi-sidebar-surface {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-sidebar-elevated)),
+    hsl(var(--kodi-sidebar))
+  );
+}
 
-  .kodi-panel-surface {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--kodi-panel-elevated)),
-      hsl(var(--kodi-panel))
-    );
-  }
+.kodi-panel-surface {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-panel-elevated)),
+    hsl(var(--kodi-panel))
+  );
+}
 
-  .kodi-panel-muted-surface {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--kodi-panel)),
-      hsl(var(--kodi-panel-muted))
-    );
-  }
+.kodi-panel-muted-surface {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-panel)),
+    hsl(var(--kodi-panel-muted))
+  );
+}
 
-  .kodi-overlay-scrim {
-    background: hsl(var(--kodi-overlay) / 0.28);
-  }
+.kodi-overlay-scrim {
+  background: hsl(var(--kodi-overlay) / 0.28);
+}
 
-  .shadow-brand-panel {
-    box-shadow:
-      0 28px 60px -36px hsl(var(--kodi-shadow) / 0.24),
-      inset 0 1px 0 hsl(var(--kodi-panel-elevated));
-  }
+.shadow-brand-panel {
+  box-shadow:
+    0 28px 60px -36px hsl(var(--kodi-shadow) / 0.24),
+    inset 0 1px 0 hsl(var(--kodi-panel-elevated));
 }

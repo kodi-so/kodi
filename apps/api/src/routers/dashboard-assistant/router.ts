@@ -1,6 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { dashboardAssistantMessages, dashboardAssistantThreads } from '@kodi/db'
-import { eq } from 'drizzle-orm'
+import { dashboardAssistantMessages, dashboardAssistantThreads, eq } from '@kodi/db'
 import { z } from 'zod'
 import { runAssistantTurn } from '../../lib/assistant-chat'
 import { memberProcedure, router } from '../../trpc'

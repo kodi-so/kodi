@@ -1,6 +1,7 @@
-import { desc, eq } from 'drizzle-orm'
 import {
   db,
+  desc,
+  eq,
   meetingEvents,
   meetingParticipants,
   meetingSessions,

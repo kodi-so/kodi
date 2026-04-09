@@ -8,6 +8,7 @@ import { ChevronLeft, CornerUpRight, Hash, Plus, Send } from 'lucide-react'
 import { Button, Textarea, cn } from '@kodi/ui'
 import { trpc } from '@/lib/trpc'
 import { useSession } from '@/lib/auth-client'
+import { DashboardAssistant } from '../../dashboard/_components/dashboard-assistant'
 
 type Channel = {
   id: string
@@ -31,6 +32,8 @@ type Message = {
   userName?: string | null
   userImage?: string | null
 }
+
+const KODI_DM_ID = 'kodi'
 
 function makeTempId(prefix: string) {
   return `temp-${prefix}-${crypto.randomUUID()}`
@@ -115,26 +118,46 @@ function SlackAvatar({ message }: { message: Message }) {
   )
 }
 
-function MobileChannelTabs({
+function MobileConversationTabs({
   channels,
+  selectedDirectId,
   selectedChannelId,
-  onSelect,
+  onSelectDirect,
+  onSelectChannel,
 }: {
   channels: Channel[]
+  selectedDirectId: string | null
   selectedChannelId: string | null
-  onSelect: (channelId: string) => void
+  onSelectDirect: (directId: string) => void
+  onSelectChannel: (channelId: string) => void
 }) {
   return (
     <div className="border-b border-[#dddddd] px-4 py-3 lg:hidden">
       <div className="flex items-center gap-2 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => onSelectDirect(KODI_DM_ID)}
+          className={cn(
+            'inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
+            selectedDirectId === KODI_DM_ID
+              ? 'border-[#7f5f26] bg-[#f5e8cb] text-[#5b4519]'
+              : 'border-[#dddddd] bg-white text-[#616061]'
+          )}
+        >
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#ead8ee] text-[11px] font-semibold text-[#4a154b]">
+            K
+          </span>
+          Kodi
+        </button>
+
         {channels.map((channel) => (
           <button
             key={channel.id}
             type="button"
-            onClick={() => onSelect(channel.id)}
+            onClick={() => onSelectChannel(channel.id)}
             className={cn(
               'whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
-              selectedChannelId === channel.id
+              selectedChannelId === channel.id && !selectedDirectId
                 ? 'border-[#1264a3] bg-[#edf5fb] text-[#1264a3]'
                 : 'border-[#dddddd] bg-white text-[#616061]'
             )}
@@ -268,12 +291,16 @@ function Composer({
 
 export function ChatInterface({
   orgId,
+  orgName,
   initialPrompt,
+  initialDirectId,
   initialChannelId,
   initialThreadId,
 }: {
   orgId: string
+  orgName: string
   initialPrompt?: string | null
+  initialDirectId?: string | null
   initialChannelId?: string | null
   initialThreadId?: string | null
 }) {
@@ -281,12 +308,17 @@ export function ChatInterface({
   const pathname = usePathname()
   const { data: session } = useSession()
   const [channels, setChannels] = useState<Channel[]>([])
+  const [selectedDirectId, setSelectedDirectId] = useState<string | null>(
+    initialDirectId === KODI_DM_ID || (!initialChannelId && !initialPrompt)
+      ? KODI_DM_ID
+      : null
+  )
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(
-    null
+    initialChannelId ?? null
   )
   const [messages, setMessages] = useState<Message[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
-    initialThreadId ?? null
+    initialDirectId === KODI_DM_ID ? null : (initialThreadId ?? null)
   )
   const [showChannelComposer, setShowChannelComposer] = useState(false)
   const [channelDraft, setChannelDraft] = useState('')
@@ -303,18 +335,36 @@ export function ChatInterface({
   const channelScrollRef = useRef<HTMLDivElement>(null)
   const threadScrollRef = useRef<HTMLDivElement>(null)
 
-  function buildChatUrl(channelId: string | null, threadId?: string | null) {
+  function buildChatUrl(options: {
+    channelId?: string | null
+    directId?: string | null
+    threadId?: string | null
+  }) {
     const params = new URLSearchParams()
-    if (channelId) {
-      params.set('channel', channelId)
+    if (options.directId) {
+      params.set('dm', options.directId)
+    } else if (options.channelId) {
+      params.set('channel', options.channelId)
     }
-    if (threadId) {
-      params.set('thread', threadId)
+    if (options.threadId) {
+      params.set('thread', options.threadId)
     }
 
     const query = params.toString()
     return query ? `${pathname}?${query}` : pathname
   }
+
+  useEffect(() => {
+    const shouldShowDirect =
+      initialDirectId === KODI_DM_ID || (!initialChannelId && !initialPrompt)
+
+    setSelectedDirectId(shouldShowDirect ? KODI_DM_ID : null)
+    setSelectedThreadId(shouldShowDirect ? null : (initialThreadId ?? null))
+
+    if (initialChannelId) {
+      setSelectedChannelId(initialChannelId)
+    }
+  }, [initialChannelId, initialDirectId, initialPrompt, initialThreadId])
 
   useEffect(() => {
     let cancelled = false
@@ -333,7 +383,7 @@ export function ChatInterface({
           nextChannels[0] ??
           null
 
-        setSelectedChannelId(initial?.id ?? null)
+        setSelectedChannelId((current) => current ?? initial?.id ?? null)
       } catch (loadError) {
         if (!cancelled) {
           setError(
@@ -355,6 +405,11 @@ export function ChatInterface({
   }, [initialChannelId, orgId])
 
   useEffect(() => {
+    if (selectedDirectId) {
+      setMessages([])
+      return
+    }
+
     if (!selectedChannelId) {
       setMessages([])
       return
@@ -392,7 +447,7 @@ export function ChatInterface({
     return () => {
       cancelled = true
     }
-  }, [orgId, selectedChannelId])
+  }, [orgId, selectedChannelId, selectedDirectId])
 
   const rootMessages = messages.filter(
     (message) => !message.threadRootMessageId
@@ -420,14 +475,14 @@ export function ChatInterface({
     channels.find((channel) => channel.id === selectedChannelId) ?? null
 
   useEffect(() => {
-    if (!selectedThreadId) return
+    if (selectedDirectId || !selectedThreadId) return
 
     const exists = rootMessages.some(
       (message) => message.id === selectedThreadId
     )
     if (!exists && !loadingMessages) {
       setSelectedThreadId(null)
-      router.replace(buildChatUrl(selectedChannelId))
+      router.replace(buildChatUrl({ channelId: selectedChannelId }))
     }
   }, [
     buildChatUrl,
@@ -435,24 +490,29 @@ export function ChatInterface({
     rootMessages,
     router,
     selectedChannelId,
+    selectedDirectId,
     selectedThreadId,
   ])
 
   useEffect(() => {
-    if (!channelScrollRef.current || selectedThreadId) return
+    if (!channelScrollRef.current || selectedThreadId || selectedDirectId)
+      return
     channelScrollRef.current.scrollTo({
       top: channelScrollRef.current.scrollHeight,
       behavior: 'smooth',
     })
-  }, [messages, selectedThreadId, sendingMain])
+  }, [messages, selectedDirectId, selectedThreadId, sendingMain])
 
   useEffect(() => {
-    if (!threadScrollRef.current || !selectedThreadId) return
+    if (!threadScrollRef.current || !selectedThreadId || selectedDirectId) {
+      return
+    }
+
     threadScrollRef.current.scrollTo({
       top: threadScrollRef.current.scrollHeight,
       behavior: 'smooth',
     })
-  }, [selectedThreadId, selectedThreadReplies, sendingThread])
+  }, [selectedDirectId, selectedThreadId, selectedThreadReplies, sendingThread])
 
   async function createChannel() {
     const name = channelDraft.trim()
@@ -468,12 +528,13 @@ export function ChatInterface({
       })) as Channel
 
       setChannels((current) => [...current, created])
+      setSelectedDirectId(null)
       setSelectedChannelId(created.id)
       setSelectedThreadId(null)
       setMessages([])
       setChannelDraft('')
       setShowChannelComposer(false)
-      router.replace(buildChatUrl(created.id))
+      router.replace(buildChatUrl({ channelId: created.id }))
     } catch (createError) {
       setError(
         createError instanceof Error
@@ -556,7 +617,10 @@ export function ChatInterface({
       if (selectedThreadId === optimisticMessageId) {
         setSelectedThreadId(result.threadRootMessageId)
         router.replace(
-          buildChatUrl(selectedChannelId, result.threadRootMessageId)
+          buildChatUrl({
+            channelId: selectedChannelId,
+            threadId: result.threadRootMessageId,
+          })
         )
       }
     } catch (sendError) {
@@ -589,6 +653,7 @@ export function ChatInterface({
   useEffect(() => {
     if (
       !initialPrompt ||
+      selectedDirectId ||
       !selectedChannelId ||
       loadingChannels ||
       promptHandled
@@ -598,29 +663,79 @@ export function ChatInterface({
 
     setPromptHandled(true)
     void sendMessage({ message: initialPrompt })
-  }, [initialPrompt, loadingChannels, promptHandled, selectedChannelId])
+  }, [
+    initialPrompt,
+    loadingChannels,
+    promptHandled,
+    selectedChannelId,
+    selectedDirectId,
+  ])
 
   function selectChannel(channelId: string) {
+    setSelectedDirectId(null)
     setSelectedChannelId(channelId)
     setSelectedThreadId(null)
     setError(null)
-    router.replace(buildChatUrl(channelId))
+    router.replace(buildChatUrl({ channelId }))
+  }
+
+  function selectDirect(directId: string) {
+    setSelectedDirectId(directId)
+    setSelectedThreadId(null)
+    setError(null)
+    router.replace(buildChatUrl({ directId }))
   }
 
   function openThread(threadId: string) {
     setSelectedThreadId(threadId)
-    router.replace(buildChatUrl(selectedChannelId, threadId))
+    router.replace(buildChatUrl({ channelId: selectedChannelId, threadId }))
   }
 
   function closeThread() {
     setSelectedThreadId(null)
-    router.replace(buildChatUrl(selectedChannelId))
+    router.replace(buildChatUrl({ channelId: selectedChannelId }))
   }
 
   return (
     <div className="grid h-[calc(100vh-2rem)] grid-cols-1 overflow-hidden rounded-[1.2rem] border border-[#d8d8d8] bg-white lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="hidden min-h-0 flex-col bg-[#4a154b] text-white lg:flex">
-        <div className="flex items-center justify-between border-b border-white/12 px-4 py-4">
+        <div className="border-b border-white/12 px-4 py-4">
+          <div className="rounded-lg bg-white/10 px-3 py-2.5">
+            <p className="truncate text-sm font-semibold">{orgName}</p>
+            <p className="mt-1 text-xs text-white/72">
+              Private and shared conversations
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 pb-2 pt-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/68">
+            Direct messages
+          </p>
+        </div>
+
+        <div className="px-2 pb-3">
+          <button
+            type="button"
+            onClick={() => selectDirect(KODI_DM_ID)}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+              selectedDirectId === KODI_DM_ID
+                ? 'bg-[#7d5a1c] text-white'
+                : 'text-white/86 hover:bg-white/10'
+            )}
+          >
+            <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#ead8ee] text-xs font-semibold text-[#4a154b]">
+              K
+            </span>
+            <span className="min-w-0 flex-1 truncate">Kodi</span>
+            <span className="text-[11px] uppercase tracking-[0.08em] text-white/55">
+              Private
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/68">
             Channels
           </p>
@@ -681,7 +796,7 @@ export function ChatInterface({
               onClick={() => selectChannel(channel.id)}
               className={cn(
                 'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
-                selectedChannelId === channel.id
+                selectedChannelId === channel.id && !selectedDirectId
                   ? 'bg-[#1164a3] text-white'
                   : 'text-white/86 hover:bg-white/10'
               )}
@@ -694,12 +809,38 @@ export function ChatInterface({
       </aside>
 
       <section className="min-h-0 min-w-0 bg-white">
-        {!selectedThreadId ? (
-          <div className="flex h-full min-h-0 flex-col bg-white">
-            <MobileChannelTabs
+        {selectedDirectId === KODI_DM_ID ? (
+          <div className="flex h-full min-h-0 flex-col bg-[#fffdfa]">
+            <MobileConversationTabs
               channels={channels}
+              selectedDirectId={selectedDirectId}
               selectedChannelId={selectedChannelId}
-              onSelect={selectChannel}
+              onSelectDirect={selectDirect}
+              onSelectChannel={selectChannel}
+            />
+
+            <div className="min-h-0 flex-1">
+              <DashboardAssistant
+                orgId={orgId}
+                orgName={orgName}
+                embedded
+                initialThreadId={
+                  initialDirectId === KODI_DM_ID ? initialThreadId : null
+                }
+                buildThreadUrl={(threadId) =>
+                  buildChatUrl({ directId: KODI_DM_ID, threadId })
+                }
+              />
+            </div>
+          </div>
+        ) : !selectedThreadId ? (
+          <div className="flex h-full min-h-0 flex-col bg-white">
+            <MobileConversationTabs
+              channels={channels}
+              selectedDirectId={selectedDirectId}
+              selectedChannelId={selectedChannelId}
+              onSelectDirect={selectDirect}
+              onSelectChannel={selectChannel}
             />
 
             <div className="border-b border-[#dddddd] px-4 py-3 sm:px-6">
@@ -759,10 +900,12 @@ export function ChatInterface({
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col bg-[#fbfbfb]">
-            <MobileChannelTabs
+            <MobileConversationTabs
               channels={channels}
+              selectedDirectId={selectedDirectId}
               selectedChannelId={selectedChannelId}
-              onSelect={selectChannel}
+              onSelectDirect={selectDirect}
+              onSelectChannel={selectChannel}
             />
 
             <div className="flex items-center gap-3 border-b border-[#dddddd] px-4 py-3 sm:px-6">

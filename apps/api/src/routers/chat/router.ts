@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server'
-import { and, asc, desc, eq, isNull, or } from 'drizzle-orm'
 import { z } from 'zod'
-import { chatChannels, chatMessages, user } from '@kodi/db'
+import { and, asc, chatChannels, chatMessages, desc, eq, isNull, or, user } from '@kodi/db'
 import { runAssistantTurn } from '../../lib/assistant-chat'
 import { memberProcedure, router } from '../../trpc'
 

@@ -34,7 +34,7 @@ export default function GeneralSettingsPage() {
     return (
       <SettingsLayout>
         <div className="flex items-center justify-center py-20">
-          <Skeleton className="h-6 w-6 rounded-full bg-white/10" />
+          <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
         </div>
       </SettingsLayout>
     )
@@ -66,35 +66,30 @@ export default function GeneralSettingsPage() {
 
   return (
     <SettingsLayout>
-      <div className="max-w-2xl mx-auto space-y-8">
+      <div className="mx-auto max-w-3xl space-y-8">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#DFAE56]/22 bg-[#DFAE56]/12">
-              <Building2 size={16} className="text-[#F0C570]" />
+          <div className="mb-2 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong shadow-brand-panel">
+              <Building2 size={18} />
             </div>
-            <h1 className="text-xl font-semibold text-white">General</h1>
+            <h1 className="text-2xl font-medium tracking-tight text-foreground">
+              General
+            </h1>
           </div>
-          <p className="ml-11 text-sm text-[#8ea3a8]">
+          <p className="ml-[3.25rem] text-sm leading-7 text-brand-quiet">
             Workspace settings for {activeOrg.orgName}
           </p>
         </div>
 
-        <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
+        <Card className="border-brand-line">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-semibold text-[#dce5e7]">
+              <CardTitle className="text-base font-semibold text-foreground">
                 Workspace name
               </CardTitle>
-              {!isOwner && (
-                <Badge
-                  variant="outline"
-                  className="border-white/12 text-[#8ea3a8]"
-                >
-                  Read only
-                </Badge>
-              )}
+              {!isOwner && <Badge variant="neutral">Read only</Badge>}
             </div>
-            <CardDescription className="text-[#8ea3a8]">
+            <CardDescription className="text-brand-quiet">
               Update how this workspace appears across Kodi.
             </CardDescription>
           </CardHeader>
@@ -109,35 +104,30 @@ export default function GeneralSettingsPage() {
                   disabled={!isOwner || saving}
                   maxLength={80}
                   placeholder="My Workspace"
-                  className="h-11 rounded-lg border-border/80 bg-card/90"
+                  className="h-12 rounded-xl border-brand-line bg-brand-elevated"
                 />
                 {!isOwner && (
-                  <p className="mt-1.5 text-xs text-[#7d9196]">
+                  <p className="mt-2 text-xs text-brand-subtle">
                     Only the workspace owner can change the name.
                   </p>
                 )}
               </div>
 
               {error && (
-                <Alert
-                  variant="destructive"
-                  className="border-red-500/20 bg-red-500/10 text-red-400"
-                >
+                <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
 
               {isOwner && (
                 <div className="flex items-center gap-3">
-                  <Button
-                    type="submit"
-                    disabled={!isDirty || saving}
-                    className="bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70] disabled:opacity-40"
-                  >
+                  <Button type="submit" disabled={!isDirty || saving}>
                     {saving ? 'Saving…' : 'Save changes'}
                   </Button>
                   {saved && (
-                    <span className="text-sm text-emerald-400">Saved ✓</span>
+                    <span className="text-sm font-medium text-brand-success">
+                      Saved
+                    </span>
                   )}
                 </div>
               )}

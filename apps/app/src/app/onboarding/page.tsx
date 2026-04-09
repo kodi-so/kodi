@@ -20,10 +20,10 @@ function OnboardingInner() {
       .mutate()
       .then(() => {
         const redirect = searchParams.get('redirect')
-        router.replace(redirect ?? '/dashboard')
+        router.replace(redirect ?? '/chat')
       })
       .catch(() => {
-        router.replace('/dashboard')
+        router.replace('/chat')
       })
   }, [router, searchParams])
 

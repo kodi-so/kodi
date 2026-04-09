@@ -1,5 +1,4 @@
-import { and, eq, or } from 'drizzle-orm'
-import { db, meetingSessions } from '@kodi/db'
+import { and, db, eq, meetingSessions, or } from '@kodi/db'
 import {
   appendNormalizedMeetingEvent,
   type MeetingIngestionSource,
@@ -369,6 +368,7 @@ export class MeetingOrchestrationService {
       joinResult = await this.gateway.join({
         orgId: input.orgId,
         provider: input.provider,
+        providerInstallationId: input.providerInstallationId,
         actor: input.actor ?? null,
         meeting: input.meeting,
         botIdentity: input.botIdentity ?? null,

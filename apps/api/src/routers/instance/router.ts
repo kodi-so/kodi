@@ -1,7 +1,6 @@
 import { TRPCError } from '@trpc/server'
-import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { instances } from '@kodi/db'
+import { eq, instances } from '@kodi/db'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { checkInstanceHealth } from './health'
 import { provisionInstance, deprovisionInstance } from './provisioning'

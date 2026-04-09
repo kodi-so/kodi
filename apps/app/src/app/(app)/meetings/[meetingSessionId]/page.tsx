@@ -27,6 +27,10 @@ import {
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import {
+  describeMeetingLifecycleEvent,
+  getMeetingRuntimeCopy,
+} from '../_lib/runtime-state'
 
 type MeetingConsole = NonNullable<
   Awaited<ReturnType<typeof trpc.meeting.getConsole.query>>
@@ -141,27 +145,6 @@ function statusLabel(status: string) {
   }
 }
 
-function statusDescription(status: string) {
-  switch (status) {
-    case 'preparing':
-      return 'Kodi is getting ready to join the meeting.'
-    case 'joining':
-      return 'Kodi is on the way into the call.'
-    case 'admitted':
-      return 'Kodi is in the meeting and waiting to actively listen.'
-    case 'listening':
-      return 'Transcript and live meeting context are flowing now.'
-    case 'processing':
-      return 'Kodi is turning the meeting into notes and follow-up.'
-    case 'ended':
-      return 'This meeting has ended.'
-    case 'failed':
-      return 'This meeting hit a provider issue and may need another attempt.'
-    default:
-      return 'Kodi will keep updating this meeting as new context arrives.'
-  }
-}
-
 function formatProviderLabel(provider: string) {
   switch (provider) {
     case 'google_meet':
@@ -207,7 +190,7 @@ function formatEventLabel(eventType: string) {
   }
 }
 
-function describeEvent(event: MeetingEventFeed[number]) {
+function describeEvent(event: MeetingEventFeed[number], provider: string) {
   const payload = asRecord(event.payload)
   if (!payload) return null
 
@@ -235,10 +218,11 @@ function describeEvent(event: MeetingEventFeed[number]) {
     )
   }
 
-  const state = typeof payload.state === 'string' ? payload.state : null
-  const errorMessage =
-    typeof payload.errorMessage === 'string' ? payload.errorMessage : null
-  return errorMessage ?? state
+  return describeMeetingLifecycleEvent({
+    provider,
+    eventType: event.eventType,
+    payload,
+  })
 }
 
 function normalizeTranscriptContent(value: string) {
@@ -449,6 +433,15 @@ export default function MeetingDetailsPage() {
   const meetingMetadata = useMemo(
     () => asRecord(meeting?.metadata),
     [meeting?.metadata]
+  )
+  const runtimeCopy = useMemo(
+    () =>
+      getMeetingRuntimeCopy({
+        provider: meeting?.provider ?? 'meeting',
+        status: meeting?.status ?? 'scheduled',
+        metadata: meeting?.metadata ?? null,
+      }),
+    [meeting?.metadata, meeting?.provider, meeting?.status]
   )
 
   const failureReason = useMemo(() => {
@@ -771,7 +764,7 @@ export default function MeetingDetailsPage() {
                   {meeting.title ?? 'Untitled meeting'}
                 </h1>
                 <p className="max-w-2xl text-sm leading-7 text-[#9bb0b5]">
-                  {statusDescription(meeting.status)}
+                  {runtimeCopy.description}
                 </p>
               </div>
             </div>
@@ -802,6 +795,23 @@ export default function MeetingDetailsPage() {
         {failureReason && (
           <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
             <AlertDescription>{failureReason}</AlertDescription>
+          </Alert>
+        )}
+
+        {runtimeCopy.alertTitle && runtimeCopy.alertDescription && (
+          <Alert
+            className={
+              runtimeCopy.alertTone === 'danger'
+                ? 'border-red-500/30 bg-red-500/10 text-red-200'
+                : runtimeCopy.alertTone === 'warning'
+                  ? 'border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]'
+                  : 'border-cyan-500/30 bg-cyan-500/15 text-cyan-100'
+            }
+          >
+            <AlertDescription>
+              <span className="font-medium">{runtimeCopy.alertTitle}: </span>
+              {runtimeCopy.alertDescription}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -1168,9 +1178,9 @@ export default function MeetingDetailsPage() {
                         </Badge>
                         <span>{formatDate(event.occurredAt)}</span>
                       </div>
-                      {describeEvent(event) && (
+                      {describeEvent(event, meeting.provider) && (
                         <p className="mt-3 text-sm leading-6 text-[#eef2ea]">
-                          {describeEvent(event)}
+                          {describeEvent(event, meeting.provider)}
                         </p>
                       )}
                     </div>

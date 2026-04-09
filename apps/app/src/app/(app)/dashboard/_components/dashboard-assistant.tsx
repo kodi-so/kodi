@@ -122,15 +122,21 @@ function UserAvatar({ name }: { name?: string | null }) {
 export function DashboardAssistant({
   orgId,
   orgName,
+  embedded = false,
+  initialThreadId: initialThreadIdProp,
+  buildThreadUrl,
 }: {
   orgId: string
   orgName: string
+  embedded?: boolean
+  initialThreadId?: string | null
+  buildThreadUrl?: (threadId: string | null) => string
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { data: session } = useSession()
-  const initialThreadId = searchParams.get('thread')
+  const initialThreadId = initialThreadIdProp ?? searchParams.get('thread')
   const [threads, setThreads] = useState<DashboardThread[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
     initialThreadId
@@ -169,7 +175,7 @@ export function DashboardAssistant({
           setError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load dashboard threads.'
+              : 'Failed to load private conversations.'
           )
         }
       } finally {
@@ -214,7 +220,7 @@ export function DashboardAssistant({
           setError(
             loadError instanceof Error
               ? loadError.message
-              : 'Failed to load dashboard thread.'
+              : 'Failed to load conversation.'
           )
         }
       } finally {
@@ -243,16 +249,28 @@ export function DashboardAssistant({
   const selectedThread =
     threads.find((thread) => thread.id === selectedThreadId) ?? null
 
+  function threadHref(threadId: string | null) {
+    if (buildThreadUrl) {
+      return buildThreadUrl(threadId)
+    }
+
+    if (!threadId) {
+      return pathname
+    }
+
+    return `${pathname}?thread=${threadId}`
+  }
+
   function openThread(threadId: string) {
     setSelectedThreadId(threadId)
-    router.replace(`${pathname}?thread=${threadId}`)
+    router.replace(threadHref(threadId))
   }
 
   function resetThreadSelection() {
     setSelectedThreadId(null)
     setMessages([])
     setError(null)
-    router.replace(pathname)
+    router.replace(threadHref(null))
   }
 
   async function sendMessage() {
@@ -330,7 +348,7 @@ export function DashboardAssistant({
         return [result.thread, ...remaining]
       })
       setSelectedThreadId(result.thread.id)
-      router.replace(`${pathname}?thread=${result.thread.id}`)
+      router.replace(threadHref(result.thread.id))
       setMessages((current) => {
         const next: DashboardMessage[] = []
         let replaced = false
@@ -356,7 +374,7 @@ export function DashboardAssistant({
       setError(
         sendError instanceof Error
           ? sendError.message
-          : 'Failed to send dashboard message.'
+          : 'Failed to send message.'
       )
 
       if (isNewThread) {
@@ -368,7 +386,7 @@ export function DashboardAssistant({
             ? null
             : previousSelectedThreadId
         )
-        router.replace(pathname)
+        router.replace(threadHref(null))
       }
     } finally {
       setSending(false)
@@ -376,16 +394,29 @@ export function DashboardAssistant({
   }
 
   return (
-    <div className="h-[calc(100vh-2rem)] px-4 py-4 sm:px-6 lg:px-8">
-      <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden rounded-[1.6rem] border border-[#ded8cf] bg-[#fffdfa] shadow-[0_22px_60px_-34px_rgba(44,34,20,0.3)] lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div
+      className={cn(
+        embedded
+          ? 'grid h-full min-h-0 grid-cols-1 overflow-hidden rounded-[1.6rem] border border-[#ded8cf] bg-[#fffdfa] shadow-[0_22px_60px_-34px_rgba(44,34,20,0.3)] lg:grid-cols-[280px_minmax(0,1fr)]'
+          : 'h-[calc(100vh-2rem)] px-4 py-4 sm:px-6 lg:px-8'
+      )}
+    >
+      <div
+        className={cn(
+          embedded
+            ? 'contents'
+            : 'grid h-full min-h-0 grid-cols-1 overflow-hidden rounded-[1.6rem] border border-[#ded8cf] bg-[#fffdfa] shadow-[0_22px_60px_-34px_rgba(44,34,20,0.3)] lg:grid-cols-[280px_minmax(0,1fr)]'
+        )}
+      >
         <aside className="hidden min-h-0 border-r border-[#ece4d8] bg-[#f8f3ec] lg:flex lg:flex-col">
           <div className="border-b border-[#ece4d8] px-4 py-4">
             <div className="rounded-[1.25rem] bg-white px-4 py-3 shadow-[0_8px_24px_-22px_rgba(48,36,22,0.3)]">
               <p className="text-xs uppercase tracking-[0.18em] text-[#7d7365]">
-                Personal assistant
+                Direct message
               </p>
               <p className="mt-2 text-sm font-medium text-[#2a241d]">
-                Private threads for questions, metrics, and one-off analysis.
+                Private threads with Kodi for questions, metrics, and one-off
+                analysis.
               </p>
             </div>
           </div>
@@ -411,7 +442,7 @@ export function DashboardAssistant({
               </p>
             ) : threads.length === 0 ? (
               <div className="rounded-[1.2rem] border border-dashed border-[#d9d0c3] bg-white/65 px-4 py-5 text-sm text-[#7d7365]">
-                Your private dashboard threads will appear here.
+                Your private conversations with Kodi will appear here.
               </div>
             ) : (
               threads.map((thread) => (
@@ -600,8 +631,8 @@ export function DashboardAssistant({
                     What can I help you figure out?
                   </h2>
                   <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[#7d7365]">
-                    Start a private thread for one-off questions, metrics, and
-                    analysis grounded in your workspace context.
+                    Start a private conversation for one-off questions, metrics,
+                    and analysis grounded in your workspace context.
                   </p>
                 </div>
 
@@ -624,7 +655,7 @@ export function DashboardAssistant({
                     <button
                       type="button"
                       className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#ddd6cb] bg-white text-[#6e665b] transition-colors hover:bg-[#f5f1ea]"
-                      aria-label="Start a new private thread"
+                      aria-label="Start a new private conversation"
                     >
                       <Plus size={16} />
                     </button>

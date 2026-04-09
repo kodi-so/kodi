@@ -29,9 +29,11 @@ import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import {
   getStatusTone,
+  getZoomSignedInBotStatus,
   getZoomStatus,
   type ZoomInstallStatus,
 } from '../integrations/_lib/tool-access-ui'
+import { getMeetingRuntimeCopy } from './_lib/runtime-state'
 
 type MeetingListItem = Awaited<ReturnType<typeof trpc.meeting.list.query>>
 
@@ -91,24 +93,11 @@ function statusLabel(status: string) {
 
 function meetingSnapshot(meeting: MeetingListItem[number]) {
   if (meeting.liveSummary) return meeting.liveSummary
-
-  switch (meeting.status) {
-    case 'joining':
-    case 'preparing':
-      return 'Kodi is on the way into the call.'
-    case 'admitted':
-      return 'Kodi reached the meeting and is waiting to actively listen.'
-    case 'listening':
-      return 'Transcript and live context are flowing now.'
-    case 'processing':
-      return 'Kodi is turning the call into notes and follow-up.'
-    case 'failed':
-      return 'This session hit a provider problem and may need another try.'
-    case 'ended':
-      return 'This meeting has ended. Summary and transcript stay available.'
-    default:
-      return 'Open the meeting to review transcript, summary, and follow-up.'
-  }
+  return getMeetingRuntimeCopy({
+    provider: meeting.provider,
+    status: meeting.status,
+    metadata: meeting.metadata,
+  }).snapshot
 }
 
 function meetingOutcomeLabel(meeting: MeetingListItem[number]) {
@@ -125,6 +114,17 @@ function meetingOutcomeLabel(meeting: MeetingListItem[number]) {
       return 'Review available'
     default:
       return 'In progress'
+  }
+}
+
+function formatProviderLabel(provider: string) {
+  switch (provider) {
+    case 'google_meet':
+      return 'Google Meet'
+    case 'zoom':
+      return 'Zoom'
+    default:
+      return 'Meeting'
   }
 }
 
@@ -248,6 +248,7 @@ export default function MeetingsPage() {
   )
 
   const zoomStatus = getZoomStatus(zoomInstallStatus)
+  const zoomSignedInBotStatus = getZoomSignedInBotStatus(zoomInstallStatus)
   const zoomInstallation = zoomInstallStatus?.installation ?? null
   const missingZoomSetup = zoomInstallStatus?.setup.missing ?? []
   const isOwner = activeOrg?.role === 'owner'
@@ -422,8 +423,8 @@ export default function MeetingsPage() {
                     Workflow
                   </p>
                   <p className="mt-3 text-sm leading-6 text-foreground">
-                    Paste the Meet link, admit Kodi, then review the summary and
-                    transcript here.
+                    Paste the meeting link, admit Kodi if needed, then review
+                    the summary and transcript here.
                   </p>
                 </div>
                 <div className="min-w-0 rounded-[1.4rem] border border-border bg-secondary p-4 md:col-span-2 2xl:col-span-1">
@@ -431,9 +432,10 @@ export default function MeetingsPage() {
                     Current scope
                   </p>
                   <p className="mt-3 text-sm leading-6 text-foreground">
-                    Google Meet live start is ready now. Stable invite identity
-                    is in place, with invite-by-email automation and auto-join
-                    rules coming next.
+                    Live start now supports Google Meet and Zoom links through
+                    the shared meeting runtime. Stable invite identity is in
+                    place, with invite-by-email automation and auto-join rules
+                    coming next.
                   </p>
                 </div>
               </div>
@@ -488,9 +490,10 @@ export default function MeetingsPage() {
                         No meetings yet
                       </h3>
                       <p className="max-w-xl text-sm leading-6 text-zinc-400">
-                        Start with a Meet link on the right. Once Kodi joins,
-                        this page becomes the running record of summary,
-                        transcript, and follow-up for the workspace.
+                        Start with a Google Meet or Zoom link on the right.
+                        Once Kodi joins, this page becomes the running record
+                        of summary, transcript, and follow-up for the
+                        workspace.
                       </p>
                     </div>
                   </CardContent>
@@ -547,9 +550,7 @@ export default function MeetingsPage() {
 
                       <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-800/80 pt-4 text-sm">
                         <span className="text-zinc-500">
-                          {meeting.provider === 'google_meet'
-                            ? 'Google Meet'
-                            : 'Meeting'}
+                          {formatProviderLabel(meeting.provider)}
                         </span>
                         <span className="inline-flex items-center gap-2 text-zinc-100 transition group-hover:translate-x-0.5">
                           Open meeting
@@ -572,11 +573,11 @@ export default function MeetingsPage() {
                       Start meeting
                     </p>
                     <h2 className="text-2xl font-semibold text-foreground">
-                      Bring Kodi into a live Meet
+                      Bring Kodi into a live meeting
                     </h2>
                     <p className="text-sm leading-6 text-muted-foreground">
-                      Start from a live Google Meet URL. The meeting page will
-                      become the control room once Kodi gets in.
+                      Start from a live Google Meet or Zoom URL. The meeting
+                      page becomes the control room once Kodi gets in.
                     </p>
                   </div>
 
@@ -588,13 +589,13 @@ export default function MeetingsPage() {
                 <div className="mt-6 space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="meeting-url" className="text-foreground">
-                      Google Meet URL
+                      Meeting URL
                     </Label>
                     <Input
                       id="meeting-url"
                       value={meetingUrl}
                       onChange={(event) => setMeetingUrl(event.target.value)}
-                      placeholder="https://meet.google.com/abc-defg-hij"
+                      placeholder="https://meet.google.com/abc-defg-hij or https://zoom.us/j/123456789"
                       className="h-11"
                     />
                   </div>
@@ -613,8 +614,9 @@ export default function MeetingsPage() {
                   </div>
 
                   <div className="rounded-[1.2rem] border border-border bg-secondary px-4 py-3 text-sm leading-6 text-muted-foreground">
-                    Start here for a live call. Admit Kodi in Meet, then come
-                    back to this workspace to review the summary and transcript.
+                    Start here for a live call. Admit Kodi if the room requires
+                    it, then come back to this workspace to review the summary
+                    and transcript.
                   </div>
 
                   <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
@@ -745,6 +747,9 @@ export default function MeetingsPage() {
                       <Badge className={getStatusTone(zoomStatus)}>
                         {zoomStatus}
                       </Badge>
+                      <Badge className={getStatusTone(zoomSignedInBotStatus)}>
+                        {zoomSignedInBotStatus}
+                      </Badge>
                       <Badge variant="outline">Meeting connection</Badge>
                     </div>
                     <h2 className="text-2xl font-semibold text-foreground">
@@ -770,7 +775,9 @@ export default function MeetingsPage() {
                   </p>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
                     {zoomInstallation
-                      ? `Last updated ${formatDate(zoomInstallation.updatedAt)}.`
+                      ? zoomInstallation.hasZakScope
+                        ? `Last updated ${formatDate(zoomInstallation.updatedAt)}. Signed-in Zoom joins are ready for meetings that require authenticated participants.`
+                        : `Last updated ${formatDate(zoomInstallation.updatedAt)}. Reconnect Zoom with the ZAK read scope to support auth-required meetings.`
                       : zoomInstallStatus?.setup.configured
                         ? 'Connect Zoom to unlock Zoom-based meeting events and callbacks.'
                         : `Zoom still needs setup: ${(missingZoomSetup.length > 0 ? missingZoomSetup : ['Zoom config']).join(', ')}.`}

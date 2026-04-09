@@ -4,6 +4,7 @@ import { MeetingOrchestrationService } from '../../lib/meetings/orchestration-se
 import { createDefaultMeetingProviderGateway } from '../../lib/meetings/provider-runtime'
 import { TRPCError } from '@trpc/server'
 import { deriveMeetingBotIdentity } from '@kodi/db'
+import { inferMeetingProviderFromUrl } from '../../lib/meetings/provider-url'
 
 export const meetingRouter = router({
   list: memberProcedure
@@ -23,6 +24,7 @@ export const meetingRouter = router({
           status: true,
           title: true,
           liveSummary: true,
+          metadata: true,
           actualStartAt: true,
           endedAt: true,
           createdAt: true,
@@ -178,11 +180,11 @@ export const meetingRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const meetingHost = new URL(input.meetingUrl).hostname.toLowerCase()
-      if (!meetingHost.includes('meet.google.com')) {
+      const provider = inferMeetingProviderFromUrl(input.meetingUrl)
+      if (!provider) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'Only Google Meet links are supported right now.',
+          message: 'Only Google Meet and Zoom links are supported right now.',
         })
       }
 
@@ -193,10 +195,30 @@ export const meetingRouter = router({
         orgName: ctx.org.name,
         orgSlug: ctx.org.slug,
       })
+      const installation =
+        provider === 'zoom'
+          ? await ctx.db.query.providerInstallations.findFirst({
+              where: (fields, { and, eq }) =>
+                and(
+                  eq(fields.orgId, ctx.org.id),
+                  eq(fields.provider, 'zoom'),
+                  eq(fields.status, 'active')
+                ),
+            })
+          : null
 
       const result = await orchestration.requestBotJoin({
         orgId: ctx.org.id,
-        provider: 'google_meet',
+        provider,
+        providerInstallationId: installation?.id ?? null,
+        actor:
+          provider === 'zoom' && installation
+            ? {
+                installerUserId: installation.installerUserId ?? null,
+                externalAccountId: installation.externalAccountId ?? null,
+                externalAccountEmail: installation.externalAccountEmail ?? null,
+              }
+            : null,
         hostUserId: ctx.session.user.id,
         meeting: {
           joinUrl: input.meetingUrl,

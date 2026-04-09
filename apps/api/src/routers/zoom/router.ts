@@ -6,6 +6,14 @@ import { getZoomSetupStatus } from '../../lib/zoom-config'
 import { createZoomInstallUrl } from '../../lib/zoom'
 import { providerInstallations } from '@kodi/db'
 
+function hasZoomZakScope(scopes: string[] | null | undefined) {
+  if (!scopes || scopes.length === 0) return false
+
+  return scopes.some(
+    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
+  )
+}
+
 export const zoomRouter = router({
   getInstallStatus: memberProcedure.query(async ({ ctx }) => {
     const rawInstallation = await ctx.db.query.providerInstallations.findFirst({
@@ -18,6 +26,9 @@ export const zoomRouter = router({
     return {
       featureFlags: getFeatureFlags(),
       setup: getZoomSetupStatus(),
+      signedInBotsReady:
+        installation?.status === 'active' &&
+        hasZoomZakScope(installation.scopes ?? []),
       installation: installation
         ? {
             id: installation.id,
@@ -26,6 +37,7 @@ export const zoomRouter = router({
             externalAccountId: installation.externalAccountId,
             externalAccountEmail: installation.externalAccountEmail,
             scopes: installation.scopes ?? [],
+            hasZakScope: hasZoomZakScope(installation.scopes ?? []),
             createdAt: installation.createdAt,
             updatedAt: installation.updatedAt,
             errorMessage: installation.errorMessage,

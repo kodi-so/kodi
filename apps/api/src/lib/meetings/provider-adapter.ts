@@ -30,6 +30,7 @@ export type MeetingBotIdentity = {
 export type MeetingProviderPrepareRequest = {
   orgId: string
   provider: MeetingProviderSlug
+  providerInstallationId?: string | null
   actor?: MeetingProviderActorIdentity | null
   meeting: MeetingProviderJoinTarget
   botIdentity?: MeetingBotIdentity | null

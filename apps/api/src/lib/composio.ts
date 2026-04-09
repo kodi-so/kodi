@@ -1,7 +1,8 @@
 import { AuthConfigTypes, Composio } from '@composio/core'
-import { and, eq } from 'drizzle-orm'
 import {
+  and,
   db,
+  eq,
   toolkitAccountPreferences,
   toolkitConnections,
   toolkitPolicies,
@@ -895,6 +896,13 @@ export async function disableConnectedAccount(connectedAccountId: string) {
     if (
       message.includes('ConnectedAccount_ResourceNotFound') ||
       message.includes('Connected account not found')
+    ) {
+      return
+    }
+
+    if (
+      message.includes('ConnectedAccount_InvalidStatusTransition') &&
+      message.includes('Only ACTIVE connections can be disabled')
     ) {
       return
     }

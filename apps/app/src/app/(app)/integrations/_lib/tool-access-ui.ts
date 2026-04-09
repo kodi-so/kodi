@@ -113,6 +113,16 @@ export function getZoomStatus(installStatus: ZoomInstallStatus | null) {
   return 'Not connected'
 }
 
+export function getZoomSignedInBotStatus(installStatus: ZoomInstallStatus | null) {
+  const installation = installStatus?.installation ?? null
+
+  if (!installation) return 'Not connected'
+  if (installStatus?.signedInBotsReady) return 'Signed-in bot ready'
+  if (installation.status === 'active') return 'Needs ZAK scope'
+  if (installation.status === 'error') return 'Attention needed'
+  return 'Not connected'
+}
+
 function evaluateToolkitStatus(params: {
   featureEnabled: boolean
   apiConfigured: boolean

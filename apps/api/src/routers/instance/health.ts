@@ -1,5 +1,4 @@
-import { eq } from 'drizzle-orm'
-import { db, instances, type Instance } from '@kodi/db'
+import { db, eq, instances, type Instance } from '@kodi/db'
 import { checkCloudInitComplete } from './ssh'
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes

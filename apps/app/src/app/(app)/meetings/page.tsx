@@ -29,6 +29,7 @@ import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import {
   getStatusTone,
+  getZoomSignedInBotStatus,
   getZoomStatus,
   type ZoomInstallStatus,
 } from '../integrations/_lib/tool-access-ui'
@@ -247,6 +248,7 @@ export default function MeetingsPage() {
   )
 
   const zoomStatus = getZoomStatus(zoomInstallStatus)
+  const zoomSignedInBotStatus = getZoomSignedInBotStatus(zoomInstallStatus)
   const zoomInstallation = zoomInstallStatus?.installation ?? null
   const missingZoomSetup = zoomInstallStatus?.setup.missing ?? []
   const isOwner = activeOrg?.role === 'owner'
@@ -745,6 +747,9 @@ export default function MeetingsPage() {
                       <Badge className={getStatusTone(zoomStatus)}>
                         {zoomStatus}
                       </Badge>
+                      <Badge className={getStatusTone(zoomSignedInBotStatus)}>
+                        {zoomSignedInBotStatus}
+                      </Badge>
                       <Badge variant="outline">Meeting connection</Badge>
                     </div>
                     <h2 className="text-2xl font-semibold text-foreground">
@@ -770,7 +775,9 @@ export default function MeetingsPage() {
                   </p>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
                     {zoomInstallation
-                      ? `Last updated ${formatDate(zoomInstallation.updatedAt)}.`
+                      ? zoomInstallation.hasZakScope
+                        ? `Last updated ${formatDate(zoomInstallation.updatedAt)}. Signed-in Zoom joins are ready for meetings that require authenticated participants.`
+                        : `Last updated ${formatDate(zoomInstallation.updatedAt)}. Reconnect Zoom with the ZAK read scope to support auth-required meetings.`
                       : zoomInstallStatus?.setup.configured
                         ? 'Connect Zoom to unlock Zoom-based meeting events and callbacks.'
                         : `Zoom still needs setup: ${(missingZoomSetup.length > 0 ? missingZoomSetup : ['Zoom config']).join(', ')}.`}

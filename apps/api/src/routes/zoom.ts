@@ -1,6 +1,6 @@
 import type { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
-import { db, providerInstallations } from '@kodi/db'
+import { db, encrypt, providerInstallations } from '@kodi/db'
 import {
   appendMeetingEvent,
   appendTranscriptSegments,
@@ -16,8 +16,13 @@ import {
   computeZoomEndpointValidationToken,
   createZoomInstallUrl,
   exchangeZoomAuthorizationCode,
+  fetchZoomZakToken,
   fetchZoomProfile,
+  getZoomInstallationAccessToken,
+  getZoomInstallationRefreshToken,
+  refreshZoomAccessToken,
   resolveAppUrl,
+  verifyZoomZakCallbackToken,
   verifyZoomOAuthState,
   verifyZoomWebhookSignature,
 } from '../lib/zoom'
@@ -57,6 +62,70 @@ function isRtmsStoppedEvent(eventName: unknown) {
   return (
     eventName === 'meeting.rtms_stopped' || eventName === 'meeting.rtms.stopped'
   )
+}
+
+function hasZoomZakScope(scopes: string[] | null | undefined) {
+  if (!scopes || scopes.length === 0) return false
+
+  return scopes.some(
+    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
+  )
+}
+
+async function getUsableZoomInstallationAccessToken(installationId: string) {
+  const installation = await db.query.providerInstallations.findFirst({
+    where: (fields, { and, eq }) =>
+      and(eq(fields.id, installationId), eq(fields.provider, 'zoom')),
+  })
+
+  if (!installation || installation.status !== 'active') {
+    return { installation: null, accessToken: null }
+  }
+
+  const currentAccessToken = getZoomInstallationAccessToken(installation)
+  const expiresSoon =
+    installation.tokenExpiresAt != null &&
+    installation.tokenExpiresAt.getTime() - Date.now() <= 60_000
+
+  if (!expiresSoon && currentAccessToken) {
+    return { installation, accessToken: currentAccessToken }
+  }
+
+  const refreshToken = getZoomInstallationRefreshToken(installation)
+  if (!refreshToken) {
+    return { installation, accessToken: currentAccessToken }
+  }
+
+  const refreshed = await refreshZoomAccessToken(refreshToken)
+  const nextScopes = refreshed.scope
+    ? refreshed.scope.split(' ')
+    : (installation.scopes ?? [])
+
+  await db
+    .update(providerInstallations)
+    .set({
+      status: 'active',
+      accessTokenEncrypted: encrypt(refreshed.access_token),
+      refreshTokenEncrypted: refreshed.refresh_token
+        ? encrypt(refreshed.refresh_token)
+        : installation.refreshTokenEncrypted,
+      tokenExpiresAt: refreshed.expires_in
+        ? new Date(Date.now() + refreshed.expires_in * 1000)
+        : installation.tokenExpiresAt,
+      scopes: nextScopes,
+      errorMessage: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(providerInstallations.id as never, installation.id as never) as never)
+
+  const updatedInstallation = await db.query.providerInstallations.findFirst({
+    where: (fields, { eq }) => eq(fields.id, installation.id),
+  })
+
+  return {
+    installation: updatedInstallation ?? installation,
+    accessToken: refreshed.access_token,
+  }
 }
 
 export function registerZoomRoutes(app: Hono) {
@@ -146,6 +215,41 @@ export function registerZoomRoutes(app: Hono) {
       return c.redirect(
         redirectToAppPath(parsedState.orgId, 'error', parsedState.returnPath)
       )
+    }
+  })
+
+  app.get('/integrations/zoom/recall/zak', async (c) => {
+    const token = c.req.query('token')
+    if (!token) {
+      return c.text('Missing token', 401)
+    }
+
+    const payload = verifyZoomZakCallbackToken(token)
+    if (!payload) {
+      return c.text('Invalid token', 401)
+    }
+
+    try {
+      const { installation, accessToken } =
+        await getUsableZoomInstallationAccessToken(payload.installationId)
+
+      if (!installation || !accessToken) {
+        return c.text('Zoom installation unavailable', 404)
+      }
+
+      if (!hasZoomZakScope(installation.scopes ?? [])) {
+        return c.text('Zoom installation missing ZAK scope', 403)
+      }
+
+      const zakToken = await fetchZoomZakToken(accessToken)
+      return c.text(zakToken)
+    } catch (error) {
+      console.error('[zoom] failed to generate Recall ZAK token', {
+        installationId: payload.installationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+
+      return c.text('Failed to generate ZAK token', 500)
     }
   })
 

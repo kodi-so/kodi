@@ -195,10 +195,30 @@ export const meetingRouter = router({
         orgName: ctx.org.name,
         orgSlug: ctx.org.slug,
       })
+      const installation =
+        provider === 'zoom'
+          ? await ctx.db.query.providerInstallations.findFirst({
+              where: (fields, { and, eq }) =>
+                and(
+                  eq(fields.orgId, ctx.org.id),
+                  eq(fields.provider, 'zoom'),
+                  eq(fields.status, 'active')
+                ),
+            })
+          : null
 
       const result = await orchestration.requestBotJoin({
         orgId: ctx.org.id,
         provider,
+        providerInstallationId: installation?.id ?? null,
+        actor:
+          provider === 'zoom' && installation
+            ? {
+                installerUserId: installation.installerUserId ?? null,
+                externalAccountId: installation.externalAccountId ?? null,
+                externalAccountEmail: installation.externalAccountEmail ?? null,
+              }
+            : null,
         hostUserId: ctx.session.user.id,
         meeting: {
           joinUrl: input.meetingUrl,

@@ -516,9 +516,7 @@ export const toolAccessRouter = router({
         })
       }
 
-      if (existing.connectedAccountStatus === 'ACTIVE') {
-        await disableConnectedAccount(existing.connectedAccountId)
-      }
+      await disableConnectedAccount(existing.connectedAccountId)
       await markPersistedConnectionInactive(
         ctx.db,
         existing.id,

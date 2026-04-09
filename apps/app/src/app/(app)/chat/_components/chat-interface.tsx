@@ -620,18 +620,7 @@ export function ChatInterface({
   return (
     <div className="grid h-[calc(100vh-2rem)] grid-cols-1 overflow-hidden rounded-[1.2rem] border border-[#d8d8d8] bg-white lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="hidden min-h-0 flex-col bg-[#4a154b] text-white lg:flex">
-        <div className="border-b border-white/12 px-4 py-4">
-          <div className="rounded-lg bg-white/10 px-3 py-2.5">
-            <p className="truncate text-sm font-semibold">
-              {selectedChannel?.name ?? session?.user?.name ?? 'Workspace'}
-            </p>
-            <p className="mt-1 text-xs text-white/72">
-              {session?.user?.email ?? 'Kodi workspace'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between border-b border-white/12 px-4 py-4">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/68">
             Channels
           </p>

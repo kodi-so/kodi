@@ -13,6 +13,14 @@ function hasZoomZakScope(scopes: string[] | null | undefined) {
   )
 }
 
+function hasZoomZakScope(scopes: string[] | null | undefined) {
+  if (!scopes || scopes.length === 0) return false
+
+  return scopes.some(
+    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
+  )
+}
+
 export const zoomRouter = router({
   getInstallStatus: memberProcedure.query(async ({ ctx }) => {
     const rawInstallation = await ctx.db.query.providerInstallations.findFirst({

@@ -899,6 +899,13 @@ export async function disableConnectedAccount(connectedAccountId: string) {
       return
     }
 
+    if (
+      message.includes('ConnectedAccount_InvalidStatusTransition') &&
+      message.includes('Only ACTIVE connections can be disabled')
+    ) {
+      return
+    }
+
     throw error
   }
 }

@@ -8,6 +8,7 @@ export default function ChatPage() {
   const { activeOrg } = useOrg()
   const searchParams = useSearchParams()
   const initialPrompt = searchParams.get('prompt')
+  const initialDirectId = searchParams.get('dm')
   const initialChannelId = searchParams.get('channel')
   const initialThreadId = searchParams.get('thread')
 
@@ -23,7 +24,9 @@ export default function ChatPage() {
     <div className="flex h-full flex-col">
       <ChatInterface
         orgId={activeOrg.orgId}
+        orgName={activeOrg.orgName}
         initialPrompt={initialPrompt}
+        initialDirectId={initialDirectId}
         initialChannelId={initialChannelId}
         initialThreadId={initialThreadId}
       />

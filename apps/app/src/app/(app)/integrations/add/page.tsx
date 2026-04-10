@@ -209,6 +209,7 @@ export default function AddIntegrationsPage() {
                 key={item.slug}
                 href={`/integrations/${encodeURIComponent(item.slug)}`}
                 name={item.name}
+                logoUrl={item.logo}
                 slug={item.slug}
                 status={getToolkitCatalogStatus(item, catalog)}
                 meta={getCatalogCardMeta(item)}

@@ -36,11 +36,11 @@ import {
   getPrimaryDetailConnection,
   getStatusTone,
   getToolkitDetailStatus,
-  getToolkitMonogram,
   isPolicyDraftDirty,
   type PolicyDraft,
   type ToolAccessToolkitDetail,
 } from '../_lib/tool-access-ui'
+import { ToolkitLogo } from '../_components/toolkit-logo'
 
 function PolicyToggleRow({
   title,
@@ -493,9 +493,12 @@ export default function IntegrationDetailPage() {
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[1.35rem] border border-brand-line bg-brand-elevated text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
-                    {getToolkitMonogram(detail.toolkit.name)}
-                  </div>
+                  <ToolkitLogo
+                    name={detail.toolkit.name}
+                    logoUrl={detail.toolkit.logo}
+                    className="h-14 w-14 flex-shrink-0 rounded-[1.35rem] border-brand-line bg-brand-elevated"
+                    imageClassName="p-3"
+                  />
                   <div className="space-y-2">
                     <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                       {detail.toolkit.name}

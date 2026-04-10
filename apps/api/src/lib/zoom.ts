@@ -181,6 +181,14 @@ export async function fetchZoomProfile(accessToken: string) {
   return (await res.json()) as ZoomProfileResponse
 }
 
+export function hasZoomZakScope(scopes: string[] | null | undefined) {
+  if (!scopes || scopes.length === 0) return false
+
+  return scopes.some(
+    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
+  )
+}
+
 export async function fetchZoomZakToken(accessToken: string, userId = 'me') {
   const url = new URL(
     `https://api.zoom.us/v2/users/${encodeURIComponent(userId)}/token`

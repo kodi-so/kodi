@@ -2,24 +2,8 @@ import { z } from 'zod'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { getFeatureFlags } from '../../lib/features'
 import { getZoomSetupStatus } from '../../lib/zoom-config'
-import { createZoomInstallUrl } from '../../lib/zoom'
+import { createZoomInstallUrl, hasZoomZakScope } from '../../lib/zoom'
 import { eq, providerInstallations } from '@kodi/db'
-
-function hasZoomZakScope(scopes: string[] | null | undefined) {
-  if (!scopes || scopes.length === 0) return false
-
-  return scopes.some(
-    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
-  )
-}
-
-function hasZoomZakScope(scopes: string[] | null | undefined) {
-  if (!scopes || scopes.length === 0) return false
-
-  return scopes.some(
-    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
-  )
-}
 
 export const zoomRouter = router({
   getInstallStatus: memberProcedure.query(async ({ ctx }) => {

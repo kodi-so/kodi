@@ -15,8 +15,9 @@ import {
   computeZoomEndpointValidationToken,
   createZoomInstallUrl,
   exchangeZoomAuthorizationCode,
-  fetchZoomZakToken,
   fetchZoomProfile,
+  fetchZoomZakToken,
+  hasZoomZakScope,
   getZoomInstallationAccessToken,
   getZoomInstallationRefreshToken,
   refreshZoomAccessToken,
@@ -60,14 +61,6 @@ function isRtmsStartedEvent(eventName: unknown) {
 function isRtmsStoppedEvent(eventName: unknown) {
   return (
     eventName === 'meeting.rtms_stopped' || eventName === 'meeting.rtms.stopped'
-  )
-}
-
-function hasZoomZakScope(scopes: string[] | null | undefined) {
-  if (!scopes || scopes.length === 0) return false
-
-  return scopes.some(
-    (scope) => scope === 'user_zak:read' || scope === 'user:read:zak'
   )
 }
 

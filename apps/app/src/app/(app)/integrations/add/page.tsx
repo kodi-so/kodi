@@ -24,6 +24,11 @@ import {
   type ToolAccessCatalog,
   type ToolAccessItem,
 } from '../_lib/tool-access-ui'
+import {
+  heroPanelClass,
+  pageShellClass,
+  quietTextClass,
+} from '@/lib/brand-styles'
 
 function sortItems(items: ToolAccessItem[], catalog: ToolAccessCatalog | null) {
   return [...items].sort((left, right) => {
@@ -96,20 +101,20 @@ export default function AddIntegrationsPage() {
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-white/10" />
+        <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
       </div>
     )
   }
 
   return (
-    <div className="kodi-shell-bg min-h-full">
+    <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-3">
             <Button
               asChild
               variant="ghost"
-              className="w-fit gap-2 px-0 text-[#5d7379] hover:bg-transparent hover:text-[#223239]"
+              className="w-fit gap-2 px-0 text-brand-quiet hover:bg-transparent hover:text-foreground"
             >
               <Link href="/integrations">
                 <ArrowLeft size={16} />
@@ -119,17 +124,15 @@ export default function AddIntegrationsPage() {
 
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
-                <Badge className="border-[#c9d2d4] bg-white/82 text-[#223239]">
-                  Add integrations
-                </Badge>
-                <Badge className="border-[#c9d2d4] bg-white/82 text-[#223239]">
+                <Badge variant="neutral">Add integrations</Badge>
+                <Badge variant="neutral">
                   {catalog?.items.length ?? 0} shown
                 </Badge>
               </div>
-              <h1 className="font-brand text-3xl tracking-[-0.05em] text-[#223239]">
+              <h1 className="text-3xl tracking-[-0.05em] text-foreground">
                 Browse the tool catalog.
               </h1>
-              <p className="max-w-2xl text-sm leading-7 text-[#5d7379]">
+              <p className={`max-w-2xl text-sm leading-7 ${quietTextClass}`}>
                 Search Composio-backed integrations, open the one you want, and
                 connect it from the dedicated detail page. The cards stay light
                 on purpose so the setup flow is easy to scan.
@@ -140,29 +143,29 @@ export default function AddIntegrationsPage() {
           <Button
             asChild
             variant="ghost"
-            className="gap-2 border border-[#c9d2d4] bg-white/82 text-[#223239] hover:bg-white"
+            className="gap-2 border border-brand-line bg-brand-elevated text-foreground hover:bg-background"
           >
             <Link href="/integrations">View active integrations</Link>
           </Button>
         </div>
 
         {error && (
-          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+          <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {catalog?.syncError && (
-          <Alert className="border-[#DFAE56]/30 bg-[#DFAE56]/12 text-[#f6d289]">
+          <Alert variant="warning">
             <AlertDescription>{catalog.syncError}</AlertDescription>
           </Alert>
         )}
 
-        <section className="rounded-[1.6rem] border border-white/10 bg-[rgba(49,66,71,0.78)] p-4 sm:p-5">
+        <section className={`${heroPanelClass} rounded-[1.6rem] p-4 sm:p-5`}>
           <div className="relative">
             <Search
               size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8ea3a8]"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-brand-subtle"
             />
             <Input
               value={search}
@@ -178,22 +181,22 @@ export default function AddIntegrationsPage() {
             {Array.from({ length: 6 }).map((_, index) => (
               <div
                 key={index}
-                className="rounded-[1.6rem] border border-white/10 bg-[rgba(49,66,71,0.78)] p-5"
+                className={`${heroPanelClass} rounded-[1.6rem] p-5`}
               >
-                <Skeleton className="h-12 w-12 rounded-[1.2rem] bg-white/10" />
-                <Skeleton className="mt-6 h-5 w-28 bg-white/10" />
-                <Skeleton className="mt-2 h-4 w-36 bg-white/10" />
-                <Skeleton className="mt-8 h-4 w-full bg-white/10" />
+                <Skeleton className="h-12 w-12 rounded-[1.2rem]" />
+                <Skeleton className="mt-6 h-5 w-28" />
+                <Skeleton className="mt-2 h-4 w-36" />
+                <Skeleton className="mt-8 h-4 w-full" />
               </div>
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-[1.6rem] border border-dashed border-[#c9d2d4] bg-white/72 p-8">
+          <div className="rounded-[1.6rem] border border-dashed border-brand-line bg-brand-elevated p-8">
             <div className="max-w-xl space-y-3">
-              <p className="text-xl font-medium text-[#223239]">
+              <p className="text-xl font-medium text-foreground">
                 No integrations match that search.
               </p>
-              <p className="text-sm leading-7 text-[#5d7379]">
+              <p className={`text-sm leading-7 ${quietTextClass}`}>
                 Try a broader search term or clear the field to return to the
                 full catalog.
               </p>
@@ -221,7 +224,9 @@ export default function AddIntegrationsPage() {
         )}
 
         {!loading && (
-          <div className="rounded-[1.4rem] border border-[#c9d2d4] bg-white/72 p-5 text-sm leading-7 text-[#5d7379]">
+          <div
+            className={`rounded-[1.4rem] border border-brand-line bg-brand-elevated p-5 text-sm leading-7 ${quietTextClass}`}
+          >
             Connect flows happen on each integration’s detail page so the main
             catalog stays easy to browse instead of turning into a wall of
             settings.

@@ -50,6 +50,25 @@
   --radius: 1rem;
 }
 
+.kodi-shell-bg {
+  background:
+    radial-gradient(
+      circle at top left,
+      hsl(var(--kodi-accent) / 0.16),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      hsl(var(--kodi-sidebar-elevated) / 0.78),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      hsl(var(--kodi-canvas)),
+      hsl(var(--kodi-canvas-shade))
+    );
+}
+
 .kodi-app-shell {
   background: linear-gradient(
     180deg,
@@ -80,6 +99,14 @@
     hsl(var(--kodi-panel)),
     hsl(var(--kodi-panel-muted))
   );
+}
+
+.kodi-surface-elevated {
+  background: hsl(var(--kodi-panel-elevated));
+}
+
+.kodi-surface-muted {
+  background: hsl(var(--kodi-panel-muted));
 }
 
 .kodi-overlay-scrim {

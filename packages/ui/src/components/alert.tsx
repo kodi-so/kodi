@@ -10,6 +10,8 @@ const alertVariants = cva(
         default: 'border-border/80 bg-card text-foreground',
         success:
           'border-[hsl(var(--kodi-success)/0.2)] bg-[hsl(var(--kodi-success-soft))] text-foreground [&>svg]:text-brand-success',
+        info:
+          'border-[hsl(var(--kodi-info)/0.2)] bg-[hsl(var(--kodi-info-soft))] text-foreground [&>svg]:text-brand-info',
         warning:
           'border-[hsl(var(--kodi-warning)/0.22)] bg-[hsl(var(--kodi-warning-soft))] text-foreground [&>svg]:text-brand-warning',
         destructive:

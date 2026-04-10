@@ -131,11 +131,11 @@ export function ProvisionStatus({
   // ── No instance yet ─────────────────────────────────────────────────────
   if (status === 'none') {
     return (
-      <Card className="mx-auto max-w-lg border-white/10 bg-[rgba(31,44,49,0.9)] text-center">
+      <Card className="mx-auto max-w-lg border-brand-line text-center">
         <CardHeader>
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#DFAE56]/22 bg-[#DFAE56]/12">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong">
             <svg
-              className="h-7 w-7 text-[#F0C570]"
+              className="h-7 w-7"
               fill="none"
               viewBox="0 0 24 24"
               strokeWidth={1.5}
@@ -148,31 +148,28 @@ export function ProvisionStatus({
               />
             </svg>
           </div>
-          <CardTitle className="text-2xl text-white">
+          <CardTitle className="text-2xl text-foreground">
             Deploy your AI agent
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="mb-6 text-sm text-[#8ea3a8]">
+          <p className="mb-6 text-sm text-brand-quiet">
             Provision a dedicated OpenClaw instance for your organization. This
             sets up a cloud server with your own AI agent.
           </p>
           {errorMessage && (
-            <Alert
-              variant="destructive"
-              className="mb-4 border-red-500/20 bg-red-500/10 text-red-400"
-            >
+            <Alert variant="destructive" className="mb-4">
               <AlertDescription>{errorMessage}</AlertDescription>
             </Alert>
           )}
           <Button
             onClick={() => void startProvision()}
             disabled={provisioning}
-            className="gap-2 bg-[#DFAE56] px-5 text-[#223239] hover:bg-[#e8bf70]"
+            className="gap-2 px-5"
           >
             {provisioning ? (
               <>
-                <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />
                 Provisioning...
               </>
             ) : (
@@ -187,23 +184,23 @@ export function ProvisionStatus({
   // ── Pending / Installing ───────────────────────────────────────────────
   if (status === 'pending' || status === 'installing') {
     return (
-      <Card className="mx-auto max-w-lg border-white/10 bg-[rgba(31,44,49,0.9)] text-center">
+      <Card className="mx-auto max-w-lg border-brand-line text-center">
         <CardContent className="pt-6">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-[#DFAE56]/22 bg-[#DFAE56]/12">
-            <div className="h-7 w-7 rounded-full border-2 border-[#DFAE56] border-t-transparent animate-spin" />
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong">
+            <div className="h-7 w-7 animate-spin rounded-full border-2 border-current border-t-transparent" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">
+          <h1 className="mb-2 text-2xl font-bold text-foreground">
             {status === 'pending'
               ? 'Setting up your AI agent...'
               : 'Installing OpenClaw...'}
           </h1>
-          <p className="text-sm text-[#8ea3a8]">
+          <p className="text-sm text-brand-quiet">
             {status === 'pending'
               ? 'Reserving cloud resources. This will take a moment.'
               : 'Your agent is being configured. Usually takes 1–3 minutes.'}
           </p>
           {status === 'installing' && (
-            <p className="mt-2 text-xs text-[#7d9196]" aria-live="polite">
+            <p className="mt-2 text-xs text-brand-subtle" aria-live="polite">
               Checking every 15 seconds...
             </p>
           )}
@@ -215,24 +212,21 @@ export function ProvisionStatus({
   // ── Running ───────────────────────────────────────────────────────────────
   if (status === 'running') {
     return (
-      <Card className="mx-auto max-w-lg border-white/10 bg-[rgba(31,44,49,0.9)] text-center">
+      <Card className="mx-auto max-w-lg border-brand-line text-center">
         <CardContent className="pt-6">
-          <div className="w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto mb-4">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-success/20 bg-brand-success-soft">
             <span className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-success opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-success" />
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">
+          <h1 className="mb-2 text-2xl font-bold text-foreground">
             Your agent is live
           </h1>
-          <p className="mb-6 text-sm text-[#8ea3a8]">
+          <p className="mb-6 text-sm text-brand-quiet">
             Your AI agent is running and ready to chat.
           </p>
-          <Button
-            asChild
-            className="gap-2 bg-[#DFAE56] px-5 text-[#223239] hover:bg-[#e8bf70]"
-          >
+          <Button asChild className="gap-2 px-5">
             <Link href="/chat">Open chat</Link>
           </Button>
         </CardContent>
@@ -243,27 +237,24 @@ export function ProvisionStatus({
   // ── Error ─────────────────────────────────────────────────────────────────
   if (status === 'error') {
     return (
-      <Card className="mx-auto max-w-lg border-white/10 bg-[rgba(31,44,49,0.9)] text-center">
+      <Card className="mx-auto max-w-lg border-brand-line text-center">
         <CardContent className="pt-6">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-danger/20 bg-brand-danger-soft text-brand-danger">
             <span className="text-2xl">✕</span>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">
+          <h1 className="mb-2 text-2xl font-bold text-foreground">
             Something went wrong
           </h1>
           {errorMessage && (
-            <Alert
-              variant="destructive"
-              className="mb-3 border-red-500/20 bg-red-500/10 text-red-400"
-            >
+            <Alert variant="destructive" className="mb-3">
               <AlertDescription>{errorMessage}</AlertDescription>
             </Alert>
           )}
-          <p className="mb-6 text-sm text-[#8ea3a8]">
+          <p className="mb-6 text-sm text-brand-quiet">
             If this keeps happening,{' '}
             <a
               href="mailto:support@kodi.so"
-              className="text-[#F0C570] hover:underline"
+              className="text-primary hover:underline"
             >
               contact support
             </a>
@@ -273,11 +264,11 @@ export function ProvisionStatus({
             onClick={() => void retryProvision()}
             disabled={provisioning}
             variant="outline"
-            className="gap-2 border-white/12 bg-white/8 text-white hover:bg-white/10"
+            className="gap-2"
           >
             {provisioning ? (
               <>
-                <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />
                 Retrying...
               </>
             ) : (
@@ -292,19 +283,19 @@ export function ProvisionStatus({
   // ── Suspended ─────────────────────────────────────────────────────────────
   if (status === 'suspended') {
     return (
-      <Card className="mx-auto max-w-lg border-white/10 bg-[rgba(31,44,49,0.9)] text-center">
+      <Card className="mx-auto max-w-lg border-brand-line text-center">
         <CardContent className="pt-6">
-          <div className="w-16 h-16 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center mx-auto mb-6">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-warning/20 bg-brand-warning-soft text-brand-warning">
             <span className="text-2xl">⏸</span>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">
+          <h1 className="mb-2 text-2xl font-bold text-foreground">
             Agent suspended
           </h1>
-          <p className="text-sm text-[#8ea3a8]">
+          <p className="text-sm text-brand-quiet">
             Your agent has been suspended. Please{' '}
             <a
               href="mailto:support@kodi.so"
-              className="text-[#F0C570] hover:underline"
+              className="text-primary hover:underline"
             >
               contact support
             </a>{' '}

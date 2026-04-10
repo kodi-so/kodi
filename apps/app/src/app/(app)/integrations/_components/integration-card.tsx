@@ -28,7 +28,7 @@ export function IntegrationCard({
     <Link
       href={href}
       className={cn(
-        'group flex min-h-[168px] flex-col justify-between rounded-[1.6rem] border bg-card p-5 transition',
+        'group kodi-panel-surface flex min-h-[168px] flex-col justify-between rounded-[1.6rem] border p-5 shadow-brand-panel transition',
         priority ? 'border-primary/40' : 'border-border',
         'hover:-translate-y-0.5 hover:border-foreground/20'
       )}
@@ -38,7 +38,7 @@ export function IntegrationCard({
           <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] border border-border bg-secondary text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
             {getToolkitMonogram(name)}
           </div>
-          <Badge className={getStatusTone(status)}>{status}</Badge>
+          <Badge variant={getStatusTone(status)}>{status}</Badge>
         </div>
 
         <div className="space-y-2">

@@ -81,18 +81,18 @@ function MessageBody({ content }: { content: string }) {
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="text-[#1264a3] underline underline-offset-2"
+            className="text-brand-info underline underline-offset-2"
           >
             {children}
           </a>
         ),
         code: ({ children }) => (
-          <code className="rounded bg-[#f1f1f1] px-1.5 py-0.5 text-xs">
+          <code className="rounded bg-brand-muted px-1.5 py-0.5 text-xs text-foreground">
             {children}
           </code>
         ),
         pre: ({ children }) => (
-          <pre className="overflow-x-auto rounded-lg bg-[#f1f1f1] p-3 text-xs">
+          <pre className="overflow-x-auto rounded-lg bg-brand-muted p-3 text-xs text-foreground">
             {children}
           </pre>
         ),
@@ -109,8 +109,8 @@ function SlackAvatar({ message }: { message: Message }) {
       className={cn(
         'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
         message.role === 'assistant'
-          ? 'bg-[#e9d9f3] text-[#4a154b]'
-          : 'bg-[#dfe7f2] text-[#28436b]'
+          ? 'bg-brand-accent-soft text-brand-accent-foreground'
+          : 'bg-brand-info-soft text-brand-info'
       )}
     >
       {message.role === 'assistant' ? 'K' : initials(message.userName ?? 'You')}
@@ -132,7 +132,7 @@ function MobileConversationTabs({
   onSelectChannel: (channelId: string) => void
 }) {
   return (
-    <div className="border-b border-[#dddddd] px-4 py-3 lg:hidden">
+    <div className="border-b border-brand-line bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center gap-2 overflow-x-auto">
         <button
           type="button"
@@ -140,11 +140,11 @@ function MobileConversationTabs({
           className={cn(
             'inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
             selectedDirectId === KODI_DM_ID
-              ? 'border-[#7f5f26] bg-[#f5e8cb] text-[#5b4519]'
-              : 'border-[#dddddd] bg-white text-[#616061]'
+              ? 'border-brand-accent/25 bg-brand-accent-soft text-brand-accent-foreground'
+              : 'border-brand-line bg-brand-elevated text-brand-quiet'
           )}
         >
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#ead8ee] text-[11px] font-semibold text-[#4a154b]">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand-accent-soft text-[11px] font-semibold text-brand-accent-foreground">
             K
           </span>
           Kodi
@@ -158,8 +158,8 @@ function MobileConversationTabs({
             className={cn(
               'whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
               selectedChannelId === channel.id && !selectedDirectId
-                ? 'border-[#1264a3] bg-[#edf5fb] text-[#1264a3]'
-                : 'border-[#dddddd] bg-white text-[#616061]'
+                ? 'border-brand-info/25 bg-brand-info-soft text-brand-info'
+                : 'border-brand-line bg-brand-elevated text-brand-quiet'
             )}
           >
             #{channel.slug}
@@ -182,7 +182,7 @@ function MessageRow({
   onOpenThread: () => void
 }) {
   return (
-    <div className="px-4 py-3 hover:bg-[#f8f8f8] sm:px-6">
+    <div className="px-4 py-3 transition-colors hover:bg-brand-muted/50 sm:px-6">
       <button
         type="button"
         onClick={onOpenThread}
@@ -192,17 +192,17 @@ function MessageRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <p className="text-[15px] font-semibold text-[#1d1c1d]">
+            <p className="text-[15px] font-semibold text-foreground">
               {message.role === 'assistant'
                 ? 'Kodi'
                 : (message.userName ?? 'You')}
             </p>
-            <p className="text-xs text-[#616061]">
+            <p className="text-xs text-brand-quiet">
               {formatTime(message.createdAt)}
             </p>
           </div>
 
-          <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
+          <div className="mt-0.5 text-[15px] leading-7 text-foreground">
             <MessageBody content={message.content} />
           </div>
         </div>
@@ -212,21 +212,21 @@ function MessageRow({
         <button
           type="button"
           onClick={onOpenThread}
-          className="mt-2 inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-[#1264a3] hover:bg-[#edf5fb]"
+          className="mt-2 inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-brand-info transition-colors hover:bg-brand-info-soft"
         >
           <CornerUpRight size={14} />
           {replies.length > 0
             ? `${replies.length} repl${replies.length === 1 ? 'y' : 'ies'}`
             : 'Reply in thread'}
           {replies.length > 0 ? (
-            <span className="text-[#616061]">
+            <span className="text-brand-quiet">
               Last reply {formatDate(replies[replies.length - 1]!.createdAt)}
             </span>
           ) : null}
         </button>
 
         {isResponding ? (
-          <p className="mt-1 text-sm text-[#616061]">Kodi is responding...</p>
+          <p className="mt-1 text-sm text-brand-quiet">Kodi is responding...</p>
         ) : null}
       </div>
     </div>
@@ -249,8 +249,8 @@ function Composer({
   ariaLabel: string
 }) {
   return (
-    <div className="sticky bottom-0 z-10 border-t border-[#dddddd] bg-white px-4 py-4 sm:px-6">
-      <div className="rounded-xl border border-[#d8d8d8] bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+    <div className="sticky bottom-0 z-10 border-t border-brand-line bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
+      <div className="rounded-xl border border-brand-line bg-brand-elevated p-3 shadow-brand-panel">
         <Textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -265,10 +265,10 @@ function Composer({
           className="min-h-0 resize-none border-0 bg-transparent px-0 py-0 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
         />
 
-        <div className="mt-3 flex items-center justify-between border-t border-[#ececec] pt-3">
+        <div className="mt-3 flex items-center justify-between border-t border-brand-line pt-3">
           <button
             type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-[#616061] transition-colors hover:bg-[#f3f3f3] hover:text-[#1d1c1d]"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-brand-quiet transition-colors hover:bg-secondary hover:text-foreground"
             aria-label="Add item"
           >
             <Plus size={16} />
@@ -697,19 +697,19 @@ export function ChatInterface({
   }
 
   return (
-    <div className="grid h-[calc(100vh-2rem)] grid-cols-1 overflow-hidden rounded-[1.2rem] border border-[#d8d8d8] bg-white lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="hidden min-h-0 flex-col bg-[#4a154b] text-white lg:flex">
-        <div className="border-b border-white/12 px-4 py-4">
-          <div className="rounded-lg bg-white/10 px-3 py-2.5">
+    <div className="grid h-[calc(100vh-2rem)] grid-cols-1 overflow-hidden rounded-[1.2rem] border border-brand-line bg-background shadow-brand-panel lg:grid-cols-[280px_minmax(0,1fr)]">
+      <aside className="kodi-sidebar-surface hidden min-h-0 flex-col border-r border-brand-line text-foreground lg:flex">
+        <div className="border-b border-brand-line px-4 py-4">
+          <div className="rounded-lg border border-brand-line bg-brand-elevated px-3 py-2.5">
             <p className="truncate text-sm font-semibold">{orgName}</p>
-            <p className="mt-1 text-xs text-white/72">
+            <p className="mt-1 text-xs text-brand-quiet">
               Private and shared conversations
             </p>
           </div>
         </div>
 
         <div className="px-4 pb-2 pt-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/68">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-subtle">
             Direct messages
           </p>
         </div>
@@ -721,28 +721,28 @@ export function ChatInterface({
             className={cn(
               'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
               selectedDirectId === KODI_DM_ID
-                ? 'bg-[#7d5a1c] text-white'
-                : 'text-white/86 hover:bg-white/10'
+                ? 'bg-brand-accent-soft text-foreground'
+                : 'text-brand-quiet hover:bg-brand-elevated hover:text-foreground'
             )}
           >
-            <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#ead8ee] text-xs font-semibold text-[#4a154b]">
+            <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-accent-soft text-xs font-semibold text-brand-accent-foreground">
               K
             </span>
             <span className="min-w-0 flex-1 truncate">Kodi</span>
-            <span className="text-[11px] uppercase tracking-[0.08em] text-white/55">
+            <span className="text-[11px] uppercase tracking-[0.08em] text-brand-subtle">
               Private
             </span>
           </button>
         </div>
 
         <div className="flex items-center justify-between px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/68">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-subtle">
             Channels
           </p>
           <button
             type="button"
             onClick={() => setShowChannelComposer((current) => !current)}
-            className="rounded-md p-1 text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-md p-1 text-brand-quiet transition-colors hover:bg-brand-elevated hover:text-foreground"
             aria-label="Create channel"
           >
             <Plus size={16} />
@@ -751,7 +751,7 @@ export function ChatInterface({
 
         {showChannelComposer ? (
           <div className="px-4 pb-3">
-            <div className="space-y-2 rounded-lg bg-white/10 p-3">
+            <div className="space-y-2 rounded-xl border border-brand-line bg-brand-elevated p-3 shadow-brand-panel">
               <input
                 value={channelDraft}
                 onChange={(event) => setChannelDraft(event.target.value)}
@@ -762,7 +762,7 @@ export function ChatInterface({
                   }
                 }}
                 placeholder="channel-name"
-                className="w-full rounded-md border border-white/14 bg-white/12 px-3 py-2 text-sm text-white outline-none placeholder:text-white/58"
+                className="w-full rounded-md border border-brand-line bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-brand-subtle"
               />
               <div className="flex items-center justify-end gap-2">
                 <button
@@ -771,7 +771,7 @@ export function ChatInterface({
                     setShowChannelComposer(false)
                     setChannelDraft('')
                   }}
-                  className="text-sm text-white/68 hover:text-white"
+                  className="text-sm text-brand-quiet hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -779,7 +779,7 @@ export function ChatInterface({
                   type="button"
                   onClick={() => void createChannel()}
                   disabled={!channelDraft.trim() || creatingChannel}
-                  className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-[#4a154b] disabled:opacity-60"
+                  className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
                 >
                   Create
                 </button>
@@ -797,8 +797,8 @@ export function ChatInterface({
               className={cn(
                 'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
                 selectedChannelId === channel.id && !selectedDirectId
-                  ? 'bg-[#1164a3] text-white'
-                  : 'text-white/86 hover:bg-white/10'
+                  ? 'bg-brand-info-soft text-brand-info'
+                  : 'text-brand-quiet hover:bg-brand-elevated hover:text-foreground'
               )}
             >
               <Hash size={15} />
@@ -808,9 +808,9 @@ export function ChatInterface({
         </div>
       </aside>
 
-      <section className="min-h-0 min-w-0 bg-white">
+      <section className="min-h-0 min-w-0 bg-background">
         {selectedDirectId === KODI_DM_ID ? (
-          <div className="flex h-full min-h-0 flex-col bg-[#fffdfa]">
+          <div className="flex h-full min-h-0 flex-col bg-background">
             <MobileConversationTabs
               channels={channels}
               selectedDirectId={selectedDirectId}
@@ -834,7 +834,7 @@ export function ChatInterface({
             </div>
           </div>
         ) : !selectedThreadId ? (
-          <div className="flex h-full min-h-0 flex-col bg-white">
+          <div className="flex h-full min-h-0 flex-col bg-background">
             <MobileConversationTabs
               channels={channels}
               selectedDirectId={selectedDirectId}
@@ -843,14 +843,14 @@ export function ChatInterface({
               onSelectChannel={selectChannel}
             />
 
-            <div className="border-b border-[#dddddd] px-4 py-3 sm:px-6">
+            <div className="border-b border-brand-line bg-background px-4 py-3 sm:px-6">
               <div className="flex items-center gap-2">
-                <Hash size={18} className="text-[#616061]" />
-                <h1 className="text-[18px] font-semibold text-[#1d1c1d]">
+                <Hash size={18} className="text-brand-quiet" />
+                <h1 className="text-[18px] font-semibold text-foreground">
                   {selectedChannel?.slug ?? 'general'}
                 </h1>
               </div>
-              <p className="mt-1 text-sm text-[#616061]">
+              <p className="mt-1 text-sm text-brand-quiet">
                 Conversation and follow-through for this channel.
               </p>
             </div>
@@ -860,11 +860,11 @@ export function ChatInterface({
               className="min-h-0 flex-1 overflow-y-auto"
             >
               {loadingMessages ? (
-                <div className="px-4 py-6 text-sm text-[#616061] sm:px-6">
+                <div className="px-4 py-6 text-sm text-brand-quiet sm:px-6">
                   Loading messages...
                 </div>
               ) : rootMessages.length === 0 ? (
-                <div className="px-4 py-12 text-sm text-[#616061] sm:px-6">
+                <div className="px-4 py-12 text-sm text-brand-quiet sm:px-6">
                   Start the conversation in #
                   {selectedChannel?.slug ?? 'general'}.
                 </div>
@@ -893,13 +893,13 @@ export function ChatInterface({
             />
 
             {error ? (
-              <p className="px-4 pb-4 text-sm text-[hsl(var(--destructive))] sm:px-6">
+              <p className="px-4 pb-4 text-sm text-brand-danger sm:px-6">
                 {error}
               </p>
             ) : null}
           </div>
         ) : (
-          <div className="flex h-full min-h-0 flex-col bg-[#fbfbfb]">
+          <div className="flex h-full min-h-0 flex-col bg-brand-muted/35">
             <MobileConversationTabs
               channels={channels}
               selectedDirectId={selectedDirectId}
@@ -908,19 +908,19 @@ export function ChatInterface({
               onSelectChannel={selectChannel}
             />
 
-            <div className="flex items-center gap-3 border-b border-[#dddddd] px-4 py-3 sm:px-6">
+            <div className="flex items-center gap-3 border-b border-brand-line bg-background px-4 py-3 sm:px-6">
               <button
                 type="button"
                 onClick={closeThread}
-                className="rounded-md p-1 text-[#616061] transition-colors hover:bg-[#ededed] hover:text-[#1d1c1d]"
+                className="rounded-md p-1 text-brand-quiet transition-colors hover:bg-secondary hover:text-foreground"
                 aria-label="Back to channel"
               >
                 <ChevronLeft size={18} />
               </button>
 
               <div>
-                <p className="text-sm font-semibold text-[#1d1c1d]">Thread</p>
-                <p className="text-xs text-[#616061]">
+                <p className="text-sm font-semibold text-foreground">Thread</p>
+                <p className="text-xs text-brand-quiet">
                   #{selectedChannel?.slug ?? 'general'}
                 </p>
               </div>
@@ -931,26 +931,26 @@ export function ChatInterface({
               className="min-h-0 flex-1 overflow-y-auto"
             >
               {loadingMessages ? (
-                <div className="px-4 py-6 text-sm text-[#616061] sm:px-6">
+                <div className="px-4 py-6 text-sm text-brand-quiet sm:px-6">
                   Loading thread...
                 </div>
               ) : selectedThreadRoot ? (
                 <>
-                  <div className="border-b border-[#e6e6e6] px-4 py-4 sm:px-6">
+                  <div className="border-b border-brand-line bg-background px-4 py-4 sm:px-6">
                     <div className="flex items-start gap-3">
                       <SlackAvatar message={selectedThreadRoot} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-2">
-                          <p className="text-[15px] font-semibold text-[#1d1c1d]">
+                          <p className="text-[15px] font-semibold text-foreground">
                             {selectedThreadRoot.role === 'assistant'
                               ? 'Kodi'
                               : (selectedThreadRoot.userName ?? 'You')}
                           </p>
-                          <p className="text-xs text-[#616061]">
+                          <p className="text-xs text-brand-quiet">
                             {formatTime(selectedThreadRoot.createdAt)}
                           </p>
                         </div>
-                        <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
+                        <div className="mt-0.5 text-[15px] leading-7 text-foreground">
                           <MessageBody content={selectedThreadRoot.content} />
                         </div>
                       </div>
@@ -958,7 +958,7 @@ export function ChatInterface({
                   </div>
 
                   {selectedThreadReplies.length > 0 ? (
-                    <div className="border-b border-[#e6e6e6] px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-[#616061] sm:px-6">
+                    <div className="border-b border-brand-line bg-background px-4 py-3 text-xs font-medium uppercase tracking-[0.08em] text-brand-quiet sm:px-6">
                       {selectedThreadReplies.length} repl
                       {selectedThreadReplies.length === 1 ? 'y' : 'ies'}
                     </div>
@@ -967,22 +967,22 @@ export function ChatInterface({
                   {selectedThreadReplies.map((message) => (
                     <div
                       key={message.id}
-                      className="border-b border-[#e6e6e6] px-4 py-4 sm:px-6"
+                      className="border-b border-brand-line/80 px-4 py-4 sm:px-6"
                     >
                       <div className="flex items-start gap-3">
                         <SlackAvatar message={message} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-baseline gap-2">
-                            <p className="text-[15px] font-semibold text-[#1d1c1d]">
+                            <p className="text-[15px] font-semibold text-foreground">
                               {message.role === 'assistant'
                                 ? 'Kodi'
                                 : (message.userName ?? 'You')}
                             </p>
-                            <p className="text-xs text-[#616061]">
+                            <p className="text-xs text-brand-quiet">
                               {formatTime(message.createdAt)}
                             </p>
                           </div>
-                          <div className="mt-0.5 text-[15px] leading-7 text-[#1d1c1d]">
+                          <div className="mt-0.5 text-[15px] leading-7 text-foreground">
                             <MessageBody content={message.content} />
                           </div>
                         </div>
@@ -991,13 +991,13 @@ export function ChatInterface({
                   ))}
 
                   {sendingThread ? (
-                    <div className="px-4 py-4 text-sm text-[#616061] sm:px-6">
+                    <div className="px-4 py-4 text-sm text-brand-quiet sm:px-6">
                       Kodi is responding...
                     </div>
                   ) : null}
                 </>
               ) : (
-                <div className="px-4 py-12 text-sm text-[#616061] sm:px-6">
+                <div className="px-4 py-12 text-sm text-brand-quiet sm:px-6">
                   This thread is no longer available.
                 </div>
               )}
@@ -1022,7 +1022,7 @@ export function ChatInterface({
             />
 
             {error ? (
-              <p className="px-4 pb-4 text-sm text-[hsl(var(--destructive))] sm:px-6">
+              <p className="px-4 pb-4 text-sm text-brand-danger sm:px-6">
                 {error}
               </p>
             ) : null}

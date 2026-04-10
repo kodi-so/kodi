@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useOrg } from '@/lib/org-context'
+import { pageShellClass } from '@/lib/brand-styles'
 import { trpc } from '@/lib/trpc'
 import { ProvisionStatus } from './_components/provision-status'
 import { Skeleton } from '@kodi/ui'
@@ -45,7 +46,7 @@ export default function ProvisionPage() {
 
   if (!activeOrg) {
     return (
-      <div className="flex min-h-full items-center justify-center p-6 text-sm text-[#8ea3a8]">
+      <div className="flex min-h-full items-center justify-center p-6 text-sm text-brand-quiet">
         Select a team to manage your agent.
       </div>
     )
@@ -54,13 +55,13 @@ export default function ProvisionPage() {
   if (loading) {
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-[#DFAE56]/30" />
+        <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center p-6">
+    <div className={`${pageShellClass} flex min-h-full items-center justify-center p-6`}>
       <ProvisionStatus orgId={activeOrg.orgId} initialData={initialData} />
     </div>
   )

@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Plus, Video } from 'lucide-react'
 import { Alert, AlertDescription, Badge, Button, Skeleton } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
+import {
+  pageShellClass,
+  heroPanelClass,
+  quietTextClass,
+} from '@/lib/brand-styles'
 import { trpc } from '@/lib/trpc'
 import { IntegrationCard } from './_components/integration-card'
 import {
@@ -102,24 +107,24 @@ export default function IntegrationsPage() {
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
+        <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-full bg-background">
+    <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8">
-        <section className="overflow-hidden rounded-[2rem] border border-border bg-card p-6 lg:p-8">
+        <section className={`${heroPanelClass} rounded-[2rem] p-6 lg:p-8`}>
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">Integrations</Badge>
-                <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                <Badge variant="success">
                   {catalog?.summary.activeCount ?? 0} active
                 </Badge>
                 {reviewItems.length > 0 && (
-                  <Badge className="border-red-500/20 bg-red-500/10 text-red-200">
+                  <Badge variant="destructive">
                     {reviewItems.length} need review
                   </Badge>
                 )}
@@ -155,13 +160,13 @@ export default function IntegrationsPage() {
         </section>
 
         {error && (
-          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+          <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {catalog && !catalog.setup.apiConfigured && (
-          <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-100">
+          <Alert variant="warning">
             <AlertDescription>
               Composio is not configured in this environment yet. Add the
               missing API values to make the tool catalog connectable.
@@ -170,7 +175,7 @@ export default function IntegrationsPage() {
         )}
 
         {catalog && !catalog.featureFlags.toolAccess && (
-          <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-100">
+          <Alert variant="warning">
             <AlertDescription>
               Tool access is off in this environment right now, so the catalog
               stays browse-only until the feature flag is enabled.
@@ -179,7 +184,7 @@ export default function IntegrationsPage() {
         )}
 
         {catalog?.syncError && (
-          <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-100">
+          <Alert variant="warning">
             <AlertDescription>{catalog.syncError}</AlertDescription>
           </Alert>
         )}
@@ -265,10 +270,10 @@ export default function IntegrationsPage() {
         {reviewItems.length > 0 && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-xl font-semibold tracking-tight text-white">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
                 Needs review
               </h2>
-              <p className="mt-1 text-sm text-zinc-400">
+              <p className={`mt-1 text-sm ${quietTextClass}`}>
                 These connections are on file, but they should be checked before
                 you rely on them in chat or meetings.
               </p>

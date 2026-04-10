@@ -24,7 +24,6 @@ import {
   CardTitle,
   Separator,
   Skeleton,
-  Textarea,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
@@ -391,9 +390,6 @@ export default function MeetingDetailsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
-  const [chatDraft, setChatDraft] = useState('')
-  const [chatError, setChatError] = useState<string | null>(null)
-  const [isSendingChat, setIsSendingChat] = useState(false)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -731,42 +727,6 @@ export default function MeetingDetailsPage() {
     [liveState?.risks]
   )
 
-  async function sendChatMessage() {
-    if (!orgId || !meeting || !chatDraft.trim() || isSendingChat) {
-      return
-    }
-
-    setIsSendingChat(true)
-    setChatError(null)
-
-    try {
-      await trpc.meeting.sendChatMessage.mutate({
-        orgId,
-        meetingSessionId: meeting.id,
-        message: chatDraft.trim(),
-        to: 'everyone',
-      })
-
-      setChatDraft('')
-
-      const next = await trpc.meeting.getConsole.query({
-        orgId,
-        meetingSessionId: meeting.id,
-        transcriptLimit: 200,
-        eventLimit: 50,
-      })
-
-      setConsoleData(next as MeetingConsole | null)
-      setLastRefreshedAt(new Date())
-    } catch (err) {
-      setChatError(
-        err instanceof Error ? err.message : 'Failed to send chat message.'
-      )
-    } finally {
-      setIsSendingChat(false)
-    }
-  }
-
   const technicalDetails = useMemo(() => {
     if (!meeting) return []
 
@@ -1046,8 +1006,8 @@ export default function MeetingDetailsPage() {
                       Meeting chat
                     </CardTitle>
                     <CardDescription>
-                      Send a Zoom chat message as Kodi and review in-meeting
-                      chat replies.
+                      Review in-meeting Zoom chat messages that Kodi observed
+                      during the session.
                     </CardDescription>
                   </div>
                 </div>
@@ -1055,37 +1015,13 @@ export default function MeetingDetailsPage() {
               <CardContent className="space-y-4">
                 {meeting.provider === 'zoom' ? (
                   <>
-                    <div className="space-y-3">
-                      <Textarea
-                        value={chatDraft}
-                        onChange={(event) => setChatDraft(event.target.value)}
-                        placeholder="Send a short message as Kodi into the meeting chat"
-                        className="min-h-[104px] border-brand-line bg-brand-elevated placeholder:text-brand-subtle"
-                      />
-                      <div className="flex items-center justify-between gap-3">
-                        <p className={`text-xs ${quietTextClass}`}>
-                          Messages currently send to everyone in the Zoom
-                          meeting.
-                        </p>
-                        <Button
-                          onClick={() => void sendChatMessage()}
-                          disabled={
-                            isSendingChat ||
-                            !chatDraft.trim() ||
-                            meeting.status === 'failed' ||
-                            meeting.status === 'ended'
-                          }
-                        >
-                          {isSendingChat ? 'Sending...' : 'Send as Kodi'}
-                        </Button>
-                      </div>
+                    <div
+                      className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                    >
+                      This branch keeps meeting chat as a read-only activity
+                      feed. Sending new in-meeting chat messages is not included
+                      here.
                     </div>
-
-                    {chatError && (
-                      <Alert variant="destructive">
-                        <AlertDescription>{chatError}</AlertDescription>
-                      </Alert>
-                    )}
 
                     {chatMessages.length === 0 ? (
                       <div
@@ -1127,8 +1063,8 @@ export default function MeetingDetailsPage() {
                   <div
                     className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
                   >
-                    In-meeting chat sending is available for Zoom sessions right
-                    now.
+                    In-meeting chat activity is available for Zoom sessions
+                    right now.
                   </div>
                 )}
               </CardContent>

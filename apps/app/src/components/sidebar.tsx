@@ -38,8 +38,8 @@ function OrgSwitcher() {
 
   if (orgs.length === 1 && activeOrg) {
     return (
-      <div className="border-b border-border/80 px-5 py-4">
-        <p className="mb-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="border-b border-brand-line px-5 py-4">
+        <p className="mb-1 text-xs uppercase tracking-[0.16em] text-brand-subtle">
           Workspace
         </p>
         <p className="truncate text-sm text-foreground">{activeOrg.orgName}</p>
@@ -48,22 +48,22 @@ function OrgSwitcher() {
   }
 
   return (
-    <div ref={ref} className="relative border-b border-border/80 px-4 py-4">
+    <div ref={ref} className="relative border-b border-brand-line px-4 py-4">
       <button
         onClick={() => setOpen((o) => !o)}
         onBlur={handleBlur}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 px-3 py-3 text-sm shadow-soft transition-colors hover:bg-secondary/80"
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-brand-line bg-brand-elevated px-3 py-3 text-sm shadow-brand-panel transition-colors hover:bg-secondary"
       >
         <span className="truncate text-foreground">
           {activeOrg?.orgName ?? 'Select workspace'}
         </span>
         <ChevronDown
           size={14}
-          className={`flex-shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`flex-shrink-0 text-brand-quiet transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (
-        <Card className="absolute left-4 right-4 top-full z-50 mt-2 overflow-hidden border-border/80 bg-card/95">
+        <Card className="absolute left-4 right-4 top-full z-50 mt-2 overflow-hidden border-brand-line">
           {orgs.map((org) => (
             <button
               key={org.orgId}
@@ -75,7 +75,7 @@ function OrgSwitcher() {
             >
               <div className="min-w-0 text-left">
                 <p className="truncate text-foreground">{org.orgName}</p>
-                <p className="text-xs capitalize text-muted-foreground">
+                <p className="text-xs capitalize text-brand-quiet">
                   {org.role}
                 </p>
               </div>
@@ -103,7 +103,7 @@ export function Sidebar() {
 
   const navContent = (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border/80 px-5 py-5">
+      <div className="border-b border-brand-line px-5 py-5">
         <BrandLogo size={34} />
       </div>
 
@@ -119,8 +119,8 @@ export function Sidebar() {
               variant={active ? 'secondary' : 'ghost'}
               className={`h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sm font-medium ${
                 active
-                  ? 'border border-border/80 bg-secondary/80 text-foreground shadow-soft hover:bg-secondary'
-                  : 'text-muted-foreground hover:bg-card/80'
+                  ? 'border border-brand-line bg-brand-accent-soft text-brand-accent-foreground shadow-brand-panel hover:bg-brand-accent-soft'
+                  : 'text-brand-quiet hover:bg-brand-panel hover:text-foreground'
               }`}
             >
               <Link href={href} onClick={() => setMobileOpen(false)}>
@@ -132,9 +132,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-border/80 px-4 py-4">
-        <div className="mb-3 flex items-center gap-3 rounded-2xl border border-border/80 bg-card/85 px-3 py-3 shadow-soft">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-secondary text-xs text-foreground">
+      <div className="border-t border-brand-line px-4 py-4">
+        <div className="mb-3 flex items-center gap-3 rounded-2xl border border-brand-line bg-brand-elevated px-3 py-3 shadow-brand-panel">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-accent-soft text-xs text-brand-accent-foreground">
             <span>
               {session?.user?.name?.[0]?.toUpperCase() ??
                 session?.user?.email?.[0]?.toUpperCase() ??
@@ -145,7 +145,7 @@ export function Sidebar() {
             <p className="truncate text-sm text-foreground">
               {session?.user?.name ?? 'User'}
             </p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-xs text-brand-quiet">
               {session?.user?.email}
             </p>
           </div>
@@ -163,7 +163,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col border-r border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(250,245,235,0.9))] md:flex">
+      <aside className="kodi-sidebar-surface sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col border-r border-brand-line md:flex">
         {navContent}
       </aside>
 
@@ -179,19 +179,19 @@ export function Sidebar() {
 
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-[rgba(30,35,38,0.18)] backdrop-blur-sm md:hidden"
+          className="kodi-overlay-scrim fixed inset-0 z-40 backdrop-blur-sm md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 border-r border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(250,245,235,0.98))] transition-transform duration-200 md:hidden ${
+        className={`kodi-sidebar-surface fixed inset-y-0 left-0 z-50 w-72 border-r border-brand-line transition-transform duration-200 md:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute right-4 top-4 p-1 text-muted-foreground hover:text-foreground"
+          className="absolute right-4 top-4 p-1 text-brand-quiet hover:text-foreground"
           aria-label="Close menu"
         >
           <X size={20} />

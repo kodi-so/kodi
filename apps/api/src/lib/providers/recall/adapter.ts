@@ -24,6 +24,7 @@ import {
   type RecallCreateBotRequest,
 } from './client'
 import { getRecallClientConfig } from './config'
+import { createZoomZakCallbackUrl } from '../../zoom'
 import {
   inferMeetingProviderFromUrl,
   resolveMeetingIdFromJoinUrl,
@@ -214,10 +215,17 @@ function buildRecallJoinPayload(
   return {
     meeting_url: request.meeting.joinUrl,
     bot_name: request.botIdentity?.displayName ?? 'Kodi',
+    zoom:
+      request.provider === 'zoom' && request.providerInstallationId
+        ? {
+            zak_url: createZoomZakCallbackUrl(request.providerInstallationId),
+          }
+        : undefined,
     metadata: {
       orgId: request.orgId,
       provider: request.provider,
       internalMeetingSessionId: request.session?.internalMeetingSessionId ?? null,
+      providerInstallationId: request.providerInstallationId ?? null,
       ...(request.metadata ?? {}),
     },
     recording_config: {

@@ -95,8 +95,8 @@ export default function HomePage() {
             </ul>
           </div>
 
-          <div className="rounded-[2rem] border border-border/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(250,245,235,0.96))] p-4 shadow-soft sm:p-6">
-            <div className="rounded-[1.6rem] border border-border/70 bg-[rgba(255,255,255,0.82)] p-5">
+          <div className="kodi-panel-surface rounded-[2rem] border border-brand-line p-4 shadow-brand-panel sm:p-6">
+            <div className="kodi-panel-muted-surface rounded-[1.6rem] border border-brand-line p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
@@ -106,7 +106,7 @@ export default function HomePage() {
                     Kodi is already lining up the follow-through
                   </h2>
                 </div>
-                <div className="rounded-full border border-border/70 bg-background/80 px-3 py-1 text-sm text-muted-foreground">
+                <div className="rounded-full border border-brand-line bg-brand-elevated px-3 py-1 text-sm text-muted-foreground">
                   live
                 </div>
               </div>
@@ -115,7 +115,7 @@ export default function HomePage() {
                 {flow.map((item) => (
                   <div
                     key={item.label}
-                    className="rounded-[1.4rem] border border-border/70 bg-secondary/55 p-4"
+                    className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
                   >
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                       {item.label}
@@ -134,7 +134,7 @@ export default function HomePage() {
                 {tools.map((tool) => (
                   <span
                     key={tool}
-                    className="rounded-full border border-border/75 bg-background/80 px-3 py-1 text-sm text-muted-foreground"
+                    className="rounded-full border border-brand-line bg-brand-elevated px-3 py-1 text-sm text-muted-foreground"
                   >
                     {tool}
                   </span>
@@ -175,7 +175,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="rounded-[1.8rem] border border-border/80 bg-card/72 p-6">
+          <div className="kodi-panel-muted-surface rounded-[1.8rem] border border-brand-line p-6">
             <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
               What teams get back
             </p>

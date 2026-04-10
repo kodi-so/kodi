@@ -10,22 +10,26 @@
     font-family: var(--font-abeezee), system-ui, sans-serif;
   }
   body {
-    @apply text-foreground antialiased;
+    @apply bg-background text-foreground antialiased;
     background:
       radial-gradient(
         circle at top,
-        rgba(236, 197, 120, 0.18),
-        transparent 28%
+        hsl(var(--kodi-accent) / 0.18),
+        transparent 30%
       ),
       radial-gradient(
-        circle at right 20%,
-        rgba(212, 223, 229, 0.46),
-        transparent 22%
+        circle at right 18%,
+        hsl(var(--kodi-sidebar) / 0.82),
+        transparent 24%
       ),
-      hsl(var(--background));
+      linear-gradient(
+        180deg,
+        hsl(var(--kodi-canvas)),
+        hsl(var(--kodi-canvas-shade))
+      );
   }
   ::selection {
-    background: rgba(231, 185, 88, 0.3);
+    background: hsl(var(--kodi-accent) / 0.28);
     color: hsl(var(--foreground));
   }
 }

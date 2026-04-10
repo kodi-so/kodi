@@ -21,6 +21,14 @@ type ConversationMessage = {
   userImage?: string | null
 }
 
+type DashboardAssistantProps = {
+  orgId: string
+  orgName: string
+  embedded?: boolean
+  initialThreadId?: string | null
+  buildThreadUrl?: (threadId: string | null) => string
+}
+
 function makeTempId(prefix: string) {
   return `temp-${prefix}-${crypto.randomUUID()}`
 }
@@ -103,15 +111,8 @@ function MessageAvatar({
   )
 }
 
-export function DashboardAssistant({
-  orgId,
-  orgName,
-  embedded = false,
-}: {
-  orgId: string
-  orgName: string
-  embedded?: boolean
-}) {
+export function DashboardAssistant(props: DashboardAssistantProps) {
+  const { orgId, orgName, embedded = false } = props
   const { data: session } = useSession()
   const [messages, setMessages] = useState<ConversationMessage[]>([])
   const [draft, setDraft] = useState('')

@@ -1,6 +1,7 @@
-import { desc, eq } from 'drizzle-orm'
 import {
   db,
+  desc,
+  eq,
   meetingSessions,
   transcriptSegments,
 } from '@kodi/db'

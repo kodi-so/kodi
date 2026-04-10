@@ -16,6 +16,7 @@ import {
   listToolkitAccountPreferences,
   listToolkitPolicies,
   listToolkits,
+  markMetadataUserDisconnected,
   markPersistedConnectionInactive,
   revalidatePersistedConnection,
   syncUserConnectionsForOrg,
@@ -515,8 +516,14 @@ export const toolAccessRouter = router({
         })
       }
 
-      await disableConnectedAccount(existing.connectedAccountId)
-      await markPersistedConnectionInactive(ctx.db, existing.id)
+      if (existing.connectedAccountStatus === 'ACTIVE') {
+        await disableConnectedAccount(existing.connectedAccountId)
+      }
+      await markPersistedConnectionInactive(
+        ctx.db,
+        existing.id,
+        markMetadataUserDisconnected(existing.metadata ?? null)
+      )
 
       const existingPreference =
         (
@@ -592,9 +599,7 @@ export const toolAccessRouter = router({
       )
 
       return {
-        connection: refreshed
-          ? serializeConnection(refreshed, null)
-          : null,
+        connection: refreshed ? serializeConnection(refreshed, null) : null,
       }
     }),
 })

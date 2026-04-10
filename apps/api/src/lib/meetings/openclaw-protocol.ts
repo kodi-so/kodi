@@ -5,6 +5,7 @@ import type {
   MeetingSession,
 } from '@kodi/db'
 import type {
+  MeetingChatMessageEvent,
   MeetingLifecycleEvent,
   MeetingParticipantEvent,
   MeetingProviderEvent,
@@ -107,6 +108,28 @@ function buildParticipantPayload(event: MeetingParticipantEvent) {
   }
 }
 
+function buildChatMessagePayload(event: MeetingChatMessageEvent) {
+  return {
+    kind: 'chat_message' as const,
+    chatMessage: {
+      action: event.action,
+      occurredAt: event.occurredAt.toISOString(),
+      message: {
+        content: event.message.content,
+        to: event.message.to,
+        sender: {
+          providerParticipantId:
+            event.message.sender?.providerParticipantId ?? null,
+          displayName: event.message.sender?.displayName ?? null,
+          email: event.message.sender?.email ?? null,
+          isHost: event.message.sender?.isHost ?? false,
+          isInternal: event.message.sender?.isInternal ?? null,
+        },
+      },
+    },
+  }
+}
+
 function buildLifecyclePayload(event: MeetingLifecycleEvent) {
   return {
     kind: 'lifecycle' as const,
@@ -123,6 +146,7 @@ function buildLifecyclePayload(event: MeetingLifecycleEvent) {
 function buildEventPayload(event: MeetingProviderEvent) {
   if (event.kind === 'transcript') return buildTranscriptPayload(event)
   if (event.kind === 'participant') return buildParticipantPayload(event)
+  if (event.kind === 'chat_message') return buildChatMessagePayload(event)
   if (event.kind === 'lifecycle') return buildLifecyclePayload(event)
 
   return {
@@ -163,7 +187,7 @@ export function buildOpenClawMeetingMessages(
     {
       role: 'system' as const,
       content:
-        'You are Kodi meeting ingress for an OpenClaw runtime. Consume the JSON envelope exactly as written. Treat delivery.sequence as the ordering key, transcript chunks as append-only inputs, participants as the latest snapshot, and lifecycle markers as state transitions. Reply with JSON only and no prose using this shape: {"protocolVersion":"kodi.meeting.v1","accepted":true,"processedEventId":"...","receivedKind":"transcript|participant|lifecycle|health","notes":null}.',
+        'You are Kodi meeting ingress for an OpenClaw runtime. Consume the JSON envelope exactly as written. Treat delivery.sequence as the ordering key, transcript chunks as append-only inputs, chat messages as explicit in-meeting text inputs, participants as the latest snapshot, and lifecycle markers as state transitions. Reply with JSON only and no prose using this shape: {"protocolVersion":"kodi.meeting.v1","accepted":true,"processedEventId":"...","receivedKind":"transcript|participant|chat_message|lifecycle|health","notes":null}.',
     },
     {
       role: 'user' as const,

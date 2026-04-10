@@ -22,6 +22,7 @@ export type MeetingAdapterHealthStatus = 'healthy' | 'degraded' | 'down'
 export type MeetingProviderEventKind =
   | 'transcript'
   | 'participant'
+  | 'chat_message'
   | 'lifecycle'
   | 'health'
 
@@ -40,11 +41,28 @@ export type MeetingParticipantEventName =
   | 'participant.updated'
   | 'participant.left'
 
+export type MeetingChatMessageEventName =
+  | 'meeting.chat_message.received'
+  | 'meeting.chat_message.sent'
+
 export type MeetingParticipantIdentity = {
   providerParticipantId?: string | null
   externalUserId?: string | null
   email?: string | null
   displayName?: string | null
+}
+
+export type MeetingChatMessageRecipient =
+  | 'everyone'
+  | 'host'
+  | 'everyone_except_host'
+  | 'only_bot'
+  | 'participant'
+  | string
+
+export type MeetingChatMessageIdentity = MeetingParticipantIdentity & {
+  isHost?: boolean
+  isInternal?: boolean | null
 }
 
 export type MeetingProviderSessionRef = {
@@ -96,6 +114,16 @@ export type MeetingParticipantEvent =
     participant: MeetingParticipantIdentity
   }
 
+export type MeetingChatMessageEvent =
+  MeetingProviderEventBase<'chat_message'> & {
+    action: MeetingChatMessageEventName
+    message: {
+      content: string
+      to: MeetingChatMessageRecipient
+      sender?: MeetingChatMessageIdentity | null
+    }
+  }
+
 export type MeetingLifecycleEvent = MeetingProviderEventBase<'lifecycle'> & {
   action: MeetingLifecycleEventName
   state: MeetingAdapterLifecycleState
@@ -110,5 +138,6 @@ export type MeetingHealthEvent = MeetingProviderEventBase<'health'> & {
 export type MeetingProviderEvent =
   | MeetingTranscriptEvent
   | MeetingParticipantEvent
+  | MeetingChatMessageEvent
   | MeetingLifecycleEvent
   | MeetingHealthEvent

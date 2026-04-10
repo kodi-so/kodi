@@ -1,4 +1,5 @@
 import type {
+  MeetingChatMessageRecipient,
   MeetingAdapterLifecycleState,
   MeetingProviderEvent,
   MeetingProviderEventEnvelope,
@@ -56,11 +57,27 @@ export type MeetingProviderHealthRequest = {
   metadata?: Record<string, unknown> | null
 }
 
+export type MeetingProviderSendChatMessageRequest = {
+  orgId: string
+  provider: MeetingProviderSlug
+  session: MeetingProviderSessionRef
+  message: string
+  to?: MeetingChatMessageRecipient | null
+  metadata?: Record<string, unknown> | null
+}
+
 export type MeetingProviderControlResult = {
   acceptedAt: Date
   session?: MeetingProviderSessionRef | null
   lifecycleState: MeetingAdapterLifecycleState
   providerRequestId?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export type MeetingProviderSendChatMessageResult = {
+  acceptedAt: Date
+  session?: MeetingProviderSessionRef | null
+  recipient: MeetingChatMessageRecipient
   metadata?: Record<string, unknown> | null
 }
 
@@ -74,6 +91,10 @@ export interface MeetingProviderAdapter {
   join(request: MeetingProviderJoinRequest): Promise<MeetingProviderControlResult>
 
   stop(request: MeetingProviderStopRequest): Promise<MeetingProviderControlResult>
+
+  sendChatMessage?(
+    request: MeetingProviderSendChatMessageRequest
+  ): Promise<MeetingProviderSendChatMessageResult>
 
   normalizeEvent(
     envelope: MeetingProviderEventEnvelope

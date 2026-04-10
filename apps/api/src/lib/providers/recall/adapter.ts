@@ -4,9 +4,12 @@ import type {
   MeetingProviderHealthRequest,
   MeetingProviderJoinRequest,
   MeetingProviderPrepareRequest,
+  MeetingProviderSendChatMessageRequest,
+  MeetingProviderSendChatMessageResult,
   MeetingProviderStopRequest,
 } from '../../meetings/provider-adapter'
 import type {
+  MeetingChatMessageEvent,
   MeetingProviderEvent,
   MeetingProviderEventEnvelope,
   MeetingProviderHealthSnapshot,
@@ -22,6 +25,7 @@ import {
   type RecallJoinAttempt,
   RecallMeetingJoinError,
   type RecallCreateBotRequest,
+  sendRecallBotChatMessage,
 } from './client'
 import { getRecallClientConfig } from './config'
 import { createZoomZakCallbackUrl } from '../../zoom'
@@ -211,6 +215,7 @@ function buildRecallJoinPayload(
         recall.realtimeAuthToken
       )
     : null
+  const chatWebhookUrl = realtimeWebhookUrl
 
   return {
     meeting_url: request.meeting.joinUrl,
@@ -229,6 +234,13 @@ function buildRecallJoinPayload(
       ...(request.metadata ?? {}),
     },
     recording_config: {
+      chat_messages: chatWebhookUrl
+        ? {
+            webhook: {
+              url: chatWebhookUrl,
+            },
+          }
+        : undefined,
       transcript: realtimeWebhookUrl
         ? {
             provider: {
@@ -406,6 +418,33 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
     }
   }
 
+  async sendChatMessage(
+    request: MeetingProviderSendChatMessageRequest
+  ): Promise<MeetingProviderSendChatMessageResult> {
+    if (!request.session.externalBotSessionId) {
+      throw new Error(
+        'Recall chat message send requires an external bot session id.'
+      )
+    }
+
+    const recipient = request.to ?? 'everyone'
+
+    await sendRecallBotChatMessage({
+      botId: request.session.externalBotSessionId,
+      message: request.message,
+      to: recipient,
+    })
+
+    return {
+      acceptedAt: new Date(),
+      session: request.session,
+      recipient,
+      metadata: {
+        transport: 'recall',
+      },
+    }
+  }
+
   async normalizeEvent(
     envelope: MeetingProviderEventEnvelope
   ): Promise<MeetingProviderEvent[]> {
@@ -463,6 +502,47 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
     }
 
     if (payload.event.startsWith('participant_events.')) {
+      if (payload.event === 'participant_events.chat_message') {
+        const sender = asRecord(eventData?.participant ?? eventData?.sender)
+        const text =
+          typeof eventData?.text === 'string'
+            ? eventData.text
+            : typeof eventData?.message === 'string'
+              ? eventData.message
+              : null
+        if (!text) return []
+
+        const chatEvent: MeetingChatMessageEvent = {
+          kind: 'chat_message',
+          provider: this.provider,
+          occurredAt,
+          session,
+          action: 'meeting.chat_message.received',
+          message: {
+            content: text,
+            to:
+              typeof eventData?.to === 'string'
+                ? eventData.to
+                : 'everyone',
+            sender: sender
+              ? {
+                  providerParticipantId:
+                    sender.id != null ? String(sender.id) : null,
+                  displayName:
+                    typeof sender.name === 'string' ? sender.name : null,
+                  isHost: sender.is_host === true,
+                }
+              : null,
+          },
+          metadata: {
+            transport: 'recall',
+            recallEvent: payload.event,
+          },
+        }
+
+        return [chatEvent]
+      }
+
       const participant = asRecord(eventData?.participant)
       if (!participant) return []
 
@@ -492,6 +572,39 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
             transport: 'recall',
             recallEvent: payload.event,
             participant: participant,
+          },
+        },
+      ]
+    }
+
+    if (payload.event === 'bot.chat_message') {
+      const sender = asRecord(data?.sender)
+      const text = typeof data?.text === 'string' ? data.text : null
+      if (!text) return []
+
+      return [
+        {
+          kind: 'chat_message',
+          provider: this.provider,
+          occurredAt,
+          session,
+          action: 'meeting.chat_message.received',
+          message: {
+            content: text,
+            to: typeof data?.to === 'string' ? data.to : 'everyone',
+            sender: sender
+              ? {
+                  providerParticipantId:
+                    sender.id != null ? String(sender.id) : null,
+                  displayName:
+                    typeof sender.name === 'string' ? sender.name : null,
+                  isHost: sender.is_host === true,
+                }
+              : null,
+          },
+          metadata: {
+            transport: 'recall',
+            recallEvent: payload.event,
           },
         },
       ]

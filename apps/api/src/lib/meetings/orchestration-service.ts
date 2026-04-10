@@ -16,6 +16,7 @@ import type {
 import { MeetingProviderGateway } from './provider-gateway'
 import { RecallMeetingJoinError } from '../providers/recall/client'
 import type {
+  MeetingChatMessageEvent,
   MeetingAdapterLifecycleState,
   MeetingProviderEvent,
   MeetingProviderEventEnvelope,
@@ -424,6 +425,86 @@ export class MeetingOrchestrationService {
     return {
       meetingSession,
       joinResult,
+    }
+  }
+
+  async sendChatMessage(input: {
+    orgId: string
+    meetingSessionId: string
+    message: string
+    to?: string | null
+  }) {
+    const meetingSession = await this.database.query.meetingSessions.findFirst({
+      where: (fields, { and, eq }) =>
+        and(eq(fields.id, input.meetingSessionId), eq(fields.orgId, input.orgId)),
+    })
+
+    if (!meetingSession) {
+      throw new Error('Meeting session not found.')
+    }
+
+    const sendResult = await this.gateway.sendChatMessage({
+      orgId: input.orgId,
+      provider: meetingSession.provider,
+      session: {
+        internalMeetingSessionId: meetingSession.id,
+        externalMeetingId: meetingSession.providerMeetingId ?? null,
+        externalMeetingInstanceId:
+          meetingSession.providerMeetingInstanceId ?? null,
+        externalBotSessionId: meetingSession.providerBotSessionId ?? null,
+      },
+      message: input.message,
+      to: input.to ?? 'everyone',
+    })
+
+    const normalizedEvent: MeetingChatMessageEvent = {
+      kind: 'chat_message',
+      provider: meetingSession.provider,
+      occurredAt: sendResult.acceptedAt,
+      session: sendResult.session ?? null,
+      action: 'meeting.chat_message.sent',
+      message: {
+        content: input.message,
+        to: sendResult.recipient,
+        sender: {
+          displayName: 'Kodi',
+          isInternal: true,
+        },
+      },
+      metadata: {
+        ...(sendResult.metadata ?? {}),
+        origin: 'kodi_ui',
+      },
+    }
+
+    const appendResult = await appendNormalizedMeetingEvent(
+      meetingSession.id,
+      normalizedEvent,
+      'kodi_ui'
+    )
+
+    const updatedMeetingSession = await this.database.query.meetingSessions.findFirst({
+      where: (fields, { eq }) => eq(fields.id, meetingSession.id),
+    })
+
+    if (
+      updatedMeetingSession &&
+      appendResult.persistedEvent &&
+      appendResult.shouldFanOut
+    ) {
+      await this.runPostIngestionWork({
+        orgId: input.orgId,
+        meetingSession: updatedMeetingSession,
+        persistedEvent: appendResult.persistedEvent,
+        event: normalizedEvent,
+        source: 'kodi_ui',
+      })
+    }
+
+    return {
+      meetingSession: updatedMeetingSession ?? meetingSession,
+      sendResult,
+      persistedEvent: appendResult.persistedEvent,
     }
   }
 

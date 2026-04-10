@@ -10,6 +10,7 @@ import {
 import { logActivity } from '../activity'
 import { env } from '../../env'
 import type {
+  MeetingChatMessageEvent,
   MeetingHealthEvent,
   MeetingLifecycleEvent,
   MeetingParticipantEvent,
@@ -617,6 +618,7 @@ export async function appendTranscriptSegments(
 function normalizedEventType(event: MeetingProviderEvent) {
   if (event.kind === 'transcript') return 'meeting.transcript.segment_received'
   if (event.kind === 'participant') return event.action
+  if (event.kind === 'chat_message') return event.action
   if (event.kind === 'lifecycle') return event.action
   return 'meeting.health.updated'
 }
@@ -640,6 +642,16 @@ function normalizedEventPayload(event: MeetingProviderEvent) {
       participant: participantEvent.participant,
       session: participantEvent.session ?? null,
       metadata: participantEvent.metadata ?? null,
+    }
+  }
+
+  if (event.kind === 'chat_message') {
+    const chatEvent: MeetingChatMessageEvent = event
+    return {
+      occurredAt: chatEvent.occurredAt.toISOString(),
+      message: chatEvent.message,
+      session: chatEvent.session ?? null,
+      metadata: chatEvent.metadata ?? null,
     }
   }
 

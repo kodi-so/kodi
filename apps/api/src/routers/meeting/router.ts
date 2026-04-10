@@ -172,6 +172,64 @@ export const meetingRouter = router({
       })
     }),
 
+  sendChatMessage: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        message: z.string().trim().min(1).max(2000),
+        to: z.enum(['everyone', 'host', 'everyone_except_host']).default('everyone'),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(eq(fields.id, input.meetingSessionId), eq(fields.orgId, ctx.org.id)),
+        columns: {
+          id: true,
+          provider: true,
+          providerBotSessionId: true,
+        },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
+      }
+
+      if (meeting.provider !== 'zoom') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'In-meeting chat sending is available for Zoom sessions right now.',
+        })
+      }
+
+      if (!meeting.providerBotSessionId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Kodi has not fully joined the meeting yet.',
+        })
+      }
+
+      const orchestration = new MeetingOrchestrationService(
+        createDefaultMeetingProviderGateway()
+      )
+
+      const result = await orchestration.sendChatMessage({
+        orgId: ctx.org.id,
+        meetingSessionId: input.meetingSessionId,
+        message: input.message.trim(),
+        to: input.to,
+      })
+
+      return {
+        ok: true,
+        acceptedAt: result.sendResult.acceptedAt,
+        recipient: result.sendResult.recipient,
+      }
+    }),
+
   joinByUrl: memberProcedure
     .input(
       z.object({

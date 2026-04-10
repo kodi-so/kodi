@@ -4,6 +4,8 @@ import type {
   MeetingProviderHealthRequest,
   MeetingProviderJoinRequest,
   MeetingProviderPrepareRequest,
+  MeetingProviderSendChatMessageRequest,
+  MeetingProviderSendChatMessageResult,
   MeetingProviderStopRequest,
 } from './provider-adapter'
 import type {
@@ -15,7 +17,10 @@ import type {
 import { MeetingProviderRegistry } from './provider-registry'
 
 export class MeetingProviderCapabilityError extends Error {
-  constructor(provider: MeetingProviderSlug, capability: 'prepare' | 'health') {
+  constructor(
+    provider: MeetingProviderSlug,
+    capability: 'prepare' | 'health' | 'sendChatMessage'
+  ) {
     super(
       `Meeting provider "${provider}" does not implement the optional "${capability}" capability.`
     )
@@ -47,6 +52,17 @@ export class MeetingProviderGateway {
 
   stop(request: MeetingProviderStopRequest): Promise<MeetingProviderControlResult> {
     return this.resolve(request.provider).stop(request)
+  }
+
+  async sendChatMessage(
+    request: MeetingProviderSendChatMessageRequest
+  ): Promise<MeetingProviderSendChatMessageResult> {
+    const adapter = this.resolve(request.provider)
+    if (!adapter.sendChatMessage) {
+      throw new MeetingProviderCapabilityError(request.provider, 'sendChatMessage')
+    }
+
+    return adapter.sendChatMessage(request)
   }
 
   normalizeEvent(

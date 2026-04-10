@@ -24,6 +24,7 @@ import {
   CardTitle,
   Separator,
   Skeleton,
+  Textarea,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
@@ -42,6 +43,14 @@ type MeetingEventFeed = MeetingConsole['events']
 type MeetingTranscriptSegment = MeetingTranscript[number]
 type MeetingTranscriptTurn = MeetingTranscriptSegment & {
   mergedSegmentCount: number
+}
+type MeetingChatItem = {
+  id: string
+  eventType: string
+  content: string
+  senderName: string
+  recipient: string
+  occurredAt: Date | string
 }
 
 function asRecord(value: unknown) {
@@ -177,6 +186,10 @@ function formatEventLabel(eventType: string) {
       return 'Admitted'
     case 'meeting.started':
       return 'Started'
+    case 'meeting.chat_message.received':
+      return 'Chat received'
+    case 'meeting.chat_message.sent':
+      return 'Chat sent'
     case 'meeting.ended':
       return 'Ended'
     case 'meeting.failed':
@@ -369,6 +382,9 @@ export default function MeetingDetailsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [isSendingChat, setIsSendingChat] = useState(false)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -504,6 +520,45 @@ export default function MeetingDetailsPage() {
       )
     })
   }, [timelineEvents])
+
+  const chatMessages = useMemo(
+    () =>
+      [...events]
+        .filter((event) =>
+          [
+            'meeting.chat_message.received',
+            'meeting.chat_message.sent',
+          ].includes(event.eventType)
+        )
+        .reverse()
+        .reduce<MeetingChatItem[]>((items, event) => {
+          const payload = asRecord(event.payload)
+          const message = asRecord(payload?.message)
+          const sender = asRecord(message?.sender)
+          const content =
+            typeof message?.content === 'string' ? message.content.trim() : ''
+
+          if (!content) return items
+
+          items.push({
+            id: event.id,
+            eventType: event.eventType,
+            content,
+            senderName:
+              typeof sender?.displayName === 'string' && sender.displayName
+                ? sender.displayName
+                : event.eventType === 'meeting.chat_message.sent'
+                  ? 'Kodi'
+                  : 'Unknown sender',
+            recipient:
+              typeof message?.to === 'string' ? message.to : 'everyone',
+            occurredAt: event.occurredAt,
+          })
+
+          return items
+        }, []),
+    [events]
+  )
 
   const rollingNotes = useMemo(
     () =>
@@ -654,6 +709,42 @@ export default function MeetingDetailsPage() {
         .filter((value): value is string => Boolean(value)),
     [liveState?.risks]
   )
+
+  async function sendChatMessage() {
+    if (!orgId || !meeting || !chatDraft.trim() || isSendingChat) {
+      return
+    }
+
+    setIsSendingChat(true)
+    setChatError(null)
+
+    try {
+      await trpc.meeting.sendChatMessage.mutate({
+        orgId,
+        meetingSessionId: meeting.id,
+        message: chatDraft.trim(),
+        to: 'everyone',
+      })
+
+      setChatDraft('')
+
+      const next = await trpc.meeting.getConsole.query({
+        orgId,
+        meetingSessionId: meeting.id,
+        transcriptLimit: 200,
+        eventLimit: 50,
+      })
+
+      setConsoleData(next as MeetingConsole | null)
+      setLastRefreshedAt(new Date())
+    } catch (err) {
+      setChatError(
+        err instanceof Error ? err.message : 'Failed to send chat message.'
+      )
+    } finally {
+      setIsSendingChat(false)
+    }
+  }
 
   const technicalDetails = useMemo(() => {
     if (!meeting) return []
@@ -920,6 +1011,96 @@ export default function MeetingDetailsPage() {
           </div>
 
           <div className="space-y-6">
+            <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-white/12 bg-[rgba(31,44,49,0.9)] text-[#dce5e7]">
+                    <Users size={18} />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-white">
+                      Meeting chat
+                    </CardTitle>
+                    <CardDescription className="text-[#9bb0b5]">
+                      Send a Zoom chat message as Kodi and review in-meeting chat
+                      replies.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {meeting.provider === 'zoom' ? (
+                  <>
+                    <div className="space-y-3">
+                      <Textarea
+                        value={chatDraft}
+                        onChange={(event) => setChatDraft(event.target.value)}
+                        placeholder="Send a short message as Kodi into the meeting chat"
+                        className="min-h-[104px] border-white/10 bg-black/12 text-white placeholder:text-[#8ea3a8]"
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs text-[#8ea3a8]">
+                          Messages currently send to everyone in the Zoom meeting.
+                        </p>
+                        <Button
+                          onClick={() => void sendChatMessage()}
+                          disabled={
+                            isSendingChat ||
+                            !chatDraft.trim() ||
+                            meeting.status === 'failed' ||
+                            meeting.status === 'ended'
+                          }
+                        >
+                          {isSendingChat ? 'Sending...' : 'Send as Kodi'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {chatError && (
+                      <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+                        <AlertDescription>{chatError}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {chatMessages.length === 0 ? (
+                      <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-4 text-sm text-[#8ea3a8]">
+                        In-meeting Zoom chat messages will appear here once Kodi
+                        receives or sends them.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {chatMessages.map((message) => (
+                          <div
+                            key={message.id}
+                            className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-[#8ea3a8]">
+                              <span className="font-medium text-[#dce5e7]">
+                                {message.senderName}
+                              </span>
+                              <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
+                                {formatEventLabel(message.eventType)}
+                              </Badge>
+                              <span>{formatDate(message.occurredAt)}</span>
+                              <span>to {message.recipient.replace(/_/g, ' ')}</span>
+                            </div>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white">
+                              {message.content}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-4 text-sm text-[#8ea3a8]">
+                    In-meeting chat sending is available for Zoom sessions right
+                    now.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
               <CardHeader>
                 <CardTitle className="text-xl text-white">

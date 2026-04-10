@@ -10,6 +10,11 @@ export type RecallCreateBotRequest = {
   recording_config?: {
     meeting_metadata?: Record<string, unknown>
     participant_events?: Record<string, unknown>
+    chat_messages?: {
+      webhook: {
+        url: string
+      }
+    }
     transcript?: {
       provider?: {
         recallai_streaming?: {
@@ -233,4 +238,21 @@ export async function leaveRecallBot(botId: string) {
     method: 'POST',
     body: JSON.stringify({}),
   })
+}
+
+export async function sendRecallBotChatMessage(input: {
+  botId: string
+  message: string
+  to?: string | null
+}) {
+  return recallFetch<Record<string, unknown>>(
+    `/api/v1/bot/${input.botId}/send_chat_message/`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        message: input.message,
+        to: input.to ?? 'everyone',
+      }),
+    }
+  )
 }

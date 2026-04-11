@@ -10,6 +10,7 @@ import {
 import { logActivity } from '../activity'
 import { env } from '../../env'
 import type {
+  MeetingChatEvent,
   MeetingHealthEvent,
   MeetingLifecycleEvent,
   MeetingParticipantEvent,
@@ -617,6 +618,7 @@ export async function appendTranscriptSegments(
 function normalizedEventType(event: MeetingProviderEvent) {
   if (event.kind === 'transcript') return 'meeting.transcript.segment_received'
   if (event.kind === 'participant') return event.action
+  if (event.kind === 'chat') return event.action
   if (event.kind === 'lifecycle') return event.action
   return 'meeting.health.updated'
 }
@@ -640,6 +642,16 @@ function normalizedEventPayload(event: MeetingProviderEvent) {
       participant: participantEvent.participant,
       session: participantEvent.session ?? null,
       metadata: participantEvent.metadata ?? null,
+    }
+  }
+
+  if (event.kind === 'chat') {
+    const chatEvent: MeetingChatEvent = event
+    return {
+      occurredAt: chatEvent.occurredAt.toISOString(),
+      message: chatEvent.message,
+      session: chatEvent.session ?? null,
+      metadata: chatEvent.metadata ?? null,
     }
   }
 
@@ -732,6 +744,16 @@ export async function appendNormalizedMeetingEvent(
         normalizedEvent.action === 'participant.left'
           ? normalizedEvent.occurredAt
           : null,
+      metadata: normalizedEvent.metadata ?? null,
+    })
+  }
+
+  if (normalizedEvent.kind === 'chat' && normalizedEvent.message.sender) {
+    await upsertMeetingParticipant(meetingSessionId, {
+      providerParticipantId:
+        normalizedEvent.message.sender.providerParticipantId ?? null,
+      displayName: normalizedEvent.message.sender.displayName ?? null,
+      email: normalizedEvent.message.sender.email ?? null,
       metadata: normalizedEvent.metadata ?? null,
     })
   }

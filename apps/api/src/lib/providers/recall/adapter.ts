@@ -7,6 +7,7 @@ import type {
   MeetingProviderStopRequest,
 } from '../../meetings/provider-adapter'
 import type {
+  MeetingParticipantIdentity,
   MeetingProviderEvent,
   MeetingProviderEventEnvelope,
   MeetingProviderHealthSnapshot,
@@ -93,7 +94,39 @@ function extractOccurredAt(payload: Record<string, unknown>) {
     }
   }
 
+  const timestamp = asRecord(statusData?.timestamp)
+  const absoluteTimestamp = timestamp?.absolute
+
+  if (typeof absoluteTimestamp === 'string') {
+    const parsed = new Date(absoluteTimestamp)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed
+    }
+  }
+
+  if (typeof payload.event_ts === 'number') {
+    const parsed = new Date(payload.event_ts * 1000)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed
+    }
+  }
+
   return new Date()
+}
+
+function extractRecallParticipantIdentity(
+  participant: Record<string, unknown> | null
+): MeetingParticipantIdentity | null {
+  if (!participant) return null
+
+  return {
+    providerParticipantId:
+      participant.id != null ? String(participant.id) : null,
+    displayName:
+      typeof participant.name === 'string' ? participant.name : null,
+    email:
+      typeof participant.email === 'string' ? participant.email : null,
+  }
 }
 
 function normalizeRecallStatusCode(value: string | null | undefined) {
@@ -302,6 +335,7 @@ function buildRecallJoinPayload(
                 'participant_events.join',
                 'participant_events.leave',
                 'participant_events.update',
+                'participant_events.chat_message',
                 'transcript.data',
                 'transcript.partial_data',
               ],
@@ -519,6 +553,38 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
     }
 
     if (payload.event.startsWith('participant_events.')) {
+      if (payload.event === 'participant_events.chat_message') {
+        const participant = asRecord(eventData?.participant)
+        const messageData = asRecord(eventData?.data)
+        const content =
+          typeof messageData?.text === 'string' ? messageData.text.trim() : ''
+
+        if (!content) return []
+
+        return [
+          {
+            kind: 'chat',
+            provider: this.provider,
+            occurredAt,
+            session,
+            action: 'meeting.chat_message.received',
+            message: {
+              content,
+              to:
+                typeof messageData?.to === 'string' ? messageData.to : 'everyone',
+              sender: extractRecallParticipantIdentity(participant),
+            },
+            metadata: {
+              transport: 'recall',
+              recallEvent: payload.event,
+              recallDeliveryId,
+              participant: participant,
+              message: messageData,
+            },
+          },
+        ]
+      }
+
       const participant = asRecord(eventData?.participant)
       if (!participant) return []
 
@@ -536,14 +602,7 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
           occurredAt,
           session,
           action,
-          participant: {
-            providerParticipantId:
-              participant.id != null ? String(participant.id) : null,
-            displayName:
-              typeof participant.name === 'string' ? participant.name : null,
-            email:
-              typeof participant.email === 'string' ? participant.email : null,
-          },
+          participant: extractRecallParticipantIdentity(participant) ?? {},
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
@@ -583,20 +642,7 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
           session,
           transcript: {
             content,
-            speaker: participant
-              ? {
-                  providerParticipantId:
-                    participant.id != null ? String(participant.id) : null,
-                  displayName:
-                    typeof participant.name === 'string'
-                      ? participant.name
-                      : null,
-                  email:
-                    typeof participant.email === 'string'
-                      ? participant.email
-                      : null,
-                }
-              : null,
+            speaker: extractRecallParticipantIdentity(participant),
             startOffsetMs:
               typeof firstTimestamp?.relative === 'number'
                 ? Math.round(firstTimestamp.relative * 1000)

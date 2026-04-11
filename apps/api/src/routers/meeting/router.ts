@@ -199,7 +199,9 @@ export const meetingRouter = router({
 
       if (!meeting) return null
 
-      const [participants, transcript, liveState, events, workspaceConfig] =
+      const gateway = createDefaultMeetingProviderGateway()
+
+      const [participants, transcript, liveState, events, workspaceConfig, health] =
         await Promise.all([
         ctx.db.query.meetingParticipants.findMany({
           where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
@@ -224,6 +226,10 @@ export const meetingRouter = router({
           name: ctx.org.name,
           slug: ctx.org.slug,
         }),
+        resolveMeetingHealthSnapshot(ctx.db, gateway, {
+          orgId: ctx.org.id,
+          meetingSession: meeting,
+        }),
         ])
 
       const controls = await resolveMeetingSessionControls(ctx.db, {
@@ -238,6 +244,7 @@ export const meetingRouter = router({
         transcript,
         liveState,
         events,
+        health,
         workspaceSettings: workspaceConfig.settings,
         controls,
       }

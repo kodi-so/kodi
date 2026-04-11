@@ -72,6 +72,8 @@ export function registerRecallRoutes(app: Hono) {
         provider,
         transport: 'webhook',
         receivedAt: new Date(),
+        deliveryId:
+          c.req.header('webhook-id') ?? c.req.header('svix-id') ?? null,
         session: {
           internalMeetingSessionId:
             typeof botMetadata?.internalMeetingSessionId === 'string'
@@ -165,6 +167,8 @@ export function registerRecallRoutes(app: Hono) {
         provider,
         transport: 'webhook',
         receivedAt: new Date(),
+        deliveryId:
+          c.req.header('webhook-id') ?? c.req.header('svix-id') ?? null,
         session: {
           internalMeetingSessionId:
             typeof botMetadata?.internalMeetingSessionId === 'string'

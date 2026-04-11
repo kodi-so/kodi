@@ -540,14 +540,16 @@ export default function MeetingsPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-3">
-                  {meetings.map((meeting) => (
+                <div className="overflow-hidden rounded-[1.75rem] border border-brand-line bg-card">
+                  {meetings.map((meeting, index) => (
                     <Link
                       key={meeting.id}
                       href={`/meetings/${meeting.id}`}
-                      className="group kodi-panel-surface block rounded-[1.75rem] border border-brand-line p-5 shadow-brand-panel transition hover:-translate-y-0.5 hover:border-foreground/20"
+                      className={`group block px-5 py-4 transition hover:bg-secondary ${
+                        index < meetings.length - 1 ? 'border-b border-brand-line' : ''
+                      }`}
                     >
-                      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant={statusTone(meeting.status)}>
@@ -556,47 +558,42 @@ export default function MeetingsPage() {
                             <Badge variant="neutral">
                               {meetingOutcomeLabel(meeting)}
                             </Badge>
+                            <span className="text-xs text-brand-subtle">
+                              {formatProviderLabel(meeting.provider)}
+                            </span>
                           </div>
 
-                          <h3 className="mt-4 text-xl font-medium text-foreground">
-                            {meeting.title ?? 'Untitled meeting'}
-                          </h3>
+                          <div className="mt-3 flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="truncate text-base font-medium text-foreground">
+                                {meeting.title ?? 'Untitled meeting'}
+                              </h3>
+                              <p className={`mt-1 truncate text-sm ${quietTextClass}`}>
+                                {meetingSnapshot(meeting)}
+                              </p>
+                            </div>
 
-                          <p className="mt-3 max-w-3xl text-sm leading-7 text-foreground">
-                            {meetingSnapshot(meeting)}
-                          </p>
+                            <div className="hidden shrink-0 items-center gap-2 text-sm text-brand-quiet sm:flex">
+                              <span>
+                                {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+                              </span>
+                              <ArrowRight
+                                size={15}
+                                className="transition group-hover:translate-x-0.5"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-brand-subtle sm:hidden">
+                            <span>
+                              {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+                            </span>
+                            <span className="inline-flex items-center gap-2 text-foreground">
+                              Open meeting
+                              <ArrowRight size={14} />
+                            </span>
+                          </div>
                         </div>
-
-                        <div className="flex shrink-0 flex-col gap-3 text-sm text-brand-quiet lg:items-end">
-                          <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated px-4 py-3">
-                            <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
-                              Started
-                            </p>
-                            <p className="mt-2 text-foreground">
-                              {formatDate(
-                                meeting.actualStartAt ?? meeting.createdAt
-                              )}
-                            </p>
-                          </div>
-                          <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated px-4 py-3">
-                            <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
-                              Updated
-                            </p>
-                            <p className="mt-2 text-foreground">
-                              {formatDate(meeting.updatedAt)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-5 flex items-center justify-between gap-3 border-t border-brand-line pt-4 text-sm">
-                        <span className="text-brand-subtle">
-                          {formatProviderLabel(meeting.provider)}
-                        </span>
-                        <span className="inline-flex items-center gap-2 text-foreground transition group-hover:translate-x-0.5">
-                          Open meeting
-                          <ArrowRight size={15} />
-                        </span>
                       </div>
                     </Link>
                   ))}

@@ -1019,11 +1019,13 @@ export default function MeetingDetailsPage() {
                     the call.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {chronologicalTranscript.map((segment) => (
+                  <div className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated">
+                    {chronologicalTranscript.map((segment, index) => (
                       <div
                         key={segment.id}
-                        className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-4"
+                        className={`px-4 py-4 ${
+                          index > 0 ? 'border-t border-brand-line' : ''
+                        }`}
                       >
                         <div
                           className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}

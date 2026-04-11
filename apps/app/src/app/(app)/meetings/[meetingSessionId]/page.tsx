@@ -3,23 +3,13 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Clock3,
-  Mic2,
-  RefreshCw,
-  Sparkles,
-  Users,
-} from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Users } from 'lucide-react'
 import {
   Alert,
   AlertDescription,
   Badge,
-  Button,
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   Separator,
@@ -141,27 +131,6 @@ function statusLabel(status: string) {
   }
 }
 
-function statusDescription(status: string) {
-  switch (status) {
-    case 'preparing':
-      return 'Kodi is getting ready to join the meeting.'
-    case 'joining':
-      return 'Kodi is on the way into the call.'
-    case 'admitted':
-      return 'Kodi is in the meeting and waiting to actively listen.'
-    case 'listening':
-      return 'Transcript and live meeting context are flowing now.'
-    case 'processing':
-      return 'Kodi is turning the meeting into notes and follow-up.'
-    case 'ended':
-      return 'This meeting has ended.'
-    case 'failed':
-      return 'This meeting hit a provider issue and may need another attempt.'
-    default:
-      return 'Kodi will keep updating this meeting as new context arrives.'
-  }
-}
-
 function formatProviderLabel(provider: string) {
   switch (provider) {
     case 'google_meet':
@@ -170,19 +139,6 @@ function formatProviderLabel(provider: string) {
       return 'Zoom'
     default:
       return provider.replace(/_/g, ' ')
-  }
-}
-
-function formatSourceLabel(source: string) {
-  switch (source) {
-    case 'recall_webhook':
-      return 'Recall webhook'
-    case 'zoom_webhook':
-      return 'Zoom webhook'
-    case 'rtms':
-      return 'RTMS'
-    default:
-      return source.replace(/_/g, ' ')
   }
 }
 
@@ -229,7 +185,8 @@ function describeEvent(event: MeetingEventFeed[number]) {
   if (event.eventType === 'participant.joined') {
     const participant = asRecord(payload.participant)
     return (
-      (typeof participant?.displayName === 'string' && participant.displayName) ||
+      (typeof participant?.displayName === 'string' &&
+        participant.displayName) ||
       (typeof participant?.email === 'string' && participant.email) ||
       'Participant joined'
     )
@@ -368,7 +325,8 @@ function collapseTranscriptSegments(segments: MeetingTranscript) {
       id: previous.id,
       createdAt: previous.createdAt,
       content: joinTranscriptContent(previous.content, segment.content),
-      mergedSegmentCount: previous.mergedSegmentCount + segment.mergedSegmentCount,
+      mergedSegmentCount:
+        previous.mergedSegmentCount + segment.mergedSegmentCount,
     }
   }
 
@@ -514,7 +472,9 @@ export default function MeetingDetailsPage() {
 
   const rollingNotes = useMemo(
     () =>
-      typeof liveState?.rollingNotes === 'string' ? liveState.rollingNotes : null,
+      typeof liveState?.rollingNotes === 'string'
+        ? liveState.rollingNotes
+        : null,
     [liveState?.rollingNotes]
   )
 
@@ -534,11 +494,11 @@ export default function MeetingDetailsPage() {
 
           return {
             title:
-              typeof record.title === 'string' ? record.title : 'Untitled follow-up',
+              typeof record.title === 'string'
+                ? record.title
+                : 'Untitled follow-up',
             ownerHint:
               typeof record.ownerHint === 'string' ? record.ownerHint : null,
-            confidence:
-              typeof record.confidence === 'number' ? record.confidence : null,
             sourceEvidence: asArray(record.sourceEvidence).filter(
               (item): item is string => typeof item === 'string'
             ),
@@ -550,7 +510,6 @@ export default function MeetingDetailsPage() {
           ): task is {
             title: string
             ownerHint: string | null
-            confidence: number | null
             sourceEvidence: string[]
           } => task !== null
         ),
@@ -566,27 +525,19 @@ export default function MeetingDetailsPage() {
 
           return {
             title:
-              typeof record.title === 'string' ? record.title : 'Untitled draft',
-            toolkitSlug:
-              typeof record.toolkitSlug === 'string' ? record.toolkitSlug : null,
+              typeof record.title === 'string'
+                ? record.title
+                : 'Untitled draft',
             toolkitName:
-              typeof record.toolkitName === 'string' ? record.toolkitName : null,
-            actionType:
-              typeof record.actionType === 'string' ? record.actionType : null,
-            targetSummary:
-              typeof record.targetSummary === 'string'
-                ? record.targetSummary
-                : null,
-            rationale:
-              typeof record.rationale === 'string' ? record.rationale : null,
-            confidence:
-              typeof record.confidence === 'number' ? record.confidence : null,
+              typeof record.toolkitName === 'string'
+                ? record.toolkitName
+                : (typeof record.toolkitSlug === 'string'
+                    ? record.toolkitSlug
+                    : null),
+            approvalRequired: record.approvalRequired === true,
             sourceEvidence: asArray(record.sourceEvidence).filter(
               (item): item is string => typeof item === 'string'
             ),
-            reviewState:
-              typeof record.reviewState === 'string' ? record.reviewState : null,
-            approvalRequired: record.approvalRequired === true,
           }
         })
         .filter(
@@ -594,15 +545,9 @@ export default function MeetingDetailsPage() {
             draft
           ): draft is {
             title: string
-            toolkitSlug: string | null
             toolkitName: string | null
-            actionType: string | null
-            targetSummary: string | null
-            rationale: string | null
-            confidence: number | null
-            sourceEvidence: string[]
-            reviewState: string | null
             approvalRequired: boolean
+            sourceEvidence: string[]
           } => draft !== null
         ),
     [liveState?.draftActions]
@@ -675,16 +620,6 @@ export default function MeetingDetailsPage() {
         value: truncateMiddle(meeting.providerBotSessionId),
       },
       {
-        label: 'Meeting ID',
-        value: truncateMiddle(meeting.providerMeetingId),
-      },
-      {
-        label: 'Instance ID',
-        value: truncateMiddle(
-          meeting.providerMeetingInstanceId ?? meeting.providerMeetingUuid
-        ),
-      },
-      {
         label: 'Last refresh',
         value: formatTime(lastRefreshedAt),
       },
@@ -707,7 +642,7 @@ export default function MeetingDetailsPage() {
     return (
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <Skeleton className="h-9 w-48 bg-white/10" />
-        <Skeleton className="h-[220px] bg-white/10" />
+        <Skeleton className="h-[160px] bg-white/10" />
         <div className="grid gap-6 lg:grid-cols-[1.18fr_0.82fr]">
           <Skeleton className="h-[640px] bg-white/10" />
           <Skeleton className="h-[640px] bg-white/10" />
@@ -741,8 +676,9 @@ export default function MeetingDetailsPage() {
   return (
     <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.10),_transparent_26%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,_rgba(16,17,21,0.88),_rgba(7,8,10,1))]">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(19,20,24,0.96),_rgba(11,12,15,0.96))] shadow-2xl shadow-black/20">
-          <div className="border-b border-white/10/80 px-6 py-5">
+        {/* Header */}
+        <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(19,20,24,0.96),_rgba(11,12,15,0.96))]">
+          <div className="border-b border-white/10 px-6 py-4">
             <Link
               href="/meetings"
               className="inline-flex w-fit items-center gap-2 text-sm text-[#9bb0b5] transition hover:text-white"
@@ -752,50 +688,24 @@ export default function MeetingDetailsPage() {
             </Link>
           </div>
 
-          <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className={statusTone(meeting.status)}>
-                  {statusLabel(meeting.status)}
-                </Badge>
-                <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
-                  {formatProviderLabel(meeting.provider)}
-                </Badge>
-                <Badge className="border-white/12 bg-[rgba(49,66,71,0.92)] text-[#9bb0b5]">
-                  refresh {Math.round(pollIntervalMs / 1000)}s
-                </Badge>
-              </div>
-
-              <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-tight text-white">
-                  {meeting.title ?? 'Untitled meeting'}
-                </h1>
-                <p className="max-w-2xl text-sm leading-7 text-[#9bb0b5]">
-                  {statusDescription(meeting.status)}
-                </p>
-              </div>
+          <div className="px-6 py-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={statusTone(meeting.status)}>
+                {statusLabel(meeting.status)}
+              </Badge>
+              <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
+                {formatProviderLabel(meeting.provider)}
+              </Badge>
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/12 px-4 py-4">
-                <div className="flex items-center gap-2 text-[#8ea3a8]">
-                  <Clock3 size={14} />
-                  Started
-                </div>
-                <p className="mt-3 text-sm text-white">
-                  {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
-                </p>
-              </div>
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/12 px-4 py-4">
-                <div className="flex items-center gap-2 text-[#8ea3a8]">
-                  <RefreshCw size={14} />
-                  Last activity
-                </div>
-                <p className="mt-3 text-sm text-white">
-                  {formatDate(latestActivityAt)}
-                </p>
-              </div>
-            </div>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
+              {meeting.title ?? 'Untitled meeting'}
+            </h1>
+            <p className="mt-1 text-sm text-[#8ea3a8]">
+              Started {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+              {latestActivityAt && (
+                <> · Last activity {formatDate(latestActivityAt)}</>
+              )}
+            </p>
           </div>
         </section>
 
@@ -806,24 +716,16 @@ export default function MeetingDetailsPage() {
         )}
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
+          {/* Left column */}
           <div className="space-y-6">
+            {/* Summary */}
             <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-emerald-500/20 bg-emerald-500/10 text-[#d6eadf]">
-                    <Sparkles size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl text-white">
-                      Meeting summary
-                    </CardTitle>
-                    <CardDescription className="text-[#9bb0b5]">
-                      The shortest useful version of the meeting so far.
-                    </CardDescription>
-                  </div>
-                </div>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium text-white">
+                  Summary
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 {activeTopics.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {activeTopics.map((topic) => (
@@ -837,68 +739,57 @@ export default function MeetingDetailsPage() {
                   </div>
                 )}
 
-                <div className="rounded-[1.5rem] border border-white/10 bg-black/12 p-5">
-                  <p className="text-sm leading-7 text-white">
-                    {meeting.liveSummary ??
-                      liveState?.summary ??
-                      'Kodi has not produced a meeting summary yet.'}
-                  </p>
-                </div>
+                <p className="text-sm leading-7 text-white">
+                  {meeting.liveSummary ??
+                    liveState?.summary ??
+                    'No summary yet.'}
+                </p>
 
-                <details className="group rounded-[1.5rem] border border-white/10 bg-black/12 p-5">
-                  <summary className="cursor-pointer list-none text-sm font-medium text-[#eef2ea] marker:hidden">
-                    Working notes
-                  </summary>
-                  <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-[#eef2ea]">
-                    {rollingNotes ??
-                      'Kodi will keep a tighter running set of notes here as the meeting develops.'}
-                  </p>
-                </details>
+                {(rollingNotes || (!meeting.liveSummary && !liveState?.summary)) && (
+                  <details className="group pt-1">
+                    <summary className="cursor-pointer list-none text-xs text-[#8ea3a8] marker:hidden hover:text-[#9bb0b5]">
+                      Working notes
+                    </summary>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#9bb0b5]">
+                      {rollingNotes ??
+                        'Kodi will keep running notes here as the meeting develops.'}
+                    </p>
+                  </details>
+                )}
               </CardContent>
             </Card>
 
+            {/* Transcript */}
             <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-white/12 bg-[rgba(31,44,49,0.9)] text-[#dce5e7]">
-                    <Mic2 size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl text-white">Transcript</CardTitle>
-                    <CardDescription className="text-[#9bb0b5]">
-                      Raw meeting language, grouped into readable speaker turns.
-                    </CardDescription>
-                  </div>
-                </div>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium text-white">
+                  Transcript
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {chronologicalTranscript.length === 0 ? (
-                  <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-black/8 p-5 text-sm text-[#8ea3a8]">
-                    Transcript lines will appear here once Kodi starts hearing the
-                    call.
-                  </div>
+                  <p className="text-sm text-[#8ea3a8]">No transcript yet.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="divide-y divide-white/8">
                     {chronologicalTranscript.map((segment) => (
                       <div
                         key={segment.id}
-                        className="rounded-[1.5rem] border border-white/10 bg-black/12 p-4"
+                        className="py-4 first:pt-0 last:pb-0"
                       >
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-[#8ea3a8]">
-                          <span className="font-medium text-[#dce5e7]">
-                            {segment.speakerName ?? 'Unknown speaker'}
+                        <div className="mb-1.5 flex items-baseline gap-3">
+                          <span className="text-sm font-medium text-[#dce5e7]">
+                            {segment.speakerName ?? 'Unknown'}
                           </span>
-                          <span>{formatDate(segment.createdAt)}</span>
-                          <Badge className="border-white/12 bg-[#314247] text-[#9bb0b5]">
-                            {formatSourceLabel(segment.source)}
-                          </Badge>
+                          <span className="text-xs text-[#8ea3a8]">
+                            {formatDate(segment.createdAt)}
+                          </span>
                           {segment.isPartial && (
-                            <Badge className="border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]">
-                              Partial
-                            </Badge>
+                            <span className="text-xs text-[#f6d289]">
+                              partial
+                            </span>
                           )}
                         </div>
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white">
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-white">
                           {segment.content}
                         </p>
                       </div>
@@ -909,289 +800,238 @@ export default function MeetingDetailsPage() {
             </Card>
           </div>
 
+          {/* Right column */}
           <div className="space-y-6">
+            {/* Follow-up */}
             <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader>
-                <CardTitle className="text-xl text-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium text-white">
                   Follow-up
                 </CardTitle>
-                <CardDescription className="text-[#9bb0b5]">
-                  The handful of outputs that are actually worth acting on.
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Draft actions
-                    </p>
-                    <div className="mt-3 space-y-3">
-                      {draftActions.length > 0 ? (
-                        draftActions.map((draft, index) => (
+                {/* Action items — draft actions and candidate tasks merged */}
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+                    Action items
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {draftActions.length === 0 && candidateTasks.length === 0 ? (
+                      <p className="text-sm text-[#8ea3a8]">
+                        No action items yet.
+                      </p>
+                    ) : (
+                      <>
+                        {draftActions.map((draft, index) => (
                           <div
-                            key={`${draft.title}-${index}`}
-                            className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4"
+                            key={`draft-${index}`}
+                            className="rounded-[1.2rem] border border-white/10 bg-black/12 px-4 py-3"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="space-y-2">
-                                <p className="text-sm font-medium text-white">
-                                  {draft.title}
-                                </p>
-                                <div className="flex flex-wrap gap-2 text-xs">
-                                  {(draft.toolkitName ?? draft.toolkitSlug) && (
-                                    <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
-                                      {draft.toolkitName ?? draft.toolkitSlug}
-                                    </Badge>
-                                  )}
-                                  {draft.actionType && (
-                                    <Badge className="border-white/12 bg-black/18 text-[#9bb0b5]">
-                                      {draft.actionType.replace(/_/g, ' ')}
-                                    </Badge>
-                                  )}
-                                  {draft.approvalRequired && (
-                                    <Badge className="border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]">
-                                      Approval required
-                                    </Badge>
-                                  )}
-                                </div>
+                            <div className="flex items-start gap-2">
+                              <p className="flex-1 text-sm font-medium text-white">
+                                {draft.title}
+                              </p>
+                              <div className="flex shrink-0 flex-wrap gap-1.5">
+                                {draft.toolkitName && (
+                                  <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
+                                    {draft.toolkitName}
+                                  </Badge>
+                                )}
+                                {draft.approvalRequired && (
+                                  <Badge className="border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]">
+                                    Needs approval
+                                  </Badge>
+                                )}
                               </div>
-                              {draft.confidence != null && (
-                                <Badge className="border-white/12 bg-[#314247] text-[#9bb0b5]">
-                                  {Math.round(draft.confidence * 100)}%
-                                </Badge>
-                              )}
                             </div>
-
-                            {draft.targetSummary && (
-                              <p className="mt-3 text-sm text-[#9bb0b5]">
-                                Target: {draft.targetSummary}
-                              </p>
-                            )}
-
-                            {draft.rationale && (
-                              <p className="mt-2 text-sm leading-6 text-[#eef2ea]">
-                                {draft.rationale}
-                              </p>
-                            )}
-
                             {draft.sourceEvidence.length > 0 && (
-                              <details className="mt-3">
-                                <summary className="cursor-pointer text-sm text-[#8ea3a8]">
+                              <details className="mt-2">
+                                <summary className="cursor-pointer text-xs text-[#8ea3a8] marker:hidden hover:text-[#9bb0b5]">
                                   Why Kodi suggested this
                                 </summary>
-                                <p className="mt-2 text-sm leading-6 text-[#8ea3a8]">
+                                <p className="mt-1.5 text-sm leading-6 text-[#8ea3a8]">
                                   {draft.sourceEvidence[0]}
                                 </p>
                               </details>
                             )}
                           </div>
-                        ))
-                      ) : (
-                        <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-4 text-sm text-[#8ea3a8]">
-                          Draft actions will appear here once Kodi can connect
-                          meeting follow-up to tools available in the workspace.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Candidate action items
-                    </p>
-                    <div className="mt-3 space-y-3">
-                      {candidateTasks.length > 0 ? (
-                        candidateTasks.map((task, index) => (
+                        ))}
+                        {candidateTasks.map((task, index) => (
                           <div
-                            key={`${task.title}-${index}`}
-                            className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4"
+                            key={`task-${index}`}
+                            className="rounded-[1.2rem] border border-white/10 bg-black/12 px-4 py-3"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <p className="text-sm font-medium text-white">
-                                {task.title}
-                              </p>
-                              {task.confidence != null && (
-                                <Badge className="border-white/12 bg-[#314247] text-[#9bb0b5]">
-                                  {Math.round(task.confidence * 100)}%
-                                </Badge>
-                              )}
-                            </div>
+                            <p className="text-sm font-medium text-white">
+                              {task.title}
+                            </p>
                             {task.ownerHint && (
-                              <p className="mt-2 text-sm text-[#9bb0b5]">
-                                Owner hint: {task.ownerHint}
+                              <p className="mt-1 text-xs text-[#9bb0b5]">
+                                {task.ownerHint}
                               </p>
                             )}
                             {task.sourceEvidence.length > 0 && (
-                              <details className="mt-3">
-                                <summary className="cursor-pointer text-sm text-[#8ea3a8]">
+                              <details className="mt-2">
+                                <summary className="cursor-pointer text-xs text-[#8ea3a8] marker:hidden hover:text-[#9bb0b5]">
                                   Why Kodi suggested this
                                 </summary>
-                                <p className="mt-2 text-sm leading-6 text-[#8ea3a8]">
+                                <p className="mt-1.5 text-sm leading-6 text-[#8ea3a8]">
                                   {task.sourceEvidence[0]}
                                 </p>
                               </details>
                             )}
                           </div>
-                        ))
-                      ) : (
-                        <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-4 text-sm text-[#8ea3a8]">
-                          Candidate follow-up will appear here when Kodi finds
-                          concrete next steps in the conversation.
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Decisions, open questions, risks — flat lists, no separate boxes */}
+                {decisions.length > 0 && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+                      Decisions
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {decisions.map((decision) => (
+                        <div
+                          key={decision}
+                          className="flex items-start gap-2 text-sm text-[#eef2ea]"
+                        >
+                          <CheckCircle2
+                            size={14}
+                            className="mt-0.5 shrink-0 text-[#d6eadf]"
+                          />
+                          <span>{decision}</span>
                         </div>
-                      )}
+                      ))}
                     </div>
                   </div>
+                )}
 
-                  {(decisions.length > 0 || openQuestions.length > 0 || risks.length > 0) && (
-                    <div className="grid gap-3">
-                      {decisions.length > 0 && (
-                        <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                          <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                            Decisions
-                          </p>
-                          <div className="mt-3 space-y-2">
-                            {decisions.map((decision) => (
-                              <div
-                                key={decision}
-                                className="flex items-start gap-3 text-sm text-[#eef2ea]"
-                              >
-                                <CheckCircle2
-                                  size={15}
-                                  className="mt-0.5 text-[#d6eadf]"
-                                />
-                                <span>{decision}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {openQuestions.length > 0 && (
-                        <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                          <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                            Open questions
-                          </p>
-                          <div className="mt-3 space-y-2 text-sm text-[#eef2ea]">
-                            {openQuestions.map((question) => (
-                              <p key={question}>{question}</p>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {risks.length > 0 && (
-                        <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                          <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                            Risks
-                          </p>
-                          <div className="mt-3 space-y-2 text-sm text-[#eef2ea]">
-                            {risks.map((risk) => (
-                              <p key={risk}>{risk}</p>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                {openQuestions.length > 0 && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+                      Open questions
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {openQuestions.map((question) => (
+                        <p key={question} className="text-sm text-[#eef2ea]">
+                          {question}
+                        </p>
+                      ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {risks.length > 0 && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
+                      Risks
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {risks.map((risk) => (
+                        <p key={risk} className="text-sm text-[#eef2ea]">
+                          {risk}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
+            {/* People, activity, and diagnostics — collapsed by default */}
             <details className="group rounded-[1.75rem] border border-white/10 bg-[rgba(49,66,71,0.72)] p-5">
               <summary className="cursor-pointer list-none text-sm font-medium text-[#eef2ea] marker:hidden">
-                People, activity, and diagnostics
+                People &amp; diagnostics
               </summary>
-              <p className="mt-2 text-sm leading-6 text-[#8ea3a8]">
-                Keep the meeting page focused by tucking roster, raw lifecycle, and provider details here.
-              </p>
 
               <div className="mt-4 space-y-3">
-                <div className="rounded-[1.5rem] border border-white/10 bg-black/12 p-4">
+                {/* Participants */}
+                <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-white">
-                    <Users size={16} className="text-[#dbeaf0]" />
+                    <Users size={14} className="text-[#dbeaf0]" />
                     People
                   </div>
                   {participants.length === 0 ? (
-                    <p className="mt-3 text-sm text-[#8ea3a8]">
-                      Participant activity will appear here.
+                    <p className="mt-2 text-sm text-[#8ea3a8]">
+                      No participants recorded.
                     </p>
                   ) : (
-                    <div className="mt-3 space-y-3">
+                    <div className="mt-3 divide-y divide-white/8">
                       {participants.map((participant) => (
                         <div
                           key={participant.id}
-                          className="rounded-[1.2rem] border border-white/10 bg-black/10 p-4"
+                          className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-white">
-                                {participant.displayName ??
-                                  participant.email ??
-                                  'Unknown participant'}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-white">
+                              {participant.displayName ??
+                                participant.email ??
+                                'Unknown participant'}
+                            </p>
+                            {participant.email && participant.displayName && (
+                              <p className="truncate text-xs text-[#8ea3a8]">
+                                {participant.email}
                               </p>
-                              <p className="mt-1 truncate text-xs text-[#8ea3a8]">
-                                {participant.email ?? 'No email captured'}
-                              </p>
-                            </div>
-                            <Badge
-                              className={
-                                participant.leftAt
-                                  ? 'border-white/12 bg-white/10 text-[#dce5e7]'
-                                  : 'border-[#6FA88C]/30 bg-[#6FA88C]/14 text-[#d6eadf]'
-                              }
-                            >
-                              {participant.leftAt ? 'Left' : 'In call'}
-                            </Badge>
+                            )}
                           </div>
-                          <p className="mt-3 text-xs text-[#8ea3a8]">
-                            Joined {formatDate(participant.joinedAt)}
-                          </p>
+                          <Badge
+                            className={
+                              participant.leftAt
+                                ? 'shrink-0 border-white/12 bg-white/10 text-[#dce5e7]'
+                                : 'shrink-0 border-[#6FA88C]/30 bg-[#6FA88C]/14 text-[#d6eadf]'
+                            }
+                          >
+                            {participant.leftAt ? 'Left' : 'In call'}
+                          </Badge>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {compactTimelineEvents.length === 0 ? (
-                  <div className="rounded-[1.4rem] border border-dashed border-white/10 bg-black/8 p-5 text-sm text-[#8ea3a8]">
-                    Kodi will add the important meeting moments here.
-                  </div>
-                ) : (
-                  compactTimelineEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4"
-                    >
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-[#8ea3a8]">
-                        <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
-                          {formatEventLabel(event.eventType)}
-                        </Badge>
-                        <span>{formatDate(event.occurredAt)}</span>
-                      </div>
-                      {describeEvent(event) && (
-                        <p className="mt-3 text-sm leading-6 text-[#eef2ea]">
-                          {describeEvent(event)}
-                        </p>
-                      )}
+                {/* Timeline events */}
+                {compactTimelineEvents.length > 0 && (
+                  <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
+                    <div className="divide-y divide-white/8">
+                      {compactTimelineEvents.map((event) => (
+                        <div
+                          key={event.id}
+                          className="flex items-center gap-3 py-2.5 text-sm first:pt-0 last:pb-0"
+                        >
+                          <Badge className="shrink-0 border-white/12 bg-[#314247] text-[#9bb0b5]">
+                            {formatEventLabel(event.eventType)}
+                          </Badge>
+                          <span className="text-xs text-[#8ea3a8]">
+                            {formatDate(event.occurredAt)}
+                          </span>
+                          {describeEvent(event) && (
+                            <span className="min-w-0 truncate text-xs text-[#dce5e7]">
+                              {describeEvent(event)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))
+                  </div>
                 )}
-              </div>
 
-              <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/12 px-4 py-3">
-                {technicalDetails.map((detail, index) => (
-                  <div key={detail.label}>
-                    {index > 0 && <Separator className="bg-white/10" />}
-                    <div className="flex items-start justify-between gap-4 py-3">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#8ea3a8]">
-                        {detail.label}
-                      </p>
-                      <p className="max-w-[16rem] text-right text-sm text-[#dce5e7]">
-                        {detail.value}
-                      </p>
+                {/* Technical details */}
+                <div className="rounded-[1.4rem] border border-white/10 bg-black/12 px-4 py-3">
+                  {technicalDetails.map((detail, index) => (
+                    <div key={detail.label}>
+                      {index > 0 && <Separator className="bg-white/8" />}
+                      <div className="flex items-center justify-between gap-4 py-2.5">
+                        <p className="text-xs text-[#8ea3a8]">{detail.label}</p>
+                        <p className="text-right text-xs text-[#dce5e7]">
+                          {detail.value}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </details>
           </div>

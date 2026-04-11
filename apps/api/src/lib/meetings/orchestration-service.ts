@@ -83,6 +83,76 @@ function meetingStatusFromEvent(
   return lifecycleStateToMeetingStatus(event.state)
 }
 
+function buildNormalizedEventDedupeKey(input: {
+  provider: MeetingProviderSlug
+  deliveryId?: string | null
+  event: MeetingProviderEvent
+}) {
+  if (input.deliveryId) {
+    if (
+      input.event.kind === 'lifecycle' ||
+      input.event.kind === 'participant' ||
+      input.event.kind === 'chat'
+    ) {
+      return `${input.provider}:${input.deliveryId}:${input.event.action}`
+    }
+
+    return null
+  }
+
+  if (input.event.kind === 'lifecycle') {
+    return [
+      input.provider,
+      'lifecycle',
+      input.event.action,
+      input.event.occurredAt.toISOString(),
+      input.event.session?.externalBotSessionId ?? 'unknown-bot',
+    ].join(':')
+  }
+
+  if (input.event.kind === 'participant') {
+    const participantKey =
+      input.event.participant.providerParticipantId ??
+      input.event.participant.email ??
+      input.event.participant.displayName ??
+      'unknown-participant'
+
+    return [
+      input.provider,
+      'participant',
+      input.event.action,
+      participantKey,
+      input.event.occurredAt.toISOString(),
+    ].join(':')
+  }
+
+  if (input.event.kind === 'chat') {
+    const senderKey =
+      input.event.message.sender?.providerParticipantId ??
+      input.event.message.sender?.email ??
+      input.event.message.sender?.displayName ??
+      'unknown-sender'
+    const contentFingerprint =
+      input.event.message.content
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .slice(0, 120) || 'empty'
+
+    return [
+      input.provider,
+      'chat',
+      input.event.action,
+      senderKey,
+      input.event.message.to ?? 'everyone',
+      input.event.occurredAt.toISOString(),
+      contentFingerprint,
+    ].join(':')
+  }
+
+  return null
+}
+
 export class MeetingOrchestrationService {
   constructor(
     private readonly gateway: MeetingProviderGateway,
@@ -508,13 +578,11 @@ export class MeetingOrchestrationService {
     }
 
     for (const event of normalizedEvents) {
-      // Derive a per-event dedupe key from the provider delivery ID so that
-      // re-delivered webhooks (same deliveryId, same eventType) are idempotent.
-      const deliveryId = input.envelope.deliveryId ?? null
-      const dedupeKey =
-        deliveryId && (event.kind === 'lifecycle' || event.kind === 'participant')
-          ? `${input.envelope.provider}:${deliveryId}:${event.kind === 'lifecycle' ? event.action : event.action}`
-          : null
+      const dedupeKey = buildNormalizedEventDedupeKey({
+        provider: input.envelope.provider,
+        deliveryId: input.envelope.deliveryId ?? null,
+        event,
+      })
 
       const result = await this.ingestNormalizedEvent({
         ...input,

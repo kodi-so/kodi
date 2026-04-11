@@ -53,11 +53,22 @@ type MeetingParticipants = MeetingConsole['participants']
 type MeetingTranscript = MeetingConsole['transcript']
 type MeetingLiveState = MeetingConsole['liveState'] | null
 type MeetingEventFeed = MeetingConsole['events']
+type MeetingHealth = MeetingConsole['health'] | null
 type MeetingWorkspaceSettings = MeetingConsole['workspaceSettings'] | null
 type MeetingControls = MeetingConsole['controls'] | null
 type MeetingTranscriptSegment = MeetingTranscript[number]
 type MeetingTranscriptTurn = MeetingTranscriptSegment & {
   mergedSegmentCount: number
+}
+type MeetingRetryAttempt = {
+  attempt: number | null
+  status: string | null
+  startedAt: string | null
+  completedAt: string | null
+  failureKind: string | null
+  retryable: boolean | null
+  message: string | null
+  httpStatus: number | null
 }
 type MeetingChatItem = {
   id: string
@@ -215,6 +226,32 @@ function formatEventLabel(eventType: string) {
       return 'Transcript'
     default:
       return eventType.replace(/^meeting\./, '').replace(/\./g, ' ')
+  }
+}
+
+function healthTone(status: string | null | undefined) {
+  switch (status) {
+    case 'healthy':
+      return 'success' as const
+    case 'degraded':
+      return 'warning' as const
+    case 'down':
+      return 'destructive' as const
+    default:
+      return 'neutral' as const
+  }
+}
+
+function formatHealthStatus(status: string | null | undefined) {
+  switch (status) {
+    case 'healthy':
+      return 'Provider healthy'
+    case 'degraded':
+      return 'Needs attention'
+    case 'down':
+      return 'Provider down'
+    default:
+      return 'Health unknown'
   }
 }
 
@@ -458,6 +495,7 @@ export default function MeetingDetailsPage() {
   const transcript: MeetingTranscript = consoleData?.transcript ?? []
   const liveState: MeetingLiveState = consoleData?.liveState ?? null
   const events: MeetingEventFeed = consoleData?.events ?? []
+  const health: MeetingHealth = consoleData?.health ?? null
   const workspaceSettings: MeetingWorkspaceSettings =
     consoleData?.workspaceSettings ?? null
   const controls: MeetingControls = consoleData?.controls ?? null
@@ -470,6 +508,7 @@ export default function MeetingDetailsPage() {
     () => asRecord(meeting?.metadata),
     [meeting?.metadata]
   )
+  const healthMetadata = useMemo(() => asRecord(health?.metadata), [health?.metadata])
   const runtimeCopy = useMemo(
     () =>
       getMeetingRuntimeCopy({
@@ -578,6 +617,38 @@ export default function MeetingDetailsPage() {
           return items
         }, []),
     [events]
+  )
+
+  const retryHistory = useMemo(
+    () =>
+      asArray(meetingMetadata?.retryHistory)
+        .map((attempt) => {
+          const record = asRecord(attempt)
+          if (!record) return null
+
+          return {
+            attempt:
+              typeof record.attempt === 'number' ? record.attempt : null,
+            status: typeof record.status === 'string' ? record.status : null,
+            startedAt:
+              typeof record.startedAt === 'string' ? record.startedAt : null,
+            completedAt:
+              typeof record.completedAt === 'string'
+                ? record.completedAt
+                : null,
+            failureKind:
+              typeof record.failureKind === 'string'
+                ? record.failureKind
+                : null,
+            retryable:
+              typeof record.retryable === 'boolean' ? record.retryable : null,
+            message: typeof record.message === 'string' ? record.message : null,
+            httpStatus:
+              typeof record.httpStatus === 'number' ? record.httpStatus : null,
+          } satisfies MeetingRetryAttempt
+        })
+        .filter((attempt): attempt is MeetingRetryAttempt => attempt !== null),
+    [meetingMetadata?.retryHistory]
   )
 
   const canManageControls =
@@ -792,6 +863,10 @@ export default function MeetingDetailsPage() {
         value: formatProviderLabel(meeting.provider),
       },
       {
+        label: 'Provider health',
+        value: formatHealthStatus(health?.status),
+      },
+      {
         label: 'Bot session',
         value: truncateMiddle(meeting.providerBotSessionId),
       },
@@ -813,8 +888,12 @@ export default function MeetingDetailsPage() {
         label: 'Latest activity',
         value: formatTime(latestActivityAt),
       },
+      {
+        label: 'Health checked',
+        value: formatTime(health?.observedAt),
+      },
     ]
-  }, [lastRefreshedAt, latestActivityAt, meeting])
+  }, [health?.observedAt, health?.status, lastRefreshedAt, latestActivityAt, meeting])
 
   if (!activeOrg) {
     return (
@@ -881,6 +960,9 @@ export default function MeetingDetailsPage() {
                 </Badge>
                 <Badge variant="neutral">
                   {formatProviderLabel(meeting.provider)}
+                </Badge>
+                <Badge variant={healthTone(health?.status)}>
+                  {formatHealthStatus(health?.status)}
                 </Badge>
                 <Badge variant="neutral">
                   refresh {Math.round(pollIntervalMs / 1000)}s
@@ -1498,6 +1580,115 @@ export default function MeetingDetailsPage() {
               </p>
 
               <div className="mt-4 space-y-3">
+                <div className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <RefreshCw size={16} className="text-brand-quiet" />
+                    Transport health
+                  </div>
+
+                  {health ? (
+                    <>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Badge variant={healthTone(health.status)}>
+                          {formatHealthStatus(health.status)}
+                        </Badge>
+                        {health.lifecycleState && (
+                          <Badge variant="neutral">
+                            {health.lifecycleState.replace(/_/g, ' ')}
+                          </Badge>
+                        )}
+                        {typeof healthMetadata?.recallStatusCode === 'string' && (
+                          <Badge variant="outline">
+                            {healthMetadata.recallStatusCode.replace(/^bot\./, '')}
+                          </Badge>
+                        )}
+                        {typeof healthMetadata?.recallSubCode === 'string' && (
+                          <Badge variant="outline">
+                            {healthMetadata.recallSubCode}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <p className="mt-3 text-sm leading-6 text-foreground">
+                        {typeof health.detail === 'string' && health.detail
+                          ? health.detail
+                          : 'Kodi has a current provider health snapshot, but no extra detail yet.'}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-3 text-xs text-brand-quiet">
+                        <span>Checked {formatDate(health.observedAt)}</span>
+                        {typeof healthMetadata?.transport === 'string' && (
+                          <span>
+                            via {String(healthMetadata.transport).replace(/_/g, ' ')}
+                          </span>
+                        )}
+                        {typeof healthMetadata?.healthProbeError === 'string' && (
+                          <span>{healthMetadata.healthProbeError}</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className={`mt-3 text-sm ${quietTextClass}`}>
+                      Kodi has not recorded a provider health snapshot for this
+                      meeting yet.
+                    </p>
+                  )}
+
+                  {retryHistory.length > 0 && (
+                    <div className="mt-4 border-t border-brand-line pt-4">
+                      <p
+                        className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                      >
+                        Join and retry history
+                      </p>
+                      <div className="mt-3 space-y-3">
+                        {retryHistory.map((attempt, index) => (
+                          <div
+                            key={`${attempt.attempt ?? index}-${attempt.completedAt ?? attempt.startedAt ?? index}`}
+                            className="rounded-[1.2rem] border border-brand-line bg-background p-4"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-brand-quiet">
+                              <span className="font-medium text-foreground">
+                                Attempt {attempt.attempt ?? index + 1}
+                              </span>
+                              {attempt.status && (
+                                <Badge
+                                  variant={
+                                    attempt.status === 'succeeded'
+                                      ? 'success'
+                                      : 'destructive'
+                                  }
+                                >
+                                  {attempt.status}
+                                </Badge>
+                              )}
+                              {attempt.httpStatus != null && (
+                                <span>HTTP {attempt.httpStatus}</span>
+                              )}
+                              {attempt.failureKind && (
+                                <span>{attempt.failureKind.replace(/_/g, ' ')}</span>
+                              )}
+                              {attempt.retryable != null && (
+                                <span>
+                                  {attempt.retryable ? 'retryable' : 'not retryable'}
+                                </span>
+                              )}
+                            </div>
+                            {(attempt.message || attempt.completedAt || attempt.startedAt) && (
+                              <p className="mt-2 text-sm leading-6 text-foreground">
+                                {attempt.message ?? 'No provider message captured.'}
+                              </p>
+                            )}
+                            <p className={`mt-2 text-xs ${subtleTextClass}`}>
+                              {formatDate(attempt.completedAt ?? attempt.startedAt)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Users size={16} className="text-brand-quiet" />

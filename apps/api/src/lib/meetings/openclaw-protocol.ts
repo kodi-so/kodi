@@ -5,6 +5,7 @@ import type {
   MeetingSession,
 } from '@kodi/db'
 import type {
+  MeetingChatEvent,
   MeetingLifecycleEvent,
   MeetingParticipantEvent,
   MeetingProviderEvent,
@@ -120,9 +121,31 @@ function buildLifecyclePayload(event: MeetingLifecycleEvent) {
   }
 }
 
+function buildChatPayload(event: MeetingChatEvent) {
+  return {
+    kind: 'chat' as const,
+    chat: {
+      action: event.action,
+      occurredAt: event.occurredAt.toISOString(),
+      message: {
+        content: event.message.content,
+        to: event.message.to ?? null,
+        sender: {
+          providerParticipantId:
+            event.message.sender?.providerParticipantId ?? null,
+          externalUserId: event.message.sender?.externalUserId ?? null,
+          displayName: event.message.sender?.displayName ?? null,
+          email: event.message.sender?.email ?? null,
+        },
+      },
+    },
+  }
+}
+
 function buildEventPayload(event: MeetingProviderEvent) {
   if (event.kind === 'transcript') return buildTranscriptPayload(event)
   if (event.kind === 'participant') return buildParticipantPayload(event)
+  if (event.kind === 'chat') return buildChatPayload(event)
   if (event.kind === 'lifecycle') return buildLifecyclePayload(event)
 
   return {

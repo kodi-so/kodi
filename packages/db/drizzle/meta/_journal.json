@@ -141,6 +141,27 @@
       "when": 1775346000000,
       "tag": "0020_chat_channels_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1775620800000,
+      "tag": "0021_dashboard_assistant_threads",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1775869200000,
+      "tag": "0022_phase_0_meeting_copilot_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1775955600000,
+      "tag": "0023_phase_1_meeting_reliability_diagnostics",
+      "breakpoints": true
     }
   ]
 }

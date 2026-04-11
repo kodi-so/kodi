@@ -4,6 +4,9 @@ export type RecallCreateBotRequest = {
   meeting_url: string
   bot_name?: string
   metadata?: Record<string, unknown>
+  zoom?: {
+    zak_url?: string | null
+  } | null
   recording_config?: {
     meeting_metadata?: Record<string, unknown>
     participant_events?: Record<string, unknown>
@@ -32,6 +35,21 @@ export type RecallCreateBotResponse = {
     meeting_id?: string | null
     platform?: string | null
   } | string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export type RecallBotStatusRecord = {
+  code?: string | null
+  sub_code?: string | null
+  message?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export type RecallRetrieveBotResponse = {
+  id: string
+  status?: RecallBotStatusRecord | null
+  status_changes?: RecallBotStatusRecord[] | null
   metadata?: Record<string, unknown> | null
 }
 
@@ -229,5 +247,11 @@ export async function leaveRecallBot(botId: string) {
   return recallFetch<Record<string, unknown>>(`/api/v1/bot/${botId}/leave_call/`, {
     method: 'POST',
     body: JSON.stringify({}),
+  })
+}
+
+export async function retrieveRecallBot(botId: string) {
+  return recallFetch<RecallRetrieveBotResponse>(`/api/v1/bot/${botId}/`, {
+    method: 'GET',
   })
 }

@@ -1,6 +1,7 @@
 export * from './auth'
 export * from './orgs'
 export * from './chat'
+export * from './dashboard-assistant'
 export * from './invites'
 export * from './activity'
 export * from './provider-installations'

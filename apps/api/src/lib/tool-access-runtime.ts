@@ -1,5 +1,4 @@
-import { eq } from 'drizzle-orm'
-import { db, toolActionRuns, toolSessionRuns } from '@kodi/db'
+import { db, eq, toolActionRuns, toolSessionRuns } from '@kodi/db'
 import { env } from '../env'
 import {
   choosePrimaryConnection,

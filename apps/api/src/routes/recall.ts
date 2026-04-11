@@ -5,6 +5,8 @@ import { env } from '../env'
 import { RecallMeetingJoinError } from '../lib/providers/recall/client'
 import { getRecallBotWebhookSecret } from '../lib/providers/recall/config'
 import { verifyRequestFromRecall } from '../lib/providers/recall/verification'
+import { inferMeetingProviderFromUrl } from '../lib/meetings/provider-url'
+import type { MeetingProviderSlug } from '../lib/meetings/events'
 
 function isRecallRouteAuthorized(headerValue: string | null) {
   const token = env.MEETING_INTERNAL_TOKEN ?? env.RECALL_REALTIME_AUTH_TOKEN
@@ -15,6 +17,16 @@ function isRecallRouteAuthorized(headerValue: string | null) {
 function isRecallRealtimeWebhookAuthorized(url: URL) {
   if (!env.RECALL_REALTIME_AUTH_TOKEN) return true
   return url.searchParams.get('token') === env.RECALL_REALTIME_AUTH_TOKEN
+}
+
+function resolveRecallProvider(
+  value: unknown
+): MeetingProviderSlug | 'google_meet' {
+  if (value === 'google_meet' || value === 'zoom') {
+    return value
+  }
+
+  return 'google_meet'
 }
 
 export function registerRecallRoutes(app: Hono) {
@@ -44,6 +56,7 @@ export function registerRecallRoutes(app: Hono) {
 
     const orgId =
       typeof botMetadata?.orgId === 'string' ? botMetadata.orgId : null
+    const provider = resolveRecallProvider(botMetadata?.provider)
     if (!orgId) {
       return c.json({ ok: true, ignored: 'missing-org-id' })
     }
@@ -54,9 +67,9 @@ export function registerRecallRoutes(app: Hono) {
 
     const result = await orchestration.ingestProviderEnvelope({
       orgId,
-      provider: 'google_meet',
+      provider,
       envelope: {
-        provider: 'google_meet',
+        provider,
         transport: 'webhook',
         receivedAt: new Date(),
         session: {
@@ -132,6 +145,7 @@ export function registerRecallRoutes(app: Hono) {
 
     const orgId =
       typeof botMetadata?.orgId === 'string' ? botMetadata.orgId : null
+    const provider = resolveRecallProvider(botMetadata?.provider)
     if (!orgId) {
       console.warn('[recall] bot webhook missing org id', {
         event: payload.event,
@@ -146,9 +160,9 @@ export function registerRecallRoutes(app: Hono) {
 
     const result = await orchestration.ingestProviderEnvelope({
       orgId,
-      provider: 'google_meet',
+      provider,
       envelope: {
-        provider: 'google_meet',
+        provider,
         transport: 'webhook',
         receivedAt: new Date(),
         session: {
@@ -190,6 +204,7 @@ export function registerRecallRoutes(app: Hono) {
 
     const body = (await c.req.json()) as {
       orgId?: string
+      provider?: MeetingProviderSlug
       hostUserId?: string | null
       meetingUrl?: string
       title?: string | null
@@ -201,6 +216,20 @@ export function registerRecallRoutes(app: Hono) {
       return c.json({ error: 'orgId and meetingUrl are required' }, 400)
     }
 
+    const provider =
+      body.provider && (body.provider === 'google_meet' || body.provider === 'zoom')
+        ? body.provider
+        : inferMeetingProviderFromUrl(body.meetingUrl)
+
+    if (!provider) {
+      return c.json(
+        {
+          error: 'Only Google Meet and Zoom meeting links are supported right now.',
+        },
+        400
+      )
+    }
+
     const orchestration = new MeetingOrchestrationService(
       createDefaultMeetingProviderGateway()
     )
@@ -208,7 +237,7 @@ export function registerRecallRoutes(app: Hono) {
     try {
       const result = await orchestration.requestBotJoin({
         orgId: body.orgId,
-        provider: 'google_meet',
+        provider,
         hostUserId: body.hostUserId ?? null,
         meeting: {
           joinUrl: body.meetingUrl,

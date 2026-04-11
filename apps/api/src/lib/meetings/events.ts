@@ -58,6 +58,7 @@ export type MeetingProviderEventEnvelope = {
   provider: MeetingProviderSlug
   transport: MeetingProviderTransport
   receivedAt: Date
+  deliveryId?: string | null
   session?: MeetingProviderSessionRef | null
   payload: unknown
 }

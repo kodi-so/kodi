@@ -22,24 +22,20 @@ import {
   type RecallJoinAttempt,
   RecallMeetingJoinError,
   type RecallCreateBotRequest,
+  retrieveRecallBot,
+  type RecallRetrieveBotResponse,
 } from './client'
 import { getRecallClientConfig } from './config'
-
-function parseGoogleMeetId(joinUrl: string) {
-  try {
-    const url = new URL(joinUrl)
-    if (!url.hostname.includes('meet.google.com')) return null
-
-    const match = url.pathname.match(/\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i)
-    return match?.[1] ?? null
-  } catch {
-    return null
-  }
-}
+import { createZoomZakCallbackUrl } from '../../zoom'
+import {
+  inferMeetingProviderFromUrl,
+  resolveMeetingIdFromJoinUrl,
+} from '../../meetings/provider-url'
 
 function resolveRecallMeetingId(
   responseMeetingUrl: unknown,
-  fallbackJoinUrl: string
+  fallbackJoinUrl: string,
+  provider: MeetingProviderJoinRequest['provider']
 ) {
   if (
     responseMeetingUrl &&
@@ -51,7 +47,7 @@ function resolveRecallMeetingId(
     return (responseMeetingUrl as { meeting_id: string }).meeting_id
   }
 
-  return parseGoogleMeetId(fallbackJoinUrl)
+  return resolveMeetingIdFromJoinUrl(fallbackJoinUrl, provider)
 }
 
 function asRecord(value: unknown) {
@@ -100,6 +96,112 @@ function extractOccurredAt(payload: Record<string, unknown>) {
   return new Date()
 }
 
+function normalizeRecallStatusCode(value: string | null | undefined) {
+  if (!value) return null
+  return value.startsWith('bot.') ? value : `bot.${value}`
+}
+
+function resolveLatestRecallBotStatus(bot: RecallRetrieveBotResponse) {
+  const directStatus = asRecord(bot.status)
+  if (typeof directStatus?.code === 'string') {
+    return {
+      code: normalizeRecallStatusCode(directStatus.code),
+      subCode:
+        typeof directStatus.sub_code === 'string' ? directStatus.sub_code : null,
+      message:
+        typeof directStatus.message === 'string' ? directStatus.message : null,
+      observedAt:
+        typeof directStatus.updated_at === 'string'
+          ? directStatus.updated_at
+          : typeof directStatus.created_at === 'string'
+            ? directStatus.created_at
+            : null,
+    }
+  }
+
+  const statusChanges = Array.isArray(bot.status_changes) ? bot.status_changes : []
+  const latest = statusChanges
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .reverse()
+    .find((item) => typeof item.code === 'string')
+
+  if (!latest) {
+    return {
+      code: null,
+      subCode: null,
+      message: null,
+      observedAt: null,
+    }
+  }
+
+  return {
+    code: normalizeRecallStatusCode(latest.code as string),
+    subCode: typeof latest.sub_code === 'string' ? latest.sub_code : null,
+    message: typeof latest.message === 'string' ? latest.message : null,
+    observedAt:
+      typeof latest.updated_at === 'string'
+        ? latest.updated_at
+        : typeof latest.created_at === 'string'
+          ? latest.created_at
+          : null,
+  }
+}
+
+function describeRecallProviderJoinState(eventName: string) {
+  switch (eventName) {
+    case 'bot.joining_call':
+      return {
+        providerJoinState: 'joining_call',
+        lifecycleMessage: 'Kodi is joining the meeting provider.',
+      } as const
+    case 'bot.in_waiting_room':
+      return {
+        providerJoinState: 'waiting_room',
+        lifecycleMessage:
+          'Kodi is waiting for the host to admit it from the waiting room.',
+      } as const
+    case 'bot.in_call_not_recording':
+      return {
+        providerJoinState: 'awaiting_recording_permission',
+        consentState: 'pending',
+        lifecycleMessage:
+          'Kodi is in the call and waiting for recording permission before it can listen.',
+      } as const
+    case 'bot.recording_permission_allowed':
+      return {
+        providerJoinState: 'recording_permission_granted',
+        consentState: 'granted',
+        lifecycleMessage:
+          'Recording permission was granted. Kodi is finishing setup before listening starts.',
+      } as const
+    case 'bot.recording_permission_denied':
+      return {
+        providerJoinState: 'recording_permission_denied',
+        consentState: 'denied',
+        lifecycleMessage:
+          'Recording permission was denied, so Kodi cannot listen to the meeting.',
+      } as const
+    case 'bot.in_call_recording':
+      return {
+        providerJoinState: 'listening',
+        consentState: 'granted',
+        lifecycleMessage: 'Kodi is now listening to the meeting.',
+      } as const
+    case 'bot.call_ended':
+    case 'bot.done':
+      return {
+        providerJoinState: 'ended',
+      } as const
+    case 'bot.fatal':
+      return {
+        providerJoinState: 'failed',
+      } as const
+    default:
+      return null
+  }
+}
+
 function mapRecallBotEventToLifecycleState(eventName: string, subCode?: string | null) {
   const failure = classifyRecallFailure({ subCode })
 
@@ -140,7 +242,19 @@ function buildRecallJoinPayload(
   request: MeetingProviderJoinRequest
 ): RecallCreateBotRequest {
   if (!request.meeting.joinUrl) {
-    throw new Error('Recall bot joins require a Google Meet URL.')
+    throw new Error('Recall bot joins require a supported meeting URL.')
+  }
+
+  const inferredProvider = inferMeetingProviderFromUrl(request.meeting.joinUrl)
+  if (!inferredProvider) {
+    throw new Error(
+      'Recall bot joins currently support Google Meet and Zoom meeting URLs.'
+    )
+  }
+  if (inferredProvider !== request.provider) {
+    throw new Error(
+      `Meeting URL provider mismatch. Expected "${request.provider}" but received "${inferredProvider}".`
+    )
   }
 
   const recall = getRecallClientConfig()
@@ -155,10 +269,17 @@ function buildRecallJoinPayload(
   return {
     meeting_url: request.meeting.joinUrl,
     bot_name: request.botIdentity?.displayName ?? 'Kodi',
+    zoom:
+      request.provider === 'zoom' && request.providerInstallationId
+        ? {
+            zak_url: createZoomZakCallbackUrl(request.providerInstallationId),
+          }
+        : undefined,
     metadata: {
       orgId: request.orgId,
       provider: request.provider,
       internalMeetingSessionId: request.session?.internalMeetingSessionId ?? null,
+      providerInstallationId: request.providerInstallationId ?? null,
       ...(request.metadata ?? {}),
     },
     recording_config: {
@@ -191,8 +312,8 @@ function buildRecallJoinPayload(
   }
 }
 
-export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
-  readonly provider = 'google_meet'
+export class RecallMeetingAdapter implements MeetingProviderAdapter {
+  constructor(readonly provider: MeetingProviderJoinRequest['provider']) {}
 
   async prepare(
     request: MeetingProviderPrepareRequest
@@ -286,7 +407,8 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
     }
     const externalMeetingId = resolveRecallMeetingId(
       response.meeting_url,
-      request.meeting.joinUrl ?? ''
+      request.meeting.joinUrl ?? '',
+      request.provider
     )
 
     return {
@@ -352,6 +474,7 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
     const eventData = asRecord(data?.data)
     const subCode =
       typeof eventData?.sub_code === 'string' ? eventData.sub_code : null
+    const recallDeliveryId = envelope.deliveryId ?? null
 
     if (payload.event.startsWith('bot.')) {
       const lifecycle = mapRecallBotEventToLifecycleState(
@@ -363,6 +486,9 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
         lifecycle.state === 'failed'
           ? classifyRecallFailure({ subCode })
           : null
+      const providerJoinDetail = describeRecallProviderJoinState(payload.event)
+      const providerMessage =
+        typeof eventData?.message === 'string' ? eventData.message : null
 
       return [
         {
@@ -375,13 +501,17 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
           errorCode: lifecycle.state === 'failed' ? subCode : null,
           errorMessage:
             lifecycle.state === 'failed'
-              ? typeof eventData?.message === 'string'
-                ? eventData.message
-                : null
+              ? providerMessage
               : null,
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
+            recallDeliveryId,
+            ...(providerJoinDetail ?? {}),
+            lifecycleMessage:
+              providerMessage ??
+              providerJoinDetail?.lifecycleMessage ??
+              null,
             failure,
           },
         },
@@ -417,6 +547,7 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
+            recallDeliveryId,
             participant: participant,
           },
         },
@@ -479,6 +610,7 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
+            recallDeliveryId,
             languageCode:
               typeof eventData?.language_code === 'string'
                 ? eventData.language_code
@@ -492,14 +624,61 @@ export class RecallGoogleMeetAdapter implements MeetingProviderAdapter {
   }
 
   async getHealth(
-    _request: MeetingProviderHealthRequest
+    request: MeetingProviderHealthRequest
   ): Promise<MeetingProviderHealthSnapshot> {
+    const botId = request.session?.externalBotSessionId
+    if (!botId) {
+      return {
+        status: 'healthy',
+        observedAt: new Date(),
+        lifecycleState: 'idle',
+        detail: 'No active Recall bot session has been assigned yet.',
+        metadata: {
+          transport: 'recall',
+        },
+      }
+    }
+
+    const bot = await retrieveRecallBot(botId)
+    const latestStatus = resolveLatestRecallBotStatus(bot)
+    const observedAt = latestStatus.observedAt
+      ? new Date(latestStatus.observedAt)
+      : new Date()
+    const lifecycle = latestStatus.code
+      ? mapRecallBotEventToLifecycleState(latestStatus.code, latestStatus.subCode)
+      : null
+    const providerJoinDetail = latestStatus.code
+      ? describeRecallProviderJoinState(latestStatus.code)
+      : null
+    const failure =
+      latestStatus.subCode != null
+        ? classifyRecallFailure({ subCode: latestStatus.subCode })
+        : null
+
+    let status: MeetingProviderHealthSnapshot['status'] = 'healthy'
+    if (lifecycle?.state === 'failed') {
+      status = 'down'
+    } else if (
+      providerJoinDetail?.providerJoinState === 'waiting_room' ||
+      providerJoinDetail?.providerJoinState === 'awaiting_recording_permission'
+    ) {
+      status = 'degraded'
+    }
+
     return {
-      status: 'healthy',
-      observedAt: new Date(),
-      lifecycleState: 'idle',
+      status,
+      observedAt,
+      lifecycleState: lifecycle?.state ?? 'idle',
+      detail:
+        latestStatus.message ??
+        providerJoinDetail?.lifecycleMessage ??
+        'Recall bot health is nominal.',
       metadata: {
         transport: 'recall',
+        recallBotId: bot.id,
+        recallStatusCode: latestStatus.code,
+        recallSubCode: latestStatus.subCode,
+        failure,
       },
     }
   }

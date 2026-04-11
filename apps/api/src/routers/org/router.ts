@@ -1,6 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { eq, and, desc, asc } from 'drizzle-orm'
-import { ensurePersonalOrganizationForUser, orgMembers, organizations, user, activityLog } from '@kodi/db'
+import { activityLog, and, asc, desc, ensurePersonalOrganizationForUser, eq, orgMembers, organizations, user } from '@kodi/db'
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
 import { logActivity } from '../../lib/activity'

@@ -1,5 +1,5 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client'
-import type { AppRouter } from '@kodi/api'
+import type { AppRouter } from '@kodi/api/client'
 
 function getApiUrl() {
   return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002'

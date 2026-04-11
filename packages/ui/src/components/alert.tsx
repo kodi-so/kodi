@@ -7,9 +7,15 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-card text-foreground',
+        default: 'border-border/80 bg-card text-foreground',
+        success:
+          'border-[hsl(var(--kodi-success)/0.2)] bg-[hsl(var(--kodi-success-soft))] text-foreground [&>svg]:text-brand-success',
+        info:
+          'border-[hsl(var(--kodi-info)/0.2)] bg-[hsl(var(--kodi-info-soft))] text-foreground [&>svg]:text-brand-info',
+        warning:
+          'border-[hsl(var(--kodi-warning)/0.22)] bg-[hsl(var(--kodi-warning-soft))] text-foreground [&>svg]:text-brand-warning',
         destructive:
-          'border-destructive/40 bg-destructive/10 text-destructive [&>svg]:text-destructive',
+          'border-[hsl(var(--kodi-danger)/0.2)] bg-[hsl(var(--kodi-danger-soft))] text-foreground [&>svg]:text-brand-danger',
       },
     },
     defaultVariants: {

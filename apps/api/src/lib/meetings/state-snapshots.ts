@@ -1,5 +1,4 @@
-import { desc, eq } from 'drizzle-orm'
-import { db, meetingStateSnapshots } from '@kodi/db'
+import { db, desc, eq, meetingStateSnapshots } from '@kodi/db'
 
 type SaveMeetingStateSnapshotPatchInput = {
   meetingSessionId: string

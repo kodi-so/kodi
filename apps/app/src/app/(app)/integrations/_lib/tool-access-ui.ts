@@ -1,6 +1,7 @@
 'use client'
 
 import { trpc } from '@/lib/trpc'
+import type { BrandBadgeTone } from '@/lib/brand-styles'
 
 export type ToolAccessCatalog = Awaited<
   ReturnType<typeof trpc.toolAccess.getCatalog.query>
@@ -42,30 +43,30 @@ export function formatIntegrationDate(value: Date | string | null | undefined) {
   })
 }
 
-export function getStatusTone(status: string) {
+export function getStatusTone(status: string): BrandBadgeTone {
   const normalized = status.trim().toLowerCase()
 
   if (normalized === 'connected' || normalized.endsWith(' connected')) {
-    return 'border-[#6FA88C]/24 bg-[#6FA88C]/12 text-[#d6eadf]'
+    return 'success'
   }
 
   if (normalized.includes('ready') || normalized.includes('browse')) {
-    return 'border-white/12 bg-white/8 text-[#dbeaf0]'
+    return 'info'
   }
 
   if (normalized.includes('connecting')) {
-    return 'border-white/12 bg-white/8 text-[#dbeaf0]'
+    return 'info'
   }
 
   if (normalized.includes('needs') || normalized.includes('blocked')) {
-    return 'border-[#DFAE56]/24 bg-[#DFAE56]/12 text-[#f6d289]'
+    return 'warning'
   }
 
   if (normalized.includes('attention') || normalized.includes('error')) {
-    return 'border-red-500/20 bg-red-500/10 text-red-200'
+    return 'destructive'
   }
 
-  return 'border-white/12 bg-white/8 text-[#dce5e7]'
+  return 'neutral'
 }
 
 export function getToolkitMonogram(name: string) {
@@ -110,6 +111,16 @@ export function getZoomStatus(installStatus: ZoomInstallStatus | null) {
   if (!installStatus?.featureFlags.zoomCopilot) return 'Feature off'
   if (!installStatus?.setup.configured) return 'Needs setup'
   if (installation?.status === 'error') return 'Attention needed'
+  return 'Not connected'
+}
+
+export function getZoomSignedInBotStatus(installStatus: ZoomInstallStatus | null) {
+  const installation = installStatus?.installation ?? null
+
+  if (!installation) return 'Not connected'
+  if (installStatus?.signedInBotsReady) return 'Signed-in bot ready'
+  if (installation.status === 'active') return 'Needs ZAK scope'
+  if (installation.status === 'error') return 'Attention needed'
   return 'Not connected'
 }
 
@@ -272,7 +283,7 @@ export function getPolicyState(policy: {
   if (!policy.enabled) {
     return {
       label: 'Workspace blocked',
-      tone: 'border-red-500/20 bg-red-500/10 text-red-200',
+      tone: 'destructive' as const,
       detail:
         'This integration is disabled for the workspace even if an account is connected.',
     }
@@ -281,7 +292,7 @@ export function getPolicyState(policy: {
   if (!policy.chatReadsEnabled || !policy.meetingReadsEnabled) {
     return {
       label: 'Limited reads',
-      tone: 'border-[#DFAE56]/24 bg-[#DFAE56]/12 text-[#f6d289]',
+      tone: 'warning' as const,
       detail:
         'Some read contexts are disabled, so availability depends on where Kodi is acting.',
     }
@@ -290,7 +301,7 @@ export function getPolicyState(policy: {
   if (policy.adminActionsEnabled) {
     return {
       label: 'Admin enabled',
-      tone: 'border-red-500/20 bg-red-500/10 text-red-200',
+      tone: 'destructive' as const,
       detail:
         'Administrative actions are enabled and should be treated carefully.',
     }
@@ -299,14 +310,14 @@ export function getPolicyState(policy: {
   if (policy.writesRequireApproval) {
     return {
       label: 'Writes reviewed',
-      tone: 'border-white/12 bg-white/8 text-[#dbeaf0]',
+      tone: 'info' as const,
       detail: 'Writes stay behind approval before execution.',
     }
   }
 
   return {
     label: 'Direct writes allowed',
-    tone: 'border-[#6FA88C]/24 bg-[#6FA88C]/12 text-[#d6eadf]',
+    tone: 'success' as const,
     detail: 'Writes can proceed directly once the runtime supports them.',
   }
 }

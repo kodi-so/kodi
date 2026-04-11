@@ -3,11 +3,13 @@
 import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 import { Badge, cn } from '@kodi/ui'
-import { getStatusTone, getToolkitMonogram } from '../_lib/tool-access-ui'
+import { getStatusTone } from '../_lib/tool-access-ui'
+import { ToolkitLogo } from './toolkit-logo'
 
 export function IntegrationCard({
   href,
   name,
+  logoUrl,
   slug,
   status,
   meta,
@@ -17,6 +19,7 @@ export function IntegrationCard({
 }: {
   href: string
   name: string
+  logoUrl?: string | null
   slug: string
   status: string
   meta: string | null
@@ -28,17 +31,15 @@ export function IntegrationCard({
     <Link
       href={href}
       className={cn(
-        'group flex min-h-[168px] flex-col justify-between rounded-[1.6rem] border bg-card p-5 transition',
+        'group kodi-panel-surface flex min-h-[168px] flex-col justify-between rounded-[1.6rem] border p-5 shadow-brand-panel transition',
         priority ? 'border-primary/40' : 'border-border',
         'hover:-translate-y-0.5 hover:border-foreground/20'
       )}
     >
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] border border-border bg-secondary text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
-            {getToolkitMonogram(name)}
-          </div>
-          <Badge className={getStatusTone(status)}>{status}</Badge>
+          <ToolkitLogo name={name} logoUrl={logoUrl} className="h-12 w-12" />
+          <Badge variant={getStatusTone(status)}>{status}</Badge>
         </div>
 
         <div className="space-y-2">

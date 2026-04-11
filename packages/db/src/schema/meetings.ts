@@ -9,6 +9,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 import { organizations } from './orgs'
@@ -16,6 +17,7 @@ import {
   conferenceProviderEnum,
   providerInstallations,
 } from './provider-installations'
+import { meetingParticipationModeValues } from '../lib/meeting-copilot'
 
 export const meetingSessionStatusEnum = pgEnum('meeting_session_status', [
   'scheduled',
@@ -50,6 +52,16 @@ export const meetingArtifactTypeEnum = pgEnum('meeting_artifact_type', [
   'draft_ticket_batch',
   'execution_plan',
 ])
+
+export const meetingParticipationModeEnum = pgEnum(
+  'meeting_participation_mode',
+  meetingParticipationModeValues
+)
+
+export const meetingAdapterHealthStatusEnum = pgEnum(
+  'meeting_adapter_health_status',
+  ['healthy', 'degraded', 'down']
+)
 
 export const meetingSessions = pgTable(
   'meeting_sessions',
@@ -111,6 +123,88 @@ export const meetingSessions = pgTable(
   })
 )
 
+export const meetingCopilotSettings = pgTable('meeting_copilot_settings', {
+  orgId: text('org_id')
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  botDisplayName: text('bot_display_name'),
+  defaultParticipationMode: meetingParticipationModeEnum(
+    'default_participation_mode'
+  )
+    .notNull()
+    .default('chat_enabled'),
+  chatResponsesRequireExplicitAsk: boolean(
+    'chat_responses_require_explicit_ask'
+  )
+    .notNull()
+    .default(true),
+  voiceResponsesRequireExplicitPrompt: boolean(
+    'voice_responses_require_explicit_prompt'
+  )
+    .notNull()
+    .default(true),
+  allowMeetingHostControls: boolean('allow_meeting_host_controls')
+    .notNull()
+    .default(true),
+  consentNoticeEnabled: boolean('consent_notice_enabled')
+    .notNull()
+    .default(true),
+  transcriptRetentionDays: integer('transcript_retention_days')
+    .notNull()
+    .default(30),
+  artifactRetentionDays: integer('artifact_retention_days')
+    .notNull()
+    .default(180),
+  updatedBy: text('updated_by').references(() => user.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+})
+
+export const meetingSessionControls = pgTable(
+  'meeting_session_controls',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    participationMode: meetingParticipationModeEnum('participation_mode')
+      .notNull()
+      .default('chat_enabled'),
+    allowHostControls: boolean('allow_host_controls').notNull().default(true),
+    liveResponsesDisabled: boolean('live_responses_disabled')
+      .notNull()
+      .default(false),
+    liveResponsesDisabledReason: text('live_responses_disabled_reason'),
+    updatedBy: text('updated_by').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => ({
+    meetingSessionIdx: uniqueIndex('meeting_session_controls_session_uidx').on(
+      table.meetingSessionId
+    ),
+    orgMeetingIdx: index('meeting_session_controls_org_session_idx').on(
+      table.orgId,
+      table.meetingSessionId
+    ),
+  })
+)
+
 export const meetingParticipants = pgTable(
   'meeting_participants',
   {
@@ -153,6 +247,7 @@ export const meetingEvents = pgTable(
     sequence: integer('sequence').notNull(),
     eventType: text('event_type').notNull(),
     source: meetingEventSourceEnum('source').notNull(),
+    dedupeKey: text('dedupe_key'),
     payload: jsonb('payload').$type<Record<string, unknown> | null>(),
     occurredAt: timestamp('occurred_at').defaultNow().notNull(),
   },
@@ -165,6 +260,39 @@ export const meetingEvents = pgTable(
       table.meetingSessionId,
       table.eventType
     ),
+    meetingSessionDedupeUidx: uniqueIndex(
+      'meeting_events_session_dedupe_uidx'
+    ).on(table.meetingSessionId, table.dedupeKey),
+  })
+)
+
+export const meetingSessionHealth = pgTable(
+  'meeting_session_health',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    provider: conferenceProviderEnum('provider').notNull(),
+    status: meetingAdapterHealthStatusEnum('status').notNull(),
+    lifecycleState: text('lifecycle_state'),
+    detail: text('detail'),
+    metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
+    observedAt: timestamp('observed_at').notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => ({
+    meetingSessionUidx: uniqueIndex('meeting_session_health_session_uidx').on(
+      table.meetingSessionId
+    ),
+    meetingSessionObservedIdx: index(
+      'meeting_session_health_session_observed_idx'
+    ).on(table.meetingSessionId, table.observedAt),
   })
 )
 
@@ -281,6 +409,46 @@ export const meetingSessionsRelations = relations(
       fields: [meetingSessions.hostUserId],
       references: [user.id],
     }),
+    health: one(meetingSessionHealth, {
+      fields: [meetingSessions.id],
+      references: [meetingSessionHealth.meetingSessionId],
+    }),
+    controls: one(meetingSessionControls, {
+      fields: [meetingSessions.id],
+      references: [meetingSessionControls.meetingSessionId],
+    }),
+  })
+)
+
+export const meetingCopilotSettingsRelations = relations(
+  meetingCopilotSettings,
+  ({ one }) => ({
+    org: one(organizations, {
+      fields: [meetingCopilotSettings.orgId],
+      references: [organizations.id],
+    }),
+    updatedByUser: one(user, {
+      fields: [meetingCopilotSettings.updatedBy],
+      references: [user.id],
+    }),
+  })
+)
+
+export const meetingSessionControlsRelations = relations(
+  meetingSessionControls,
+  ({ one }) => ({
+    org: one(organizations, {
+      fields: [meetingSessionControls.orgId],
+      references: [organizations.id],
+    }),
+    meetingSession: one(meetingSessions, {
+      fields: [meetingSessionControls.meetingSessionId],
+      references: [meetingSessions.id],
+    }),
+    updatedByUser: one(user, {
+      fields: [meetingSessionControls.updatedBy],
+      references: [user.id],
+    }),
   })
 )
 
@@ -304,6 +472,16 @@ export const meetingEventsRelations = relations(meetingEvents, ({ one }) => ({
     references: [meetingSessions.id],
   }),
 }))
+
+export const meetingSessionHealthRelations = relations(
+  meetingSessionHealth,
+  ({ one }) => ({
+    meetingSession: one(meetingSessions, {
+      fields: [meetingSessionHealth.meetingSessionId],
+      references: [meetingSessions.id],
+    }),
+  })
+)
 
 export const transcriptSegmentsRelations = relations(
   transcriptSegments,
@@ -345,10 +523,16 @@ export const meetingArtifactsRelations = relations(
 
 export type MeetingSession = typeof meetingSessions.$inferSelect
 export type NewMeetingSession = typeof meetingSessions.$inferInsert
+export type MeetingCopilotSetting = typeof meetingCopilotSettings.$inferSelect
+export type NewMeetingCopilotSetting = typeof meetingCopilotSettings.$inferInsert
+export type MeetingSessionControl = typeof meetingSessionControls.$inferSelect
+export type NewMeetingSessionControl = typeof meetingSessionControls.$inferInsert
 export type MeetingParticipant = typeof meetingParticipants.$inferSelect
 export type NewMeetingParticipant = typeof meetingParticipants.$inferInsert
 export type MeetingEvent = typeof meetingEvents.$inferSelect
 export type NewMeetingEvent = typeof meetingEvents.$inferInsert
+export type MeetingSessionHealth = typeof meetingSessionHealth.$inferSelect
+export type NewMeetingSessionHealth = typeof meetingSessionHealth.$inferInsert
 export type TranscriptSegment = typeof transcriptSegments.$inferSelect
 export type NewTranscriptSegment = typeof transcriptSegments.$inferInsert
 export type MeetingStateSnapshot = typeof meetingStateSnapshots.$inferSelect

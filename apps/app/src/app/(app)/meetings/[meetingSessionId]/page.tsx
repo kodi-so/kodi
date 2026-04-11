@@ -3,20 +3,48 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, CheckCircle2, Users } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock3,
+  Mic2,
+  RefreshCw,
+  Sparkles,
+  Users,
+} from 'lucide-react'
 import {
   Alert,
   AlertDescription,
   Badge,
+  Button,
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
   Separator,
   Skeleton,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
+import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
+import {
+  dashedPanelClass,
+  heroPanelClass,
+  pageShellClass,
+  quietTextClass,
+  subtleTextClass,
+} from '@/lib/brand-styles'
+import {
+  describeMeetingLifecycleEvent,
+  getMeetingRuntimeCopy,
+} from '../_lib/runtime-state'
+import {
+  buildMeetingCopilotDisclosure,
+  formatRetentionDays,
+  getMeetingParticipationModeDescription,
+  getMeetingParticipationModeLabel,
+} from '@kodi/db/client'
 
 type MeetingConsole = NonNullable<
   Awaited<ReturnType<typeof trpc.meeting.getConsole.query>>
@@ -25,9 +53,19 @@ type MeetingParticipants = MeetingConsole['participants']
 type MeetingTranscript = MeetingConsole['transcript']
 type MeetingLiveState = MeetingConsole['liveState'] | null
 type MeetingEventFeed = MeetingConsole['events']
+type MeetingWorkspaceSettings = MeetingConsole['workspaceSettings'] | null
+type MeetingControls = MeetingConsole['controls'] | null
 type MeetingTranscriptSegment = MeetingTranscript[number]
 type MeetingTranscriptTurn = MeetingTranscriptSegment & {
   mergedSegmentCount: number
+}
+type MeetingChatItem = {
+  id: string
+  eventType: string
+  content: string
+  senderName: string
+  recipient: string
+  occurredAt: Date | string
 }
 
 function asRecord(value: unknown) {
@@ -92,21 +130,21 @@ function pollIntervalForStatus(status: string | null | undefined) {
 function statusTone(status: string) {
   switch (status) {
     case 'listening':
-      return 'border-[#6FA88C]/30 bg-[#6FA88C]/14 text-[#d6eadf]'
+      return 'success' as const
     case 'admitted':
-      return 'border-cyan-500/30 bg-cyan-500/15 text-cyan-200'
+      return 'info' as const
     case 'processing':
-      return 'border-[#DFAE56]/30 bg-[#DFAE56]/14 text-[#f6d289]'
+      return 'warning' as const
     case 'joining':
     case 'scheduled':
     case 'preparing':
-      return 'border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]'
+      return 'warning' as const
     case 'ended':
-      return 'border-white/12 bg-white/10 text-[#dce5e7]'
+      return 'neutral' as const
     case 'failed':
-      return 'border-red-500/30 bg-red-500/15 text-red-200'
+      return 'destructive' as const
     default:
-      return 'border-white/12 bg-white/10 text-[#dce5e7]'
+      return 'neutral' as const
   }
 }
 
@@ -142,6 +180,19 @@ function formatProviderLabel(provider: string) {
   }
 }
 
+function formatSourceLabel(source: string) {
+  switch (source) {
+    case 'recall_webhook':
+      return 'Recall webhook'
+    case 'zoom_webhook':
+      return 'Zoom webhook'
+    case 'rtms':
+      return 'RTMS'
+    default:
+      return source.replace(/_/g, ' ')
+  }
+}
+
 function formatEventLabel(eventType: string) {
   switch (eventType) {
     case 'meeting.joining':
@@ -150,6 +201,10 @@ function formatEventLabel(eventType: string) {
       return 'Admitted'
     case 'meeting.started':
       return 'Started'
+    case 'meeting.chat_message.received':
+      return 'Chat received'
+    case 'meeting.chat_message.sent':
+      return 'Chat sent'
     case 'meeting.ended':
       return 'Ended'
     case 'meeting.failed':
@@ -163,7 +218,7 @@ function formatEventLabel(eventType: string) {
   }
 }
 
-function describeEvent(event: MeetingEventFeed[number]) {
+function describeEvent(event: MeetingEventFeed[number], provider: string) {
   const payload = asRecord(event.payload)
   if (!payload) return null
 
@@ -192,10 +247,11 @@ function describeEvent(event: MeetingEventFeed[number]) {
     )
   }
 
-  const state = typeof payload.state === 'string' ? payload.state : null
-  const errorMessage =
-    typeof payload.errorMessage === 'string' ? payload.errorMessage : null
-  return errorMessage ?? state
+  return describeMeetingLifecycleEvent({
+    provider,
+    eventType: event.eventType,
+    payload,
+  })
 }
 
 function normalizeTranscriptContent(value: string) {
@@ -337,12 +393,15 @@ export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
   const meetingSessionId = params.meetingSessionId
   const { activeOrg } = useOrg()
+  const { data: session } = useSession()
   const orgId = activeOrg?.orgId ?? null
+  const currentUserId = session?.user?.id ?? null
 
   const [consoleData, setConsoleData] = useState<MeetingConsole | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+  const [controlsSaving, setControlsSaving] = useState(false)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -399,6 +458,9 @@ export default function MeetingDetailsPage() {
   const transcript: MeetingTranscript = consoleData?.transcript ?? []
   const liveState: MeetingLiveState = consoleData?.liveState ?? null
   const events: MeetingEventFeed = consoleData?.events ?? []
+  const workspaceSettings: MeetingWorkspaceSettings =
+    consoleData?.workspaceSettings ?? null
+  const controls: MeetingControls = consoleData?.controls ?? null
 
   const chronologicalTranscript = useMemo(
     () => collapseTranscriptSegments([...transcript].reverse()),
@@ -407,6 +469,15 @@ export default function MeetingDetailsPage() {
   const meetingMetadata = useMemo(
     () => asRecord(meeting?.metadata),
     [meeting?.metadata]
+  )
+  const runtimeCopy = useMemo(
+    () =>
+      getMeetingRuntimeCopy({
+        provider: meeting?.provider ?? 'meeting',
+        status: meeting?.status ?? 'scheduled',
+        metadata: meeting?.metadata ?? null,
+      }),
+    [meeting?.metadata, meeting?.provider, meeting?.status]
   )
 
   const failureReason = useMemo(() => {
@@ -470,6 +541,86 @@ export default function MeetingDetailsPage() {
     })
   }, [timelineEvents])
 
+  const chatMessages = useMemo(
+    () =>
+      [...events]
+        .filter((event) =>
+          [
+            'meeting.chat_message.received',
+            'meeting.chat_message.sent',
+          ].includes(event.eventType)
+        )
+        .reverse()
+        .reduce<MeetingChatItem[]>((items, event) => {
+          const payload = asRecord(event.payload)
+          const message = asRecord(payload?.message)
+          const sender = asRecord(message?.sender)
+          const content =
+            typeof message?.content === 'string' ? message.content.trim() : ''
+
+          if (!content) return items
+
+          items.push({
+            id: event.id,
+            eventType: event.eventType,
+            content,
+            senderName:
+              typeof sender?.displayName === 'string' && sender.displayName
+                ? sender.displayName
+                : event.eventType === 'meeting.chat_message.sent'
+                  ? 'Kodi'
+                  : 'Unknown sender',
+            recipient:
+              typeof message?.to === 'string' ? message.to : 'everyone',
+            occurredAt: event.occurredAt,
+          })
+
+          return items
+        }, []),
+    [events]
+  )
+
+  const canManageControls =
+    activeOrg?.role === 'owner' ||
+    (currentUserId != null && meeting?.hostUserId === currentUserId)
+
+  async function updateControls(input: {
+    participationMode?: 'listen_only' | 'chat_enabled' | 'voice_enabled'
+    liveResponsesDisabled?: boolean
+    liveResponsesDisabledReason?: string
+  }) {
+    if (!orgId || !meetingSessionId) return
+
+    setControlsSaving(true)
+
+    try {
+      await trpc.meeting.updateSessionControls.mutate({
+        orgId,
+        meetingSessionId,
+        ...input,
+      })
+
+      const next = await trpc.meeting.getConsole.query({
+        orgId,
+        meetingSessionId,
+        transcriptLimit: 200,
+        eventLimit: 20,
+      })
+
+      setConsoleData(next as MeetingConsole | null)
+      setLastRefreshedAt(new Date())
+      setError(null)
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update live meeting controls.'
+      )
+    } finally {
+      setControlsSaving(false)
+    }
+  }
+
   const rollingNotes = useMemo(
     () =>
       typeof liveState?.rollingNotes === 'string'
@@ -499,6 +650,8 @@ export default function MeetingDetailsPage() {
                 : 'Untitled follow-up',
             ownerHint:
               typeof record.ownerHint === 'string' ? record.ownerHint : null,
+            confidence:
+              typeof record.confidence === 'number' ? record.confidence : null,
             sourceEvidence: asArray(record.sourceEvidence).filter(
               (item): item is string => typeof item === 'string'
             ),
@@ -510,6 +663,7 @@ export default function MeetingDetailsPage() {
           ): task is {
             title: string
             ownerHint: string | null
+            confidence: number | null
             sourceEvidence: string[]
           } => task !== null
         ),
@@ -528,16 +682,32 @@ export default function MeetingDetailsPage() {
               typeof record.title === 'string'
                 ? record.title
                 : 'Untitled draft',
+            toolkitSlug:
+              typeof record.toolkitSlug === 'string'
+                ? record.toolkitSlug
+                : null,
             toolkitName:
               typeof record.toolkitName === 'string'
                 ? record.toolkitName
-                : (typeof record.toolkitSlug === 'string'
-                    ? record.toolkitSlug
-                    : null),
-            approvalRequired: record.approvalRequired === true,
+                : null,
+            actionType:
+              typeof record.actionType === 'string' ? record.actionType : null,
+            targetSummary:
+              typeof record.targetSummary === 'string'
+                ? record.targetSummary
+                : null,
+            rationale:
+              typeof record.rationale === 'string' ? record.rationale : null,
+            confidence:
+              typeof record.confidence === 'number' ? record.confidence : null,
             sourceEvidence: asArray(record.sourceEvidence).filter(
               (item): item is string => typeof item === 'string'
             ),
+            reviewState:
+              typeof record.reviewState === 'string'
+                ? record.reviewState
+                : null,
+            approvalRequired: record.approvalRequired === true,
           }
         })
         .filter(
@@ -545,9 +715,15 @@ export default function MeetingDetailsPage() {
             draft
           ): draft is {
             title: string
+            toolkitSlug: string | null
             toolkitName: string | null
-            approvalRequired: boolean
+            actionType: string | null
+            targetSummary: string | null
+            rationale: string | null
+            confidence: number | null
             sourceEvidence: string[]
+            reviewState: string | null
+            approvalRequired: boolean
           } => draft !== null
         ),
     [liveState?.draftActions]
@@ -620,6 +796,16 @@ export default function MeetingDetailsPage() {
         value: truncateMiddle(meeting.providerBotSessionId),
       },
       {
+        label: 'Meeting ID',
+        value: truncateMiddle(meeting.providerMeetingId),
+      },
+      {
+        label: 'Instance ID',
+        value: truncateMiddle(
+          meeting.providerMeetingInstanceId ?? meeting.providerMeetingUuid
+        ),
+      },
+      {
         label: 'Last refresh',
         value: formatTime(lastRefreshedAt),
       },
@@ -632,7 +818,7 @@ export default function MeetingDetailsPage() {
 
   if (!activeOrg) {
     return (
-      <div className="flex min-h-full items-center justify-center p-6 text-sm text-[#8ea3a8]">
+      <div className="flex min-h-full items-center justify-center p-6 text-sm text-brand-subtle">
         Select a workspace to view meetings.
       </div>
     )
@@ -641,11 +827,11 @@ export default function MeetingDetailsPage() {
   if (loading) {
     return (
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <Skeleton className="h-9 w-48 bg-white/10" />
-        <Skeleton className="h-[160px] bg-white/10" />
+        <Skeleton className="h-9 w-48 bg-brand-muted" />
+        <Skeleton className="h-[220px] bg-brand-muted" />
         <div className="grid gap-6 lg:grid-cols-[1.18fr_0.82fr]">
-          <Skeleton className="h-[640px] bg-white/10" />
-          <Skeleton className="h-[640px] bg-white/10" />
+          <Skeleton className="h-[640px] bg-brand-muted" />
+          <Skeleton className="h-[640px] bg-brand-muted" />
         </div>
       </div>
     )
@@ -654,7 +840,7 @@ export default function MeetingDetailsPage() {
   if (error) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
-        <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+        <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       </div>
@@ -664,7 +850,7 @@ export default function MeetingDetailsPage() {
   if (!meeting) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
-        <Alert className="border-white/12 bg-[rgba(49,66,71,0.82)] text-[#dce5e7]">
+        <Alert>
           <AlertDescription>
             This meeting session was not found for the current workspace.
           </AlertDescription>
@@ -674,122 +860,188 @@ export default function MeetingDetailsPage() {
   }
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.10),_transparent_26%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.08),_transparent_32%),linear-gradient(180deg,_rgba(16,17,21,0.88),_rgba(7,8,10,1))]">
+    <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        {/* Header */}
-        <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(19,20,24,0.96),_rgba(11,12,15,0.96))]">
-          <div className="border-b border-white/10 px-6 py-4">
+        <section className={`${heroPanelClass} rounded-[2rem]`}>
+          <div className="border-b border-brand-line px-6 py-5">
             <Link
               href="/meetings"
-              className="inline-flex w-fit items-center gap-2 text-sm text-[#9bb0b5] transition hover:text-white"
+              className="inline-flex w-fit items-center gap-2 text-sm text-brand-quiet transition hover:text-foreground"
             >
               <ArrowLeft size={16} />
               Back to meetings
             </Link>
           </div>
 
-          <div className="px-6 py-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className={statusTone(meeting.status)}>
-                {statusLabel(meeting.status)}
-              </Badge>
-              <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
-                {formatProviderLabel(meeting.provider)}
-              </Badge>
+          <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={statusTone(meeting.status)}>
+                  {statusLabel(meeting.status)}
+                </Badge>
+                <Badge variant="neutral">
+                  {formatProviderLabel(meeting.provider)}
+                </Badge>
+                <Badge variant="neutral">
+                  refresh {Math.round(pollIntervalMs / 1000)}s
+                </Badge>
+              </div>
+
+              <div className="space-y-3">
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+                  {meeting.title ?? 'Untitled meeting'}
+                </h1>
+                <p className={`max-w-2xl text-sm leading-7 ${quietTextClass}`}>
+                  {runtimeCopy.description}
+                </p>
+              </div>
             </div>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-              {meeting.title ?? 'Untitled meeting'}
-            </h1>
-            <p className="mt-1 text-sm text-[#8ea3a8]">
-              Started {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
-              {latestActivityAt && (
-                <> · Last activity {formatDate(latestActivityAt)}</>
-              )}
-            </p>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated px-4 py-4">
+                <div className={`flex items-center gap-2 ${subtleTextClass}`}>
+                  <Clock3 size={14} />
+                  Started
+                </div>
+                <p className="mt-3 text-sm text-foreground">
+                  {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+                </p>
+              </div>
+              <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated px-4 py-4">
+                <div className={`flex items-center gap-2 ${subtleTextClass}`}>
+                  <RefreshCw size={14} />
+                  Last activity
+                </div>
+                <p className="mt-3 text-sm text-foreground">
+                  {formatDate(latestActivityAt)}
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
         {failureReason && (
-          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+          <Alert variant="destructive">
             <AlertDescription>{failureReason}</AlertDescription>
           </Alert>
         )}
 
+        {runtimeCopy.alertTitle && runtimeCopy.alertDescription && (
+          <Alert
+            variant={
+              runtimeCopy.alertTone === 'danger'
+                ? 'destructive'
+                : runtimeCopy.alertTone === 'warning'
+                  ? 'warning'
+                  : 'info'
+            }
+          >
+            <AlertDescription>
+              <span className="font-medium">{runtimeCopy.alertTitle}: </span>
+              {runtimeCopy.alertDescription}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
-          {/* Left column */}
           <div className="space-y-6">
-            {/* Summary */}
-            <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium text-white">
-                  Summary
-                </CardTitle>
+            <Card className="border-brand-line">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-foreground">
+                      Meeting summary
+                    </CardTitle>
+                    <CardDescription>
+                      The shortest useful version of the meeting so far.
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 {activeTopics.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {activeTopics.map((topic) => (
-                      <Badge
-                        key={topic}
-                        className="border-white/12 bg-white/10 text-[#dce5e7]"
-                      >
+                      <Badge key={topic} variant="neutral">
                         {topic}
                       </Badge>
                     ))}
                   </div>
                 )}
 
-                <p className="text-sm leading-7 text-white">
-                  {meeting.liveSummary ??
-                    liveState?.summary ??
-                    'No summary yet.'}
-                </p>
+                <div className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-5">
+                  <p className="text-sm leading-7 text-foreground">
+                    {meeting.liveSummary ??
+                      liveState?.summary ??
+                      'Kodi has not produced a meeting summary yet.'}
+                  </p>
+                </div>
 
-                {(rollingNotes || (!meeting.liveSummary && !liveState?.summary)) && (
-                  <details className="group pt-1">
-                    <summary className="cursor-pointer list-none text-xs text-[#8ea3a8] marker:hidden hover:text-[#9bb0b5]">
-                      Working notes
-                    </summary>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#9bb0b5]">
-                      {rollingNotes ??
-                        'Kodi will keep running notes here as the meeting develops.'}
-                    </p>
-                  </details>
-                )}
+                <details className="group rounded-[1.5rem] border border-brand-line bg-brand-elevated p-5">
+                  <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
+                    Working notes
+                  </summary>
+                  <p
+                    className={`mt-4 whitespace-pre-wrap text-sm leading-6 ${quietTextClass}`}
+                  >
+                    {rollingNotes ??
+                      'Kodi will keep a tighter running set of notes here as the meeting develops.'}
+                  </p>
+                </details>
               </CardContent>
             </Card>
 
-            {/* Transcript */}
-            <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium text-white">
-                  Transcript
-                </CardTitle>
+            <Card className="border-brand-line">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+                    <Mic2 size={18} />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-foreground">
+                      Transcript
+                    </CardTitle>
+                    <CardDescription>
+                      Raw meeting language, grouped into readable speaker turns.
+                    </CardDescription>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {chronologicalTranscript.length === 0 ? (
-                  <p className="text-sm text-[#8ea3a8]">No transcript yet.</p>
+                  <div
+                    className={`${dashedPanelClass} rounded-[1.5rem] p-5 text-sm ${quietTextClass}`}
+                  >
+                    Transcript lines will appear here once Kodi starts hearing
+                    the call.
+                  </div>
                 ) : (
-                  <div className="divide-y divide-white/8">
-                    {chronologicalTranscript.map((segment) => (
+                  <div className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated">
+                    {chronologicalTranscript.map((segment, index) => (
                       <div
                         key={segment.id}
-                        className="py-4 first:pt-0 last:pb-0"
+                        className={`px-4 py-4 ${
+                          index > 0 ? 'border-t border-brand-line' : ''
+                        }`}
                       >
-                        <div className="mb-1.5 flex items-baseline gap-3">
-                          <span className="text-sm font-medium text-[#dce5e7]">
-                            {segment.speakerName ?? 'Unknown'}
+                        <div
+                          className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                        >
+                          <span className="font-medium text-foreground">
+                            {segment.speakerName ?? 'Unknown speaker'}
                           </span>
-                          <span className="text-xs text-[#8ea3a8]">
-                            {formatDate(segment.createdAt)}
-                          </span>
+                          <span>{formatDate(segment.createdAt)}</span>
+                          <Badge variant="neutral">
+                            {formatSourceLabel(segment.source)}
+                          </Badge>
                           {segment.isPartial && (
-                            <span className="text-xs text-[#f6d289]">
-                              partial
-                            </span>
+                            <Badge variant="warning">Partial</Badge>
                           )}
                         </div>
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-white">
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
                           {segment.content}
                         </p>
                       </div>
@@ -800,238 +1052,546 @@ export default function MeetingDetailsPage() {
             </Card>
           </div>
 
-          {/* Right column */}
           <div className="space-y-6">
-            {/* Follow-up */}
-            <Card className="border-white/10 bg-[rgba(49,66,71,0.78)]">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium text-white">
-                  Follow-up
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {/* Action items — draft actions and candidate tasks merged */}
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                    Action items
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {draftActions.length === 0 && candidateTasks.length === 0 ? (
-                      <p className="text-sm text-[#8ea3a8]">
-                        No action items yet.
-                      </p>
+            {workspaceSettings && controls && (
+              <Card className="border-brand-line">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+                      <CheckCircle2 size={18} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl text-foreground">
+                        Live participation controls
+                      </CardTitle>
+                      <CardDescription>
+                        These controls narrow how Kodi can participate in this
+                        meeting without changing the workspace defaults.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {getMeetingParticipationModeLabel(
+                        controls.participationMode
+                      )}
+                    </Badge>
+                    {controls.liveResponsesDisabled ? (
+                      <Badge variant="destructive">Live replies paused</Badge>
                     ) : (
-                      <>
-                        {draftActions.map((draft, index) => (
-                          <div
-                            key={`draft-${index}`}
-                            className="rounded-[1.2rem] border border-white/10 bg-black/12 px-4 py-3"
-                          >
-                            <div className="flex items-start gap-2">
-                              <p className="flex-1 text-sm font-medium text-white">
-                                {draft.title}
-                              </p>
-                              <div className="flex shrink-0 flex-wrap gap-1.5">
-                                {draft.toolkitName && (
-                                  <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
-                                    {draft.toolkitName}
-                                  </Badge>
-                                )}
-                                {draft.approvalRequired && (
-                                  <Badge className="border-[#DFAE56]/28 bg-[#DFAE56]/14 text-[#f6d289]">
-                                    Needs approval
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            {draft.sourceEvidence.length > 0 && (
-                              <details className="mt-2">
-                                <summary className="cursor-pointer text-xs text-[#8ea3a8] marker:hidden hover:text-[#9bb0b5]">
-                                  Why Kodi suggested this
-                                </summary>
-                                <p className="mt-1.5 text-sm leading-6 text-[#8ea3a8]">
-                                  {draft.sourceEvidence[0]}
-                                </p>
-                              </details>
-                            )}
-                          </div>
-                        ))}
-                        {candidateTasks.map((task, index) => (
-                          <div
-                            key={`task-${index}`}
-                            className="rounded-[1.2rem] border border-white/10 bg-black/12 px-4 py-3"
-                          >
-                            <p className="text-sm font-medium text-white">
-                              {task.title}
-                            </p>
-                            {task.ownerHint && (
-                              <p className="mt-1 text-xs text-[#9bb0b5]">
-                                {task.ownerHint}
-                              </p>
-                            )}
-                            {task.sourceEvidence.length > 0 && (
-                              <details className="mt-2">
-                                <summary className="cursor-pointer text-xs text-[#8ea3a8] marker:hidden hover:text-[#9bb0b5]">
-                                  Why Kodi suggested this
-                                </summary>
-                                <p className="mt-1.5 text-sm leading-6 text-[#8ea3a8]">
-                                  {task.sourceEvidence[0]}
-                                </p>
-                              </details>
-                            )}
-                          </div>
-                        ))}
-                      </>
+                      <Badge variant="success">Live replies allowed</Badge>
+                    )}
+                    {controls.allowHostControls && (
+                      <Badge variant="neutral">Starter controls on</Badge>
                     )}
                   </div>
-                </div>
 
-                {/* Decisions, open questions, risks — flat lists, no separate boxes */}
-                {decisions.length > 0 && (
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Decisions
-                    </p>
-                    <div className="mt-2 space-y-1.5">
-                      {decisions.map((decision) => (
-                        <div
-                          key={decision}
-                          className="flex items-start gap-2 text-sm text-[#eef2ea]"
+                  <div className="grid gap-3">
+                    {(
+                      ['listen_only', 'chat_enabled', 'voice_enabled'] as const
+                    ).map((mode) => {
+                      const active = controls.participationMode === mode
+
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          disabled={!canManageControls || controlsSaving}
+                          onClick={() =>
+                            void updateControls({
+                              participationMode: mode,
+                            })
+                          }
+                          className={`rounded-[1.25rem] border px-4 py-4 text-left transition ${
+                            active
+                              ? 'border-foreground bg-brand-accent-soft text-foreground'
+                              : 'border-brand-line bg-brand-elevated text-brand-quiet hover:border-foreground/20 hover:text-foreground'
+                          }`}
                         >
-                          <CheckCircle2
-                            size={14}
-                            className="mt-0.5 shrink-0 text-[#d6eadf]"
-                          />
-                          <span>{decision}</span>
-                        </div>
-                      ))}
+                          <p className="text-sm font-medium">
+                            {getMeetingParticipationModeLabel(mode)}
+                          </p>
+                          <p className="mt-2 text-xs leading-5">
+                            {getMeetingParticipationModeDescription(mode)}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-brand-line bg-brand-elevated p-4">
+                    <p className="text-sm font-medium text-foreground">
+                      Live reply kill switch
+                    </p>
+                    <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
+                      Pause live chat and voice replies immediately without
+                      ending the meeting session. Owners can always do this. If
+                      starter controls are enabled, the meeting starter can too.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        variant={
+                          controls.liveResponsesDisabled
+                            ? 'outline'
+                            : 'destructive'
+                        }
+                        disabled={!canManageControls || controlsSaving}
+                        onClick={() =>
+                          void updateControls({
+                            liveResponsesDisabled:
+                              !controls.liveResponsesDisabled,
+                            liveResponsesDisabledReason:
+                              controls.liveResponsesDisabled
+                                ? undefined
+                                : 'Paused from the meeting detail page.',
+                          })
+                        }
+                      >
+                        {controlsSaving
+                          ? 'Updating...'
+                          : controls.liveResponsesDisabled
+                            ? 'Resume live replies'
+                            : 'Pause live replies'}
+                      </Button>
+                      {controls.liveResponsesDisabledReason && (
+                        <span className="text-xs text-brand-quiet">
+                          {controls.liveResponsesDisabledReason}
+                        </span>
+                      )}
                     </div>
                   </div>
-                )}
 
-                {openQuestions.length > 0 && (
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Open questions
+                  <div className="rounded-[1.25rem] border border-dashed border-brand-line bg-brand-elevated p-4">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
+                      Meeting trust contract
                     </p>
-                    <div className="mt-2 space-y-1.5">
-                      {openQuestions.map((question) => (
-                        <p key={question} className="text-sm text-[#eef2ea]">
-                          {question}
-                        </p>
-                      ))}
+                    <div className="mt-3 space-y-2 text-sm leading-6 text-foreground">
+                      {buildMeetingCopilotDisclosure(workspaceSettings).map(
+                        (line) => (
+                          <p key={line}>{line}</p>
+                        )
+                      )}
+                    </div>
+                    <Separator className="my-4" />
+                    <div className="flex flex-wrap gap-3 text-xs text-brand-quiet">
+                      <span>
+                        Transcript retention:{' '}
+                        {formatRetentionDays(
+                          workspaceSettings.transcriptRetentionDays
+                        )}
+                      </span>
+                      <span>
+                        Artifact retention:{' '}
+                        {formatRetentionDays(
+                          workspaceSettings.artifactRetentionDays
+                        )}
+                      </span>
                     </div>
                   </div>
-                )}
 
-                {risks.length > 0 && (
+                  {!canManageControls && (
+                    <Alert>
+                      <AlertDescription>
+                        Only workspace owners and, when enabled, the meeting
+                        starter can change these live controls.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="border-brand-line">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+                    <Users size={18} />
+                  </div>
                   <div>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#8ea3a8]">
-                      Risks
-                    </p>
-                    <div className="mt-2 space-y-1.5">
-                      {risks.map((risk) => (
-                        <p key={risk} className="text-sm text-[#eef2ea]">
-                          {risk}
-                        </p>
-                      ))}
+                    <CardTitle className="text-xl text-foreground">
+                      Meeting chat
+                    </CardTitle>
+                    <CardDescription>
+                      Review in-meeting Zoom chat messages that Kodi observed
+                      during the session.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {meeting.provider === 'zoom' ? (
+                  <>
+                    <div
+                      className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                    >
+                      This branch keeps meeting chat as a read-only activity
+                      feed. Sending new in-meeting chat messages is not included
+                      here.
                     </div>
+
+                    {chatMessages.length === 0 ? (
+                      <div
+                        className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                      >
+                        In-meeting Zoom chat messages will appear here once Kodi
+                        receives or sends them.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {chatMessages.map((message) => (
+                          <div
+                            key={message.id}
+                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                          >
+                            <div
+                              className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                            >
+                              <span className="font-medium text-foreground">
+                                {message.senderName}
+                              </span>
+                              <Badge variant="neutral">
+                                {formatEventLabel(message.eventType)}
+                              </Badge>
+                              <span>{formatDate(message.occurredAt)}</span>
+                              <span>
+                                to {message.recipient.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                              {message.content}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div
+                    className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                  >
+                    In-meeting chat activity is available for Zoom sessions
+                    right now.
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* People, activity, and diagnostics — collapsed by default */}
-            <details className="group rounded-[1.75rem] border border-white/10 bg-[rgba(49,66,71,0.72)] p-5">
-              <summary className="cursor-pointer list-none text-sm font-medium text-[#eef2ea] marker:hidden">
-                People &amp; diagnostics
+            <Card className="border-brand-line">
+              <CardHeader>
+                <CardTitle className="text-xl text-foreground">
+                  Follow-up
+                </CardTitle>
+                <CardDescription>
+                  The handful of outputs that are actually worth acting on.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-3">
+                  <div>
+                    <p
+                      className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                    >
+                      Draft actions
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      {draftActions.length > 0 ? (
+                        draftActions.map((draft, index) => (
+                          <div
+                            key={`${draft.title}-${index}`}
+                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium text-foreground">
+                                  {draft.title}
+                                </p>
+                                <div className="flex flex-wrap gap-2 text-xs">
+                                  {(draft.toolkitName ?? draft.toolkitSlug) && (
+                                    <Badge variant="neutral">
+                                      {draft.toolkitName ?? draft.toolkitSlug}
+                                    </Badge>
+                                  )}
+                                  {draft.actionType && (
+                                    <Badge variant="neutral">
+                                      {draft.actionType.replace(/_/g, ' ')}
+                                    </Badge>
+                                  )}
+                                  {draft.approvalRequired && (
+                                    <Badge variant="warning">
+                                      Approval required
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              {draft.confidence != null && (
+                                <Badge variant="neutral">
+                                  {Math.round(draft.confidence * 100)}%
+                                </Badge>
+                              )}
+                            </div>
+
+                            {draft.targetSummary && (
+                              <p className={`mt-3 text-sm ${quietTextClass}`}>
+                                Target: {draft.targetSummary}
+                              </p>
+                            )}
+
+                            {draft.rationale && (
+                              <p className="mt-2 text-sm leading-6 text-foreground">
+                                {draft.rationale}
+                              </p>
+                            )}
+
+                            {draft.sourceEvidence.length > 0 && (
+                              <details className="mt-3">
+                                <summary
+                                  className={`cursor-pointer text-sm ${subtleTextClass}`}
+                                >
+                                  Why Kodi suggested this
+                                </summary>
+                                <p
+                                  className={`mt-2 text-sm leading-6 ${quietTextClass}`}
+                                >
+                                  {draft.sourceEvidence[0]}
+                                </p>
+                              </details>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div
+                          className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                        >
+                          Draft actions will appear here once Kodi can connect
+                          meeting follow-up to tools available in the workspace.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p
+                      className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                    >
+                      Candidate action items
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      {candidateTasks.length > 0 ? (
+                        candidateTasks.map((task, index) => (
+                          <div
+                            key={`${task.title}-${index}`}
+                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-medium text-foreground">
+                                {task.title}
+                              </p>
+                              {task.confidence != null && (
+                                <Badge variant="neutral">
+                                  {Math.round(task.confidence * 100)}%
+                                </Badge>
+                              )}
+                            </div>
+                            {task.ownerHint && (
+                              <p className={`mt-2 text-sm ${quietTextClass}`}>
+                                Owner hint: {task.ownerHint}
+                              </p>
+                            )}
+                            {task.sourceEvidence.length > 0 && (
+                              <details className="mt-3">
+                                <summary
+                                  className={`cursor-pointer text-sm ${subtleTextClass}`}
+                                >
+                                  Why Kodi suggested this
+                                </summary>
+                                <p
+                                  className={`mt-2 text-sm leading-6 ${quietTextClass}`}
+                                >
+                                  {task.sourceEvidence[0]}
+                                </p>
+                              </details>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div
+                          className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                        >
+                          Candidate follow-up will appear here when Kodi finds
+                          concrete next steps in the conversation.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {(decisions.length > 0 ||
+                    openQuestions.length > 0 ||
+                    risks.length > 0) && (
+                    <div className="grid gap-3">
+                      {decisions.length > 0 && (
+                        <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4">
+                          <p
+                            className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                          >
+                            Decisions
+                          </p>
+                          <div className="mt-3 space-y-2">
+                            {decisions.map((decision) => (
+                              <div
+                                key={decision}
+                                className="flex items-start gap-3 text-sm text-foreground"
+                              >
+                                <CheckCircle2
+                                  size={15}
+                                  className="mt-0.5 text-brand-success"
+                                />
+                                <span>{decision}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {openQuestions.length > 0 && (
+                        <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4">
+                          <p
+                            className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                          >
+                            Open questions
+                          </p>
+                          <div className="mt-3 space-y-2 text-sm text-foreground">
+                            {openQuestions.map((question) => (
+                              <p key={question}>{question}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {risks.length > 0 && (
+                        <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4">
+                          <p
+                            className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                          >
+                            Risks
+                          </p>
+                          <div className="mt-3 space-y-2 text-sm text-foreground">
+                            {risks.map((risk) => (
+                              <p key={risk}>{risk}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <details className="group kodi-panel-surface rounded-[1.75rem] border border-brand-line p-5 shadow-brand-panel">
+              <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
+                People, activity, and diagnostics
               </summary>
+              <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
+                Keep the meeting page focused by tucking roster, raw lifecycle,
+                and provider details here.
+              </p>
 
               <div className="mt-4 space-y-3">
-                {/* Participants */}
-                <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-white">
-                    <Users size={14} className="text-[#dbeaf0]" />
+                <div className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Users size={16} className="text-brand-quiet" />
                     People
                   </div>
                   {participants.length === 0 ? (
-                    <p className="mt-2 text-sm text-[#8ea3a8]">
-                      No participants recorded.
+                    <p className={`mt-3 text-sm ${quietTextClass}`}>
+                      Participant activity will appear here.
                     </p>
                   ) : (
-                    <div className="mt-3 divide-y divide-white/8">
+                    <div className="mt-3 space-y-3">
                       {participants.map((participant) => (
                         <div
                           key={participant.id}
-                          className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                          className="rounded-[1.2rem] border border-brand-line bg-background p-4"
                         >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm text-white">
-                              {participant.displayName ??
-                                participant.email ??
-                                'Unknown participant'}
-                            </p>
-                            {participant.email && participant.displayName && (
-                              <p className="truncate text-xs text-[#8ea3a8]">
-                                {participant.email}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {participant.displayName ??
+                                  participant.email ??
+                                  'Unknown participant'}
                               </p>
-                            )}
+                              <p
+                                className={`mt-1 truncate text-xs ${subtleTextClass}`}
+                              >
+                                {participant.email ?? 'No email captured'}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={
+                                participant.leftAt ? 'neutral' : 'success'
+                              }
+                            >
+                              {participant.leftAt ? 'Left' : 'In call'}
+                            </Badge>
                           </div>
-                          <Badge
-                            className={
-                              participant.leftAt
-                                ? 'shrink-0 border-white/12 bg-white/10 text-[#dce5e7]'
-                                : 'shrink-0 border-[#6FA88C]/30 bg-[#6FA88C]/14 text-[#d6eadf]'
-                            }
-                          >
-                            {participant.leftAt ? 'Left' : 'In call'}
-                          </Badge>
+                          <p className={`mt-3 text-xs ${subtleTextClass}`}>
+                            Joined {formatDate(participant.joinedAt)}
+                          </p>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Timeline events */}
-                {compactTimelineEvents.length > 0 && (
-                  <div className="rounded-[1.4rem] border border-white/10 bg-black/12 p-4">
-                    <div className="divide-y divide-white/8">
-                      {compactTimelineEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className="flex items-center gap-3 py-2.5 text-sm first:pt-0 last:pb-0"
-                        >
-                          <Badge className="shrink-0 border-white/12 bg-[#314247] text-[#9bb0b5]">
-                            {formatEventLabel(event.eventType)}
-                          </Badge>
-                          <span className="text-xs text-[#8ea3a8]">
-                            {formatDate(event.occurredAt)}
-                          </span>
-                          {describeEvent(event) && (
-                            <span className="min-w-0 truncate text-xs text-[#dce5e7]">
-                              {describeEvent(event)}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                {compactTimelineEvents.length === 0 ? (
+                  <div
+                    className={`${dashedPanelClass} rounded-[1.4rem] p-5 text-sm ${quietTextClass}`}
+                  >
+                    Kodi will add the important meeting moments here.
+                  </div>
+                ) : (
+                  compactTimelineEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                    >
+                      <div
+                        className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                      >
+                        <Badge variant="neutral">
+                          {formatEventLabel(event.eventType)}
+                        </Badge>
+                        <span>{formatDate(event.occurredAt)}</span>
+                      </div>
+                      {describeEvent(event, meeting.provider) && (
+                        <p className="mt-3 text-sm leading-6 text-foreground">
+                          {describeEvent(event, meeting.provider)}
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-4 rounded-[1.5rem] border border-brand-line bg-brand-elevated px-4 py-3">
+                {technicalDetails.map((detail, index) => (
+                  <div key={detail.label}>
+                    {index > 0 && <Separator className="bg-border" />}
+                    <div className="flex items-start justify-between gap-4 py-3">
+                      <p
+                        className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}
+                      >
+                        {detail.label}
+                      </p>
+                      <p className="max-w-[16rem] text-right text-sm text-foreground">
+                        {detail.value}
+                      </p>
                     </div>
                   </div>
-                )}
-
-                {/* Technical details */}
-                <div className="rounded-[1.4rem] border border-white/10 bg-black/12 px-4 py-3">
-                  {technicalDetails.map((detail, index) => (
-                    <div key={detail.label}>
-                      {index > 0 && <Separator className="bg-white/8" />}
-                      <div className="flex items-center justify-between gap-4 py-2.5">
-                        <p className="text-xs text-[#8ea3a8]">{detail.label}</p>
-                        <p className="text-right text-xs text-[#dce5e7]">
-                          {detail.value}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                ))}
               </div>
             </details>
           </div>

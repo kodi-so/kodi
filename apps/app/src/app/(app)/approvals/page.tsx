@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Alert, AlertDescription, Badge, Button, Skeleton, cn } from '@kodi/ui'
+import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 
@@ -25,32 +26,32 @@ function formatDate(value: Date | string | null | undefined) {
 function getStatusTone(status: ApprovalItem['status']) {
   switch (status) {
     case 'pending':
-      return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+      return 'warning' as const
     case 'approved':
-      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+      return 'success' as const
     case 'rejected':
-      return 'border-red-500/20 bg-red-500/10 text-red-200'
+      return 'destructive' as const
     case 'expired':
-      return 'border-zinc-700 bg-zinc-900 text-zinc-300'
+      return 'neutral' as const
     default:
-      return 'border-zinc-700 bg-zinc-900 text-zinc-300'
+      return 'neutral' as const
   }
 }
 
 function getExecutionTone(status: ApprovalItem['executionStatus']) {
   switch (status) {
     case 'succeeded':
-      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+      return 'success' as const
     case 'failed':
-      return 'border-red-500/20 bg-red-500/10 text-red-200'
+      return 'destructive' as const
     case 'running':
-      return 'border-sky-500/20 bg-sky-500/10 text-sky-200'
+      return 'info' as const
     case 'cancelled':
-      return 'border-zinc-700 bg-zinc-900 text-zinc-300'
+      return 'neutral' as const
     case 'pending':
-      return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+      return 'warning' as const
     default:
-      return 'border-zinc-700 bg-zinc-950 text-zinc-400'
+      return 'outline' as const
   }
 }
 
@@ -178,13 +179,13 @@ export default function ApprovalsPage() {
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
+        <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-full bg-background">
+    <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <div className="space-y-2">
           <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
@@ -200,13 +201,13 @@ export default function ApprovalsPage() {
         </div>
 
         {error && (
-          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+          <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {successMessage && (
-          <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200">
+          <Alert variant="success">
             <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
@@ -245,17 +246,15 @@ export default function ApprovalsPage() {
                       <section
                         key={item.id}
                         className={cn(
-                          'rounded-[1.6rem] border bg-card p-6',
-                          isHighlighted
-                            ? 'border-amber-500/30'
-                            : 'border-border'
+                          'kodi-panel-surface rounded-[1.6rem] border p-6 shadow-brand-panel',
+                          isHighlighted ? 'border-primary/45' : 'border-brand-line'
                         )}
                       >
                         <div className="flex flex-col gap-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <Badge className={getStatusTone(item.status)}>
+                                <Badge variant={getStatusTone(item.status)}>
                                   {item.status}
                                 </Badge>
                                 {item.toolkitSlug && (
@@ -283,7 +282,7 @@ export default function ApprovalsPage() {
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+                                className="border-brand-danger text-brand-danger hover:bg-brand-danger-soft"
                                 disabled={actionKey !== null}
                                 onClick={() =>
                                   void decideApproval(item.id, 'rejected')
@@ -309,25 +308,25 @@ export default function ApprovalsPage() {
                           </div>
 
                           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-                            <div className="rounded-[1.2rem] border border-border bg-secondary p-4">
+                            <div className="rounded-[1.2rem] border border-brand-line bg-secondary p-4">
                               <p className="text-sm font-medium text-foreground">
                                 Requested action
                               </p>
                               <div className="mt-3 space-y-2 text-sm text-foreground">
                                 <p>
-                                  <span className="text-zinc-500">Action:</span>{' '}
+                                  <span className="text-brand-subtle">Action:</span>{' '}
                                   {item.action ?? 'Unknown'}
                                 </p>
                                 {targetText && (
                                   <p>
-                                    <span className="text-zinc-500">
+                                    <span className="text-brand-subtle">
                                       Target:
                                     </span>{' '}
                                     {targetText}
                                   </p>
                                 )}
                                 <p>
-                                  <span className="text-zinc-500">
+                                  <span className="text-brand-subtle">
                                     Requested by:
                                   </span>{' '}
                                   {item.requestedByUser?.name ??
@@ -335,14 +334,14 @@ export default function ApprovalsPage() {
                                     'Unknown'}
                                 </p>
                                 <p>
-                                  <span className="text-zinc-500">
+                                  <span className="text-brand-subtle">
                                     Created:
                                   </span>{' '}
                                   {formatDate(item.createdAt)}
                                 </p>
                                 {item.expiresAt && (
                                   <p>
-                                    <span className="text-zinc-500">
+                                    <span className="text-brand-subtle">
                                       Expires:
                                     </span>{' '}
                                     {formatDate(item.expiresAt)}
@@ -351,12 +350,12 @@ export default function ApprovalsPage() {
                               </div>
                             </div>
 
-                            <div className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 p-4">
-                              <p className="text-sm font-medium text-white">
+                            <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+                              <p className="text-sm font-medium text-foreground">
                                 Payload preview
                               </p>
                               {fields.length === 0 ? (
-                                <p className="mt-3 text-sm leading-7 text-zinc-400">
+                                <p className="mt-3 text-sm leading-7 text-brand-quiet">
                                   No structured preview fields were extracted
                                   for this action.
                                 </p>
@@ -364,10 +363,10 @@ export default function ApprovalsPage() {
                                 <div className="mt-3 space-y-3">
                                   {fields.map((field) => (
                                     <div key={`${item.id}:${field.label}`}>
-                                      <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">
+                                      <p className="text-xs uppercase tracking-[0.16em] text-brand-subtle">
                                         {field.label}
                                       </p>
-                                      <p className="mt-1 text-sm leading-6 text-zinc-300">
+                                      <p className="mt-1 text-sm leading-6 text-foreground">
                                         {field.value}
                                       </p>
                                     </div>
@@ -386,16 +385,16 @@ export default function ApprovalsPage() {
 
             <section className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-white">
+                <h2 className="text-xl font-semibold text-foreground">
                   Recent decisions
                 </h2>
-                <Badge className="border-zinc-700 bg-zinc-900 text-zinc-300">
+                <Badge variant="neutral">
                   {recentItems.length} items
                 </Badge>
               </div>
 
               {recentItems.length === 0 ? (
-                <div className="rounded-[1.4rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
+                <div className="rounded-[1.4rem] border border-dashed border-brand-line bg-brand-elevated p-6 text-sm text-brand-quiet">
                   No approvals have been decided yet.
                 </div>
               ) : (
@@ -403,54 +402,50 @@ export default function ApprovalsPage() {
                   {recentItems.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-[1.2rem] border border-zinc-800 bg-zinc-950/70 p-4"
+                      className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Badge className={getStatusTone(item.status)}>
+                            <Badge variant={getStatusTone(item.status)}>
                               {item.status}
                             </Badge>
                             {item.executionStatus && (
-                              <Badge
-                                className={getExecutionTone(
-                                  item.executionStatus
-                                )}
-                              >
+                              <Badge variant={getExecutionTone(item.executionStatus)}>
                                 execution: {item.executionStatus}
                               </Badge>
                             )}
                             {item.toolkitSlug && (
-                              <Badge className="border-zinc-700 bg-zinc-950 text-zinc-300">
+                              <Badge variant="neutral">
                                 {item.toolkitSlug}
                               </Badge>
                             )}
                           </div>
-                          <p className="text-sm font-medium text-white">
+                          <p className="text-sm font-medium text-foreground">
                             {item.action ?? 'External action'}
                           </p>
-                          <p className="text-sm text-zinc-400">
+                          <p className="text-sm text-brand-quiet">
                             {getPreviewSummary(item)}
                           </p>
                           {item.targetText && (
-                            <p className="text-sm text-zinc-500">
+                            <p className="text-sm text-brand-subtle">
                               Target: {item.targetText}
                             </p>
                           )}
                           {typeof item.attemptCount === 'number' &&
                             item.attemptCount > 0 && (
-                              <p className="text-sm text-zinc-500">
+                              <p className="text-sm text-brand-subtle">
                                 Attempts: {item.attemptCount}
                               </p>
                             )}
                           {item.executionError && (
-                            <p className="text-sm leading-6 text-red-300">
+                            <p className="text-sm leading-6 text-brand-danger">
                               {item.executionError}
                             </p>
                           )}
                         </div>
 
-                        <div className="text-sm text-zinc-500">
+                        <div className="text-sm text-brand-subtle">
                           {item.decidedAt
                             ? `Decided ${formatDate(item.decidedAt)}`
                             : `Created ${formatDate(item.createdAt)}`}

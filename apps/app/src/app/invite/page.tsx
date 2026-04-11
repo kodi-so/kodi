@@ -53,7 +53,7 @@ function InvitePageInner() {
       .mutate({ token })
       .then(() => {
         setState('success')
-        setTimeout(() => router.replace('/dashboard'), 1200)
+        setTimeout(() => router.replace('/chat'), 1200)
       })
       .catch((error: unknown) => {
         setState('error')
@@ -70,8 +70,8 @@ function InvitePageInner() {
   if (state === 'error') {
     return (
       <AuthShell title="Invite problem" description={errorMessage}>
-        <Button onClick={() => router.replace('/dashboard')} className="w-full">
-          Go to dashboard
+        <Button onClick={() => router.replace('/chat')} className="w-full">
+          Open chat
         </Button>
       </AuthShell>
     )
@@ -90,7 +90,7 @@ function InvitePageInner() {
           </CardTitle>
           <CardDescription className="text-base text-muted-foreground">
             {state === 'success'
-              ? 'Taking you to the dashboard.'
+              ? 'Taking you to chat.'
               : 'This should only take a moment.'}
           </CardDescription>
         </CardHeader>

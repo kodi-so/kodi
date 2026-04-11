@@ -15,6 +15,14 @@ import { Alert, AlertDescription, Badge, Button, Skeleton, cn } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import {
+  dashedPanelClass,
+  heroPanelClass,
+  pageShellClass,
+  quietTextClass,
+  subtleTextClass,
+  type BrandBadgeTone,
+} from '@/lib/brand-styles'
+import {
   canStartConnection,
   createPolicyDraft,
   formatAuthMode,
@@ -28,11 +36,11 @@ import {
   getPrimaryDetailConnection,
   getStatusTone,
   getToolkitDetailStatus,
-  getToolkitMonogram,
   isPolicyDraftDirty,
   type PolicyDraft,
   type ToolAccessToolkitDetail,
 } from '../_lib/tool-access-ui'
+import { ToolkitLogo } from '../_components/toolkit-logo'
 
 function PolicyToggleRow({
   title,
@@ -52,11 +60,11 @@ function PolicyToggleRow({
   disabled?: boolean
 }) {
   return (
-    <div className="rounded-[1.2rem] border border-white/10 bg-black/12 p-4">
+    <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-white">{title}</p>
-          <p className="text-sm leading-6 text-[#9bb0b5]">{description}</p>
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className={`text-sm leading-6 ${quietTextClass}`}>{description}</p>
         </div>
 
         <Button
@@ -65,8 +73,8 @@ function PolicyToggleRow({
           className={cn(
             'w-full justify-center border sm:w-auto',
             value
-              ? 'border-emerald-500/20 bg-emerald-500/10 text-[#d6eadf] hover:bg-emerald-500/20 hover:text-emerald-200'
-              : 'border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white'
+              ? 'border-brand-success/20 bg-brand-success-soft text-brand-success hover:bg-brand-success-soft hover:text-brand-success'
+              : 'border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground'
           )}
           disabled={disabled}
           onClick={onToggle}
@@ -89,14 +97,18 @@ function CollapsibleSection({
 }: {
   title: string
   description: string
-  badges?: Array<{ label: string; className: string }>
+  badges?: Array<{
+    label: string
+    variant?: BrandBadgeTone
+    className?: string
+  }>
   actions?: React.ReactNode
   expanded: boolean
   onToggle: () => void
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,63,69,0.96),rgba(31,44,49,0.98))]">
+    <section className={`${heroPanelClass} rounded-[1.6rem]`}>
       <div className="p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-3">
@@ -105,7 +117,7 @@ function CollapsibleSection({
               onClick={onToggle}
               className="group inline-flex items-center gap-3 text-left"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#223239] text-[#9bb0b5] transition group-hover:border-white/12 group-hover:text-white">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-line bg-brand-elevated text-brand-quiet transition group-hover:border-foreground/15 group-hover:text-foreground">
                 <ChevronDown
                   size={16}
                   className={cn(
@@ -115,15 +127,21 @@ function CollapsibleSection({
                 />
               </div>
               <div className="space-y-1">
-                <h2 className="text-xl font-semibold text-white">{title}</h2>
-                <p className="text-sm text-[#9bb0b5]">{description}</p>
+                <h2 className="text-xl font-semibold text-foreground">
+                  {title}
+                </h2>
+                <p className={`text-sm ${quietTextClass}`}>{description}</p>
               </div>
             </button>
 
             {badges.length > 0 && (
               <div className="flex flex-wrap gap-2 pl-12">
                 {badges.map((badge) => (
-                  <Badge key={badge.label} className={badge.className}>
+                  <Badge
+                    key={badge.label}
+                    variant={badge.variant}
+                    className={badge.className}
+                  >
                     {badge.label}
                   </Badge>
                 ))}
@@ -137,7 +155,7 @@ function CollapsibleSection({
               type="button"
               variant="ghost"
               onClick={onToggle}
-              className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+              className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
             >
               {expanded ? 'Collapse' : 'Expand'}
             </Button>
@@ -152,7 +170,7 @@ function CollapsibleSection({
         )}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-white/10 px-6 pb-6 pt-2">
+          <div className="border-t border-brand-line px-6 pb-6 pt-2">
             {children}
           </div>
         </div>
@@ -254,7 +272,7 @@ export default function IntegrationDetailPage() {
     }
 
     return {
-      tone: 'error' as const,
+      tone: 'destructive' as const,
       message: `${appLabel} did not finish connecting. Try again from this page.`,
     }
   }, [callbackAppName, callbackStatus])
@@ -431,20 +449,20 @@ export default function IntegrationDetailPage() {
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-white/10" />
+        <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,rgba(20,184,166,0.08),transparent_20%),linear-gradient(180deg,rgba(15,17,22,0.96),rgba(8,9,13,1))]">
+    <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-3">
             <Button
               asChild
               variant="ghost"
-              className="w-fit gap-2 px-0 text-[#9bb0b5] hover:bg-transparent hover:text-white"
+              className="w-fit gap-2 px-0 text-brand-quiet hover:bg-transparent hover:text-foreground"
             >
               <Link href="/integrations">
                 <ArrowLeft size={16} />
@@ -454,35 +472,40 @@ export default function IntegrationDetailPage() {
 
             {loading ? (
               <div className="space-y-2">
-                <Skeleton className="h-4 w-28 bg-white/10" />
-                <Skeleton className="h-10 w-56 bg-white/10" />
+                <Skeleton className="h-4 w-28 bg-brand-muted" />
+                <Skeleton className="h-10 w-56 bg-brand-muted" />
               </div>
             ) : detail ? (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
-                  <Badge className={getStatusTone(status)}>{status}</Badge>
-                  <Badge className="border-white/12 bg-[#223239] text-[#dce5e7]">
+                  <Badge variant={getStatusTone(status)}>{status}</Badge>
+                  <Badge variant="neutral">
                     {formatSupportTier(detail.toolkit.supportTier)}
                   </Badge>
-                  <Badge className="border-white/12 bg-[#223239] text-[#dce5e7]">
+                  <Badge variant="neutral">
                     {formatAuthMode(detail.toolkit.authMode)}
                   </Badge>
                   {policyState && (
-                    <Badge className={policyState.tone}>
+                    <Badge variant={policyState.tone}>
                       {policyState.label}
                     </Badge>
                   )}
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-[1.35rem] border border-white/10 bg-[#223239] text-sm font-semibold uppercase tracking-[0.18em] text-[#eef2ea]">
-                    {getToolkitMonogram(detail.toolkit.name)}
-                  </div>
+                  <ToolkitLogo
+                    name={detail.toolkit.name}
+                    logoUrl={detail.toolkit.logo}
+                    className="h-14 w-14 flex-shrink-0 rounded-[1.35rem] border-brand-line bg-brand-elevated"
+                    imageClassName="p-3"
+                  />
                   <div className="space-y-2">
-                    <h1 className="text-3xl font-semibold tracking-tight text-white">
+                    <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                       {detail.toolkit.name}
                     </h1>
-                    <p className="max-w-3xl text-sm leading-7 text-[#9bb0b5]">
+                    <p
+                      className={`max-w-3xl text-sm leading-7 ${quietTextClass}`}
+                    >
                       {detail.toolkit.description ??
                         'No provider description is available yet for this integration.'}
                     </p>
@@ -491,8 +514,10 @@ export default function IntegrationDetailPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-[#8ea3a8]">Integration detail</p>
-                <h1 className="text-3xl font-semibold tracking-tight text-white">
+                <p className={`text-sm ${subtleTextClass}`}>
+                  Integration detail
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground">
                   Integration not found
                 </h1>
               </div>
@@ -503,7 +528,7 @@ export default function IntegrationDetailPage() {
             <Button
               onClick={() => void refresh()}
               variant="ghost"
-              className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+              className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
               disabled={loading || actionKey === 'refresh'}
             >
               <RefreshCcw
@@ -516,7 +541,7 @@ export default function IntegrationDetailPage() {
             <Button
               asChild
               variant="ghost"
-              className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+              className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
             >
               <Link href="/integrations/add">Browse catalog</Link>
             </Button>
@@ -524,37 +549,29 @@ export default function IntegrationDetailPage() {
         </div>
 
         {callbackBanner && (
-          <Alert
-            className={
-              callbackBanner.tone === 'success'
-                ? 'border-[#6FA88C]/30 bg-emerald-500/10 text-emerald-200'
-                : callbackBanner.tone === 'warning'
-                  ? 'border-[#DFAE56]/28 bg-amber-500/10 text-amber-100'
-                  : 'border-red-500/30 bg-red-500/10 text-red-200'
-            }
-          >
+          <Alert variant={callbackBanner.tone}>
             <AlertDescription>{callbackBanner.message}</AlertDescription>
           </Alert>
         )}
 
         {error && (
-          <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+          <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {loading ? (
           <div className="space-y-4">
-            <Skeleton className="h-44 rounded-[1.6rem] bg-[rgba(49,66,71,0.82)]" />
-            <Skeleton className="h-72 rounded-[1.6rem] bg-[rgba(49,66,71,0.82)]" />
-            <Skeleton className="h-[28rem] rounded-[1.6rem] bg-[rgba(49,66,71,0.82)]" />
+            <Skeleton className="h-44 rounded-[1.6rem] bg-brand-muted" />
+            <Skeleton className="h-72 rounded-[1.6rem] bg-brand-muted" />
+            <Skeleton className="h-[28rem] rounded-[1.6rem] bg-brand-muted" />
           </div>
         ) : !detail ? (
-          <div className="rounded-[1.6rem] border border-dashed border-white/10 bg-[#223239]/40 p-8">
-            <p className="text-xl font-medium text-white">
+          <div className={`${dashedPanelClass} rounded-[1.6rem] p-8`}>
+            <p className="text-xl font-medium text-foreground">
               This integration could not be loaded.
             </p>
-            <p className="mt-2 max-w-xl text-sm leading-7 text-[#9bb0b5]">
+            <p className={`mt-2 max-w-xl text-sm leading-7 ${quietTextClass}`}>
               Go back to the catalog and pick another integration, or refresh if
               the connection state just changed.
             </p>
@@ -562,21 +579,23 @@ export default function IntegrationDetailPage() {
         ) : (
           <div className="space-y-6">
             <div className="space-y-6">
-              <section className="rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,rgba(46,63,69,0.96),rgba(31,44,49,0.98))] p-6">
+              <section className={`${heroPanelClass} rounded-[1.6rem] p-6`}>
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#8ea3a8]">
+                    <p
+                      className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}
+                    >
                       Overview
                     </p>
                     <div className="space-y-2">
-                      <p className="text-sm font-medium text-white">
+                      <p className="text-sm font-medium text-foreground">
                         {primaryConnection
                           ? getConnectionLabel(primaryConnection)
                           : detail.toolkit.authMode === 'no_auth'
                             ? 'No connected identity required'
                             : 'No identity connected yet'}
                       </p>
-                      <p className="text-sm leading-7 text-[#9bb0b5]">
+                      <p className={`text-sm leading-7 ${quietTextClass}`}>
                         {getCapabilitySummary(detail.toolkit)}.{' '}
                         {policyState?.detail}
                       </p>
@@ -591,8 +610,7 @@ export default function IntegrationDetailPage() {
                             primaryConnection.connectedAccountId
                           )
                         }
-                        variant="outline"
-                        className="border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+                        variant="destructive"
                         disabled={actionKey !== null}
                       >
                         {actionKey ===
@@ -603,7 +621,7 @@ export default function IntegrationDetailPage() {
                     ) : (
                       <Button
                         onClick={() => void connectToolkit()}
-                        className="gap-2 bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
+                        className="gap-2"
                         disabled={!canRunPrimaryAction || actionKey !== null}
                       >
                         <Link2 size={16} />
@@ -617,7 +635,7 @@ export default function IntegrationDetailPage() {
                       <Button
                         asChild
                         variant="ghost"
-                        className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+                        className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
                       >
                         <a
                           href={detail.toolkit.appUrl}
@@ -637,7 +655,7 @@ export default function IntegrationDetailPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+                  className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
                   onClick={() => {
                     setIdentitiesExpanded(true)
                     setDefaultsExpanded(true)
@@ -648,7 +666,7 @@ export default function IntegrationDetailPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+                  className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
                   onClick={() => {
                     setIdentitiesExpanded(false)
                     setDefaultsExpanded(false)
@@ -668,14 +686,13 @@ export default function IntegrationDetailPage() {
                         ? 'active identity'
                         : 'active identities'
                     }`,
-                    className: 'border-white/12 bg-[#314247] text-[#dce5e7]',
+                    variant: 'neutral',
                   },
                   ...(detail.selectedConnectedAccountId
                     ? [
                         {
                           label: 'Preferred identity set',
-                          className:
-                            'border-emerald-500/20 bg-emerald-500/10 text-[#d6eadf]',
+                          variant: 'success' as const,
                         },
                       ]
                     : []),
@@ -686,7 +703,7 @@ export default function IntegrationDetailPage() {
                       <Button
                         type="button"
                         variant="ghost"
-                        className="gap-2 border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+                        className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
                         disabled={preferenceActionKey !== null}
                         onClick={() => void selectPreferredConnection(null)}
                       >
@@ -695,7 +712,7 @@ export default function IntegrationDetailPage() {
                     )}
                     <Button
                       type="button"
-                      className="gap-2 bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
+                      className="gap-2"
                       disabled={!canRunPrimaryAction || actionKey !== null}
                       onClick={() => void connectToolkit()}
                     >
@@ -710,11 +727,13 @@ export default function IntegrationDetailPage() {
                 onToggle={() => setIdentitiesExpanded((current) => !current)}
               >
                 {visibleConnections.length === 0 ? (
-                  <div className="mt-4 rounded-[1.2rem] border border-dashed border-white/10 bg-[#223239]/40 p-5">
-                    <p className="text-sm font-medium text-white">
+                  <div
+                    className={`${dashedPanelClass} mt-4 rounded-[1.2rem] p-5`}
+                  >
+                    <p className="text-sm font-medium text-foreground">
                       No identities connected yet.
                     </p>
-                    <p className="mt-2 text-sm leading-7 text-[#9bb0b5]">
+                    <p className={`mt-2 text-sm leading-7 ${quietTextClass}`}>
                       Connect an account first so Kodi can scope runtime access
                       to the right identity when it uses this integration.
                     </p>
@@ -740,32 +759,30 @@ export default function IntegrationDetailPage() {
                             className={cn(
                               'rounded-[1.2rem] border p-4',
                               connection.isPreferred
-                                ? 'border-emerald-500/20 bg-emerald-500/10'
-                                : 'border-white/10 bg-black/12'
+                                ? 'border-brand-success/20 bg-brand-success-soft'
+                                : 'border-brand-line bg-brand-elevated'
                             )}
                           >
                             <div className="flex flex-col gap-4">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <p className="text-sm font-medium text-white">
+                                    <p className="text-sm font-medium text-foreground">
                                       {getConnectionLabel(connection)}
                                     </p>
                                     <Badge
-                                      className={getStatusTone(
-                                        connection.status
-                                      )}
+                                      variant={getStatusTone(connection.status)}
                                     >
                                       {connection.status}
                                     </Badge>
                                     {connection.isPreferred && (
-                                      <Badge className="border-emerald-500/20 bg-emerald-500/10 text-[#d6eadf]">
-                                        Preferred
-                                      </Badge>
+                                      <Badge variant="success">Preferred</Badge>
                                     )}
                                   </div>
 
-                                  <div className="flex flex-wrap gap-3 text-xs text-[#8ea3a8]">
+                                  <div
+                                    className={`flex flex-wrap gap-3 text-xs ${subtleTextClass}`}
+                                  >
                                     {connection.lastValidatedAt && (
                                       <span>
                                         Validated{' '}
@@ -790,7 +807,7 @@ export default function IntegrationDetailPage() {
                                     <Button
                                       type="button"
                                       variant="ghost"
-                                      className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+                                      className="border border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground"
                                       disabled={actionKey !== null}
                                       onClick={() =>
                                         void revalidateConnection(
@@ -809,7 +826,7 @@ export default function IntegrationDetailPage() {
                                       <Button
                                         type="button"
                                         variant="ghost"
-                                        className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+                                        className="border border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground"
                                         disabled={preferenceActionKey !== null}
                                         onClick={() =>
                                           void selectPreferredConnection(
@@ -825,8 +842,7 @@ export default function IntegrationDetailPage() {
 
                                   <Button
                                     type="button"
-                                    variant="outline"
-                                    className="border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+                                    variant="destructive"
                                     disabled={actionKey !== null}
                                     onClick={() =>
                                       void disconnectToolkit(
@@ -848,13 +864,14 @@ export default function IntegrationDetailPage() {
                                     .map((scope: string) => (
                                       <Badge
                                         key={scope}
-                                        className="max-w-full border-white/12 bg-[#314247] text-[#dce5e7]"
+                                        variant="neutral"
+                                        className="max-w-full"
                                       >
                                         {formatScope(scope)}
                                       </Badge>
                                     ))}
                                   {connection.scopes.length > 8 && (
-                                    <Badge className="border-white/12 bg-[#314247] text-[#dce5e7]">
+                                    <Badge variant="neutral">
                                       +{connection.scopes.length - 8} more
                                       scopes
                                     </Badge>
@@ -863,7 +880,7 @@ export default function IntegrationDetailPage() {
                               )}
 
                               {connection.errorMessage && (
-                                <Alert className="border-red-500/30 bg-red-500/10 text-red-200">
+                                <Alert variant="destructive">
                                   <AlertDescription>
                                     {connection.errorMessage}
                                   </AlertDescription>
@@ -888,9 +905,7 @@ export default function IntegrationDetailPage() {
                 badges={[
                   {
                     label: policyState?.label ?? 'Policy',
-                    className:
-                      policyState?.tone ??
-                      'border-white/12 bg-[#314247] text-[#dce5e7]',
+                    variant: policyState?.tone ?? 'neutral',
                   },
                   {
                     label: `${detail.connectionSummary.activeCount} ${
@@ -898,12 +913,14 @@ export default function IntegrationDetailPage() {
                         ? 'active identity'
                         : 'active identities'
                     }`,
-                    className: 'border-white/12 bg-[#314247] text-[#dce5e7]',
+                    variant: 'neutral',
                   },
                 ]}
                 actions={
-                  <div className="flex items-center gap-2 text-sm text-[#9bb0b5]">
-                    <ShieldCheck size={16} className="text-[#8ea3a8]" />
+                  <div
+                    className={`flex items-center gap-2 text-sm ${quietTextClass}`}
+                  >
+                    <ShieldCheck size={16} className={subtleTextClass} />
                     {isOwner ? 'Owner controls' : 'View only'}
                   </div>
                 }
@@ -1024,10 +1041,9 @@ export default function IntegrationDetailPage() {
                       disabled={policySaving}
                     />
 
-                    <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                    <div className="flex flex-wrap gap-2 border-t border-brand-line pt-4">
                       <Button
                         onClick={() => void savePolicy()}
-                        className="bg-[#DFAE56] text-[#223239] hover:bg-[#e8bf70]"
                         disabled={!policyDirty || policySaving}
                       >
                         {policySaving ? 'Saving...' : 'Save defaults'}
@@ -1035,7 +1051,7 @@ export default function IntegrationDetailPage() {
                       <Button
                         onClick={resetPolicyDraft}
                         variant="ghost"
-                        className="border border-white/10 bg-[#223239] text-[#dce5e7] hover:bg-[#314247] hover:text-white"
+                        className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
                         disabled={!policyDirty || policySaving}
                       >
                         Reset
@@ -1043,11 +1059,11 @@ export default function IntegrationDetailPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-[1.2rem] border border-white/10 bg-black/12 p-5">
-                    <p className="text-sm font-medium text-white">
+                  <div className="mt-4 rounded-[1.2rem] border border-brand-line bg-brand-elevated p-5">
+                    <p className="text-sm font-medium text-foreground">
                       Workspace policy is view-only here.
                     </p>
-                    <p className="mt-2 text-sm leading-7 text-[#9bb0b5]">
+                    <p className={`mt-2 text-sm leading-7 ${quietTextClass}`}>
                       Owners can change defaults for chat reads, meeting reads,
                       drafts, approval gating, and administrative actions.
                     </p>

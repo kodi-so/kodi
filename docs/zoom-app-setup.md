@@ -1,60 +1,97 @@
-# Zoom App Setup Contract
+# Zoom Pilot Setup Contract
 
-This document defines the setup contract for the Kodi Zoom copilot integration through Phase 1.
+This document defines the production-facing setup contract for the Phase 0 and
+Phase 1 Kodi Zoom copilot path.
 
 ## Goal
 
-Establish the environment, callback, webhook, and RTMS gateway prerequisites needed to run the full Zoom install and live transcript ingestion flow.
+Establish the environment contract, OAuth and webhook assumptions, Recall
+transport prerequisites, and pilot go or no-go checks required before Kodi is
+used as a visible Zoom copilot in real meetings.
+
+## Production Path
+
+- Zoom is the meeting surface and workspace installation.
+- Recall is the production transport for join, participant presence, transcript
+  delivery, meeting chat, and voice output.
+- Kodi owns the meeting runtime, meeting state, reasoning pipeline, policy, and
+  approvals.
+- Native RTMS or `apps/zoom-gateway` work is not part of the pilot launch path.
 
 ## Required Environment Variables
 
-API settings live in `apps/api/.env` and are optional until the Zoom copilot feature is enabled.
+API settings live in `apps/api/.env` and remain optional until the Zoom copilot
+feature is enabled.
+
+Feature flags:
 
 - `KODI_FEATURE_ZOOM_COPILOT`
+- `KODI_FEATURE_MEETING_INTELLIGENCE`
+
+Recall transport:
+
+- `RECALL_API_KEY`
+- `RECALL_API_REGION` or `RECALL_API_BASE_URL`
+- `RECALL_REALTIME_WEBHOOK_URL` recommended when Kodi ingests bot events
+- `RECALL_REALTIME_AUTH_TOKEN` recommended for internal webhook auth
+- `RECALL_WEBHOOK_SECRET` recommended
+- `RECALL_BOT_STATUS_WEBHOOK_SECRET` recommended
+
+Zoom installation and callbacks:
+
 - `ZOOM_CLIENT_ID`
 - `ZOOM_CLIENT_SECRET`
 - `ZOOM_WEBHOOK_SECRET`
 - `ZOOM_REDIRECT_URI`
 - `ZOOM_APP_ID`
 - `ZOOM_ACCOUNT_ID` optional
-- `ZOOM_GATEWAY_URL`
-- `ZOOM_GATEWAY_INTERNAL_TOKEN` recommended
 
-Gateway settings live in `apps/zoom-gateway/.env`.
+Shared meeting runtime:
 
-- `API_URL`
-- `ZOOM_GATEWAY_INTERNAL_TOKEN`
-- `ZOOM_GATEWAY_POLL_INTERVAL_MS`
-- `ZOOM_GATEWAY_JOIN_TIMEOUT_MS`
-- `ZOOM_GATEWAY_MAX_RETRIES`
-- `ZOOM_GATEWAY_RETRY_DELAY_MS`
-- `ZM_RTMS_CLIENT` optional if Zoom webhook payload does not include a signature
-- `ZM_RTMS_SECRET` optional if Zoom webhook payload does not include a signature
-- `ZM_RTMS_CA` optional
-- `ZM_RTMS_LOG_ENABLED`
-- `ZM_RTMS_LOG_LEVEL`
-- `ZM_RTMS_LOG_FORMAT`
+- `MEETING_INTERNAL_TOKEN` recommended for internal meeting callbacks
 
-## Callback and Webhook Contract
+## OAuth and Webhook Contract
 
-- OAuth callback should terminate at the API service.
-- `ZOOM_REDIRECT_URI` should point to the future OAuth callback route.
-- Webhook delivery should target the API service and use `ZOOM_WEBHOOK_SECRET` for validation.
-- RTMS-related meeting events should be enabled in the Zoom app configuration.
-- `meeting.rtms_started` must reach the API so it can hand the join payload to `apps/zoom-gateway`.
+- OAuth callback terminates at the API service.
+- `ZOOM_REDIRECT_URI` points to the Zoom OAuth callback route exposed by the
+  API.
+- Zoom webhook delivery targets the API service and is validated with
+  `ZOOM_WEBHOOK_SECRET`.
+- Recall bot and realtime events target the API service and should be protected
+  by the configured Recall auth token and webhook secrets.
+- Zoom app scopes must support the visible meeting participant flow Kodi uses,
+  including the ZAK scope when the workspace needs signed-in bot joins.
 
-## Install Prerequisites
+## Workspace Install Prerequisites
 
-- Create a Zoom app for Kodi.
-- Enable OAuth for the app.
-- Register the production and development redirect URIs.
-- Configure webhook delivery and save the secret in the API environment.
-- Confirm the Zoom app has the scopes and event subscriptions needed for meeting presence and RTMS-driven session startup.
-- Run the `apps/zoom-gateway` service on Node so the native RTMS SDK can load.
+- Create the Zoom app Kodi will use for workspace installs.
+- Enable OAuth and register both development and production redirect URIs.
+- Configure webhook delivery and store the secret in the API environment.
+- Confirm the Zoom app has the scopes and event subscriptions needed for
+  meeting lifecycle callbacks and signed-in bot support.
+- Connect the Zoom account at the workspace level from the Meetings page in
+  Kodi.
 
-## Implementation Notes
+## Pilot Go Or No-Go Checklist
 
-- The API exposes `zoom.getInstallStatus` as the current control-plane status entrypoint.
-- Feature gating should keep Zoom functionality off until the app is configured.
-- The full install and callback flow is implemented in Phase 1.
-- Real transcript ingestion depends on the RTMS gateway successfully joining the stream after `meeting.rtms_started`.
+- Recall credentials are present and the target region or API base URL is
+  configured.
+- Zoom OAuth and webhook settings are configured in the API environment.
+- The workspace has a connected Zoom installation.
+- The workspace installation has the ZAK scope before depending on
+  sign-in-required meetings.
+- A real Zoom validation call has confirmed waiting-room admission, recording
+  or transcription consent handling, and the operator guidance shown in product.
+- The workspace has reviewed the default participation mode, disclosure
+  behavior, and transcript or artifact retention settings before inviting Kodi
+  into external meetings.
+
+## Product Notes
+
+- `meeting.getCopilotSettings` is the current Phase 0 control-plane entrypoint
+  for workspace meeting identity, participation defaults, retention defaults,
+  and the pilot checklist.
+- `zoom.getInstallStatus` remains the Zoom-specific install and scope status
+  entrypoint.
+- The Meetings page is the operational home for Zoom installation, meeting
+  start, and pilot readiness checks.

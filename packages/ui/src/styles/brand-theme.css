@@ -1,17 +1,32 @@
 :root {
-  --font-abeezee: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --kodi-canvas: 44 40% 96%;
-  --kodi-panel: 42 33% 99%;
-  --kodi-panel-muted: 40 28% 92%;
-  --kodi-border: 36 28% 82%;
-  --kodi-text: 201 28% 16%;
-  --kodi-text-muted: 198 16% 39%;
+  --font-abeezee:
+    'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --kodi-canvas: 42 36% 96%;
+  --kodi-canvas-shade: 40 28% 93%;
+  --kodi-panel: 42 34% 98%;
+  --kodi-panel-elevated: 42 42% 99%;
+  --kodi-panel-muted: 40 28% 93%;
+  --kodi-sidebar: 39 28% 91%;
+  --kodi-sidebar-elevated: 41 32% 95%;
+  --kodi-border: 35 24% 80%;
+  --kodi-border-strong: 33 24% 72%;
+  --kodi-text: 198 24% 18%;
+  --kodi-text-muted: 197 15% 39%;
+  --kodi-text-subtle: 195 12% 50%;
   --kodi-accent: 39 74% 58%;
+  --kodi-accent-soft: 41 74% 91%;
   --kodi-accent-strong: 35 79% 49%;
-  --kodi-accent-foreground: 201 28% 16%;
-  --kodi-success: 150 36% 42%;
+  --kodi-accent-foreground: 198 24% 18%;
+  --kodi-success: 150 36% 38%;
+  --kodi-success-soft: 151 34% 91%;
   --kodi-warning: 37 84% 54%;
-  --kodi-danger: 5 63% 54%;
+  --kodi-warning-soft: 39 86% 91%;
+  --kodi-danger: 8 62% 54%;
+  --kodi-danger-soft: 8 68% 92%;
+  --kodi-info: 199 34% 44%;
+  --kodi-info-soft: 201 38% 92%;
+  --kodi-overlay: 198 22% 18%;
+  --kodi-shadow: 198 27% 18%;
 
   --background: var(--kodi-canvas);
   --foreground: var(--kodi-text);
@@ -25,12 +40,81 @@
   --secondary-foreground: var(--kodi-text);
   --muted: var(--kodi-panel-muted);
   --muted-foreground: var(--kodi-text-muted);
-  --accent: var(--kodi-panel-muted);
-  --accent-foreground: var(--kodi-text);
+  --accent: var(--kodi-accent-soft);
+  --accent-foreground: var(--kodi-accent-foreground);
   --destructive: var(--kodi-danger);
   --destructive-foreground: 42 33% 99%;
   --border: var(--kodi-border);
   --input: var(--kodi-border);
-  --ring: var(--kodi-accent);
+  --ring: var(--kodi-accent-strong);
   --radius: 1rem;
+}
+
+.kodi-shell-bg {
+  background:
+    radial-gradient(
+      circle at top left,
+      hsl(var(--kodi-accent) / 0.16),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      hsl(var(--kodi-sidebar-elevated) / 0.78),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      hsl(var(--kodi-canvas)),
+      hsl(var(--kodi-canvas-shade))
+    );
+}
+
+.kodi-app-shell {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-panel-elevated) / 0.52),
+    transparent 18rem
+  );
+}
+
+.kodi-sidebar-surface {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-sidebar-elevated)),
+    hsl(var(--kodi-sidebar))
+  );
+}
+
+.kodi-panel-surface {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-panel-elevated)),
+    hsl(var(--kodi-panel))
+  );
+}
+
+.kodi-panel-muted-surface {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--kodi-panel)),
+    hsl(var(--kodi-panel-muted))
+  );
+}
+
+.kodi-surface-elevated {
+  background: hsl(var(--kodi-panel-elevated));
+}
+
+.kodi-surface-muted {
+  background: hsl(var(--kodi-panel-muted));
+}
+
+.kodi-overlay-scrim {
+  background: hsl(var(--kodi-overlay) / 0.28);
+}
+
+.shadow-brand-panel {
+  box-shadow:
+    0 28px 60px -36px hsl(var(--kodi-shadow) / 0.24),
+    inset 0 1px 0 hsl(var(--kodi-panel-elevated));
 }

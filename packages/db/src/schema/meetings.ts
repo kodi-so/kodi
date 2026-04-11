@@ -58,6 +58,11 @@ export const meetingParticipationModeEnum = pgEnum(
   meetingParticipationModeValues
 )
 
+export const meetingAdapterHealthStatusEnum = pgEnum(
+  'meeting_adapter_health_status',
+  ['healthy', 'degraded', 'down']
+)
+
 export const meetingSessions = pgTable(
   'meeting_sessions',
   {
@@ -242,6 +247,7 @@ export const meetingEvents = pgTable(
     sequence: integer('sequence').notNull(),
     eventType: text('event_type').notNull(),
     source: meetingEventSourceEnum('source').notNull(),
+    dedupeKey: text('dedupe_key'),
     payload: jsonb('payload').$type<Record<string, unknown> | null>(),
     occurredAt: timestamp('occurred_at').defaultNow().notNull(),
   },
@@ -254,6 +260,39 @@ export const meetingEvents = pgTable(
       table.meetingSessionId,
       table.eventType
     ),
+    meetingSessionDedupeUidx: uniqueIndex(
+      'meeting_events_session_dedupe_uidx'
+    ).on(table.meetingSessionId, table.dedupeKey),
+  })
+)
+
+export const meetingSessionHealth = pgTable(
+  'meeting_session_health',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    provider: conferenceProviderEnum('provider').notNull(),
+    status: meetingAdapterHealthStatusEnum('status').notNull(),
+    lifecycleState: text('lifecycle_state'),
+    detail: text('detail'),
+    metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
+    observedAt: timestamp('observed_at').notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => ({
+    meetingSessionUidx: uniqueIndex('meeting_session_health_session_uidx').on(
+      table.meetingSessionId
+    ),
+    meetingSessionObservedIdx: index(
+      'meeting_session_health_session_observed_idx'
+    ).on(table.meetingSessionId, table.observedAt),
   })
 )
 
@@ -370,6 +409,10 @@ export const meetingSessionsRelations = relations(
       fields: [meetingSessions.hostUserId],
       references: [user.id],
     }),
+    health: one(meetingSessionHealth, {
+      fields: [meetingSessions.id],
+      references: [meetingSessionHealth.meetingSessionId],
+    }),
     controls: one(meetingSessionControls, {
       fields: [meetingSessions.id],
       references: [meetingSessionControls.meetingSessionId],
@@ -430,6 +473,16 @@ export const meetingEventsRelations = relations(meetingEvents, ({ one }) => ({
   }),
 }))
 
+export const meetingSessionHealthRelations = relations(
+  meetingSessionHealth,
+  ({ one }) => ({
+    meetingSession: one(meetingSessions, {
+      fields: [meetingSessionHealth.meetingSessionId],
+      references: [meetingSessions.id],
+    }),
+  })
+)
+
 export const transcriptSegmentsRelations = relations(
   transcriptSegments,
   ({ one }) => ({
@@ -478,6 +531,8 @@ export type MeetingParticipant = typeof meetingParticipants.$inferSelect
 export type NewMeetingParticipant = typeof meetingParticipants.$inferInsert
 export type MeetingEvent = typeof meetingEvents.$inferSelect
 export type NewMeetingEvent = typeof meetingEvents.$inferInsert
+export type MeetingSessionHealth = typeof meetingSessionHealth.$inferSelect
+export type NewMeetingSessionHealth = typeof meetingSessionHealth.$inferInsert
 export type TranscriptSegment = typeof transcriptSegments.$inferSelect
 export type NewTranscriptSegment = typeof transcriptSegments.$inferInsert
 export type MeetingStateSnapshot = typeof meetingStateSnapshots.$inferSelect

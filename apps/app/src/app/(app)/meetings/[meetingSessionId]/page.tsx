@@ -44,7 +44,7 @@ import {
   formatRetentionDays,
   getMeetingParticipationModeDescription,
   getMeetingParticipationModeLabel,
-} from '@kodi/db'
+} from '@kodi/db/client'
 
 type MeetingConsole = NonNullable<
   Awaited<ReturnType<typeof trpc.meeting.getConsole.query>>

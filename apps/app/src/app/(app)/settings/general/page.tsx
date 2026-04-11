@@ -13,7 +13,7 @@ import {
   getMeetingParticipationModeLabel,
   meetingParticipationModeValues,
   type MeetingCopilotSettings,
-} from '@kodi/db'
+} from '@kodi/db/client'
 import {
   Alert,
   AlertDescription,

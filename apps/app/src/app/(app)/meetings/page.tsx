@@ -19,7 +19,7 @@ import {
   deriveMeetingBotIdentity,
   formatRetentionDays,
   getMeetingParticipationModeLabel,
-} from '@kodi/db'
+} from '@kodi/db/client'
 import {
   Alert,
   AlertDescription,

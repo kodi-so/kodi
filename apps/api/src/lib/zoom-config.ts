@@ -28,7 +28,8 @@ export function getZoomSetupStatus() {
       'Create a Zoom app with OAuth enabled.',
       'Configure the OAuth redirect URI to match ZOOM_REDIRECT_URI.',
       'Configure webhook delivery and store the secret in ZOOM_WEBHOOK_SECRET.',
-      'Enable RTMS-related meeting events for the Kodi Zoom integration.',
+      'Enable the scopes and webhook events Kodi needs for visible meeting joins and lifecycle callbacks.',
+      'Reconnect Zoom with the ZAK scope before relying on sign-in-required meetings.',
     ],
   }
 }

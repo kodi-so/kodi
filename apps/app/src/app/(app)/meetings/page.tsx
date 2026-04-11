@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   ArrowRight,
   Check,
+  CheckCircle2,
   Copy,
   Mail,
   RefreshCcw,
@@ -13,7 +14,12 @@ import {
   UserRound,
   Video,
 } from 'lucide-react'
-import { deriveMeetingBotIdentity } from '@kodi/db/meeting-bot-identity'
+import {
+  buildMeetingCopilotDisclosure,
+  deriveMeetingBotIdentity,
+  formatRetentionDays,
+  getMeetingParticipationModeLabel,
+} from '@kodi/db'
 import {
   Alert,
   AlertDescription,
@@ -41,6 +47,22 @@ import {
 import { getMeetingRuntimeCopy } from './_lib/runtime-state'
 
 type MeetingListItem = Awaited<ReturnType<typeof trpc.meeting.list.query>>
+type MeetingCopilotConfig = Awaited<
+  ReturnType<typeof trpc.meeting.getCopilotSettings.query>
+>
+
+function setupCheckVariant(
+  state: MeetingCopilotConfig['setup']['checks'][number]['state']
+) {
+  switch (state) {
+    case 'ready':
+      return 'success' as const
+    case 'missing':
+      return 'destructive' as const
+    default:
+      return 'warning' as const
+  }
+}
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return 'Not available'
@@ -138,6 +160,8 @@ export default function MeetingsPage() {
   const searchParams = useSearchParams()
   const { activeOrg } = useOrg()
   const [meetings, setMeetings] = useState<MeetingListItem>([])
+  const [copilotConfig, setCopilotConfig] =
+    useState<MeetingCopilotConfig | null>(null)
   const [zoomInstallStatus, setZoomInstallStatus] =
     useState<ZoomInstallStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -167,13 +191,16 @@ export default function MeetingsPage() {
 
     async function load() {
       try {
-        const [meetingItems, installStatus] = await Promise.all([
+        const [meetingItems, installStatus, nextCopilotConfig] =
+          await Promise.all([
           trpc.meeting.list.query({ orgId, limit: 20 }),
           trpc.zoom.getInstallStatus.query({ orgId }),
-        ])
+          trpc.meeting.getCopilotSettings.query({ orgId }),
+          ])
         if (cancelled) return
         setMeetings(meetingItems)
         setZoomInstallStatus(installStatus)
+        setCopilotConfig(nextCopilotConfig)
       } catch (err) {
         if (cancelled) return
         setError(
@@ -256,16 +283,18 @@ export default function MeetingsPage() {
   const zoomSignedInBotStatus = getZoomSignedInBotStatus(zoomInstallStatus)
   const zoomInstallation = zoomInstallStatus?.installation ?? null
   const missingZoomSetup = zoomInstallStatus?.setup.missing ?? []
+  const workspaceCopilotSettings = copilotConfig?.settings ?? null
   const isOwner = activeOrg?.role === 'owner'
   const meetingBotIdentity = useMemo(
     () =>
-      activeOrg
+      activeOrg && workspaceCopilotSettings
         ? deriveMeetingBotIdentity({
             orgName: activeOrg.orgName,
             orgSlug: activeOrg.orgSlug,
+            displayNameOverride: workspaceCopilotSettings.botDisplayName,
           })
         : null,
-    [activeOrg]
+    [activeOrg, workspaceCopilotSettings]
   )
   const zoomCallbackStatus = searchParams.get('zoom')
 
@@ -311,10 +340,16 @@ export default function MeetingsPage() {
     setZoomAction('refresh')
 
     try {
-      const status = await trpc.zoom.getInstallStatus.query({
-        orgId: activeOrg.orgId,
-      })
+      const [status, nextCopilotConfig] = await Promise.all([
+        trpc.zoom.getInstallStatus.query({
+          orgId: activeOrg.orgId,
+        }),
+        trpc.meeting.getCopilotSettings.query({
+          orgId: activeOrg.orgId,
+        }),
+      ])
       setZoomInstallStatus(status)
+      setCopilotConfig(nextCopilotConfig)
       setError(null)
     } catch (err) {
       setError(
@@ -625,6 +660,31 @@ export default function MeetingsPage() {
                     and transcript.
                   </div>
 
+                  {workspaceCopilotSettings && (
+                    <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">
+                          {getMeetingParticipationModeLabel(
+                            workspaceCopilotSettings.defaultParticipationMode
+                          )}
+                        </Badge>
+                        {workspaceCopilotSettings.allowMeetingHostControls && (
+                          <Badge variant="neutral">Starter controls on</Badge>
+                        )}
+                        {workspaceCopilotSettings.consentNoticeEnabled && (
+                          <Badge variant="neutral">Disclosure on</Badge>
+                        )}
+                      </div>
+                      <div className="mt-3 space-y-2 text-sm leading-6 text-foreground">
+                        {buildMeetingCopilotDisclosure(
+                          workspaceCopilotSettings
+                        ).map((line) => (
+                          <p key={line}>{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
                     <Button
                       onClick={() => void startMeeting()}
@@ -645,17 +705,18 @@ export default function MeetingsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 space-y-2">
                       <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                        Workspace meeting agent
+                        Workspace meeting copilot
                       </p>
                       <h3 className="text-xl font-semibold text-foreground">
-                        Stable identity for invites
+                        Identity and live defaults
                       </h3>
                       <p className="text-sm leading-6 text-muted-foreground">
-                        This is the workspace-specific meeting agent identity
-                        Kodi will keep using as invite-by-email comes online.
+                        This is the identity and default live participation
+                        contract that new meetings inherit before any
+                        meeting-level override is applied.
                       </p>
                     </div>
-                    <Badge variant="outline">Phase F1</Badge>
+                    <Badge variant="outline">Phase 0</Badge>
                   </div>
 
                   <div className="mt-5 grid gap-3">
@@ -733,6 +794,48 @@ export default function MeetingsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {workspaceCopilotSettings && (
+                    <div className="rounded-[1.2rem] border border-border bg-background p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">
+                          {getMeetingParticipationModeLabel(
+                            workspaceCopilotSettings.defaultParticipationMode
+                          )}
+                        </Badge>
+                        {workspaceCopilotSettings.chatResponsesRequireExplicitAsk && (
+                          <Badge variant="neutral">Chat asks only</Badge>
+                        )}
+                        {workspaceCopilotSettings.voiceResponsesRequireExplicitPrompt && (
+                          <Badge variant="neutral">
+                            Voice requests only
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-[1rem] border border-brand-line bg-brand-elevated px-4 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
+                            Transcript retention
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {formatRetentionDays(
+                              workspaceCopilotSettings.transcriptRetentionDays
+                            )}
+                          </p>
+                        </div>
+                        <div className="rounded-[1rem] border border-brand-line bg-brand-elevated px-4 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
+                            Artifact retention
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {formatRetentionDays(
+                              workspaceCopilotSettings.artifactRetentionDays
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-4 rounded-[1.2rem] border border-dashed border-border bg-background p-4 text-sm leading-6 text-foreground">
                     {workspaceMeetingBotIdentity.inviteInstructions.map(
@@ -829,6 +932,67 @@ export default function MeetingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {copilotConfig && (
+              <Card className="border-border bg-card">
+                <CardContent className="p-6">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">Pilot contract</Badge>
+                      <Badge variant="neutral">Phase 0</Badge>
+                    </div>
+                    <h2 className="text-2xl font-semibold text-foreground">
+                      Launch checklist
+                    </h2>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      The production path stays Recall-first. Use this checklist
+                      to verify the environment, workspace install, and manual
+                      Zoom validation work before broad rollout.
+                    </p>
+                  </div>
+
+                  <div className="mt-6 space-y-3">
+                    {copilotConfig.setup.checks.map((check) => (
+                      <div
+                        key={check.key}
+                        className="rounded-[1.25rem] border border-brand-line bg-brand-elevated p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">
+                              {check.label}
+                            </p>
+                            <p className="text-xs leading-5 text-brand-quiet">
+                              {check.detail}
+                            </p>
+                          </div>
+                          <Badge variant={setupCheckVariant(check.state)}>
+                            {check.state === 'ready'
+                              ? 'Ready'
+                              : check.state === 'missing'
+                                ? 'Missing'
+                                : 'Manual'}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 rounded-[1.25rem] border border-dashed border-brand-line bg-brand-elevated p-4 text-sm leading-6 text-brand-quiet">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2
+                        size={16}
+                        className="mt-1 shrink-0 text-brand-success"
+                      />
+                      <p>
+                        Settings and setup defaults can be updated from the
+                        General settings page before the next meeting starts.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

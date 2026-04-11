@@ -148,6 +148,13 @@
       "when": 1775620800000,
       "tag": "0021_dashboard_assistant_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1775869200000,
+      "tag": "0022_phase_0_meeting_copilot_controls",
+      "breakpoints": true
     }
   ]
 }

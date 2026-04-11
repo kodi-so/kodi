@@ -2,6 +2,7 @@ type MeetingBotIdentityInput = {
   orgName: string
   orgSlug: string
   emailDomain?: string
+  displayNameOverride?: string | null
 }
 
 export type MeetingBotIdentity = {
@@ -25,7 +26,15 @@ function sanitizeOrgSlug(orgSlug: string) {
   return normalized || 'workspace'
 }
 
-function buildDisplayName(orgName: string) {
+function buildDisplayName(
+  orgName: string,
+  displayNameOverride?: string | null
+) {
+  const trimmedOverride = displayNameOverride?.trim()
+  if (trimmedOverride) {
+    return trimmedOverride
+  }
+
   const trimmedName = orgName.trim()
   if (!trimmedName || trimmedName.toLowerCase() === 'personal') {
     return 'Kodi'
@@ -43,7 +52,10 @@ export function deriveMeetingBotIdentity(
 
   return {
     shortName: 'Kodi',
-    displayName: buildDisplayName(input.orgName),
+    displayName: buildDisplayName(
+      input.orgName,
+      input.displayNameOverride
+    ),
     inviteEmail: `${inviteEmailLocalPart}@${emailDomain}`,
     inviteEmailLocalPart,
     inviteInstructions: [

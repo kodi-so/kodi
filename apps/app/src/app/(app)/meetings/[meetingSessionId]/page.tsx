@@ -26,6 +26,7 @@ import {
   Skeleton,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
+import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
 import {
   dashedPanelClass,
@@ -38,6 +39,12 @@ import {
   describeMeetingLifecycleEvent,
   getMeetingRuntimeCopy,
 } from '../_lib/runtime-state'
+import {
+  buildMeetingCopilotDisclosure,
+  formatRetentionDays,
+  getMeetingParticipationModeDescription,
+  getMeetingParticipationModeLabel,
+} from '@kodi/db'
 
 type MeetingConsole = NonNullable<
   Awaited<ReturnType<typeof trpc.meeting.getConsole.query>>
@@ -46,6 +53,8 @@ type MeetingParticipants = MeetingConsole['participants']
 type MeetingTranscript = MeetingConsole['transcript']
 type MeetingLiveState = MeetingConsole['liveState'] | null
 type MeetingEventFeed = MeetingConsole['events']
+type MeetingWorkspaceSettings = MeetingConsole['workspaceSettings'] | null
+type MeetingControls = MeetingConsole['controls'] | null
 type MeetingTranscriptSegment = MeetingTranscript[number]
 type MeetingTranscriptTurn = MeetingTranscriptSegment & {
   mergedSegmentCount: number
@@ -384,12 +393,15 @@ export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
   const meetingSessionId = params.meetingSessionId
   const { activeOrg } = useOrg()
+  const { data: session } = useSession()
   const orgId = activeOrg?.orgId ?? null
+  const currentUserId = session?.user?.id ?? null
 
   const [consoleData, setConsoleData] = useState<MeetingConsole | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+  const [controlsSaving, setControlsSaving] = useState(false)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -446,6 +458,9 @@ export default function MeetingDetailsPage() {
   const transcript: MeetingTranscript = consoleData?.transcript ?? []
   const liveState: MeetingLiveState = consoleData?.liveState ?? null
   const events: MeetingEventFeed = consoleData?.events ?? []
+  const workspaceSettings: MeetingWorkspaceSettings =
+    consoleData?.workspaceSettings ?? null
+  const controls: MeetingControls = consoleData?.controls ?? null
 
   const chronologicalTranscript = useMemo(
     () => collapseTranscriptSegments([...transcript].reverse()),
@@ -564,6 +579,47 @@ export default function MeetingDetailsPage() {
         }, []),
     [events]
   )
+
+  const canManageControls =
+    activeOrg?.role === 'owner' ||
+    (currentUserId != null && meeting?.hostUserId === currentUserId)
+
+  async function updateControls(input: {
+    participationMode?: 'listen_only' | 'chat_enabled' | 'voice_enabled'
+    liveResponsesDisabled?: boolean
+    liveResponsesDisabledReason?: string
+  }) {
+    if (!orgId || !meetingSessionId) return
+
+    setControlsSaving(true)
+
+    try {
+      await trpc.meeting.updateSessionControls.mutate({
+        orgId,
+        meetingSessionId,
+        ...input,
+      })
+
+      const next = await trpc.meeting.getConsole.query({
+        orgId,
+        meetingSessionId,
+        transcriptLimit: 200,
+        eventLimit: 20,
+      })
+
+      setConsoleData(next as MeetingConsole | null)
+      setLastRefreshedAt(new Date())
+      setError(null)
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to update live meeting controls.'
+      )
+    } finally {
+      setControlsSaving(false)
+    }
+  }
 
   const rollingNotes = useMemo(
     () =>
@@ -995,6 +1051,157 @@ export default function MeetingDetailsPage() {
           </div>
 
           <div className="space-y-6">
+            {workspaceSettings && controls && (
+              <Card className="border-brand-line">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+                      <CheckCircle2 size={18} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl text-foreground">
+                        Live participation controls
+                      </CardTitle>
+                      <CardDescription>
+                        These controls narrow how Kodi can participate in this
+                        meeting without changing the workspace defaults.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {getMeetingParticipationModeLabel(
+                        controls.participationMode
+                      )}
+                    </Badge>
+                    {controls.liveResponsesDisabled ? (
+                      <Badge variant="destructive">Live replies paused</Badge>
+                    ) : (
+                      <Badge variant="success">Live replies allowed</Badge>
+                    )}
+                    {controls.allowHostControls && (
+                      <Badge variant="neutral">Starter controls on</Badge>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3">
+                    {(
+                      ['listen_only', 'chat_enabled', 'voice_enabled'] as const
+                    ).map((mode) => {
+                      const active = controls.participationMode === mode
+
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          disabled={!canManageControls || controlsSaving}
+                          onClick={() =>
+                            void updateControls({
+                              participationMode: mode,
+                            })
+                          }
+                          className={`rounded-[1.25rem] border px-4 py-4 text-left transition ${
+                            active
+                              ? 'border-foreground bg-brand-accent-soft text-foreground'
+                              : 'border-brand-line bg-brand-elevated text-brand-quiet hover:border-foreground/20 hover:text-foreground'
+                          }`}
+                        >
+                          <p className="text-sm font-medium">
+                            {getMeetingParticipationModeLabel(mode)}
+                          </p>
+                          <p className="mt-2 text-xs leading-5">
+                            {getMeetingParticipationModeDescription(mode)}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-brand-line bg-brand-elevated p-4">
+                    <p className="text-sm font-medium text-foreground">
+                      Live reply kill switch
+                    </p>
+                    <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
+                      Pause live chat and voice replies immediately without
+                      ending the meeting session. Owners can always do this. If
+                      starter controls are enabled, the meeting starter can too.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        variant={
+                          controls.liveResponsesDisabled
+                            ? 'outline'
+                            : 'destructive'
+                        }
+                        disabled={!canManageControls || controlsSaving}
+                        onClick={() =>
+                          void updateControls({
+                            liveResponsesDisabled:
+                              !controls.liveResponsesDisabled,
+                            liveResponsesDisabledReason:
+                              controls.liveResponsesDisabled
+                                ? undefined
+                                : 'Paused from the meeting detail page.',
+                          })
+                        }
+                      >
+                        {controlsSaving
+                          ? 'Updating...'
+                          : controls.liveResponsesDisabled
+                            ? 'Resume live replies'
+                            : 'Pause live replies'}
+                      </Button>
+                      {controls.liveResponsesDisabledReason && (
+                        <span className="text-xs text-brand-quiet">
+                          {controls.liveResponsesDisabledReason}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-dashed border-brand-line bg-brand-elevated p-4">
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
+                      Meeting trust contract
+                    </p>
+                    <div className="mt-3 space-y-2 text-sm leading-6 text-foreground">
+                      {buildMeetingCopilotDisclosure(workspaceSettings).map(
+                        (line) => (
+                          <p key={line}>{line}</p>
+                        )
+                      )}
+                    </div>
+                    <Separator className="my-4" />
+                    <div className="flex flex-wrap gap-3 text-xs text-brand-quiet">
+                      <span>
+                        Transcript retention:{' '}
+                        {formatRetentionDays(
+                          workspaceSettings.transcriptRetentionDays
+                        )}
+                      </span>
+                      <span>
+                        Artifact retention:{' '}
+                        {formatRetentionDays(
+                          workspaceSettings.artifactRetentionDays
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!canManageControls && (
+                    <Alert>
+                      <AlertDescription>
+                        Only workspace owners and, when enabled, the meeting
+                        starter can change these live controls.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="border-brand-line">
               <CardHeader>
                 <div className="flex items-center gap-3">

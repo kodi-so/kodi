@@ -18,6 +18,7 @@ import {
   resolveMeetingSessionControls,
 } from '../../lib/meetings/copilot-policy'
 import { logActivity } from '../../lib/activity'
+import { resolveMeetingHealthSnapshot } from '../../lib/meetings/health'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -447,6 +448,32 @@ export const meetingRouter = router({
         meetingSessionId: meeting.id,
         orgId: ctx.org.id,
         settings: config.settings,
+      })
+    }),
+
+  getHealth: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        forceRefresh: z.boolean().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+      })
+
+      if (!meeting) return null
+
+      const gateway = createDefaultMeetingProviderGateway()
+      return resolveMeetingHealthSnapshot(ctx.db, gateway, {
+        orgId: ctx.org.id,
+        meetingSession: meeting,
+        forceRefresh: input.forceRefresh ?? false,
       })
     }),
 

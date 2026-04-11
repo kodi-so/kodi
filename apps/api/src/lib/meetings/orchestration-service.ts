@@ -44,6 +44,7 @@ type EnsureMeetingSessionInput = {
 type IngestNormalizedEventInput = Omit<EnsureMeetingSessionInput, 'provider'> & {
   event: MeetingProviderEvent
   source?: MeetingIngestionSource
+  dedupeKey?: string | null
 }
 
 type IngestProviderEnvelopeInput = EnsureMeetingSessionInput & {
@@ -442,7 +443,8 @@ export class MeetingOrchestrationService {
     const persistedEvent = await appendNormalizedMeetingEvent(
       meetingSession.id,
       input.event,
-      input.source ?? 'worker'
+      input.source ?? 'worker',
+      input.dedupeKey ?? null
     )
 
     if (!persistedEvent.shouldFanOut || !persistedEvent.persistedEvent) {
@@ -506,9 +508,18 @@ export class MeetingOrchestrationService {
     }
 
     for (const event of normalizedEvents) {
+      // Derive a per-event dedupe key from the provider delivery ID so that
+      // re-delivered webhooks (same deliveryId, same eventType) are idempotent.
+      const deliveryId = input.envelope.deliveryId ?? null
+      const dedupeKey =
+        deliveryId && (event.kind === 'lifecycle' || event.kind === 'participant')
+          ? `${input.envelope.provider}:${deliveryId}:${event.kind === 'lifecycle' ? event.action : event.action}`
+          : null
+
       const result = await this.ingestNormalizedEvent({
         ...input,
         event,
+        dedupeKey,
       })
       meetingSession = result.meetingSession
     }

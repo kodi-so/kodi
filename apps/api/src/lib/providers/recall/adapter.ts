@@ -22,6 +22,8 @@ import {
   type RecallJoinAttempt,
   RecallMeetingJoinError,
   type RecallCreateBotRequest,
+  retrieveRecallBot,
+  type RecallRetrieveBotResponse,
 } from './client'
 import { getRecallClientConfig } from './config'
 import { createZoomZakCallbackUrl } from '../../zoom'
@@ -92,6 +94,58 @@ function extractOccurredAt(payload: Record<string, unknown>) {
   }
 
   return new Date()
+}
+
+function normalizeRecallStatusCode(value: string | null | undefined) {
+  if (!value) return null
+  return value.startsWith('bot.') ? value : `bot.${value}`
+}
+
+function resolveLatestRecallBotStatus(bot: RecallRetrieveBotResponse) {
+  const directStatus = asRecord(bot.status)
+  if (typeof directStatus?.code === 'string') {
+    return {
+      code: normalizeRecallStatusCode(directStatus.code),
+      subCode:
+        typeof directStatus.sub_code === 'string' ? directStatus.sub_code : null,
+      message:
+        typeof directStatus.message === 'string' ? directStatus.message : null,
+      observedAt:
+        typeof directStatus.updated_at === 'string'
+          ? directStatus.updated_at
+          : typeof directStatus.created_at === 'string'
+            ? directStatus.created_at
+            : null,
+    }
+  }
+
+  const statusChanges = Array.isArray(bot.status_changes) ? bot.status_changes : []
+  const latest = statusChanges
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .reverse()
+    .find((item) => typeof item.code === 'string')
+
+  if (!latest) {
+    return {
+      code: null,
+      subCode: null,
+      message: null,
+      observedAt: null,
+    }
+  }
+
+  return {
+    code: normalizeRecallStatusCode(latest.code as string),
+    subCode: typeof latest.sub_code === 'string' ? latest.sub_code : null,
+    message: typeof latest.message === 'string' ? latest.message : null,
+    observedAt:
+      typeof latest.updated_at === 'string'
+        ? latest.updated_at
+        : typeof latest.created_at === 'string'
+          ? latest.created_at
+          : null,
+  }
 }
 
 function describeRecallProviderJoinState(eventName: string) {
@@ -420,6 +474,7 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
     const eventData = asRecord(data?.data)
     const subCode =
       typeof eventData?.sub_code === 'string' ? eventData.sub_code : null
+    const recallDeliveryId = envelope.deliveryId ?? null
 
     if (payload.event.startsWith('bot.')) {
       const lifecycle = mapRecallBotEventToLifecycleState(
@@ -451,6 +506,7 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
+            recallDeliveryId,
             ...(providerJoinDetail ?? {}),
             lifecycleMessage:
               providerMessage ??
@@ -491,6 +547,7 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
+            recallDeliveryId,
             participant: participant,
           },
         },
@@ -553,6 +610,7 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
           metadata: {
             transport: 'recall',
             recallEvent: payload.event,
+            recallDeliveryId,
             languageCode:
               typeof eventData?.language_code === 'string'
                 ? eventData.language_code
@@ -566,14 +624,61 @@ export class RecallMeetingAdapter implements MeetingProviderAdapter {
   }
 
   async getHealth(
-    _request: MeetingProviderHealthRequest
+    request: MeetingProviderHealthRequest
   ): Promise<MeetingProviderHealthSnapshot> {
+    const botId = request.session?.externalBotSessionId
+    if (!botId) {
+      return {
+        status: 'healthy',
+        observedAt: new Date(),
+        lifecycleState: 'idle',
+        detail: 'No active Recall bot session has been assigned yet.',
+        metadata: {
+          transport: 'recall',
+        },
+      }
+    }
+
+    const bot = await retrieveRecallBot(botId)
+    const latestStatus = resolveLatestRecallBotStatus(bot)
+    const observedAt = latestStatus.observedAt
+      ? new Date(latestStatus.observedAt)
+      : new Date()
+    const lifecycle = latestStatus.code
+      ? mapRecallBotEventToLifecycleState(latestStatus.code, latestStatus.subCode)
+      : null
+    const providerJoinDetail = latestStatus.code
+      ? describeRecallProviderJoinState(latestStatus.code)
+      : null
+    const failure =
+      latestStatus.subCode != null
+        ? classifyRecallFailure({ subCode: latestStatus.subCode })
+        : null
+
+    let status: MeetingProviderHealthSnapshot['status'] = 'healthy'
+    if (lifecycle?.state === 'failed') {
+      status = 'down'
+    } else if (
+      providerJoinDetail?.providerJoinState === 'waiting_room' ||
+      providerJoinDetail?.providerJoinState === 'awaiting_recording_permission'
+    ) {
+      status = 'degraded'
+    }
+
     return {
-      status: 'healthy',
-      observedAt: new Date(),
-      lifecycleState: 'idle',
+      status,
+      observedAt,
+      lifecycleState: lifecycle?.state ?? 'idle',
+      detail:
+        latestStatus.message ??
+        providerJoinDetail?.lifecycleMessage ??
+        'Recall bot health is nominal.',
       metadata: {
         transport: 'recall',
+        recallBotId: bot.id,
+        recallStatusCode: latestStatus.code,
+        recallSubCode: latestStatus.subCode,
+        failure,
       },
     }
   }

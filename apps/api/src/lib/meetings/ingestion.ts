@@ -379,7 +379,8 @@ export async function appendMeetingEvent(
   meetingSessionId: string,
   eventType: string,
   source: MeetingIngestionSource,
-  payload?: Record<string, unknown> | null
+  payload?: Record<string, unknown> | null,
+  dedupeKey?: string | null
 ) {
   const lastEvent = await db.query.meetingEvents.findFirst({
     where: (fields, { eq }) => eq(fields.meetingSessionId, meetingSessionId),
@@ -394,16 +395,15 @@ export async function appendMeetingEvent(
       sequence: (lastEvent?.sequence ?? 0) + 1,
       eventType,
       source,
+      dedupeKey: dedupeKey ?? null,
       payload: payload ?? null,
       occurredAt: new Date(),
     })
+    .onConflictDoNothing()
     .returning()
 
-  if (!created) {
-    throw new Error('Failed to append meeting event')
-  }
-
-  return created
+  // null means the row was silently deduplicated (same dedupeKey already exists)
+  return created ?? null
 }
 
 export async function upsertMeetingParticipant(
@@ -709,7 +709,8 @@ async function sanitizeLifecycleEventForPersistence(
 export async function appendNormalizedMeetingEvent(
   meetingSessionId: string,
   event: MeetingProviderEvent,
-  source: MeetingIngestionSource = 'worker'
+  source: MeetingIngestionSource = 'worker',
+  dedupeKey?: string | null
 ): Promise<AppendNormalizedMeetingEventResult> {
   const normalizedEvent =
     event.kind === 'lifecycle'
@@ -786,8 +787,18 @@ export async function appendNormalizedMeetingEvent(
     meetingSessionId,
     normalizedEventType(normalizedEvent),
     source,
-    normalizedEventPayload(normalizedEvent)
+    normalizedEventPayload(normalizedEvent),
+    dedupeKey ?? null
   )
+
+  if (!persistedEvent) {
+    // Row was silently deduplicated — skip fan-out for this delivery
+    return {
+      persistedEvent: null,
+      transcriptOperation,
+      shouldFanOut: false,
+    }
+  }
 
   return {
     persistedEvent,

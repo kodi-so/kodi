@@ -38,6 +38,21 @@ export type RecallCreateBotResponse = {
   metadata?: Record<string, unknown> | null
 }
 
+export type RecallBotStatusRecord = {
+  code?: string | null
+  sub_code?: string | null
+  message?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export type RecallRetrieveBotResponse = {
+  id: string
+  status?: RecallBotStatusRecord | null
+  status_changes?: RecallBotStatusRecord[] | null
+  metadata?: Record<string, unknown> | null
+}
+
 export type RecallFailureKind =
   | 'lobby_denied'
   | 'bad_meeting_url'
@@ -232,5 +247,11 @@ export async function leaveRecallBot(botId: string) {
   return recallFetch<Record<string, unknown>>(`/api/v1/bot/${botId}/leave_call/`, {
     method: 'POST',
     body: JSON.stringify({}),
+  })
+}
+
+export async function retrieveRecallBot(botId: string) {
+  return recallFetch<RecallRetrieveBotResponse>(`/api/v1/bot/${botId}/`, {
+    method: 'GET',
   })
 }

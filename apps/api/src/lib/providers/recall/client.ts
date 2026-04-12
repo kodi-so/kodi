@@ -3,7 +3,7 @@ import { getRecallClientConfig } from './config'
 export type RecallCreateBotRequest = {
   meeting_url: string
   bot_name?: string
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, string | null>
   recording_config?: {
     meeting_metadata?: Record<string, unknown>
     participant_events?: Record<string, unknown>

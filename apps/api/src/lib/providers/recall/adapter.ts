@@ -298,15 +298,28 @@ function buildRecallJoinPayload(
       )
     : null
 
+  const rawMetadata: Record<string, unknown> = {
+    orgId: request.orgId,
+    provider: request.provider,
+    internalMeetingSessionId: request.session?.internalMeetingSessionId ?? null,
+    ...(request.metadata ?? {}),
+  }
+  // Recall metadata values must be strings or null
+  const metadata: Record<string, string | null> = Object.fromEntries(
+    Object.entries(rawMetadata).map(([k, v]) => [
+      k,
+      v === null || v === undefined
+        ? null
+        : typeof v === 'string'
+          ? v
+          : JSON.stringify(v),
+    ])
+  )
+
   return {
     meeting_url: request.meeting.joinUrl,
     bot_name: request.botIdentity?.displayName ?? 'Kodi',
-    metadata: {
-      orgId: request.orgId,
-      provider: request.provider,
-      internalMeetingSessionId: request.session?.internalMeetingSessionId ?? null,
-      ...(request.metadata ?? {}),
-    },
+    metadata,
     recording_config: realtimeWebhookUrl
       ? {
           transcript: {

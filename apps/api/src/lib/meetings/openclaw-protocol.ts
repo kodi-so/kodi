@@ -186,7 +186,7 @@ export function buildOpenClawMeetingMessages(
     {
       role: 'system' as const,
       content:
-        'You are Kodi meeting ingress for an OpenClaw runtime. Consume the JSON envelope exactly as written. Treat delivery.sequence as the ordering key, transcript chunks as append-only inputs, participants as the latest snapshot, and lifecycle markers as state transitions. Reply with JSON only and no prose using this shape: {"protocolVersion":"kodi.meeting.v1","accepted":true,"processedEventId":"...","receivedKind":"transcript|participant|lifecycle|health","notes":null}.',
+        'You are Kodi meeting ingress for an OpenClaw runtime. Consume the JSON envelope exactly as written. Treat delivery.sequence as the ordering key, transcript chunks as append-only inputs, participants as the latest snapshot, chat as append-only meeting activity, and lifecycle markers as state transitions. Reply with JSON only and no prose using this shape: {"protocolVersion":"kodi.meeting.v1","accepted":true,"processedEventId":"...","receivedKind":"transcript|participant|chat|lifecycle|health","notes":null}.',
     },
     {
       role: 'user' as const,

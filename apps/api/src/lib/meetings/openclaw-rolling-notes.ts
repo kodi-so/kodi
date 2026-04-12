@@ -1,13 +1,15 @@
 import {
   db,
-  desc,
   eq,
   meetingSessions,
-  transcriptSegments,
 } from '@kodi/db'
-import type { MeetingParticipant, MeetingSession, TranscriptSegment } from '@kodi/db'
+import type { MeetingSession } from '@kodi/db'
 import { z } from 'zod'
 import { openClawChatCompletion } from '../openclaw/client'
+import {
+  buildMeetingPromptContext,
+  loadMeetingAnalysisContext,
+} from './meeting-analysis-context'
 import { saveMeetingStateSnapshotPatch } from './state-snapshots'
 
 const rollingNotesSchema = z.object({
@@ -22,59 +24,25 @@ type ProcessMeetingRollingNotesInput = {
   lastEventSequence: number
 }
 
-function formatDate(value: Date | null | undefined) {
-  return value ? value.toISOString() : null
-}
-
-function serializeParticipants(participants: MeetingParticipant[]) {
-  return participants.map((participant) => ({
-    displayName: participant.displayName,
-    email: participant.email,
-    isHost: participant.isHost,
-    joinedAt: formatDate(participant.joinedAt),
-    leftAt: formatDate(participant.leftAt),
-  }))
-}
-
-function serializeTranscriptWindow(segments: TranscriptSegment[]) {
-  return segments.map((segment) => ({
-    id: segment.id,
-    speakerName: segment.speakerName,
-    content: segment.content,
-    isPartial: segment.isPartial,
-    source: segment.source,
-    createdAt: formatDate(segment.createdAt),
-    startOffsetMs: segment.startOffsetMs,
-    endOffsetMs: segment.endOffsetMs,
-  }))
-}
-
 function buildRollingNotesMessages(input: {
   meetingSession: MeetingSession
-  participants: MeetingParticipant[]
-  transcriptWindow: TranscriptSegment[]
+  analysis: Awaited<ReturnType<typeof loadMeetingAnalysisContext>>
 }) {
   return [
     {
       role: 'system' as const,
       content:
-        'You are Kodi meeting intelligence running inside OpenClaw. Read the provided JSON meeting context and transcript window, then reply with JSON only and no prose. Return this shape: {"summary":"short current summary","rollingNotes":"bullet-style running notes as plain text","activeTopics":["topic one","topic two"]}. Keep summary concise, keep rollingNotes grounded in the transcript, and do not invent facts.',
+        'You are Kodi meeting intelligence running inside OpenClaw. Read the provided JSON meeting context, prior meeting state, and transcript turns, then reply with JSON only and no prose. Return this shape: {"summary":"short current summary","rollingNotes":"bullet-style running notes as plain text","activeTopics":["topic one","topic two"]}. Keep summary concise, keep rollingNotes grounded in the transcript, preserve important existing context when still relevant, and do not invent facts.',
     },
     {
       role: 'user' as const,
-      content: JSON.stringify({
-        protocolVersion: 'kodi.meeting.notes.v1',
-        meeting: {
-          meetingSessionId: input.meetingSession.id,
-          provider: input.meetingSession.provider,
-          title: input.meetingSession.title,
-          status: input.meetingSession.status,
-          actualStartAt: formatDate(input.meetingSession.actualStartAt),
-          endedAt: formatDate(input.meetingSession.endedAt),
-        },
-        participants: serializeParticipants(input.participants),
-        transcriptWindow: serializeTranscriptWindow(input.transcriptWindow),
-      }),
+      content: JSON.stringify(
+        buildMeetingPromptContext({
+          meetingSession: input.meetingSession,
+          analysis: input.analysis,
+          protocolVersion: 'kodi.meeting.notes.v2',
+        })
+      ),
     },
   ]
 }
@@ -96,35 +64,19 @@ function parseRollingNotes(content: string) {
 export async function processMeetingRollingNotes(
   input: ProcessMeetingRollingNotesInput
 ) {
-  const lastSnapshot = await db.query.meetingStateSnapshots.findFirst({
-    where: (fields, { eq }) => eq(fields.meetingSessionId, input.meetingSession.id),
-    orderBy: (fields, { desc }) => desc(fields.createdAt),
-    columns: {
-      id: true,
-      lastEventSequence: true,
-    },
+  const analysis = await loadMeetingAnalysisContext({
+    meetingSessionId: input.meetingSession.id,
+    transcriptLimit: 60,
   })
 
   if (
-    lastSnapshot?.lastEventSequence != null &&
-    lastSnapshot.lastEventSequence >= input.lastEventSequence
+    analysis.snapshot?.lastEventSequence != null &&
+    analysis.snapshot.lastEventSequence >= input.lastEventSequence
   ) {
     return { ok: true as const, skipped: 'already-processed' as const }
   }
 
-  const [participants, transcriptWindow] = await Promise.all([
-    db.query.meetingParticipants.findMany({
-      where: (fields, { eq }) => eq(fields.meetingSessionId, input.meetingSession.id),
-      orderBy: (fields, { asc }) => asc(fields.createdAt),
-    }),
-    db.query.transcriptSegments.findMany({
-      where: (fields, { eq }) => eq(fields.meetingSessionId, input.meetingSession.id),
-      orderBy: (fields, { desc }) => desc(fields.createdAt),
-      limit: 40,
-    }),
-  ])
-
-  if (transcriptWindow.length === 0) {
+  if (analysis.transcriptTurns.length === 0) {
     return { ok: true as const, skipped: 'no-transcript' as const }
   }
 
@@ -132,8 +84,7 @@ export async function processMeetingRollingNotes(
     orgId: input.orgId,
     messages: buildRollingNotesMessages({
       meetingSession: input.meetingSession,
-      participants,
-      transcriptWindow: [...transcriptWindow].reverse(),
+      analysis,
     }),
     timeoutMs: 15_000,
   })
@@ -156,10 +107,10 @@ export async function processMeetingRollingNotes(
     meetingSessionId: input.meetingSession.id,
     lastEventSequence: input.lastEventSequence,
     patch: {
-    summary: snapshot.summary ?? null,
-    rollingNotes: snapshot.rollingNotes ?? null,
-    activeTopics: snapshot.activeTopics ?? null,
-    lastProcessedAt: new Date(),
+      summary: snapshot.summary ?? null,
+      rollingNotes: snapshot.rollingNotes ?? null,
+      activeTopics: snapshot.activeTopics ?? null,
+      lastProcessedAt: new Date(),
     },
   })
 

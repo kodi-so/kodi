@@ -1,17 +1,16 @@
 import {
   and,
-  asc,
   db,
   desc,
-  eq,
-  transcriptSegments,
-  type MeetingParticipant,
   type MeetingSession,
-  type TranscriptSegment,
   type ToolkitConnection,
 } from '@kodi/db'
 import { z } from 'zod'
 import { openClawChatCompletion } from '../openclaw/client'
+import {
+  buildMeetingPromptContext,
+  loadMeetingAnalysisContext,
+} from './meeting-analysis-context'
 import { saveMeetingStateSnapshotPatch } from './state-snapshots'
 
 const draftActionsSchema = z.object({
@@ -75,10 +74,6 @@ type AvailableToolkit = {
   examples: string[]
 }
 
-function formatDate(value: Date | null | undefined) {
-  return value ? value.toISOString() : null
-}
-
 function humanizeToolkitSlug(toolkitSlug: string) {
   return toolkitSlug
     .split(/[-_]/g)
@@ -134,22 +129,6 @@ function buildToolkitExamples(toolkitSlug: string) {
   return ['Draft a follow-up action for this connected tool.']
 }
 
-function serializeParticipants(participants: MeetingParticipant[]) {
-  return participants.map((participant) => ({
-    displayName: participant.displayName,
-    email: participant.email,
-    isHost: participant.isHost,
-  }))
-}
-
-function serializeTranscriptWindow(segments: TranscriptSegment[]) {
-  return segments.map((segment) => ({
-    speakerName: segment.speakerName,
-    content: segment.content,
-    createdAt: formatDate(segment.createdAt),
-  }))
-}
-
 function serializeToolkits(toolkits: AvailableToolkit[]) {
   return toolkits.map((toolkit) => ({
     toolkitSlug: toolkit.toolkitSlug,
@@ -160,35 +139,24 @@ function serializeToolkits(toolkits: AvailableToolkit[]) {
 
 function buildDraftActionMessages(input: {
   meetingSession: MeetingSession
-  participants: MeetingParticipant[]
-  transcriptWindow: TranscriptSegment[]
-  rollingSummary: string | null
-  rollingNotes: string | null
-  candidateTasks: Record<string, unknown>[]
+  analysis: Awaited<ReturnType<typeof loadMeetingAnalysisContext>>
   availableToolkits: AvailableToolkit[]
 }) {
   return [
     {
       role: 'system' as const,
       content:
-        'You are Kodi meeting intelligence running inside OpenClaw. Read the meeting context, transcript window, existing candidate tasks, and available connected toolkits. Propose reviewable draft actions only. Do not assume execution. Reply with JSON only and no prose using this shape: {"draftActions":[{"title":"short action title","toolkitSlug":"linear","actionType":"create_issue|post_recap|update_doc|create_task","targetSummary":"where this would go","rationale":"why this draft is useful now","confidence":0.0,"sourceEvidence":["quote or short evidence"]}]}. Only propose drafts that are grounded in the transcript and fit one of the available toolkits. Keep titles concise and actionable.',
+        'You are Kodi meeting intelligence running inside OpenClaw. Read the meeting context, prior state, transcript turns, and available connected toolkits. Propose reviewable draft actions only. Do not assume execution. Reply with JSON only and no prose using this shape: {"draftActions":[{"title":"short action title","toolkitSlug":"linear","actionType":"create_issue|post_recap|update_doc|create_task","targetSummary":"where this would go","rationale":"why this draft is useful now","confidence":0.0,"sourceEvidence":["quote or short evidence"]}]}. Only propose drafts that are grounded in the transcript and fit one of the available toolkits. Keep titles concise and actionable.',
     },
     {
       role: 'user' as const,
       content: JSON.stringify({
-        protocolVersion: 'kodi.meeting.draft-actions.v1',
-        meeting: {
-          meetingSessionId: input.meetingSession.id,
-          provider: input.meetingSession.provider,
-          title: input.meetingSession.title,
-          status: input.meetingSession.status,
-        },
-        participants: serializeParticipants(input.participants),
-        rollingSummary: input.rollingSummary,
-        rollingNotes: input.rollingNotes,
-        candidateTasks: input.candidateTasks,
+        ...buildMeetingPromptContext({
+          meetingSession: input.meetingSession,
+          analysis: input.analysis,
+          protocolVersion: 'kodi.meeting.draft-actions.v2',
+        }),
         availableToolkits: serializeToolkits(input.availableToolkits),
-        transcriptWindow: serializeTranscriptWindow(input.transcriptWindow),
       }),
     },
   ]
@@ -251,31 +219,16 @@ async function listAvailableDraftToolkits(orgId: string) {
 export async function processMeetingDraftActions(
   input: ProcessDraftActionsInput
 ): Promise<ProcessMeetingDraftActionsResult> {
-  const [latestSnapshot, participants, transcriptWindow, availableToolkits] =
+  const [analysis, availableToolkits] =
     await Promise.all([
-      db.query.meetingStateSnapshots.findFirst({
-        where: (fields, { eq }) =>
-          eq(fields.meetingSessionId, input.meetingSession.id),
-        orderBy: (fields, { desc }) => desc(fields.createdAt),
-      }),
-      db.query.meetingParticipants.findMany({
-        where: (fields, { eq }) =>
-          eq(fields.meetingSessionId, input.meetingSession.id),
-        orderBy: (fields, { asc }) => asc(fields.createdAt),
-      }),
-      db.query.transcriptSegments.findMany({
-        where: (fields, { and, eq }) =>
-          and(
-            eq(fields.meetingSessionId, input.meetingSession.id),
-            eq(fields.isPartial, false)
-          ),
-        orderBy: (fields, { desc }) => desc(fields.createdAt),
-        limit: 40,
+      loadMeetingAnalysisContext({
+        meetingSessionId: input.meetingSession.id,
+        transcriptLimit: 60,
       }),
       listAvailableDraftToolkits(input.orgId),
     ])
 
-  if (transcriptWindow.length === 0) {
+  if (analysis.transcriptTurns.length === 0) {
     return { ok: true as const, skipped: 'no-transcript' as const }
   }
 
@@ -287,13 +240,7 @@ export async function processMeetingDraftActions(
     orgId: input.orgId,
     messages: buildDraftActionMessages({
       meetingSession: input.meetingSession,
-      participants,
-      transcriptWindow: [...transcriptWindow].reverse(),
-      rollingSummary: latestSnapshot?.summary ?? null,
-      rollingNotes: latestSnapshot?.rollingNotes ?? null,
-      candidateTasks: Array.isArray(latestSnapshot?.candidateTasks)
-        ? latestSnapshot.candidateTasks
-        : [],
+      analysis,
       availableToolkits,
     }),
     timeoutMs: 15_000,

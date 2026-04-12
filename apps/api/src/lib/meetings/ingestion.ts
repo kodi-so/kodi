@@ -5,7 +5,9 @@ import {
   meetingEvents,
   meetingParticipants,
   meetingSessions,
+  orgMembers,
   transcriptSegments,
+  user,
 } from '@kodi/db'
 import type {
   MeetingChatEvent,
@@ -20,6 +22,10 @@ import {
   transitionMeetingStatus,
   type MeetingSessionStatus,
 } from './status'
+import {
+  buildMeetingOrgIdentityDirectory,
+  resolveMeetingParticipantIdentity,
+} from './participant-identity'
 
 type PersistedTranscriptSegment = typeof transcriptSegments.$inferSelect
 
@@ -63,6 +69,11 @@ export type MeetingIngestionSource =
   | 'agent'
   | 'worker'
 
+function asRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
 export async function updateMeetingSessionRuntimeState(
   meetingSessionId: string,
   input: {
@@ -186,7 +197,15 @@ export async function upsertMeetingParticipant(
       )
       .returning()
 
-    return updated
+    if (!updated) return updated
+
+    return resolveAndPersistMeetingParticipantIdentity({
+      meetingSessionId,
+      participant: updated,
+      previousParticipant: existing,
+      metadataPatch: input.metadata ?? null,
+      sawJoinEvent: input.joinedAt != null,
+    })
   }
 
   const [created] = await db
@@ -204,7 +223,101 @@ export async function upsertMeetingParticipant(
     })
     .returning()
 
-  return created
+  if (!created) return created
+
+  return resolveAndPersistMeetingParticipantIdentity({
+    meetingSessionId,
+    participant: created,
+    previousParticipant: null,
+    metadataPatch: input.metadata ?? null,
+    sawJoinEvent: input.joinedAt != null,
+  })
+}
+
+async function resolveAndPersistMeetingParticipantIdentity(input: {
+  meetingSessionId: string
+  participant: typeof meetingParticipants.$inferSelect
+  previousParticipant: typeof meetingParticipants.$inferSelect | null
+  metadataPatch?: Record<string, unknown> | null
+  sawJoinEvent: boolean
+}) {
+  const meeting = await db.query.meetingSessions.findFirst({
+    where: (fields, { eq }) => eq(fields.id, input.meetingSessionId),
+    columns: {
+      id: true,
+      orgId: true,
+      provider: true,
+    },
+  })
+
+  if (!meeting) {
+    return input.participant
+  }
+
+  const orgUsers = await db
+    .select({
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+    })
+    .from(orgMembers)
+    .innerJoin(user, eq(orgMembers.userId, user.id))
+    .where(eq(orgMembers.orgId, meeting.orgId))
+
+  const directory = buildMeetingOrgIdentityDirectory(orgUsers)
+  const previousMetadata = asRecord(input.previousParticipant?.metadata)
+  const previousResolvedIdentity = asRecord(previousMetadata?.resolvedIdentity)
+  const previousRejoinCount =
+    typeof previousResolvedIdentity?.rejoinCount === 'number'
+      ? previousResolvedIdentity.rejoinCount
+      : 0
+  const rejoinCount =
+    input.sawJoinEvent && input.previousParticipant?.leftAt != null
+      ? previousRejoinCount + 1
+      : previousRejoinCount
+
+  const resolvedIdentity = resolveMeetingParticipantIdentity({
+    provider: meeting.provider,
+    participant: {
+      providerParticipantId: input.participant.providerParticipantId ?? null,
+      displayName: input.participant.displayName ?? null,
+      email: input.participant.email ?? null,
+    },
+    directory,
+    rejoinCount,
+  })
+
+  const previousFirstSeenAt =
+    typeof previousResolvedIdentity?.firstSeenAt === 'string'
+      ? previousResolvedIdentity.firstSeenAt
+      : null
+  const mergedMetadata = {
+    ...(input.previousParticipant?.metadata ?? {}),
+    ...(input.metadataPatch ?? {}),
+    resolvedIdentity: {
+      ...resolvedIdentity,
+      provider: meeting.provider,
+      firstSeenAt: previousFirstSeenAt ?? input.participant.createdAt.toISOString(),
+      lastSeenAt: new Date().toISOString(),
+    },
+  }
+
+  const [updated] = await db
+    .update(meetingParticipants)
+    .set({
+      userId: resolvedIdentity.matchedUserId ?? input.participant.userId ?? null,
+      isInternal:
+        resolvedIdentity.classification === 'internal'
+          ? true
+          : resolvedIdentity.classification === 'external'
+            ? false
+            : null,
+      metadata: mergedMetadata,
+    })
+    .where(eq(meetingParticipants.id, input.participant.id))
+    .returning()
+
+  return updated ?? input.participant
 }
 
 export async function appendTranscriptSegments(

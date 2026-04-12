@@ -5,6 +5,7 @@ import {
   updateMeetingSessionRuntimeState,
 } from './ingestion'
 import { processMeetingDraftActions } from './openclaw-draft-actions'
+import { processMeetingStructuredInsights } from './openclaw-structured-insights'
 import { processMeetingCandidateTasks } from './openclaw-candidate-tasks'
 import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
 import { processMeetingRollingNotes } from './openclaw-rolling-notes'
@@ -209,6 +210,29 @@ export class MeetingOrchestrationService {
           reason: rollingNotesResult.reason,
           error:
             'error' in rollingNotesResult ? rollingNotesResult.error ?? null : null,
+        })
+      }
+
+      const structuredInsightsResult = await processMeetingStructuredInsights({
+        orgId: input.orgId,
+        meetingSession: input.meetingSession,
+        lastEventSequence: input.persistedEvent.sequence,
+      })
+
+      if (
+        !structuredInsightsResult.ok &&
+        'reason' in structuredInsightsResult &&
+        structuredInsightsResult.reason !== 'missing-instance'
+      ) {
+        console.warn('[meetings] openclaw structured insights failed', {
+          orgId: input.orgId,
+          meetingSessionId: input.meetingSession.id,
+          eventId: input.persistedEvent.id,
+          reason: structuredInsightsResult.reason,
+          error:
+            'error' in structuredInsightsResult
+              ? structuredInsightsResult.error ?? null
+              : null,
         })
       }
 

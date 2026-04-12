@@ -70,6 +70,13 @@ type MeetingRetryAttempt = {
   message: string | null
   httpStatus: number | null
 }
+type MeetingParticipantIdentitySummary = {
+  classification: 'internal' | 'external' | 'unknown'
+  confidence: number | null
+  rejoinCount: number
+  matchedBy: string | null
+  matchedUserEmail: string | null
+}
 type MeetingChatItem = {
   id: string
   eventType: string
@@ -252,6 +259,61 @@ function formatHealthStatus(status: string | null | undefined) {
       return 'Provider down'
     default:
       return 'Health unknown'
+  }
+}
+
+function participantIdentitySummary(
+  participant: MeetingParticipants[number]
+): MeetingParticipantIdentitySummary | null {
+  const metadata = asRecord(participant.metadata)
+  const resolved = asRecord(metadata?.resolvedIdentity)
+  if (!resolved) return null
+
+  const classification =
+    resolved.classification === 'internal' ||
+    resolved.classification === 'external' ||
+    resolved.classification === 'unknown'
+      ? resolved.classification
+      : 'unknown'
+
+  return {
+    classification,
+    confidence:
+      typeof resolved.confidence === 'number' ? resolved.confidence : null,
+    rejoinCount:
+      typeof resolved.rejoinCount === 'number' ? resolved.rejoinCount : 0,
+    matchedBy:
+      typeof resolved.matchedBy === 'string' ? resolved.matchedBy : null,
+    matchedUserEmail:
+      typeof resolved.matchedUserEmail === 'string'
+        ? resolved.matchedUserEmail
+        : null,
+  }
+}
+
+function participantIdentityBadgeVariant(
+  classification: 'internal' | 'external' | 'unknown'
+) {
+  switch (classification) {
+    case 'internal':
+      return 'success' as const
+    case 'external':
+      return 'neutral' as const
+    default:
+      return 'warning' as const
+  }
+}
+
+function participantIdentityLabel(
+  classification: 'internal' | 'external' | 'unknown'
+) {
+  switch (classification) {
+    case 'internal':
+      return 'Internal'
+    case 'external':
+      return 'External'
+    default:
+      return 'Needs review'
   }
 }
 
@@ -739,6 +801,40 @@ export default function MeetingDetailsPage() {
           } => task !== null
         ),
     [liveState?.candidateTasks]
+  )
+
+  const candidateActionItems = useMemo(
+    () =>
+      asArray(liveState?.candidateActionItems)
+        .map((item) => {
+          const record = asRecord(item)
+          if (!record) return null
+
+          return {
+            title:
+              typeof record.title === 'string'
+                ? record.title
+                : 'Untitled action item',
+            ownerHint:
+              typeof record.ownerHint === 'string' ? record.ownerHint : null,
+            confidence:
+              typeof record.confidence === 'number' ? record.confidence : null,
+            sourceEvidence: asArray(record.sourceEvidence).filter(
+              (value): value is string => typeof value === 'string'
+            ),
+          }
+        })
+        .filter(
+          (
+            item
+          ): item is {
+            title: string
+            ownerHint: string | null
+            confidence: number | null
+            sourceEvidence: string[]
+          } => item !== null
+        ),
+    [liveState?.candidateActionItems]
   )
 
   const draftActions = useMemo(
@@ -1461,6 +1557,62 @@ export default function MeetingDetailsPage() {
                       Candidate action items
                     </p>
                     <div className="mt-3 space-y-3">
+                      {candidateActionItems.length > 0 ? (
+                        candidateActionItems.map((item, index) => (
+                          <div
+                            key={`${item.title}-${index}`}
+                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-medium text-foreground">
+                                {item.title}
+                              </p>
+                              {item.confidence != null && (
+                                <Badge variant="neutral">
+                                  {Math.round(item.confidence * 100)}%
+                                </Badge>
+                              )}
+                            </div>
+                            {item.ownerHint && (
+                              <p className={`mt-2 text-sm ${quietTextClass}`}>
+                                Owner hint: {item.ownerHint}
+                              </p>
+                            )}
+                            {item.sourceEvidence.length > 0 && (
+                              <details className="mt-3">
+                                <summary
+                                  className={`cursor-pointer text-sm ${subtleTextClass}`}
+                                >
+                                  Why Kodi suggested this
+                                </summary>
+                                <p
+                                  className={`mt-2 text-sm leading-6 ${quietTextClass}`}
+                                >
+                                  {item.sourceEvidence[0]}
+                                </p>
+                              </details>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div
+                          className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                        >
+                          Candidate action items will appear here once Kodi can
+                          separate concrete next actions from broader meeting
+                          notes.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p
+                      className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                    >
+                      Candidate follow-up
+                    </p>
+                    <div className="mt-3 space-y-3">
                       {candidateTasks.length > 0 ? (
                         candidateTasks.map((task, index) => (
                           <div
@@ -1702,37 +1854,72 @@ export default function MeetingDetailsPage() {
                     </p>
                   ) : (
                     <div className="mt-3 space-y-3">
-                      {participants.map((participant) => (
-                        <div
-                          key={participant.id}
-                          className="rounded-[1.2rem] border border-brand-line bg-background p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {participant.displayName ??
-                                  participant.email ??
-                                  'Unknown participant'}
-                              </p>
-                              <p
-                                className={`mt-1 truncate text-xs ${subtleTextClass}`}
+                      {participants.map((participant) => {
+                        const identity = participantIdentitySummary(participant)
+
+                        return (
+                          <div
+                            key={participant.id}
+                            className="rounded-[1.2rem] border border-brand-line bg-background p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {participant.displayName ??
+                                    participant.email ??
+                                    'Unknown participant'}
+                                </p>
+                                <p
+                                  className={`mt-1 truncate text-xs ${subtleTextClass}`}
+                                >
+                                  {participant.email ?? 'No email captured'}
+                                </p>
+                                {identity && (
+                                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                    <Badge
+                                      variant={participantIdentityBadgeVariant(
+                                        identity.classification
+                                      )}
+                                    >
+                                      {participantIdentityLabel(
+                                        identity.classification
+                                      )}
+                                    </Badge>
+                                    {identity.confidence != null && (
+                                      <Badge variant="outline">
+                                        {Math.round(identity.confidence * 100)}%
+                                        {' '}confidence
+                                      </Badge>
+                                    )}
+                                    {identity.rejoinCount > 0 && (
+                                      <Badge variant="outline">
+                                        rejoined x{identity.rejoinCount}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <Badge
+                                variant={
+                                  participant.leftAt ? 'neutral' : 'success'
+                                }
                               >
-                                {participant.email ?? 'No email captured'}
-                              </p>
+                                {participant.leftAt ? 'Left' : 'In call'}
+                              </Badge>
                             </div>
-                            <Badge
-                              variant={
-                                participant.leftAt ? 'neutral' : 'success'
-                              }
-                            >
-                              {participant.leftAt ? 'Left' : 'In call'}
-                            </Badge>
+                            <p className={`mt-3 text-xs ${subtleTextClass}`}>
+                              Joined {formatDate(participant.joinedAt)}
+                            </p>
+                            {identity?.matchedBy && (
+                              <p className={`mt-2 text-xs ${subtleTextClass}`}>
+                                Matched by {identity.matchedBy.replace(/_/g, ' ')}
+                                {identity.matchedUserEmail &&
+                                  ` - ${identity.matchedUserEmail}`}
+                              </p>
+                            )}
                           </div>
-                          <p className={`mt-3 text-xs ${subtleTextClass}`}>
-                            Joined {formatDate(participant.joinedAt)}
-                          </p>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>

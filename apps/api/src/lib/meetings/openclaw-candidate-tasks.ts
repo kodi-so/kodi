@@ -1,7 +1,10 @@
-import { db, desc, eq, transcriptSegments } from '@kodi/db'
-import type { MeetingParticipant, MeetingSession, TranscriptSegment } from '@kodi/db'
+import type { MeetingSession } from '@kodi/db'
 import { z } from 'zod'
 import { openClawChatCompletion } from '../openclaw/client'
+import {
+  buildMeetingPromptContext,
+  loadMeetingAnalysisContext,
+} from './meeting-analysis-context'
 import { saveMeetingStateSnapshotPatch } from './state-snapshots'
 
 const candidateTasksSchema = z.object({
@@ -21,54 +24,25 @@ type ProcessCandidateTasksInput = {
   lastEventSequence: number
 }
 
-function formatDate(value: Date | null | undefined) {
-  return value ? value.toISOString() : null
-}
-
-function serializeParticipants(participants: MeetingParticipant[]) {
-  return participants.map((participant) => ({
-    displayName: participant.displayName,
-    email: participant.email,
-    isHost: participant.isHost,
-  }))
-}
-
-function serializeTranscriptWindow(segments: TranscriptSegment[]) {
-  return segments.map((segment) => ({
-    speakerName: segment.speakerName,
-    content: segment.content,
-    createdAt: formatDate(segment.createdAt),
-  }))
-}
-
 function buildCandidateTaskMessages(input: {
   meetingSession: MeetingSession
-  participants: MeetingParticipant[]
-  transcriptWindow: TranscriptSegment[]
-  rollingSummary: string | null
-  rollingNotes: string | null
+  analysis: Awaited<ReturnType<typeof loadMeetingAnalysisContext>>
 }) {
   return [
     {
       role: 'system' as const,
       content:
-        'You are Kodi meeting intelligence running inside OpenClaw. Read the meeting transcript window and existing rolling notes, then identify likely follow-up tasks that were discussed or clearly implied. Reply with JSON only and no prose using this shape: {"candidateTasks":[{"title":"task title","ownerHint":"person or team","confidence":0.0,"sourceEvidence":["quote or short evidence"]}]}. Only include tasks with concrete evidence. Keep titles short and actionable.',
+        'You are Kodi meeting intelligence running inside OpenClaw. Read the compressed meeting state and transcript turns, then identify likely follow-up tasks that were discussed or clearly implied. Reply with JSON only and no prose using this shape: {"candidateTasks":[{"title":"task title","ownerHint":"person or team","confidence":0.0,"sourceEvidence":["quote or short evidence"]}]}. Only include tasks with concrete evidence. Keep titles short and actionable.',
     },
     {
       role: 'user' as const,
-      content: JSON.stringify({
-        protocolVersion: 'kodi.meeting.tasks.v1',
-        meeting: {
-          meetingSessionId: input.meetingSession.id,
-          provider: input.meetingSession.provider,
-          title: input.meetingSession.title,
-          status: input.meetingSession.status,
-        },
-        participants: serializeParticipants(input.participants),
-        rollingSummary: input.rollingSummary,
-        rollingNotes: input.rollingNotes,
-        transcriptWindow: serializeTranscriptWindow(input.transcriptWindow),
-      }),
+      content: JSON.stringify(
+        buildMeetingPromptContext({
+          meetingSession: input.meetingSession,
+          analysis: input.analysis,
+          protocolVersion: 'kodi.meeting.tasks.v2',
+        })
+      ),
     },
   ]
 }
@@ -90,23 +64,12 @@ function parseCandidateTasks(content: string) {
 export async function processMeetingCandidateTasks(
   input: ProcessCandidateTasksInput
 ) {
-  const [latestSnapshot, participants, transcriptWindow] = await Promise.all([
-    db.query.meetingStateSnapshots.findFirst({
-      where: (fields, { eq }) => eq(fields.meetingSessionId, input.meetingSession.id),
-      orderBy: (fields, { desc }) => desc(fields.createdAt),
-    }),
-    db.query.meetingParticipants.findMany({
-      where: (fields, { eq }) => eq(fields.meetingSessionId, input.meetingSession.id),
-      orderBy: (fields, { asc }) => asc(fields.createdAt),
-    }),
-    db.query.transcriptSegments.findMany({
-      where: (fields, { eq }) => eq(fields.meetingSessionId, input.meetingSession.id),
-      orderBy: (fields, { desc }) => desc(fields.createdAt),
-      limit: 40,
-    }),
-  ])
+  const analysis = await loadMeetingAnalysisContext({
+    meetingSessionId: input.meetingSession.id,
+    transcriptLimit: 60,
+  })
 
-  if (transcriptWindow.length === 0) {
+  if (analysis.transcriptTurns.length === 0) {
     return { ok: true as const, skipped: 'no-transcript' as const }
   }
 
@@ -114,10 +77,7 @@ export async function processMeetingCandidateTasks(
     orgId: input.orgId,
     messages: buildCandidateTaskMessages({
       meetingSession: input.meetingSession,
-      participants,
-      transcriptWindow: [...transcriptWindow].reverse(),
-      rollingSummary: latestSnapshot?.summary ?? null,
-      rollingNotes: latestSnapshot?.rollingNotes ?? null,
+      analysis,
     }),
     timeoutMs: 15_000,
   })

@@ -38,6 +38,11 @@ const envSchema = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+
+  // Stripe Prices (billing)
+  STRIPE_PRO_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_BUSINESS_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_USAGE_PRICE_ID: z.string().startsWith('price_').optional(),
 })
 
 const _env = envSchema.safeParse(process.env)
@@ -84,4 +89,32 @@ export function requireStripe() {
     throw new Error('Stripe environment variables are not configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.')
   }
   return { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET }
+}
+
+export function requireStripeBilling() {
+  const {
+    STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRO_PRICE_ID,
+    STRIPE_BUSINESS_PRICE_ID,
+    STRIPE_USAGE_PRICE_ID,
+  } = env
+  if (
+    !STRIPE_SECRET_KEY ||
+    !STRIPE_WEBHOOK_SECRET ||
+    !STRIPE_PRO_PRICE_ID ||
+    !STRIPE_BUSINESS_PRICE_ID ||
+    !STRIPE_USAGE_PRICE_ID
+  ) {
+    throw new Error(
+      'Stripe billing environment variables are not fully configured.',
+    )
+  }
+  return {
+    STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRO_PRICE_ID,
+    STRIPE_BUSINESS_PRICE_ID,
+    STRIPE_USAGE_PRICE_ID,
+  }
 }

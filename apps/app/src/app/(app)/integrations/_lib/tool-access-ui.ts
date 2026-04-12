@@ -13,10 +13,6 @@ export type ToolAccessToolkitDetail = Awaited<
   ReturnType<typeof trpc.toolAccess.getToolkitDetail.query>
 >
 
-export type ZoomInstallStatus = Awaited<
-  ReturnType<typeof trpc.zoom.getInstallStatus.query>
->
-
 export type PolicyDraft = Pick<
   ToolAccessToolkitDetail['policy'],
   | 'enabled'
@@ -102,26 +98,6 @@ export function formatSupportTier(tier: string) {
     default:
       return 'Catalog'
   }
-}
-
-export function getZoomStatus(installStatus: ZoomInstallStatus | null) {
-  const installation = installStatus?.installation ?? null
-
-  if (installation?.status === 'active') return 'Connected'
-  if (!installStatus?.featureFlags.zoomCopilot) return 'Feature off'
-  if (!installStatus?.setup.configured) return 'Needs setup'
-  if (installation?.status === 'error') return 'Attention needed'
-  return 'Not connected'
-}
-
-export function getZoomSignedInBotStatus(installStatus: ZoomInstallStatus | null) {
-  const installation = installStatus?.installation ?? null
-
-  if (!installation) return 'Not connected'
-  if (installStatus?.signedInBotsReady) return 'Signed-in bot ready'
-  if (installation.status === 'active') return 'Needs ZAK scope'
-  if (installation.status === 'error') return 'Attention needed'
-  return 'Not connected'
 }
 
 function evaluateToolkitStatus(params: {

@@ -80,6 +80,18 @@ type RecallApiErrorBody = {
   detail?: string
   message?: string
   errors?: unknown
+  [key: string]: unknown
+}
+
+function extractRecallErrorMessage(body: RecallApiErrorBody): string | null {
+  if (typeof body.detail === 'string') return body.detail
+  if (typeof body.message === 'string') return body.message
+  // Field-level validation errors: { meeting_url: ["msg"], ... }
+  const fieldErrors = Object.entries(body)
+    .filter(([, v]) => Array.isArray(v))
+    .map(([k, v]) => `${k}: ${(v as unknown[]).join(', ')}`)
+  if (fieldErrors.length > 0) return fieldErrors.join('; ')
+  return null
 }
 
 export class RecallApiError extends Error {
@@ -210,10 +222,11 @@ async function recallFetch<TResponse>(
       body = null
     }
 
+    const extracted = body ? extractRecallErrorMessage(body) : null
+    console.error('[recall] API error', { status: response.status, body })
+
     throw new RecallApiError(
-      body?.detail ??
-        body?.message ??
-        `Recall API request failed with status ${response.status}.`,
+      extracted ?? `Recall API request failed with status ${response.status}.`,
       response.status,
       body
     )

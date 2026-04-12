@@ -307,19 +307,17 @@ function buildRecallJoinPayload(
       internalMeetingSessionId: request.session?.internalMeetingSessionId ?? null,
       ...(request.metadata ?? {}),
     },
-    recording_config: {
-      transcript: realtimeWebhookUrl
-        ? {
+    recording_config: realtimeWebhookUrl
+      ? {
+          transcript: {
             provider: {
               recallai_streaming: {
                 mode: 'prioritize_low_latency',
                 language_code: 'en',
               },
             },
-          }
-        : undefined,
-      realtime_endpoints: realtimeWebhookUrl
-        ? [
+          },
+          realtime_endpoints: [
             {
               type: 'webhook',
               url: realtimeWebhookUrl,
@@ -332,9 +330,9 @@ function buildRecallJoinPayload(
                 'transcript.partial_data',
               ],
             },
-          ]
-        : undefined,
-    },
+          ],
+        }
+      : undefined,
   }
 }
 

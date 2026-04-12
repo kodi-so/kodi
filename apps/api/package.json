@@ -23,6 +23,7 @@
     "hono": "^4.3.4",
     "resend": "^6.9.4",
     "ssh2": "^1.17.0",
+    "stripe": "15.8.0",
     "zod": "^3.23.6"
   },
   "devDependencies": {

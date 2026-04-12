@@ -162,6 +162,13 @@
       "when": 1775955600000,
       "tag": "0023_phase_1_meeting_reliability_diagnostics",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1776192000000,
+      "tag": "0024_billing_schema",
+      "breakpoints": true
     }
   ]
 }

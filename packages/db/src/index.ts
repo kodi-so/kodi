@@ -35,3 +35,4 @@ export {
   type PlanId,
   type PlanConfig,
 } from './lib/plans'
+export { createLiteLLMClient } from './lib/litellm'

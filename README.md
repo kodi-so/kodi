@@ -11,8 +11,7 @@ kodi/
 ├── apps/
 │   ├── web/       # Landing site (Next.js + Tailwind + ShadCN)
 │   ├── app/       # Web application (Next.js + Tailwind + ShadCN + BetterAuth + Stripe)
-│   ├── api/       # API server (Hono + tRPC)
-│   └── zoom-gateway/ # Zoom RTMS gateway (Node + Hono + native RTMS SDK)
+│   └── api/       # API server (Hono + tRPC)
 ├── packages/
 │   ├── db/        # Database (Postgres + Drizzle ORM)
 │   ├── ui/        # Shared UI components (ShadCN-style)
@@ -55,12 +54,6 @@ kodi/
    cd ../.. && bun dev
    ```
 
-   For live Zoom RTMS testing, also run:
-
-   ```bash
-   cd apps/zoom-gateway && bun run dev
-   ```
-
 ### Apps & Ports
 
 | App            | Port | Description       |
@@ -68,7 +61,6 @@ kodi/
 | `web`          | 3000 | Landing site      |
 | `app`          | 3001 | Web application   |
 | `api`          | 3002 | API server        |
-| `zoom-gateway` | 3010 | Zoom RTMS gateway |
 
 ## Deployment (Railway)
 

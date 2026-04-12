@@ -66,10 +66,7 @@ function resolveAppUrl() {
 }
 
 function isToolAccessInternalAuthorized(headerValue: string | null) {
-  const token =
-    env.TOOL_ACCESS_INTERNAL_TOKEN ??
-    env.MEETING_INTERNAL_TOKEN ??
-    env.ZOOM_GATEWAY_INTERNAL_TOKEN
+  const token = env.TOOL_ACCESS_INTERNAL_TOKEN ?? env.MEETING_INTERNAL_TOKEN
 
   if (!token) return true
   return headerValue === `Bearer ${token}`

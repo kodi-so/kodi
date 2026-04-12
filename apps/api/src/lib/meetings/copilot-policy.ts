@@ -1,6 +1,7 @@
 import {
   db,
   deriveMeetingBotIdentity,
+  desc,
   eq,
   meetingCopilotSettings,
   meetingEvents,
@@ -9,9 +10,7 @@ import {
   type MeetingCopilotSettings,
   type MeetingParticipationMode,
 } from '@kodi/db'
-import { hasZoomZakScope } from '../zoom'
 import { getRecallSetupStatus } from '../providers/recall/config'
-import { getZoomSetupStatus } from '../zoom-config'
 
 type Database = typeof db
 
@@ -21,37 +20,23 @@ type OrgIdentity = {
   slug: string
 }
 
-type ZoomInstallationShape = {
-  status?: string | null
-  scopes?: string[] | null
-} | null
-
 function normalizeBotDisplayName(value: string | null | undefined) {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
 }
 
-export function buildMeetingPilotSetupContract(
-  zoomInstallation: ZoomInstallationShape
-) {
-  const zoom = getZoomSetupStatus()
+export function buildMeetingPilotSetupContract() {
   const recall = getRecallSetupStatus()
-  const zoomConnected =
-    zoomInstallation != null && zoomInstallation.status !== 'revoked'
-  const signedInBotsReady =
-    zoomConnected && hasZoomZakScope(zoomInstallation?.scopes ?? [])
 
   return {
-    zoom,
     recall,
     checks: [
       {
         key: 'feature-flags',
-        label: 'Meeting and Zoom feature flags enabled',
-        state:
-          zoom.enabled && recall.enabled ? ('ready' as const) : ('missing' as const),
+        label: 'Meeting intelligence enabled',
+        state: recall.enabled ? ('ready' as const) : ('missing' as const),
         detail:
-          'Both KODI_FEATURE_ZOOM_COPILOT and KODI_FEATURE_MEETING_INTELLIGENCE should be enabled in the target environment.',
+          'KODI_FEATURE_MEETING_INTELLIGENCE should be enabled in the target environment.',
       },
       {
         key: 'recall-config',
@@ -61,32 +46,11 @@ export function buildMeetingPilotSetupContract(
           'Recall credentials and webhook configuration are required for the production transport path.',
       },
       {
-        key: 'zoom-config',
-        label: 'Zoom app environment configured',
-        state: zoom.configured ? ('ready' as const) : ('missing' as const),
-        detail:
-          'OAuth, webhook validation, and callback configuration must be present before pilot validation starts.',
-      },
-      {
-        key: 'workspace-install',
-        label: 'Workspace Zoom account connected',
-        state: zoomConnected ? ('ready' as const) : ('missing' as const),
-        detail:
-          'A workspace owner should connect the Zoom account Kodi will use for meeting joins and callbacks.',
-      },
-      {
-        key: 'signed-in-bot',
-        label: 'Signed-in bot support ready for auth-required meetings',
-        state: signedInBotsReady ? ('ready' as const) : ('missing' as const),
-        detail:
-          'Reconnect Zoom with the ZAK scope before relying on sign-in-required meetings in the pilot.',
-      },
-      {
         key: 'manual-consent',
-        label: 'Waiting room, host consent, and recording behavior validated',
+        label: 'Waiting room, host consent, and bot admission validated',
         state: 'manual' as const,
         detail:
-          'Run a real Zoom validation call to confirm waiting-room admission, consent prompts, and recording or transcription approval behavior.',
+          'Run a real Zoom or Meet validation call to confirm waiting-room admission, consent prompts, and live bot behavior.',
       },
     ],
   }
@@ -94,8 +58,7 @@ export function buildMeetingPilotSetupContract(
 
 export async function getWorkspaceMeetingCopilotConfig(
   database: Database,
-  org: OrgIdentity,
-  zoomInstallation: ZoomInstallationShape = null
+  org: OrgIdentity
 ) {
   const persisted = await database.query.meetingCopilotSettings.findFirst({
     where: (fields, { eq }) => eq(fields.orgId, org.id),
@@ -122,7 +85,7 @@ export async function getWorkspaceMeetingCopilotConfig(
       orgSlug: org.slug,
       displayNameOverride: settings.botDisplayName,
     }),
-    setup: buildMeetingPilotSetupContract(zoomInstallation),
+    setup: buildMeetingPilotSetupContract(),
   }
 }
 

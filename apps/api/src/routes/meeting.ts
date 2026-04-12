@@ -4,7 +4,7 @@ import { env } from '../env'
 import type { MeetingProviderEvent } from '../lib/meetings/events'
 
 function isMeetingRouteAuthorized(headerValue: string | null) {
-  const token = env.MEETING_INTERNAL_TOKEN ?? env.ZOOM_GATEWAY_INTERNAL_TOKEN
+  const token = env.MEETING_INTERNAL_TOKEN
   if (!token) return true
   return headerValue === `Bearer ${token}`
 }

@@ -4,7 +4,6 @@ import { MeetingOrchestrationService } from '../../lib/meetings/orchestration-se
 import { createDefaultMeetingProviderGateway } from '../../lib/meetings/provider-runtime'
 import { TRPCError } from '@trpc/server'
 import {
-  and,
   eq,
   meetingCopilotSettings,
   meetingParticipationModeValues,
@@ -32,22 +31,6 @@ const meetingCopilotSettingsInputSchema = z.object({
   transcriptRetentionDays: z.number().int().min(1).max(3650),
   artifactRetentionDays: z.number().int().min(1).max(3650),
 })
-
-async function getActiveZoomInstallation(
-  database: typeof import('@kodi/db').db,
-  orgId: string
-) {
-  const installation = await database.query.providerInstallations.findFirst({
-    where: (fields, { and, eq }) =>
-      and(eq(fields.orgId, orgId), eq(fields.provider, 'zoom')),
-  })
-
-  if (!installation || installation.status === 'revoked') {
-    return null
-  }
-
-  return installation
-}
 
 export const meetingRouter = router({
   list: memberProcedure
@@ -93,16 +76,13 @@ export const meetingRouter = router({
     }),
 
   getCopilotSettings: memberProcedure.query(async ({ ctx }) => {
-    const installation = await getActiveZoomInstallation(ctx.db, ctx.org.id)
-
     const config = await getWorkspaceMeetingCopilotConfig(
       ctx.db,
       {
         id: ctx.org.id,
         name: ctx.org.name,
         slug: ctx.org.slug,
-      },
-      installation
+      }
     )
 
     return {
@@ -161,15 +141,13 @@ export const meetingRouter = router({
         ctx.session.user.id
       )
 
-      const installation = await getActiveZoomInstallation(ctx.db, ctx.org.id)
       const config = await getWorkspaceMeetingCopilotConfig(
         ctx.db,
         {
           id: ctx.org.id,
           name: ctx.org.name,
           slug: ctx.org.slug,
-        },
-        installation
+        }
       )
 
       return {
@@ -503,36 +481,18 @@ export const meetingRouter = router({
       const orchestration = new MeetingOrchestrationService(
         createDefaultMeetingProviderGateway()
       )
-      const activeZoomInstallation = await getActiveZoomInstallation(
-        ctx.db,
-        ctx.org.id
-      )
       const copilotConfig = await getWorkspaceMeetingCopilotConfig(
         ctx.db,
         {
           id: ctx.org.id,
           name: ctx.org.name,
           slug: ctx.org.slug,
-        },
-        activeZoomInstallation
+        }
       )
-      const installation =
-        provider === 'zoom' && activeZoomInstallation?.status === 'active'
-          ? activeZoomInstallation
-          : null
 
       const result = await orchestration.requestBotJoin({
         orgId: ctx.org.id,
         provider,
-        providerInstallationId: installation?.id ?? null,
-        actor:
-          provider === 'zoom' && installation
-            ? {
-                installerUserId: installation.installerUserId ?? null,
-                externalAccountId: installation.externalAccountId ?? null,
-                externalAccountEmail: installation.externalAccountEmail ?? null,
-              }
-            : null,
         hostUserId: ctx.session.user.id,
         meeting: {
           joinUrl: input.meetingUrl,

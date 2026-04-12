@@ -63,6 +63,12 @@ function buildParticipantSnapshot(participants: MeetingParticipant[]) {
     email: participant.email,
     isHost: participant.isHost,
     isInternal: participant.isInternal,
+    resolvedIdentity:
+      participant.metadata &&
+      typeof participant.metadata === 'object' &&
+      !Array.isArray(participant.metadata)
+        ? (participant.metadata as Record<string, unknown>).resolvedIdentity ?? null
+        : null,
     joinedAt: participant.joinedAt?.toISOString() ?? null,
     leftAt: participant.leftAt?.toISOString() ?? null,
   }))

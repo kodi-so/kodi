@@ -125,6 +125,7 @@ export async function replaySimulatedMeetingEvents(input: {
       provider: input.provider,
       transport: event.transport ?? 'internal',
       receivedAt: event.receivedAt ?? new Date(),
+      deliveryId: event.deliveryId ?? null,
       session: event.session ?? null,
       payload: event.payload ?? null,
     }

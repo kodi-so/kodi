@@ -33,6 +33,12 @@ export type LoadedMeetingAnalysisContext = {
   transcriptTurns: MeetingTranscriptTurn[]
 }
 
+function asRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
 function normalizeTranscriptContent(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLowerCase()
 }
@@ -148,6 +154,8 @@ export function serializeMeetingParticipants(participants: MeetingParticipant[])
     email: participant.email,
     isHost: participant.isHost,
     isInternal: participant.isInternal ?? null,
+    resolvedIdentity:
+      asRecord(participant.metadata)?.resolvedIdentity ?? null,
     joinedAt: formatOptionalDate(participant.joinedAt),
     leftAt: formatOptionalDate(participant.leftAt),
   }))

@@ -4,7 +4,6 @@ import { chatRouter } from './chat/router'
 import { dashboardAssistantRouter } from './dashboard-assistant/router'
 import { inviteRouter } from './invite/router'
 import { orgRouter } from './org/router'
-import { zoomRouter } from './zoom/router'
 import { meetingRouter } from './meeting/router'
 import { workRouter } from './work/router'
 import { toolAccessRouter } from './tool-access/router'
@@ -17,7 +16,6 @@ export const appRouter = router({
   approval: approvalRouter,
   invite: inviteRouter,
   org: orgRouter,
-  zoom: zoomRouter,
   meeting: meetingRouter,
   work: workRouter,
   toolAccess: toolAccessRouter,

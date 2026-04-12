@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   ArrowRight,
@@ -33,12 +33,6 @@ import {
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
-import {
-  getStatusTone,
-  getZoomSignedInBotStatus,
-  getZoomStatus,
-  type ZoomInstallStatus,
-} from '../integrations/_lib/tool-access-ui'
 import {
   heroPanelClass,
   pageShellClass,
@@ -157,13 +151,10 @@ function formatProviderLabel(provider: string) {
 
 export default function MeetingsPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { activeOrg } = useOrg()
   const [meetings, setMeetings] = useState<MeetingListItem>([])
   const [copilotConfig, setCopilotConfig] =
     useState<MeetingCopilotConfig | null>(null)
-  const [zoomInstallStatus, setZoomInstallStatus] =
-    useState<ZoomInstallStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [meetingUrl, setMeetingUrl] = useState('')
@@ -172,9 +163,6 @@ export default function MeetingsPage() {
   const [isRefreshing, startRefreshTransition] = useTransition()
   const [copiedField, setCopiedField] = useState<
     'display-name' | 'invite-email' | null
-  >(null)
-  const [zoomAction, setZoomAction] = useState<
-    'connect' | 'disconnect' | 'refresh' | null
   >(null)
 
   useEffect(() => {
@@ -191,15 +179,12 @@ export default function MeetingsPage() {
 
     async function load() {
       try {
-        const [meetingItems, installStatus, nextCopilotConfig] =
-          await Promise.all([
+        const [meetingItems, nextCopilotConfig] = await Promise.all([
           trpc.meeting.list.query({ orgId, limit: 20 }),
-          trpc.zoom.getInstallStatus.query({ orgId }),
           trpc.meeting.getCopilotSettings.query({ orgId }),
-          ])
+        ])
         if (cancelled) return
         setMeetings(meetingItems)
-        setZoomInstallStatus(installStatus)
         setCopilotConfig(nextCopilotConfig)
       } catch (err) {
         if (cancelled) return
@@ -279,12 +264,7 @@ export default function MeetingsPage() {
     [meetings]
   )
 
-  const zoomStatus = getZoomStatus(zoomInstallStatus)
-  const zoomSignedInBotStatus = getZoomSignedInBotStatus(zoomInstallStatus)
-  const zoomInstallation = zoomInstallStatus?.installation ?? null
-  const missingZoomSetup = zoomInstallStatus?.setup.missing ?? []
   const workspaceCopilotSettings = copilotConfig?.settings ?? null
-  const isOwner = activeOrg?.role === 'owner'
   const meetingBotIdentity = useMemo(
     () =>
       activeOrg && workspaceCopilotSettings
@@ -296,27 +276,6 @@ export default function MeetingsPage() {
         : null,
     [activeOrg, workspaceCopilotSettings]
   )
-  const zoomCallbackStatus = searchParams.get('zoom')
-
-  const zoomCallbackBanner = useMemo(() => {
-    if (zoomCallbackStatus === 'connected') {
-      return {
-        tone: 'success' as const,
-        message:
-          'Zoom connected. Kodi can now use meeting events for this workspace.',
-      }
-    }
-
-    if (zoomCallbackStatus === 'error') {
-      return {
-        tone: 'error' as const,
-        message:
-          'Zoom connection did not finish. Check the meeting connection card and try again.',
-      }
-    }
-
-    return null
-  }, [zoomCallbackStatus])
 
   async function copyIdentityValue(
     value: string,
@@ -332,66 +291,6 @@ export default function MeetingsPage() {
       setError(
         err instanceof Error ? err.message : 'Failed to copy to clipboard.'
       )
-    }
-  }
-
-  async function refreshZoomStatus() {
-    if (!activeOrg) return
-    setZoomAction('refresh')
-
-    try {
-      const [status, nextCopilotConfig] = await Promise.all([
-        trpc.zoom.getInstallStatus.query({
-          orgId: activeOrg.orgId,
-        }),
-        trpc.meeting.getCopilotSettings.query({
-          orgId: activeOrg.orgId,
-        }),
-      ])
-      setZoomInstallStatus(status)
-      setCopilotConfig(nextCopilotConfig)
-      setError(null)
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to refresh Zoom status.'
-      )
-    } finally {
-      setZoomAction(null)
-    }
-  }
-
-  async function connectZoom() {
-    if (!activeOrg) return
-    setZoomAction('connect')
-
-    try {
-      const result = await trpc.zoom.getInstallUrl.mutate({
-        orgId: activeOrg.orgId,
-        returnPath: '/meetings',
-      })
-      window.location.assign(result.url)
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to start the Zoom install flow.'
-      )
-      setZoomAction(null)
-    }
-  }
-
-  async function disconnectZoom() {
-    if (!activeOrg) return
-    setZoomAction('disconnect')
-
-    try {
-      await trpc.zoom.disconnect.mutate({ orgId: activeOrg.orgId })
-      await refreshZoomStatus()
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to disconnect Zoom.'
-      )
-      setZoomAction(null)
     }
   }
 
@@ -413,16 +312,6 @@ export default function MeetingsPage() {
   return (
     <div className={pageShellClass}>
       <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-6 px-4 py-8">
-        {zoomCallbackBanner && (
-          <Alert
-            variant={
-              zoomCallbackBanner.tone === 'success' ? 'success' : 'destructive'
-            }
-          >
-            <AlertDescription>{zoomCallbackBanner.message}</AlertDescription>
-          </Alert>
-        )}
-
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -849,83 +738,16 @@ export default function MeetingsPage() {
 
             <Card className="border-border bg-card">
               <CardContent className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className={getStatusTone(zoomStatus)}>
-                        {zoomStatus}
-                      </Badge>
-                      <Badge className={getStatusTone(zoomSignedInBotStatus)}>
-                        {zoomSignedInBotStatus}
-                      </Badge>
-                      <Badge variant="outline">Meeting connection</Badge>
-                    </div>
-                    <h2 className="text-2xl font-semibold text-foreground">
-                      Zoom belongs here
-                    </h2>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Zoom is a meeting integration, not a tool integration, so
-                      it lives on the Meetings page. Tool integrations stay in
-                      the separate Integrations surface.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-[1.4rem] border border-border bg-secondary p-4">
-                  <p className="text-sm font-medium text-foreground">
-                    {zoomInstallation
-                      ? zoomInstallation.externalAccountEmail
-                        ? `Connected account: ${zoomInstallation.externalAccountEmail}`
-                        : 'A Zoom account is connected for this workspace.'
-                      : isOwner
-                        ? 'Zoom is not connected yet.'
-                        : 'A workspace owner needs to connect Zoom.'}
+                <div className="space-y-2">
+                  <Badge variant="outline">Recall-based join</Badge>
+                  <h2 className="text-2xl font-semibold text-foreground">
+                    Zoom works through the same join flow
+                  </h2>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Paste a live Zoom or Google Meet URL above and Kodi will
+                    join through Recall. There is no separate Zoom connection
+                    step anymore.
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {zoomInstallation
-                      ? zoomInstallation.hasZakScope
-                        ? `Last updated ${formatDate(zoomInstallation.updatedAt)}. Signed-in Zoom joins are ready for meetings that require authenticated participants.`
-                        : `Last updated ${formatDate(zoomInstallation.updatedAt)}. Reconnect Zoom with the ZAK read scope to support auth-required meetings.`
-                      : zoomInstallStatus?.setup.configured
-                        ? 'Connect Zoom to unlock Zoom-based meeting events and callbacks.'
-                        : `Zoom still needs setup: ${(missingZoomSetup.length > 0 ? missingZoomSetup : ['Zoom config']).join(', ')}.`}
-                  </p>
-                </div>
-
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  {zoomInstallation ? (
-                    <Button
-                      onClick={() => void disconnectZoom()}
-                      variant="destructive"
-                      disabled={zoomAction !== null}
-                    >
-                      {zoomAction === 'disconnect'
-                        ? 'Disconnecting...'
-                        : 'Disconnect Zoom'}
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => void connectZoom()}
-                      disabled={!isOwner || zoomAction !== null}
-                    >
-                      {zoomAction === 'connect'
-                        ? 'Connecting...'
-                        : 'Connect Zoom'}
-                    </Button>
-                  )}
-
-                  <Button
-                    onClick={() => void refreshZoomStatus()}
-                    variant="outline"
-                    className="gap-2"
-                    disabled={zoomAction !== null}
-                  >
-                    <RefreshCcw
-                      size={16}
-                      className={zoomAction === 'refresh' ? 'animate-spin' : ''}
-                    />
-                    Refresh Zoom
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -942,9 +764,9 @@ export default function MeetingsPage() {
                       Launch checklist
                     </h2>
                     <p className="text-sm leading-6 text-muted-foreground">
-                      The production path stays Recall-first. Use this checklist
-                      to verify the environment, workspace install, and manual
-                      Zoom validation work before broad rollout.
+                      The production path is Recall-first. Use this checklist to
+                      verify the environment and run a real validation call
+                      before broad rollout.
                     </p>
                   </div>
 

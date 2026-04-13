@@ -265,3 +265,13 @@ export async function retrieveRecallBot(botId: string) {
     method: 'GET',
   })
 }
+
+export async function sendRecallBotChatMessage(botId: string, message: string) {
+  return recallFetch<Record<string, unknown>>(
+    `/api/v1/bot/${botId}/send_chat_message/`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }
+  )
+}

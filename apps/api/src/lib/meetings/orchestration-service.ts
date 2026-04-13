@@ -1,4 +1,4 @@
-import { and, db, eq, meetingSessions, or } from '@kodi/db'
+import { and, db, eq, meetingSessions, or, organizations } from '@kodi/db'
 import {
   appendNormalizedMeetingEvent,
   type MeetingIngestionSource,
@@ -9,6 +9,7 @@ import { processMeetingStructuredInsights } from './openclaw-structured-insights
 import { processMeetingCandidateTasks } from './openclaw-candidate-tasks'
 import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
 import { processMeetingRollingNotes } from './openclaw-rolling-notes'
+import { routeMeetingChatEvent } from './chat-router'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
@@ -279,6 +280,27 @@ export class MeetingOrchestrationService {
             'error' in draftActionsResult
               ? draftActionsResult.error ?? null
               : null,
+        })
+      }
+    }
+
+    if (input.event.kind === 'chat') {
+      const org = await this.database.query.organizations.findFirst({
+        where: (fields, { eq }) => eq(fields.id, input.orgId),
+        columns: { id: true, name: true, slug: true },
+      })
+
+      if (org) {
+        void routeMeetingChatEvent({
+          meetingSessionId: input.meetingSession.id,
+          org,
+          chatEvent: input.event,
+        }).catch((error) => {
+          console.warn('[meetings] chat routing failed', {
+            orgId: input.orgId,
+            meetingSessionId: input.meetingSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
         })
       }
     }

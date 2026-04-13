@@ -7,8 +7,10 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
+  MessageSquare,
   Mic2,
   RefreshCw,
+  SendHorizonal,
   Sparkles,
   Users,
 } from 'lucide-react'
@@ -24,6 +26,7 @@ import {
   CardTitle,
   Separator,
   Skeleton,
+  Textarea,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { useSession } from '@/lib/auth-client'
@@ -84,6 +87,14 @@ type MeetingChatItem = {
   senderName: string
   recipient: string
   occurredAt: Date | string
+}
+
+type AskKodiAnswer = {
+  id: string
+  question: string
+  answerText: string | null
+  status: string
+  askedAt: Date
 }
 
 function asRecord(value: unknown) {
@@ -501,6 +512,9 @@ export default function MeetingDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
   const [controlsSaving, setControlsSaving] = useState(false)
+  const [askQuestion, setAskQuestion] = useState('')
+  const [askPending, setAskPending] = useState(false)
+  const [answers, setAnswers] = useState<AskKodiAnswer[]>([])
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -751,6 +765,52 @@ export default function MeetingDetailsPage() {
       )
     } finally {
       setControlsSaving(false)
+    }
+  }
+
+  async function handleAskKodi(e: React.FormEvent) {
+    e.preventDefault()
+    const question = askQuestion.trim()
+    if (!question || !orgId || !meetingSessionId || askPending) return
+
+    const optimisticId = crypto.randomUUID()
+    const askedAt = new Date()
+    setAnswers((prev) => [
+      { id: optimisticId, question, answerText: null, status: 'preparing', askedAt },
+      ...prev,
+    ])
+    setAskQuestion('')
+    setAskPending(true)
+
+    try {
+      const result = await trpc.meeting.askKodi.mutate({
+        orgId,
+        meetingSessionId,
+        question,
+      })
+
+      setAnswers((prev) =>
+        prev.map((a) =>
+          a.id === optimisticId
+            ? {
+                ...a,
+                id: result.answerId,
+                answerText: result.answerText,
+                status: result.status,
+              }
+            : a
+        )
+      )
+    } catch (err) {
+      setAnswers((prev) =>
+        prev.map((a) =>
+          a.id === optimisticId
+            ? { ...a, status: 'failed', answerText: err instanceof Error ? err.message : 'Request failed.' }
+            : a
+        )
+      )
+    } finally {
+      setAskPending(false)
     }
   }
 
@@ -1169,6 +1229,98 @@ export default function MeetingDetailsPage() {
                       'Kodi will keep a tighter running set of notes here as the meeting develops.'}
                   </p>
                 </details>
+              </CardContent>
+            </Card>
+
+            <Card className="border-brand-line">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                    <MessageSquare size={18} />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl text-foreground">
+                      Ask Kodi
+                    </CardTitle>
+                    <CardDescription>
+                      Ask a question grounded in the live meeting context.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <form onSubmit={handleAskKodi} className="flex gap-2">
+                  <Textarea
+                    className="min-h-[2.5rem] resize-none rounded-[1.2rem] text-sm"
+                    placeholder="What has been decided so far?"
+                    value={askQuestion}
+                    onChange={(e) => setAskQuestion(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        void handleAskKodi(e as unknown as React.FormEvent)
+                      }
+                    }}
+                    disabled={askPending}
+                    rows={2}
+                  />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    variant="default"
+                    disabled={askPending || !askQuestion.trim()}
+                    className="h-10 w-10 shrink-0 rounded-[1.2rem]"
+                  >
+                    <SendHorizonal size={16} />
+                  </Button>
+                </form>
+
+                {answers.length > 0 && (
+                  <div className="space-y-3">
+                    {answers.map((answer) => (
+                      <div
+                        key={answer.id}
+                        className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated"
+                      >
+                        <div className="border-b border-brand-line px-4 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-foreground">
+                              {answer.question}
+                            </p>
+                            <Badge
+                              variant={
+                                answer.status === 'delivered_to_ui' || answer.status === 'delivered_to_chat'
+                                  ? 'success'
+                                  : answer.status === 'preparing'
+                                    ? 'warning'
+                                    : answer.status === 'failed' || answer.status === 'suppressed'
+                                      ? 'destructive'
+                                      : 'neutral'
+                              }
+                            >
+                              {answer.status === 'delivered_to_ui' || answer.status === 'delivered_to_chat'
+                                ? 'Answered'
+                                : answer.status === 'preparing'
+                                  ? 'Thinking…'
+                                  : answer.status === 'suppressed'
+                                    ? 'No context'
+                                    : answer.status === 'failed'
+                                      ? 'Failed'
+                                      : answer.status}
+                            </Badge>
+                          </div>
+                        </div>
+                        {(answer.answerText || answer.status === 'preparing') && (
+                          <div className="px-4 py-3">
+                            <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
+                              {answer.answerText ?? 'Generating answer…'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

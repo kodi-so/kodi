@@ -5,6 +5,7 @@ import { createDefaultMeetingProviderGateway } from '../../lib/meetings/provider
 import { TRPCError } from '@trpc/server'
 import {
   eq,
+  meetingAnswers,
   meetingCopilotSettings,
   meetingParticipationModeValues,
   meetingSessionControls,
@@ -18,6 +19,17 @@ import {
 } from '../../lib/meetings/copilot-policy'
 import { logActivity } from '../../lib/activity'
 import { resolveMeetingHealthSnapshot } from '../../lib/meetings/health'
+import { generateMeetingAnswer } from '../../lib/meetings/answer-engine'
+import {
+  cancelAnswer,
+  createAnswerRequest,
+  listMeetingAnswers,
+  markAnswerDeliveredToUi,
+  markAnswerFailed,
+  markAnswerGrounded,
+  suppressAnswer,
+  transitionAnswerState,
+} from '../../lib/meetings/answer-lifecycle'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -532,5 +544,129 @@ export const meetingRouter = router({
         meetingSessionId: result.meetingSession.id,
         status: result.meetingSession.status,
       }
+    }),
+
+  askKodi: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        question: z.string().trim().min(1).max(1000),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      const answer = await createAnswerRequest({
+        meetingSessionId: meeting.id,
+        orgId: ctx.org.id,
+        requestedByUserId: ctx.session.user.id,
+        source: 'ui',
+        question: input.question,
+      })
+
+      await transitionAnswerState(answer.id, meeting.id, 'preparing')
+
+      const result = await generateMeetingAnswer({
+        orgId: ctx.org.id,
+        meetingSession: meeting,
+        question: input.question,
+      })
+
+      if (!result.ok) {
+        if (result.reason === 'no-context') {
+          await suppressAnswer(answer.id, meeting.id, 'No meeting context available yet.')
+          return { answerId: answer.id, status: 'suppressed' as const, answerText: null }
+        }
+
+        await markAnswerFailed(answer.id, meeting.id, result.reason)
+        return { answerId: answer.id, status: 'failed' as const, answerText: null }
+      }
+
+      await markAnswerGrounded(answer.id, meeting.id, result.answerText, result.grounding)
+      await markAnswerDeliveredToUi(answer.id, meeting.id)
+
+      return {
+        answerId: answer.id,
+        status: 'delivered_to_ui' as const,
+        answerText: result.answerText,
+      }
+    }),
+
+  getAnswers: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) return []
+
+      return listMeetingAnswers(meeting.id)
+    }),
+
+  cancelAnswer: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        answerId: z.string(),
+        reason: z.string().trim().max(240).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      const answer = await ctx.db.query.meetingAnswers.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.answerId),
+            eq(fields.meetingSessionId, meeting.id)
+          ),
+        columns: { id: true, status: true },
+      })
+
+      if (!answer) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Answer not found.' })
+      }
+
+      const terminalStatuses = ['delivered_to_ui', 'delivered_to_chat', 'failed', 'canceled', 'stale']
+      if (terminalStatuses.includes(answer.status)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Answer is already in terminal state: ${answer.status}`,
+        })
+      }
+
+      await cancelAnswer(input.answerId, meeting.id, input.reason)
+      return { ok: true }
     }),
 })

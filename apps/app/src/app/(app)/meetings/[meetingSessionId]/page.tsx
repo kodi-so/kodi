@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   MessageSquare,
   Mic2,
@@ -506,6 +508,47 @@ function collapseTranscriptSegments(segments: MeetingTranscript) {
   return grouped
 }
 
+// Stable per-speaker colors — assigned by first-seen order, not by name hash,
+// so colors are consistent within a session regardless of name spelling.
+const SPEAKER_COLORS = [
+  'bg-blue-100 text-blue-700',
+  'bg-violet-100 text-violet-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-orange-100 text-orange-700',
+  'bg-pink-100 text-pink-700',
+]
+
+function getSpeakerInitials(name: string | null | undefined) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return (parts[0]![0] ?? '?').toUpperCase()
+  return ((parts[0]![0] ?? '') + (parts[parts.length - 1]![0] ?? '')).toUpperCase()
+}
+
+type TranscriptSpeakerGroup = {
+  groupId: string
+  speaker: string
+  startsAt: Date | string
+  turns: MeetingTranscriptTurn[]
+}
+
+function groupTranscriptBySpeaker(turns: MeetingTranscriptTurn[]): TranscriptSpeakerGroup[] {
+  const groups: TranscriptSpeakerGroup[] = []
+  for (const turn of turns) {
+    const speaker = turn.speakerName ?? 'Unknown speaker'
+    const last = groups[groups.length - 1]
+    if (last && last.speaker === speaker) {
+      last.turns.push(turn)
+    } else {
+      groups.push({ groupId: turn.id, speaker, startsAt: turn.createdAt, turns: [turn] })
+    }
+  }
+  return groups
+}
+
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
   const meetingSessionId = params.meetingSessionId
@@ -524,6 +567,11 @@ export default function MeetingDetailsPage() {
   const [answers, setAnswers] = useState<AskKodiAnswer[]>([])
   const [askSheetOpen, setAskSheetOpen] = useState(false)
   const answerBottomRef = useRef<HTMLDivElement>(null)
+  const [collapsedSpeakers, setCollapsedSpeakers] = useState<Set<string>>(new Set())
+  const transcriptScrollRef = useRef<HTMLDivElement>(null)
+  const transcriptBottomRef = useRef<HTMLDivElement>(null)
+  const [transcriptAtBottom, setTranscriptAtBottom] = useState(true)
+  const speakerColorMap = useRef<Map<string, string>>(new Map())
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -589,6 +637,32 @@ export default function MeetingDetailsPage() {
     () => collapseTranscriptSegments([...transcript].reverse()),
     [transcript]
   )
+  const transcriptSpeakerGroups = useMemo(() => {
+    const groups = groupTranscriptBySpeaker(chronologicalTranscript)
+    // Assign stable colors in first-seen order
+    for (const group of groups) {
+      if (!speakerColorMap.current.has(group.speaker)) {
+        const idx = speakerColorMap.current.size % SPEAKER_COLORS.length
+        speakerColorMap.current.set(group.speaker, SPEAKER_COLORS[idx]!)
+      }
+    }
+    return groups
+  }, [chronologicalTranscript])
+
+  const handleTranscriptScroll = useCallback(() => {
+    const el = transcriptScrollRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    setTranscriptAtBottom(distFromBottom < 60)
+  }, [])
+
+  // Auto-scroll to bottom when new transcript arrives, but only if already at bottom
+  useEffect(() => {
+    if (transcriptAtBottom) {
+      transcriptBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [transcriptSpeakerGroups.length, transcriptAtBottom])
+
   const meetingMetadata = useMemo(
     () => asRecord(meeting?.metadata),
     [meeting?.metadata]
@@ -1392,33 +1466,96 @@ export default function MeetingDetailsPage() {
                     the call.
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated">
-                    {chronologicalTranscript.map((segment, index) => (
-                      <div
-                        key={segment.id}
-                        className={`px-4 py-4 ${
-                          index > 0 ? 'border-t border-brand-line' : ''
-                        }`}
-                      >
-                        <div
-                          className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                  <div className="relative">
+                    <div
+                      ref={transcriptScrollRef}
+                      onScroll={handleTranscriptScroll}
+                      className="max-h-[540px] overflow-y-auto overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated"
+                    >
+                      {transcriptSpeakerGroups.map((group, groupIndex) => {
+                        const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
+                        const initials = getSpeakerInitials(group.speaker)
+                        const isCollapsed = collapsedSpeakers.has(group.groupId)
+                        const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)
+                        return (
+                          <div
+                            key={group.groupId}
+                            className={groupIndex > 0 ? 'border-t border-brand-line' : ''}
+                          >
+                            {/* Speaker header row */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCollapsedSpeakers((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(group.groupId)) next.delete(group.groupId)
+                                  else next.add(group.groupId)
+                                  return next
+                                })
+                              }
+                              className="flex w-full items-center gap-2.5 px-4 py-3 text-left hover:bg-brand-line/30 transition-colors"
+                            >
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${color}`}>
+                                {initials}
+                              </span>
+                              <span className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-foreground">{group.speaker}</span>
+                                <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                  {formatTime(group.startsAt)}
+                                </span>
+                              </span>
+                              {isCollapsed && (
+                                <span className={`text-xs ${subtleTextClass}`}>
+                                  {wordCount} words
+                                </span>
+                              )}
+                              {isCollapsed
+                                ? <ChevronRight size={14} className={subtleTextClass} />
+                                : <ChevronDown size={14} className={subtleTextClass} />
+                              }
+                            </button>
+
+                            {/* Turn content */}
+                            {!isCollapsed && (
+                              <div className="space-y-3 pb-4 pl-[3.25rem] pr-4">
+                                {group.turns.map((turn) => (
+                                  <p
+                                    key={turn.id}
+                                    className="whitespace-pre-wrap text-sm leading-6 text-foreground"
+                                  >
+                                    {turn.content}
+                                    {turn.isPartial && (
+                                      <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                        …
+                                      </span>
+                                    )}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                      <div ref={transcriptBottomRef} />
+                    </div>
+
+                    {/* Jump to latest button */}
+                    {!transcriptAtBottom && (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="rounded-full shadow-md text-xs h-7 px-3 gap-1.5"
+                          onClick={() => {
+                            setTranscriptAtBottom(true)
+                            transcriptBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+                          }}
                         >
-                          <span className="font-medium text-foreground">
-                            {segment.speakerName ?? 'Unknown speaker'}
-                          </span>
-                          <span>{formatDate(segment.createdAt)}</span>
-                          <Badge variant="neutral">
-                            {formatSourceLabel(segment.source)}
-                          </Badge>
-                          {segment.isPartial && (
-                            <Badge variant="warning">Partial</Badge>
-                          )}
-                        </div>
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
-                          {segment.content}
-                        </p>
+                          <ChevronDown size={13} />
+                          Latest
+                        </Button>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </CardContent>

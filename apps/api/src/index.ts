@@ -7,6 +7,7 @@ import { createContext } from './context'
 import { registerMeetingRoutes } from './routes/meeting'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
+import { consumeVoiceAudio } from './lib/meetings/voice-audio-store'
 
 const app = new Hono()
 
@@ -34,6 +35,24 @@ app.use(
 )
 
 app.get('/health', (c) => c.json({ ok: true }))
+
+// Serve short-lived TTS audio blobs for Recall Output Media consumption.
+// Tokens are single-use and expire after 5 minutes.
+app.get('/voice-output/:token', (c) => {
+  const token = c.req.param('token')
+  const audio = consumeVoiceAudio(token)
+
+  if (!audio) {
+    return c.json({ error: 'Not found or expired' }, 404)
+  }
+
+  return new Response(new Uint8Array(audio.buffer), {
+    headers: {
+      'Content-Type': audio.contentType,
+      'Cache-Control': 'no-store',
+    },
+  })
+})
 
 export type AppRouter = typeof appRouter
 

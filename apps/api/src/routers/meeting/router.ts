@@ -26,11 +26,24 @@ import {
   createAnswerRequest,
   listMeetingAnswers,
   markAnswerDeliveredToUi,
+  markAnswerDeliveredToVoice,
   markAnswerFailed,
   markAnswerGrounded,
+  markAnswerSpeaking,
   suppressAnswer,
   transitionAnswerState,
 } from '../../lib/meetings/answer-lifecycle'
+import {
+  evaluateVoicePolicy,
+  isAnswerFreshForVoice,
+  isAnswerSpeakable,
+  truncateForVoice,
+} from '../../lib/meetings/voice-policy'
+import { acquireVoiceLock, interruptActiveVoice } from '../../lib/meetings/voice-concurrency'
+import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
+import { sendRecallBotAudioOutput, stopRecallBotAudioOutput } from '../../lib/providers/recall/client'
+import { storeVoiceAudio } from '../../lib/meetings/voice-audio-store'
+import { env } from '../../env'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -682,7 +695,14 @@ export const meetingRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Answer not found.' })
       }
 
-      const terminalStatuses = ['delivered_to_ui', 'delivered_to_chat', 'failed', 'canceled', 'stale']
+      const terminalStatuses = [
+        'delivered_to_ui',
+        'delivered_to_chat',
+        'delivered_to_voice',
+        'failed',
+        'canceled',
+        'stale',
+      ]
       if (terminalStatuses.includes(answer.status)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -692,5 +712,180 @@ export const meetingRouter = router({
 
       await cancelAnswer(input.answerId, meeting.id, input.reason)
       return { ok: true }
+    }),
+
+  speakAnswer: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        answerId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!isTtsAvailable()) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'TTS is not configured on this server.',
+        })
+      }
+
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      const answer = await ctx.db.query.meetingAnswers.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.answerId),
+            eq(fields.meetingSessionId, meeting.id)
+          ),
+      })
+
+      if (!answer) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Answer not found.' })
+      }
+
+      // Policy gate
+      const workspaceConfig = await getWorkspaceMeetingCopilotConfig(ctx.db, {
+        id: ctx.org.id,
+        name: ctx.org.name,
+        slug: ctx.org.slug,
+      })
+
+      const controls = await resolveMeetingSessionControls(ctx.db, {
+        meetingSessionId: meeting.id,
+        orgId: ctx.org.id,
+        settings: workspaceConfig.settings,
+      })
+
+      const policy = evaluateVoicePolicy({
+        participationMode: controls.participationMode,
+        liveResponsesDisabled: controls.liveResponsesDisabled,
+        liveResponsesDisabledReason: controls.liveResponsesDisabledReason,
+        settings: workspaceConfig.settings,
+        requireExplicitPrompt: false, // UI-triggered speak is an explicit prompt
+      })
+
+      if (!policy.voiceAllowed) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: policy.suppressionReason ?? 'Voice output is not allowed.',
+        })
+      }
+
+      // Eligibility checks
+      const speakableCheck = isAnswerSpeakable(answer)
+      if (!speakableCheck.eligible) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: speakableCheck.reason })
+      }
+
+      const freshnessCheck = isAnswerFreshForVoice(answer)
+      if (!freshnessCheck.eligible) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: freshnessCheck.reason })
+      }
+
+      const botSessionId = meeting.providerBotSessionId
+      if (!botSessionId) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'No active bot session for voice output.',
+        })
+      }
+
+      const apiBaseUrl = env.API_BASE_URL
+      if (!apiBaseUrl) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'API_BASE_URL is not configured.',
+        })
+      }
+
+      // Acquire per-session voice lock (interrupts any in-flight response)
+      const lockResult = acquireVoiceLock(meeting.id, answer.id, () => {
+        void markAnswerFailed(answer.id, meeting.id, 'Interrupted by newer voice request.').catch(() => {})
+      })
+
+      if (!lockResult.acquired) {
+        throw new TRPCError({ code: 'CONFLICT', message: lockResult.reason })
+      }
+
+      try {
+        await markAnswerSpeaking(answer.id, meeting.id)
+
+        const voiceText = truncateForVoice(answer.answerText!)
+        const ttsResult = await generateSpeech({ text: voiceText })
+
+        if (!ttsResult.ok) {
+          await markAnswerFailed(answer.id, meeting.id, `TTS failed: ${ttsResult.reason}`)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `TTS generation failed: ${ttsResult.reason}`,
+          })
+        }
+
+        const token = storeVoiceAudio(ttsResult.audioBuffer)
+        const audioUrl = `${apiBaseUrl}/voice-output/${token}`
+
+        await sendRecallBotAudioOutput(botSessionId, { url: audioUrl })
+        await markAnswerDeliveredToVoice(answer.id, meeting.id)
+
+        return { ok: true, answerId: answer.id, status: 'delivered_to_voice' as const }
+      } catch (err) {
+        if (err instanceof TRPCError) throw err
+        const message = err instanceof Error ? err.message : String(err)
+        await markAnswerFailed(answer.id, meeting.id, message)
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message })
+      } finally {
+        lockResult.release()
+      }
+    }),
+
+  stopVoice: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true, providerBotSessionId: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      const interruptedAnswerId = interruptActiveVoice(meeting.id)
+
+      if (interruptedAnswerId) {
+        await suppressAnswer(
+          interruptedAnswerId,
+          meeting.id,
+          'Voice output stopped by operator.'
+        )
+      }
+
+      if (meeting.providerBotSessionId) {
+        try {
+          await stopRecallBotAudioOutput(meeting.providerBotSessionId)
+        } catch {
+          // Best-effort — bot may no longer be in call
+        }
+      }
+
+      return { ok: true, stoppedAnswerId: interruptedAnswerId ?? null }
     }),
 })

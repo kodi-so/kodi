@@ -111,6 +111,19 @@ const envSchema = z.object({
   // Base domain for hostnames
   BASE_DOMAIN: z.string().default('agent.kodi.so'),
 
+  // ── Phase 4: Voice Participation ──────────────────────────────────────────
+
+  // OpenAI TTS for voice responses (optional — voice output disabled if absent)
+  TTS_OPENAI_API_KEY: z.string().optional(),
+  TTS_OPENAI_VOICE: z
+    .enum(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'])
+    .default('alloy'),
+  TTS_OPENAI_MODEL: z.enum(['tts-1', 'tts-1-hd']).default('tts-1'),
+
+  // Public base URL of the API server (used to build Recall-accessible voice audio URLs)
+  // e.g. https://api.kodi.so — must be reachable by Recall.ai in production
+  API_BASE_URL: z.string().url().optional(),
+
   // ── Required in Phase 3 (invite flow) ─────────────────────────────────────
 
   // JWT secret for signing invite tokens (generate: openssl rand -hex 32)

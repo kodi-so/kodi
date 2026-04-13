@@ -275,3 +275,43 @@ export async function sendRecallBotChatMessage(botId: string, message: string) {
     }
   )
 }
+
+export type RecallOutputAudioRequest = {
+  /** Publicly accessible URL to an MP3 audio file to play into the meeting. */
+  url: string
+  /** Optional: replay after the clip finishes */
+  loop?: boolean
+}
+
+/**
+ * Start playing audio from a URL into the meeting via the Recall Output Media API.
+ * The bot must be in a `in_call_*` state for this to succeed.
+ *
+ * Recall API reference: POST /api/v1/bot/{bot_id}/output_audio/
+ */
+export async function sendRecallBotAudioOutput(
+  botId: string,
+  input: RecallOutputAudioRequest
+) {
+  return recallFetch<Record<string, unknown>>(
+    `/api/v1/bot/${botId}/output_audio/`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'mp3', url: input.url }),
+    }
+  )
+}
+
+/**
+ * Stop any currently playing audio output on the bot.
+ *
+ * Recall API reference: DELETE /api/v1/bot/{bot_id}/output_audio/
+ */
+export async function stopRecallBotAudioOutput(botId: string) {
+  return recallFetch<Record<string, unknown>>(
+    `/api/v1/bot/${botId}/output_audio/`,
+    {
+      method: 'DELETE',
+    }
+  )
+}

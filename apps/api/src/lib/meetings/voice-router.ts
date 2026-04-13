@@ -52,11 +52,12 @@ export function detectVoiceTriggerInTranscript(
 ): { isVoiceTrigger: boolean; question: string } {
   const trimmed = content.trim()
 
-  // Match "hey kodi <question>" pattern
-  const heyPattern = /^hey\s+kodi[,\s]+(.+)/i
+  // Match "hey kodi <question>" — including common ASR misrecognitions of "Kodi":
+  // "Cody" is the most frequent (phonetically identical), "Kody"/"Codi"/"Codie" also appear.
+  const heyPattern = /^hey\s+(kodi|cody|kody|codi|codie)[,\s]+(.+)/i
   const heyMatch = heyPattern.exec(trimmed)
-  if (heyMatch?.[1]) {
-    return { isVoiceTrigger: true, question: heyMatch[1].trim() }
+  if (heyMatch?.[2]) {
+    return { isVoiceTrigger: true, question: heyMatch[2].trim() }
   }
 
   // Match "@<BotName> <question>" pattern

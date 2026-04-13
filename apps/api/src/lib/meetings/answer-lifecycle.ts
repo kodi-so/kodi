@@ -213,6 +213,66 @@ export async function markAnswerStale(
   return updated
 }
 
+export async function markAnswerSpeaking(
+  answerId: string,
+  meetingSessionId: string
+): Promise<MeetingAnswer | null> {
+  const [updated] = await db
+    .update(meetingAnswers)
+    .set({ status: 'speaking', updatedAt: new Date() })
+    .where(eq(meetingAnswers.id, answerId))
+    .returning()
+
+  if (!updated) return null
+
+  await logAnswerEvent(answerId, meetingSessionId, 'delivering_to_voice')
+
+  return updated
+}
+
+export async function markAnswerDeliveredToVoice(
+  answerId: string,
+  meetingSessionId: string
+): Promise<MeetingAnswer | null> {
+  const now = new Date()
+  const [updated] = await db
+    .update(meetingAnswers)
+    .set({ status: 'delivered_to_voice', deliveredToVoiceAt: now, updatedAt: now })
+    .where(eq(meetingAnswers.id, answerId))
+    .returning()
+
+  if (!updated) return null
+
+  await logAnswerEvent(answerId, meetingSessionId, 'delivered_to_voice')
+
+  return updated
+}
+
+export async function markAnswerInterrupted(
+  answerId: string,
+  meetingSessionId: string,
+  reason?: string
+): Promise<MeetingAnswer | null> {
+  const now = new Date()
+  const [updated] = await db
+    .update(meetingAnswers)
+    .set({
+      status: 'canceled',
+      interruptedAt: now,
+      canceledAt: now,
+      suppressionReason: reason ?? 'Interrupted by newer voice response.',
+      updatedAt: now,
+    })
+    .where(eq(meetingAnswers.id, answerId))
+    .returning()
+
+  if (!updated) return null
+
+  await logAnswerEvent(answerId, meetingSessionId, 'interrupted', reason ? { reason } : undefined)
+
+  return updated
+}
+
 export async function getAnswerWithEvents(answerId: string) {
   return db.query.meetingAnswers.findFirst({
     where: (fields, { eq }) => eq(fields.id, answerId),
@@ -228,10 +288,10 @@ export async function listMeetingAnswers(meetingSessionId: string) {
   })
 }
 
-// Stale-detection: an answer is stale if it is still in-flight (requested/preparing/grounded)
+// Stale-detection: an answer is stale if it is still in-flight (requested/preparing/grounded/speaking)
 // but was created more than 2 minutes ago.
 export function isAnswerStale(answer: MeetingAnswer): boolean {
-  const inFlightStatuses: MeetingAnswerStatus[] = ['requested', 'preparing', 'grounded']
+  const inFlightStatuses: MeetingAnswerStatus[] = ['requested', 'preparing', 'grounded', 'speaking']
   if (!inFlightStatuses.includes(answer.status)) return false
   const ageMs = Date.now() - answer.createdAt.getTime()
   return ageMs > 2 * 60 * 1000
@@ -261,6 +321,8 @@ function statusToEventType(status: MeetingAnswerStatus): MeetingAnswerEventType 
     stale: 'stale',
     delivered_to_ui: 'delivered_to_ui',
     delivered_to_chat: 'delivered_to_chat',
+    speaking: 'delivering_to_voice',
+    delivered_to_voice: 'delivered_to_voice',
   }
   return map[status] ?? null
 }

@@ -18,6 +18,8 @@ import {
   Sparkles,
   Trash2,
   Users,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import {
   Alert,
@@ -105,6 +107,7 @@ type AskKodiAnswer = {
   answerText: string | null
   status: string
   askedAt: Date
+  voiceStatus?: 'speaking' | 'delivered_to_voice' | 'voice_failed' | null
 }
 
 function asRecord(value: unknown) {
@@ -569,6 +572,7 @@ export default function MeetingDetailsPage() {
   const [askPending, setAskPending] = useState(false)
   const [answers, setAnswers] = useState<AskKodiAnswer[]>([])
   const [askSheetOpen, setAskSheetOpen] = useState(false)
+  const [speakingAnswerId, setSpeakingAnswerId] = useState<string | null>(null)
   const answerBottomRef = useRef<HTMLDivElement>(null)
   const [collapsedSpeakers, setCollapsedSpeakers] = useState<Set<string>>(new Set())
   const transcriptScrollRef = useRef<HTMLDivElement>(null)
@@ -911,6 +915,26 @@ export default function MeetingDetailsPage() {
       )
     } finally {
       setAskPending(false)
+    }
+  }
+
+  async function handleSpeakAnswer(answerId: string) {
+    if (!orgId || !meetingSessionId || speakingAnswerId) return
+    setSpeakingAnswerId(answerId)
+    setAnswers((prev) =>
+      prev.map((a) => (a.id === answerId ? { ...a, voiceStatus: 'speaking' } : a))
+    )
+    try {
+      await trpc.meeting.speakAnswer.mutate({ orgId, meetingSessionId, answerId })
+      setAnswers((prev) =>
+        prev.map((a) => (a.id === answerId ? { ...a, voiceStatus: 'delivered_to_voice' } : a))
+      )
+    } catch {
+      setAnswers((prev) =>
+        prev.map((a) => (a.id === answerId ? { ...a, voiceStatus: 'voice_failed' } : a))
+      )
+    } finally {
+      setSpeakingAnswerId(null)
     }
   }
 
@@ -1403,28 +1427,62 @@ export default function MeetingDetailsPage() {
                             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
                               <Sparkles size={13} />
                             </div>
-                            <div className="min-w-0 flex-1 rounded-[1.2rem] rounded-tl-[0.3rem] border border-brand-line bg-brand-elevated px-4 py-3">
-                              {answer.status === 'preparing' ? (
-                                <div className="space-y-2">
-                                  <Skeleton className="h-3.5 w-full" />
-                                  <Skeleton className="h-3.5 w-4/5" />
-                                  <Skeleton className="h-3.5 w-3/5" />
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <div className="rounded-[1.2rem] rounded-tl-[0.3rem] border border-brand-line bg-brand-elevated px-4 py-3">
+                                {answer.status === 'preparing' ? (
+                                  <div className="space-y-2">
+                                    <Skeleton className="h-3.5 w-full" />
+                                    <Skeleton className="h-3.5 w-4/5" />
+                                    <Skeleton className="h-3.5 w-3/5" />
+                                  </div>
+                                ) : answer.status === 'suppressed' ? (
+                                  <p className={`text-sm ${quietTextClass}`}>
+                                    Not enough meeting context yet to answer this. Try again once more of the conversation has been transcribed.
+                                  </p>
+                                ) : answer.status === 'failed' ? (
+                                  <p className="text-sm text-destructive">
+                                    {answer.answerText ?? 'Something went wrong. Please try again.'}
+                                  </p>
+                                ) : answer.answerText ? (
+                                  <div className="prose prose-sm max-w-none text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_li]:text-sm [&_p]:text-sm [&_p]:leading-6">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                      {answer.answerText}
+                                    </ReactMarkdown>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {/* Voice delivery controls */}
+                              {answer.answerText && controls?.participationMode === 'voice_enabled' && (
+                                <div className="flex items-center gap-2">
+                                  {answer.voiceStatus === 'speaking' ? (
+                                    <span className={`flex items-center gap-1.5 text-xs ${subtleTextClass}`}>
+                                      <Volume2 size={12} className="animate-pulse text-brand-accent" />
+                                      Speaking…
+                                    </span>
+                                  ) : answer.voiceStatus === 'delivered_to_voice' ? (
+                                    <span className={`flex items-center gap-1.5 text-xs ${subtleTextClass}`}>
+                                      <Volume2 size={12} />
+                                      Spoken
+                                    </span>
+                                  ) : answer.voiceStatus === 'voice_failed' ? (
+                                    <span className="flex items-center gap-1.5 text-xs text-destructive">
+                                      <VolumeX size={12} />
+                                      Voice failed
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSpeakAnswer(answer.id)}
+                                      disabled={!!speakingAnswerId}
+                                      className={`flex items-center gap-1.5 rounded-full border border-brand-line px-2.5 py-1 text-xs transition hover:bg-brand-elevated disabled:opacity-40 ${subtleTextClass}`}
+                                    >
+                                      <Volume2 size={11} />
+                                      Speak
+                                    </button>
+                                  )}
                                 </div>
-                              ) : answer.status === 'suppressed' ? (
-                                <p className={`text-sm ${quietTextClass}`}>
-                                  Not enough meeting context yet to answer this. Try again once more of the conversation has been transcribed.
-                                </p>
-                              ) : answer.status === 'failed' ? (
-                                <p className="text-sm text-destructive">
-                                  {answer.answerText ?? 'Something went wrong. Please try again.'}
-                                </p>
-                              ) : answer.answerText ? (
-                                <div className="prose prose-sm max-w-none text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_li]:text-sm [&_p]:text-sm [&_p]:leading-6">
-                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {answer.answerText}
-                                  </ReactMarkdown>
-                                </div>
-                              ) : null}
+                              )}
                             </div>
                           </div>
                         </div>

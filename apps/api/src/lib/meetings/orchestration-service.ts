@@ -10,6 +10,7 @@ import { processMeetingCandidateTasks } from './openclaw-candidate-tasks'
 import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
 import { processMeetingRollingNotes } from './openclaw-rolling-notes'
 import { routeMeetingChatEvent } from './chat-router'
+import { routeMeetingVoiceEvent } from './voice-router'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
@@ -297,6 +298,27 @@ export class MeetingOrchestrationService {
           chatEvent: input.event,
         }).catch((error) => {
           console.warn('[meetings] chat routing failed', {
+            orgId: input.orgId,
+            meetingSessionId: input.meetingSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+    }
+
+    if (input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
+      const org = await this.database.query.organizations.findFirst({
+        where: (fields, { eq }) => eq(fields.id, input.orgId),
+        columns: { id: true, name: true, slug: true },
+      })
+
+      if (org) {
+        void routeMeetingVoiceEvent({
+          meetingSessionId: input.meetingSession.id,
+          org,
+          transcriptEvent: input.event,
+        }).catch((error) => {
+          console.warn('[meetings] voice routing failed', {
             orgId: input.orgId,
             meetingSessionId: input.meetingSession.id,
             error: error instanceof Error ? error.message : String(error),

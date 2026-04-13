@@ -11,6 +11,7 @@ import {
   Mail,
   RefreshCcw,
   Sparkles,
+  Trash2,
   UserRound,
   Video,
 } from 'lucide-react'
@@ -164,6 +165,23 @@ export default function MeetingsPage() {
   const [copiedField, setCopiedField] = useState<
     'display-name' | 'invite-email' | null
   >(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function handleDeleteMeeting(e: React.MouseEvent, meetingId: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (deletingId || !activeOrg) return
+    if (!confirm('Delete this meeting? This cannot be undone.')) return
+    setDeletingId(meetingId)
+    try {
+      await trpc.meeting.delete.mutate({ orgId: activeOrg.orgId, meetingSessionId: meetingId })
+      setMeetings((prev) => prev.filter((m) => m.id !== meetingId))
+    } catch {
+      // silently ignore — meeting may already be gone
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   useEffect(() => {
     if (!activeOrg) {
@@ -431,60 +449,71 @@ export default function MeetingsPage() {
               ) : (
                 <div className="overflow-hidden rounded-[1.75rem] border border-brand-line bg-card">
                   {meetings.map((meeting, index) => (
-                    <Link
+                    <div
                       key={meeting.id}
-                      href={`/meetings/${meeting.id}`}
-                      className={`group block px-5 py-4 transition hover:bg-secondary ${
-                        index < meetings.length - 1 ? 'border-b border-brand-line' : ''
-                      }`}
+                      className={`group relative ${index < meetings.length - 1 ? 'border-b border-brand-line' : ''}`}
                     >
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={statusTone(meeting.status)}>
-                              {statusLabel(meeting.status)}
-                            </Badge>
-                            <Badge variant="neutral">
-                              {meetingOutcomeLabel(meeting)}
-                            </Badge>
-                            <span className="text-xs text-brand-subtle">
-                              {formatProviderLabel(meeting.provider)}
-                            </span>
-                          </div>
-
-                          <div className="mt-3 flex items-start justify-between gap-4">
-                            <div className="min-w-0 flex-1">
-                              <h3 className="truncate text-base font-medium text-foreground">
-                                {meeting.title ?? 'Untitled meeting'}
-                              </h3>
-                              <p className={`mt-1 truncate text-sm ${quietTextClass}`}>
-                                {meetingSnapshot(meeting)}
-                              </p>
+                      <Link
+                        href={`/meetings/${meeting.id}`}
+                        className="block px-5 py-4 transition hover:bg-secondary"
+                      >
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={statusTone(meeting.status)}>
+                                {statusLabel(meeting.status)}
+                              </Badge>
+                              <Badge variant="neutral">
+                                {meetingOutcomeLabel(meeting)}
+                              </Badge>
+                              <span className="text-xs text-brand-subtle">
+                                {formatProviderLabel(meeting.provider)}
+                              </span>
                             </div>
 
-                            <div className="hidden shrink-0 items-center gap-2 text-sm text-brand-quiet sm:flex">
+                            <div className="mt-3 flex items-start justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="truncate text-base font-medium text-foreground">
+                                  {meeting.title ?? 'Untitled meeting'}
+                                </h3>
+                                <p className={`mt-1 truncate text-sm ${quietTextClass}`}>
+                                  {meetingSnapshot(meeting)}
+                                </p>
+                              </div>
+
+                              <div className="hidden shrink-0 items-center gap-2 text-sm text-brand-quiet sm:flex pr-8">
+                                <span>
+                                  {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+                                </span>
+                                <ArrowRight
+                                  size={15}
+                                  className="transition group-hover:translate-x-0.5"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-brand-subtle sm:hidden">
                               <span>
                                 {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
                               </span>
-                              <ArrowRight
-                                size={15}
-                                className="transition group-hover:translate-x-0.5"
-                              />
+                              <span className="inline-flex items-center gap-2 text-foreground">
+                                Open meeting
+                                <ArrowRight size={14} />
+                              </span>
                             </div>
                           </div>
-
-                          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-brand-subtle sm:hidden">
-                            <span>
-                              {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
-                            </span>
-                            <span className="inline-flex items-center gap-2 text-foreground">
-                              Open meeting
-                              <ArrowRight size={14} />
-                            </span>
-                          </div>
                         </div>
-                      </div>
-                    </Link>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => void handleDeleteMeeting(e, meeting.id)}
+                        disabled={deletingId === meeting.id}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                        title="Delete meeting"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

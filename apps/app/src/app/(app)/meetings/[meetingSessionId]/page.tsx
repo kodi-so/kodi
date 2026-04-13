@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -16,6 +16,7 @@ import {
   RefreshCw,
   SendHorizonal,
   Sparkles,
+  Trash2,
   Users,
 } from 'lucide-react'
 import {
@@ -554,10 +555,12 @@ export default function MeetingDetailsPage() {
   const meetingSessionId = params.meetingSessionId
   const { activeOrg } = useOrg()
   const { data: session } = useSession()
+  const router = useRouter()
   const orgId = activeOrg?.orgId ?? null
   const currentUserId = session?.user?.id ?? null
 
   const [consoleData, setConsoleData] = useState<MeetingConsole | null>(null)
+  const [deletingMeeting, setDeletingMeeting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
@@ -848,6 +851,18 @@ export default function MeetingDetailsPage() {
       )
     } finally {
       setControlsSaving(false)
+    }
+  }
+
+  async function handleDeleteMeeting() {
+    if (!orgId || !meetingSessionId || deletingMeeting) return
+    if (!confirm('Delete this meeting? This cannot be undone.')) return
+    setDeletingMeeting(true)
+    try {
+      await trpc.meeting.delete.mutate({ orgId, meetingSessionId })
+      router.push('/meetings')
+    } catch {
+      setDeletingMeeting(false)
     }
   }
 
@@ -1183,7 +1198,7 @@ export default function MeetingDetailsPage() {
     <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <section className={`${heroPanelClass} rounded-[2rem]`}>
-          <div className="border-b border-brand-line px-6 py-5">
+          <div className="flex items-center justify-between border-b border-brand-line px-6 py-5">
             <Link
               href="/meetings"
               className="inline-flex w-fit items-center gap-2 text-sm text-brand-quiet transition hover:text-foreground"
@@ -1191,6 +1206,16 @@ export default function MeetingDetailsPage() {
               <ArrowLeft size={16} />
               Back to meetings
             </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleDeleteMeeting()}
+              disabled={deletingMeeting}
+              className="gap-1.5 text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 size={14} />
+              {deletingMeeting ? 'Deleting…' : 'Delete'}
+            </Button>
           </div>
 
           <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">

@@ -9,6 +9,7 @@ import {
   meetingCopilotSettings,
   meetingParticipationModeValues,
   meetingSessionControls,
+  meetingSessions,
 } from '@kodi/db'
 import { inferMeetingProviderFromUrl } from '../../lib/meetings/provider-url'
 import {
@@ -69,6 +70,29 @@ export const meetingRouter = router({
           updatedAt: true,
         },
       })
+    }),
+
+  delete: memberProcedure
+    .input(z.object({ meetingSessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting not found.' })
+      }
+
+      await ctx.db
+        .delete(meetingSessions)
+        .where(eq(meetingSessions.id, input.meetingSessionId))
+
+      return { deleted: true }
     }),
 
   getById: memberProcedure

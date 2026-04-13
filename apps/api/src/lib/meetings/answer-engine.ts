@@ -42,24 +42,29 @@ function buildAnswerMessages(input: {
   analysis: Awaited<ReturnType<typeof loadMeetingAnalysisContext>>
   question: string
 }) {
+  const hasMeetingContext =
+    input.analysis.transcriptTurns.length > 0 || input.analysis.snapshot != null
+
   const promptContext = buildMeetingPromptContext({
     meetingSession: input.meetingSession,
     analysis: input.analysis,
     protocolVersion: 'kodi.meeting.answer.v1',
   })
 
+  const systemPrompt = hasMeetingContext
+    ? 'You are Kodi, an AI meeting copilot. You have access to the live meeting context below including the current transcript, participants, and structured meeting state. Answer the user\'s question directly and helpfully. For questions about the meeting, use the provided context. For general questions, draw on your broader knowledge — you are not limited to meeting context only. Be concise. Respond in markdown.'
+    : 'You are Kodi, an AI meeting copilot. No meeting context is available yet for this session. Answer the user\'s question using your general knowledge. Be concise. Respond in markdown.'
+
   return [
     {
       role: 'system' as const,
-      content:
-        'You are Kodi, a meeting copilot running inside OpenClaw. You have access to the live meeting context below including the current transcript, participants, and structured meeting state. Answer the user\'s question using only information grounded in the meeting context. Be concise and direct. If the answer is not covered by the meeting context, say so clearly rather than guessing. Do not hallucinate details. Respond in plain text, not JSON.',
+      content: systemPrompt,
     },
     {
       role: 'user' as const,
-      content: JSON.stringify({
-        ...promptContext,
-        question: input.question,
-      }),
+      content: hasMeetingContext
+        ? JSON.stringify({ ...promptContext, question: input.question })
+        : input.question,
     },
   ]
 }
@@ -71,10 +76,6 @@ export async function generateMeetingAnswer(
     meetingSessionId: input.meetingSession.id,
     transcriptLimit: 60,
   })
-
-  if (analysis.transcriptTurns.length === 0 && !analysis.snapshot) {
-    return { ok: false, reason: 'no-context' }
-  }
 
   const messages = buildAnswerMessages({
     meetingSession: input.meetingSession,

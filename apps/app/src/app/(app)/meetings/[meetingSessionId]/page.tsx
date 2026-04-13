@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -25,6 +27,11 @@ import {
   CardHeader,
   CardTitle,
   Separator,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
   Skeleton,
   Textarea,
 } from '@kodi/ui'
@@ -515,6 +522,8 @@ export default function MeetingDetailsPage() {
   const [askQuestion, setAskQuestion] = useState('')
   const [askPending, setAskPending] = useState(false)
   const [answers, setAnswers] = useState<AskKodiAnswer[]>([])
+  const [askSheetOpen, setAskSheetOpen] = useState(false)
+  const answerBottomRef = useRef<HTMLDivElement>(null)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -776,11 +785,12 @@ export default function MeetingDetailsPage() {
     const optimisticId = crypto.randomUUID()
     const askedAt = new Date()
     setAnswers((prev) => [
-      { id: optimisticId, question, answerText: null, status: 'preparing', askedAt },
       ...prev,
+      { id: optimisticId, question, answerText: null, status: 'preparing', askedAt },
     ])
     setAskQuestion('')
     setAskPending(true)
+    setTimeout(() => answerBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
 
     try {
       const result = await trpc.meeting.askKodi.mutate({
@@ -801,6 +811,7 @@ export default function MeetingDetailsPage() {
             : a
         )
       )
+      setTimeout(() => answerBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     } catch (err) {
       setAnswers((prev) =>
         prev.map((a) =>
@@ -1232,97 +1243,129 @@ export default function MeetingDetailsPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-brand-line">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
-                    <MessageSquare size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl text-foreground">
-                      Ask Kodi
-                    </CardTitle>
-                    <CardDescription>
-                      Ask a question grounded in the live meeting context.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <form onSubmit={handleAskKodi} className="flex gap-2">
-                  <Textarea
-                    className="min-h-[2.5rem] resize-none rounded-[1.2rem] text-sm"
-                    placeholder="What has been decided so far?"
-                    value={askQuestion}
-                    onChange={(e) => setAskQuestion(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        void handleAskKodi(e as unknown as React.FormEvent)
-                      }
-                    }}
-                    disabled={askPending}
-                    rows={2}
-                  />
-                  <Button
-                    type="submit"
-                    size="icon"
-                    variant="default"
-                    disabled={askPending || !askQuestion.trim()}
-                    className="h-10 w-10 shrink-0 rounded-[1.2rem]"
-                  >
-                    <SendHorizonal size={16} />
-                  </Button>
-                </form>
+            <Sheet open={askSheetOpen} onOpenChange={setAskSheetOpen}>
+              <SheetTrigger asChild>
+                <Card className="cursor-pointer border-brand-line transition-colors hover:bg-brand-elevated/60">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                          <MessageSquare size={18} />
+                        </div>
+                        <div>
+                          <CardTitle className="text-xl text-foreground">
+                            Ask Kodi
+                          </CardTitle>
+                          <CardDescription>
+                            {answers.length > 0
+                              ? `${answers.length} question${answers.length === 1 ? '' : 's'} asked`
+                              : 'Ask a question grounded in the live meeting context.'}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <SendHorizonal size={16} className="text-muted-foreground" />
+                    </div>
+                  </CardHeader>
+                </Card>
+              </SheetTrigger>
 
-                {answers.length > 0 && (
-                  <div className="space-y-3">
-                    {answers.map((answer) => (
-                      <div
-                        key={answer.id}
-                        className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated"
-                      >
-                        <div className="border-b border-brand-line px-4 py-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium text-foreground">
-                              {answer.question}
-                            </p>
-                            <Badge
-                              variant={
-                                answer.status === 'delivered_to_ui' || answer.status === 'delivered_to_chat'
-                                  ? 'success'
-                                  : answer.status === 'preparing'
-                                    ? 'warning'
-                                    : answer.status === 'failed' || answer.status === 'suppressed'
-                                      ? 'destructive'
-                                      : 'neutral'
-                              }
-                            >
-                              {answer.status === 'delivered_to_ui' || answer.status === 'delivered_to_chat'
-                                ? 'Answered'
-                                : answer.status === 'preparing'
-                                  ? 'Thinking…'
-                                  : answer.status === 'suppressed'
-                                    ? 'No context'
-                                    : answer.status === 'failed'
-                                      ? 'Failed'
-                                      : answer.status}
-                            </Badge>
+              <SheetContent className="flex w-full max-w-xl flex-col p-0 sm:max-w-xl">
+                <SheetHeader className="shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-[0.9rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                      <MessageSquare size={15} />
+                    </div>
+                    <SheetTitle>Ask Kodi</SheetTitle>
+                  </div>
+                </SheetHeader>
+
+                {/* Scrollable conversation */}
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  {answers.length === 0 ? (
+                    <div className={`${dashedPanelClass} flex h-full flex-col items-center justify-center gap-3 rounded-[1.5rem] p-8 text-center`}>
+                      <Sparkles size={22} className="text-brand-accent-strong/60" />
+                      <p className={`text-sm ${quietTextClass}`}>
+                        Ask anything about this meeting — decisions made, topics covered, action items, or what someone said.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {answers.map((answer) => (
+                        <div key={answer.id} className="space-y-2">
+                          {/* Question bubble */}
+                          <div className="flex justify-end">
+                            <div className="max-w-[80%] rounded-[1.2rem] rounded-tr-[0.3rem] bg-brand-accent px-4 py-2.5">
+                              <p className="text-sm font-medium text-white">{answer.question}</p>
+                            </div>
+                          </div>
+
+                          {/* Answer bubble */}
+                          <div className="flex items-start gap-2.5">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                              <Sparkles size={13} />
+                            </div>
+                            <div className="min-w-0 flex-1 rounded-[1.2rem] rounded-tl-[0.3rem] border border-brand-line bg-brand-elevated px-4 py-3">
+                              {answer.status === 'preparing' ? (
+                                <div className="space-y-2">
+                                  <Skeleton className="h-3.5 w-full" />
+                                  <Skeleton className="h-3.5 w-4/5" />
+                                  <Skeleton className="h-3.5 w-3/5" />
+                                </div>
+                              ) : answer.status === 'suppressed' ? (
+                                <p className={`text-sm ${quietTextClass}`}>
+                                  Not enough meeting context yet to answer this. Try again once more of the conversation has been transcribed.
+                                </p>
+                              ) : answer.status === 'failed' ? (
+                                <p className="text-sm text-destructive">
+                                  {answer.answerText ?? 'Something went wrong. Please try again.'}
+                                </p>
+                              ) : answer.answerText ? (
+                                <div className="prose prose-sm max-w-none text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_li]:text-sm [&_p]:text-sm [&_p]:leading-6">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {answer.answerText}
+                                  </ReactMarkdown>
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
-                        {(answer.answerText || answer.status === 'preparing') && (
-                          <div className="px-4 py-3">
-                            <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                              {answer.answerText ?? 'Generating answer…'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                      <div ref={answerBottomRef} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Sticky input */}
+                <div className="shrink-0 border-t px-6 py-4">
+                  <form onSubmit={handleAskKodi} className="flex gap-2">
+                    <Textarea
+                      className="min-h-[2.5rem] resize-none rounded-[1.2rem] text-sm"
+                      placeholder="What has been decided so far?"
+                      value={askQuestion}
+                      onChange={(e) => setAskQuestion(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          void handleAskKodi(e as unknown as React.FormEvent)
+                        }
+                      }}
+                      disabled={askPending}
+                      rows={2}
+                      autoFocus
+                    />
+                    <Button
+                      type="submit"
+                      size="icon"
+                      variant="default"
+                      disabled={askPending || !askQuestion.trim()}
+                      className="h-10 w-10 shrink-0 rounded-[1.2rem]"
+                    >
+                      <SendHorizonal size={16} />
+                    </Button>
+                  </form>
+                </div>
+              </SheetContent>
+            </Sheet>
 
             <Card className="border-brand-line">
               <CardHeader>

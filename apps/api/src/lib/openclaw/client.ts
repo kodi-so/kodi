@@ -106,7 +106,8 @@ export async function openClawChatCompletion(
   }
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), input.timeoutMs ?? 15_000)
+  const timeoutMs = input.timeoutMs ?? 15_000
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const response = await fetch(`${instanceUrl}/v1/chat/completions`, {
@@ -153,10 +154,20 @@ export async function openClawChatCompletion(
   } catch (error) {
     clearTimeout(timeoutId)
 
+    const isAbortError =
+      error instanceof Error &&
+      (error.name === 'AbortError' ||
+        error.message === 'The operation was aborted.')
+
     return {
       ok: false,
       reason: 'request-failed',
-      error: error instanceof Error ? error.message : 'Unknown OpenClaw error',
+      error:
+        isAbortError
+          ? `OpenClaw request timed out after ${timeoutMs}ms.`
+          : error instanceof Error
+            ? error.message
+            : 'Unknown OpenClaw error',
     }
   }
 }

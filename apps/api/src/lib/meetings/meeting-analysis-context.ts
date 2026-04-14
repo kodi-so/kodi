@@ -154,8 +154,7 @@ export function serializeMeetingParticipants(participants: MeetingParticipant[])
     email: participant.email,
     isHost: participant.isHost,
     isInternal: participant.isInternal ?? null,
-    resolvedIdentity:
-      asRecord(participant.metadata)?.resolvedIdentity ?? null,
+    // resolvedIdentity omitted — internal pipeline metadata, not useful to the model
     joinedAt: formatOptionalDate(participant.joinedAt),
     leftAt: formatOptionalDate(participant.leftAt),
   }))
@@ -167,9 +166,8 @@ export function serializeMeetingTranscriptTurns(turns: MeetingTranscriptTurn[]) 
     content: turn.content,
     createdAt: formatOptionalDate(turn.createdAt),
     source: turn.source,
-    startOffsetMs: turn.startOffsetMs,
-    endOffsetMs: turn.endOffsetMs,
-    mergedSegmentCount: turn.mergedSegmentCount,
+    // startOffsetMs / endOffsetMs / mergedSegmentCount omitted — pipeline
+    // implementation details that the model never uses and waste tokens.
   }))
 }
 

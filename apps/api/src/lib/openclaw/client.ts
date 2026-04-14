@@ -15,6 +15,8 @@ type OpenClawChatCompletionInput = {
   orgId: string
   messages: OpenClawChatMessage[]
   timeoutMs?: number
+  temperature?: number
+  maxTokens?: number
 }
 
 type OpenClawChatCompletionResult =
@@ -113,6 +115,8 @@ export async function openClawChatCompletion(
       body: JSON.stringify({
         model: 'openclaw:main',
         messages: input.messages,
+        ...(input.temperature !== undefined && { temperature: input.temperature }),
+        ...(input.maxTokens !== undefined && { max_tokens: input.maxTokens }),
       }),
       signal: controller.signal,
     })

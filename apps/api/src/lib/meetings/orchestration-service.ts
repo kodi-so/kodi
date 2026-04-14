@@ -194,11 +194,36 @@ export class MeetingOrchestrationService {
     }
 
     if (input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
-      const rollingNotesResult = await processMeetingRollingNotes({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
+      // Run all four analysis passes in parallel — they are independent and
+      // each carries its own OpenClaw timeout. Sequential execution was the
+      // primary source of timeout pile-ups (worst case 4 × 15 s = 60 s blocked).
+      const [
+        rollingNotesResult,
+        structuredInsightsResult,
+        candidateTasksResult,
+        draftActionsResult,
+      ] = await Promise.all([
+        processMeetingRollingNotes({
+          orgId: input.orgId,
+          meetingSession: input.meetingSession,
+          lastEventSequence: input.persistedEvent.sequence,
+        }),
+        processMeetingStructuredInsights({
+          orgId: input.orgId,
+          meetingSession: input.meetingSession,
+          lastEventSequence: input.persistedEvent.sequence,
+        }),
+        processMeetingCandidateTasks({
+          orgId: input.orgId,
+          meetingSession: input.meetingSession,
+          lastEventSequence: input.persistedEvent.sequence,
+        }),
+        processMeetingDraftActions({
+          orgId: input.orgId,
+          meetingSession: input.meetingSession,
+          lastEventSequence: input.persistedEvent.sequence,
+        }),
+      ])
 
       if (
         !rollingNotesResult.ok &&
@@ -214,12 +239,6 @@ export class MeetingOrchestrationService {
             'error' in rollingNotesResult ? rollingNotesResult.error ?? null : null,
         })
       }
-
-      const structuredInsightsResult = await processMeetingStructuredInsights({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
 
       if (
         !structuredInsightsResult.ok &&
@@ -238,12 +257,6 @@ export class MeetingOrchestrationService {
         })
       }
 
-      const candidateTasksResult = await processMeetingCandidateTasks({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
-
       if (
         !candidateTasksResult.ok &&
         'reason' in candidateTasksResult &&
@@ -260,12 +273,6 @@ export class MeetingOrchestrationService {
               : null,
         })
       }
-
-      const draftActionsResult = await processMeetingDraftActions({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
 
       if (
         !draftActionsResult.ok &&

@@ -94,10 +94,7 @@ export async function routeMeetingChatEvent(ctx: ChatRouterContext): Promise<voi
     return
   }
 
-  if (
-    controls.participationMode === 'listen_only' ||
-    controls.participationMode === 'chat_enabled' === false
-  ) {
+  if (controls.participationMode === 'listen_only') {
     return
   }
 

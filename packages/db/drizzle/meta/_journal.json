@@ -176,6 +176,13 @@
       "when": 1776128400000,
       "tag": "0025_phase_4_voice_output",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1776214800000,
+      "tag": "0026_phase_4_durable_voice_media",
+      "breakpoints": true
     }
   ]
 }

@@ -622,11 +622,11 @@ export const meetingRouter = router({
       if (!result.ok) {
         if (result.reason === 'no-context') {
           await suppressAnswer(answer.id, meeting.id, 'No meeting context available yet.')
-          return { answerId: answer.id, status: 'suppressed' as const, answerText: null }
+          return { answerId: answer.id, status: 'suppressed' as const, answerText: null, failureReason: null }
         }
 
         await markAnswerFailed(answer.id, meeting.id, result.reason)
-        return { answerId: answer.id, status: 'failed' as const, answerText: null }
+        return { answerId: answer.id, status: 'failed' as const, answerText: null, failureReason: result.reason }
       }
 
       await markAnswerGrounded(answer.id, meeting.id, result.answerText, result.grounding)
@@ -636,6 +636,7 @@ export const meetingRouter = router({
         answerId: answer.id,
         status: 'delivered_to_ui' as const,
         answerText: result.answerText,
+        failureReason: null,
       }
     }),
 

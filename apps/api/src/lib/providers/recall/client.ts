@@ -276,42 +276,49 @@ export async function sendRecallBotChatMessage(botId: string, message: string) {
   )
 }
 
-export type RecallOutputAudioRequest = {
-  /** Publicly accessible URL to an MP3 audio file to play into the meeting. */
-  url: string
-  /** Optional: replay after the clip finishes */
-  loop?: boolean
+export type RecallOutputMediaRequest = {
+  camera?: {
+    kind: 'webpage'
+    config: {
+      url: string
+    }
+  }
+  screenshare?: {
+    kind: 'webpage'
+    config: {
+      url: string
+    }
+  }
 }
 
 /**
- * Start playing audio from a URL into the meeting via the Recall Output Media API.
- * The bot must be in a `in_call_*` state for this to succeed.
+ * Start or refresh Recall Output Media for a bot.
  *
- * Recall API reference: POST /api/v1/bot/{bot_id}/output_audio/
+ * This streams a webpage's audio/video into the meeting, which is the provider-
+ * supported path for real-time interactive agents.
  */
-export async function sendRecallBotAudioOutput(
+export async function startRecallBotOutputMedia(
   botId: string,
-  input: RecallOutputAudioRequest
+  input: RecallOutputMediaRequest
 ) {
   return recallFetch<Record<string, unknown>>(
-    `/api/v1/bot/${botId}/output_audio/`,
+    `/api/v1/bot/${botId}/output_media/`,
     {
       method: 'POST',
-      body: JSON.stringify({ kind: 'mp3', url: input.url }),
+      body: JSON.stringify(input),
     }
   )
 }
 
 /**
- * Stop any currently playing audio output on the bot.
- *
- * Recall API reference: DELETE /api/v1/bot/{bot_id}/output_audio/
+ * Stop any active Recall Output Media webpage for the bot camera.
  */
-export async function stopRecallBotAudioOutput(botId: string) {
+export async function stopRecallBotOutputMedia(botId: string) {
   return recallFetch<Record<string, unknown>>(
-    `/api/v1/bot/${botId}/output_audio/`,
+    `/api/v1/bot/${botId}/output_media/`,
     {
       method: 'DELETE',
+      body: JSON.stringify({ camera: true }),
     }
   )
 }

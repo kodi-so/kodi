@@ -41,10 +41,12 @@ import {
 } from '../../lib/meetings/voice-policy'
 import { acquireVoiceLock, interruptActiveVoice } from '../../lib/meetings/voice-concurrency'
 import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
-import { sendRecallBotAudioOutput, stopRecallBotAudioOutput } from '../../lib/providers/recall/client'
 import { storeVoiceAudio } from '../../lib/meetings/voice-audio-store'
-import { env } from '../../env'
 import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
+import {
+  ensureRecallOutputMediaActive,
+  stopRecallOutputMediaSession,
+} from '../../lib/meetings/voice-output-delivery'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -802,14 +804,6 @@ export const meetingRouter = router({
         })
       }
 
-      const apiBaseUrl = env.API_BASE_URL
-      if (!apiBaseUrl) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'API_BASE_URL is not configured.',
-        })
-      }
-
       // Acquire per-session voice lock (interrupts any in-flight response)
       const lockResult = acquireVoiceLock(meeting.id, answer.id, () => {
         void markAnswerFailed(answer.id, meeting.id, 'Interrupted by newer voice request.').catch(() => {})
@@ -835,15 +829,17 @@ export const meetingRouter = router({
           })
         }
 
-        const token = await storeVoiceAudio({
+        await storeVoiceAudio({
           answerId: answer.id,
           meetingSessionId: meeting.id,
           buffer: ttsResult.audioBuffer,
           contentType: ttsResult.contentType,
         })
-        const audioUrl = `${apiBaseUrl}/voice-output/${token}`
 
-        await sendRecallBotAudioOutput(botSessionId, { url: audioUrl })
+        await ensureRecallOutputMediaActive({
+          botSessionId,
+          meetingSessionId: meeting.id,
+        })
         await markAnswerDeliveredToVoice(answer.id, meeting.id)
 
         return { ok: true, answerId: answer.id, status: 'delivered_to_voice' as const }
@@ -889,7 +885,7 @@ export const meetingRouter = router({
 
       if (meeting.providerBotSessionId) {
         try {
-          await stopRecallBotAudioOutput(meeting.providerBotSessionId)
+          await stopRecallOutputMediaSession(meeting.providerBotSessionId)
         } catch {
           // Best-effort — bot may no longer be in call
         }

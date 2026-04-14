@@ -15,6 +15,7 @@ import {
   detectChatTriggerInMessage,
   isDirectMessageToBot,
 } from './interaction-triggers'
+import { markdownToMeetingPlainText } from './answer-format'
 
 type OrgIdentity = {
   id: string
@@ -103,6 +104,7 @@ export async function routeMeetingChatEvent(ctx: ChatRouterContext): Promise<voi
     orgId: org.id,
     meetingSession,
     question,
+    responseFormat: 'plain_text',
   })
 
   if (!result.ok) {
@@ -132,7 +134,10 @@ export async function routeMeetingChatEvent(ctx: ChatRouterContext): Promise<voi
   }
 
   try {
-    await sendRecallBotChatMessage(botSessionId, result.answerText)
+    await sendRecallBotChatMessage(
+      botSessionId,
+      markdownToMeetingPlainText(result.answerText)
+    )
     await markAnswerDeliveredToChat(answer.id, meetingSessionId)
   } catch (err) {
     await markAnswerFailed(

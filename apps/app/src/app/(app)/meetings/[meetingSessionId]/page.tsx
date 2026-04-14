@@ -574,6 +574,7 @@ export default function MeetingDetailsPage() {
   const [askSheetOpen, setAskSheetOpen] = useState(false)
   const [speakingAnswerId, setSpeakingAnswerId] = useState<string | null>(null)
   const answerBottomRef = useRef<HTMLDivElement>(null)
+  const answerScrollRef = useRef<HTMLDivElement>(null)
   const [collapsedSpeakers, setCollapsedSpeakers] = useState<Set<string>>(new Set())
   const transcriptScrollRef = useRef<HTMLDivElement>(null)
   const transcriptBottomRef = useRef<HTMLDivElement>(null)
@@ -666,7 +667,8 @@ export default function MeetingDetailsPage() {
   // Auto-scroll to bottom when new transcript arrives, but only if already at bottom
   useEffect(() => {
     if (transcriptAtBottom) {
-      transcriptBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      const el = transcriptScrollRef.current
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     }
   }, [transcriptSpeakerGroups.length, transcriptAtBottom])
 
@@ -883,7 +885,10 @@ export default function MeetingDetailsPage() {
     ])
     setAskQuestion('')
     setAskPending(true)
-    setTimeout(() => answerBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    setTimeout(() => {
+      const el = answerScrollRef.current
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    }, 50)
 
     try {
       const result = await trpc.meeting.askKodi.mutate({
@@ -904,7 +909,10 @@ export default function MeetingDetailsPage() {
             : a
         )
       )
-      setTimeout(() => answerBottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+      setTimeout(() => {
+        const el = answerScrollRef.current
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+      }, 50)
     } catch (err) {
       setAnswers((prev) =>
         prev.map((a) =>
@@ -1403,7 +1411,7 @@ export default function MeetingDetailsPage() {
                 </SheetHeader>
 
                 {/* Scrollable conversation */}
-                <div className="flex-1 overflow-y-auto px-6 py-4">
+                <div ref={answerScrollRef} className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
                   {answers.length === 0 ? (
                     <div className={`${dashedPanelClass} flex h-full flex-col items-center justify-center gap-3 rounded-[1.5rem] p-8 text-center`}>
                       <Sparkles size={22} className="text-brand-accent-strong/60" />
@@ -1553,7 +1561,7 @@ export default function MeetingDetailsPage() {
                     <div
                       ref={transcriptScrollRef}
                       onScroll={handleTranscriptScroll}
-                      className="max-h-[540px] overflow-y-auto overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated"
+                      className="max-h-[540px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[1.5rem] border border-brand-line bg-brand-elevated"
                     >
                       {transcriptSpeakerGroups.map((group, groupIndex) => {
                         const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
@@ -1631,7 +1639,8 @@ export default function MeetingDetailsPage() {
                           className="rounded-full shadow-md text-xs h-7 px-3 gap-1.5"
                           onClick={() => {
                             setTranscriptAtBottom(true)
-                            transcriptBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+                            const el = transcriptScrollRef.current
+                            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
                           }}
                         >
                           <ChevronDown size={13} />

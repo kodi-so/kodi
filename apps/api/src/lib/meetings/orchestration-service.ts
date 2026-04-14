@@ -4,13 +4,10 @@ import {
   type MeetingIngestionSource,
   updateMeetingSessionRuntimeState,
 } from './ingestion'
-import { processMeetingDraftActions } from './openclaw-draft-actions'
-import { processMeetingStructuredInsights } from './openclaw-structured-insights'
-import { processMeetingCandidateTasks } from './openclaw-candidate-tasks'
 import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
-import { processMeetingRollingNotes } from './openclaw-rolling-notes'
 import { routeMeetingChatEvent } from './chat-router'
 import { routeMeetingVoiceEvent } from './voice-router'
+import { scheduleMeetingTranscriptAnalysis } from './openclaw-background'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
@@ -232,104 +229,22 @@ export class MeetingOrchestrationService {
         orgId: input.orgId,
         meetingSessionId: input.meetingSession.id,
         eventId: input.persistedEvent.id,
+        eventKind: input.event.kind,
         reason: forwardResult.reason,
         error: 'error' in forwardResult ? forwardResult.error ?? null : null,
       })
     }
 
     if (isFinalTranscript) {
-      // Interactive answers need to win the race against background analysis.
-      // After voice routing runs, keep transcript-derived analysis sequential to
-      // avoid flooding the same OpenClaw instance with four concurrent jobs.
-      const rollingNotesResult = await processMeetingRollingNotes({
+      // Final transcript analysis is latest-only work. Coalescing it per meeting
+      // avoids piling multiple near-identical OpenClaw jobs onto the same
+      // instance when Recall emits several transcript events in quick succession.
+      await scheduleMeetingTranscriptAnalysis({
         orgId: input.orgId,
-        meetingSession: input.meetingSession,
+        meetingSessionId: input.meetingSession.id,
+        eventId: input.persistedEvent.id,
         lastEventSequence: input.persistedEvent.sequence,
       })
-
-      if (
-        !rollingNotesResult.ok &&
-        'reason' in rollingNotesResult &&
-        rollingNotesResult.reason !== 'missing-instance'
-      ) {
-        console.warn('[meetings] openclaw rolling notes failed', {
-          orgId: input.orgId,
-          meetingSessionId: input.meetingSession.id,
-          eventId: input.persistedEvent.id,
-          reason: rollingNotesResult.reason,
-          error:
-            'error' in rollingNotesResult ? rollingNotesResult.error ?? null : null,
-        })
-      }
-
-      const structuredInsightsResult = await processMeetingStructuredInsights({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
-
-      if (
-        !structuredInsightsResult.ok &&
-        'reason' in structuredInsightsResult &&
-        structuredInsightsResult.reason !== 'missing-instance'
-      ) {
-        console.warn('[meetings] openclaw structured insights failed', {
-          orgId: input.orgId,
-          meetingSessionId: input.meetingSession.id,
-          eventId: input.persistedEvent.id,
-          reason: structuredInsightsResult.reason,
-          error:
-            'error' in structuredInsightsResult
-              ? structuredInsightsResult.error ?? null
-              : null,
-        })
-      }
-
-      const candidateTasksResult = await processMeetingCandidateTasks({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
-
-      if (
-        !candidateTasksResult.ok &&
-        'reason' in candidateTasksResult &&
-        candidateTasksResult.reason !== 'missing-instance'
-      ) {
-        console.warn('[meetings] openclaw candidate tasks failed', {
-          orgId: input.orgId,
-          meetingSessionId: input.meetingSession.id,
-          eventId: input.persistedEvent.id,
-          reason: candidateTasksResult.reason,
-          error:
-            'error' in candidateTasksResult
-              ? candidateTasksResult.error ?? null
-              : null,
-        })
-      }
-
-      const draftActionsResult = await processMeetingDraftActions({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
-
-      if (
-        !draftActionsResult.ok &&
-        'reason' in draftActionsResult &&
-        draftActionsResult.reason !== 'missing-instance'
-      ) {
-        console.warn('[meetings] openclaw draft actions failed', {
-          orgId: input.orgId,
-          meetingSessionId: input.meetingSession.id,
-          eventId: input.persistedEvent.id,
-          reason: draftActionsResult.reason,
-          error:
-            'error' in draftActionsResult
-              ? draftActionsResult.error ?? null
-              : null,
-        })
-      }
     }
   }
 

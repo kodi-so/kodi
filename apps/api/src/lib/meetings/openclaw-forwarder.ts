@@ -24,6 +24,14 @@ export async function forwardMeetingEventToOpenClaw(
     return { ok: true as const, skipped: 'health-event' as const }
   }
 
+  if (input.event.kind === 'transcript') {
+    // Transcript-derived answers and analysis already read from Postgres.
+    // Forwarding every final transcript turn to OpenClaw creates a second,
+    // redundant high-volume request stream that can overwhelm the same
+    // instance during busy meetings.
+    return { ok: true as const, skipped: 'transcript-event' as const }
+  }
+
   const participants = await db.query.meetingParticipants.findMany({
     where: (fields, { eq }) => eq(fields.meetingSessionId, input.meetingSession.id),
     orderBy: (fields, { asc }) => asc(fields.createdAt),

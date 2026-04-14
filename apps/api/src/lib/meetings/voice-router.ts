@@ -31,12 +31,11 @@ import {
 } from './interaction-triggers'
 import { markdownToMeetingPlainText } from './answer-format'
 import { generateSpeech, isTtsAvailable } from '../providers/tts/client'
-import {
-  sendRecallBotAudioOutput,
-  stopRecallBotAudioOutput,
-} from '../providers/recall/client'
 import { storeVoiceAudio } from './voice-audio-store'
-import { env } from '../../env'
+import {
+  ensureRecallOutputMediaActive,
+  stopRecallOutputMediaSession,
+} from './voice-output-delivery'
 
 type OrgIdentity = {
   id: string
@@ -182,26 +181,16 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
       return
     }
 
-    // Store audio and build a Recall-accessible URL
-    const token = await storeVoiceAudio({
+    // Persist the clip so the Output Media webpage can fetch and play it.
+    await storeVoiceAudio({
       answerId: answer.id,
       meetingSessionId,
       buffer: ttsResult.audioBuffer,
       contentType: ttsResult.contentType,
     })
-    const apiBaseUrl = env.API_BASE_URL
-    if (!apiBaseUrl) {
-      await markAnswerFailed(
-        answer.id,
-        meetingSessionId,
-        'API_BASE_URL is not configured — cannot build voice audio URL for Recall.'
-      )
-      return
-    }
 
-    const audioUrl = `${apiBaseUrl}/voice-output/${token}`
-
-    // Deliver audio via Recall Output Media
+    // Ensure Recall Output Media is running so the bot webpage can pull and
+    // play the queued clip into the meeting.
     const botSessionId = meetingSession.providerBotSessionId
     if (!botSessionId) {
       await markAnswerFailed(
@@ -212,7 +201,10 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
       return
     }
 
-    await sendRecallBotAudioOutput(botSessionId, { url: audioUrl })
+    await ensureRecallOutputMediaActive({
+      botSessionId,
+      meetingSessionId,
+    })
     await markAnswerDeliveredToVoice(answer.id, meetingSessionId)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -242,9 +234,9 @@ export async function stopMeetingVoiceOutput(
   }
 
   try {
-    await stopRecallBotAudioOutput(botSessionId)
+    await stopRecallOutputMediaSession(botSessionId)
   } catch (err) {
-    console.warn('[voice] stop audio output failed', {
+    console.warn('[voice] stop output media failed', {
       meetingSessionId,
       error: err instanceof Error ? err.message : String(err),
     })

@@ -857,7 +857,7 @@ export function ChatInterface({
 
             <div
               ref={channelScrollRef}
-              className="min-h-0 flex-1 overflow-y-auto"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
             >
               {loadingMessages ? (
                 <div className="px-4 py-6 text-sm text-brand-quiet sm:px-6">
@@ -928,7 +928,7 @@ export function ChatInterface({
 
             <div
               ref={threadScrollRef}
-              className="min-h-0 flex-1 overflow-y-auto"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
             >
               {loadingMessages ? (
                 <div className="px-4 py-6 text-sm text-brand-quiet sm:px-6">

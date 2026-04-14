@@ -171,6 +171,50 @@ export class MeetingOrchestrationService {
     event: MeetingProviderEvent
     source: MeetingIngestionSource
   }) {
+    const isFinalTranscript =
+      input.event.kind === 'transcript' && !input.event.transcript.isPartial
+    const requiresInteractiveRouting =
+      input.event.kind === 'chat' || isFinalTranscript
+
+    if (requiresInteractiveRouting) {
+      const org = await this.database.query.organizations.findFirst({
+        where: (fields, { eq }) => eq(fields.id, input.orgId),
+        columns: { id: true, name: true, slug: true },
+      })
+
+      if (org && input.event.kind === 'chat') {
+        try {
+          await routeMeetingChatEvent({
+            meetingSessionId: input.meetingSession.id,
+            org,
+            chatEvent: input.event,
+          })
+        } catch (error) {
+          console.warn('[meetings] chat routing failed', {
+            orgId: input.orgId,
+            meetingSessionId: input.meetingSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+
+      if (org && input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
+        try {
+          await routeMeetingVoiceEvent({
+            meetingSessionId: input.meetingSession.id,
+            org,
+            transcriptEvent: input.event,
+          })
+        } catch (error) {
+          console.warn('[meetings] voice routing failed', {
+            orgId: input.orgId,
+            meetingSessionId: input.meetingSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+    }
+
     const forwardResult = await forwardMeetingEventToOpenClaw({
       orgId: input.orgId,
       meetingSession: input.meetingSession,
@@ -193,37 +237,15 @@ export class MeetingOrchestrationService {
       })
     }
 
-    if (input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
-      // Run all four analysis passes in parallel — they are independent and
-      // each carries its own OpenClaw timeout. Sequential execution was the
-      // primary source of timeout pile-ups (worst case 4 × 15 s = 60 s blocked).
-      const [
-        rollingNotesResult,
-        structuredInsightsResult,
-        candidateTasksResult,
-        draftActionsResult,
-      ] = await Promise.all([
-        processMeetingRollingNotes({
-          orgId: input.orgId,
-          meetingSession: input.meetingSession,
-          lastEventSequence: input.persistedEvent.sequence,
-        }),
-        processMeetingStructuredInsights({
-          orgId: input.orgId,
-          meetingSession: input.meetingSession,
-          lastEventSequence: input.persistedEvent.sequence,
-        }),
-        processMeetingCandidateTasks({
-          orgId: input.orgId,
-          meetingSession: input.meetingSession,
-          lastEventSequence: input.persistedEvent.sequence,
-        }),
-        processMeetingDraftActions({
-          orgId: input.orgId,
-          meetingSession: input.meetingSession,
-          lastEventSequence: input.persistedEvent.sequence,
-        }),
-      ])
+    if (isFinalTranscript) {
+      // Interactive answers need to win the race against background analysis.
+      // After voice routing runs, keep transcript-derived analysis sequential to
+      // avoid flooding the same OpenClaw instance with four concurrent jobs.
+      const rollingNotesResult = await processMeetingRollingNotes({
+        orgId: input.orgId,
+        meetingSession: input.meetingSession,
+        lastEventSequence: input.persistedEvent.sequence,
+      })
 
       if (
         !rollingNotesResult.ok &&
@@ -239,6 +261,12 @@ export class MeetingOrchestrationService {
             'error' in rollingNotesResult ? rollingNotesResult.error ?? null : null,
         })
       }
+
+      const structuredInsightsResult = await processMeetingStructuredInsights({
+        orgId: input.orgId,
+        meetingSession: input.meetingSession,
+        lastEventSequence: input.persistedEvent.sequence,
+      })
 
       if (
         !structuredInsightsResult.ok &&
@@ -257,6 +285,12 @@ export class MeetingOrchestrationService {
         })
       }
 
+      const candidateTasksResult = await processMeetingCandidateTasks({
+        orgId: input.orgId,
+        meetingSession: input.meetingSession,
+        lastEventSequence: input.persistedEvent.sequence,
+      })
+
       if (
         !candidateTasksResult.ok &&
         'reason' in candidateTasksResult &&
@@ -274,6 +308,12 @@ export class MeetingOrchestrationService {
         })
       }
 
+      const draftActionsResult = await processMeetingDraftActions({
+        orgId: input.orgId,
+        meetingSession: input.meetingSession,
+        lastEventSequence: input.persistedEvent.sequence,
+      })
+
       if (
         !draftActionsResult.ok &&
         'reason' in draftActionsResult &&
@@ -288,48 +328,6 @@ export class MeetingOrchestrationService {
             'error' in draftActionsResult
               ? draftActionsResult.error ?? null
               : null,
-        })
-      }
-    }
-
-    if (input.event.kind === 'chat') {
-      const org = await this.database.query.organizations.findFirst({
-        where: (fields, { eq }) => eq(fields.id, input.orgId),
-        columns: { id: true, name: true, slug: true },
-      })
-
-      if (org) {
-        void routeMeetingChatEvent({
-          meetingSessionId: input.meetingSession.id,
-          org,
-          chatEvent: input.event,
-        }).catch((error) => {
-          console.warn('[meetings] chat routing failed', {
-            orgId: input.orgId,
-            meetingSessionId: input.meetingSession.id,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        })
-      }
-    }
-
-    if (input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
-      const org = await this.database.query.organizations.findFirst({
-        where: (fields, { eq }) => eq(fields.id, input.orgId),
-        columns: { id: true, name: true, slug: true },
-      })
-
-      if (org) {
-        void routeMeetingVoiceEvent({
-          meetingSessionId: input.meetingSession.id,
-          org,
-          transcriptEvent: input.event,
-        }).catch((error) => {
-          console.warn('[meetings] voice routing failed', {
-            orgId: input.orgId,
-            meetingSessionId: input.meetingSession.id,
-            error: error instanceof Error ? error.message : String(error),
-          })
         })
       }
     }

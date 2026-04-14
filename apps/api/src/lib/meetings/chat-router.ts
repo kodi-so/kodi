@@ -1,4 +1,4 @@
-import { db, eq, meetingSessions } from '@kodi/db'
+import { db, eq } from '@kodi/db'
 import type { MeetingChatEvent } from './events'
 import { sendRecallBotChatMessage } from '../providers/recall/client'
 import { generateMeetingAnswer } from './answer-engine'
@@ -11,6 +11,10 @@ import {
   transitionAnswerState,
 } from './answer-lifecycle'
 import { getWorkspaceMeetingCopilotConfig, resolveMeetingSessionControls } from './copilot-policy'
+import {
+  detectChatTriggerInMessage,
+  isDirectMessageToBot,
+} from './interaction-triggers'
 
 type OrgIdentity = {
   id: string
@@ -22,29 +26,6 @@ type ChatRouterContext = {
   meetingSessionId: string
   org: OrgIdentity
   chatEvent: MeetingChatEvent
-}
-
-// Detect whether a chat message is a direct mention of the bot.
-// Matches "@Kodi", "@kodi", or any configured bot display name.
-export function detectMentionInMessage(
-  content: string,
-  botNames: string[]
-): { isMention: boolean; question: string } {
-  const trimmed = content.trim()
-
-  for (const name of botNames) {
-    if (!name) continue
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const pattern = new RegExp(`^@${escaped}\\b\\s*`, 'i')
-    if (pattern.test(trimmed)) {
-      return {
-        isMention: true,
-        question: trimmed.replace(pattern, '').trim(),
-      }
-    }
-  }
-
-  return { isMention: false, question: trimmed }
 }
 
 // Check whether the chat message was sent by the bot itself to prevent echo loops.
@@ -78,9 +59,17 @@ export async function routeMeetingChatEvent(ctx: ChatRouterContext): Promise<voi
   // Prevent echo: ignore messages the bot sent itself
   if (isBotOwnMessage(chatEvent, identity.displayName)) return
 
-  const { isMention, question } = detectMentionInMessage(content, botNames)
+  const isDirectMessage = isDirectMessageToBot(chatEvent, botNames)
+  const { isExplicitAsk, question: explicitQuestion } = detectChatTriggerInMessage(
+    content,
+    botNames
+  )
+  const shouldRespond =
+    isDirectMessage || isExplicitAsk || !settings.chatResponsesRequireExplicitAsk
 
-  if (!isMention) return
+  if (!shouldRespond) return
+
+  const question = isDirectMessage && !isExplicitAsk ? content.trim() : explicitQuestion
   if (!question) return
 
   // Check participation mode and controls

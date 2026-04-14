@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Plus, Send } from 'lucide-react'
@@ -120,6 +120,11 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const hasInitialScrollRef = useRef(false)
+
+  useEffect(() => {
+    hasInitialScrollRef.current = false
+  }, [orgId])
 
   useEffect(() => {
     let cancelled = false
@@ -160,14 +165,16 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
     }
   }, [orgId])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!scrollRef.current) return
+    if (loadingConversation) return
 
     scrollRef.current.scrollTo({
       top: scrollRef.current.scrollHeight,
-      behavior: 'smooth',
+      behavior: hasInitialScrollRef.current ? 'smooth' : 'auto',
     })
-  }, [messages, sending])
+    hasInitialScrollRef.current = true
+  }, [loadingConversation, messages.length, sending])
 
   async function sendMessage() {
     const content = draft.trim()

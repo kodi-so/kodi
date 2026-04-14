@@ -1,4 +1,4 @@
-import { db, eq, meetingAnswers } from '@kodi/db'
+import { db, eq } from '@kodi/db'
 import type { MeetingTranscriptEvent } from './events'
 import { generateMeetingAnswer } from './answer-engine'
 import {
@@ -25,6 +25,10 @@ import {
   acquireVoiceLock,
   interruptActiveVoice,
 } from './voice-concurrency'
+import {
+  detectVoiceTriggerInTranscript,
+  isBotOwnTranscriptEvent,
+} from './interaction-triggers'
 import { generateSpeech, isTtsAvailable } from '../providers/tts/client'
 import {
   sendRecallBotAudioOutput,
@@ -43,37 +47,6 @@ type VoiceRouterContext = {
   meetingSessionId: string
   org: OrgIdentity
   transcriptEvent: MeetingTranscriptEvent
-}
-
-// Detect @kodi or "hey kodi" in transcript text (similar to chat mention detection).
-export function detectVoiceTriggerInTranscript(
-  content: string,
-  botNames: string[]
-): { isVoiceTrigger: boolean; question: string } {
-  const trimmed = content.trim()
-
-  // Match "hey kodi <question>" — including common ASR misrecognitions of "Kodi":
-  // "Cody" is the most frequent (phonetically identical), "Kody"/"Codi"/"Codie" also appear.
-  const heyPattern = /^hey\s+(kodi|cody|kody|codi|codie)[,\s]+(.+)/i
-  const heyMatch = heyPattern.exec(trimmed)
-  if (heyMatch?.[2]) {
-    return { isVoiceTrigger: true, question: heyMatch[2].trim() }
-  }
-
-  // Match "@<BotName> <question>" pattern
-  for (const name of botNames) {
-    if (!name) continue
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const pattern = new RegExp(`^@${escaped}\\b\\s*`, 'i')
-    if (pattern.test(trimmed)) {
-      return {
-        isVoiceTrigger: true,
-        question: trimmed.replace(pattern, '').trim(),
-      }
-    }
-  }
-
-  return { isVoiceTrigger: false, question: trimmed }
 }
 
 /**
@@ -105,6 +78,8 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
 
   const { settings, identity } = copilotConfig
   const botNames = [identity.displayName, 'kodi'].filter(Boolean)
+
+  if (isBotOwnTranscriptEvent(transcriptEvent, botNames)) return
 
   const { isVoiceTrigger, question } = detectVoiceTriggerInTranscript(content, botNames)
 

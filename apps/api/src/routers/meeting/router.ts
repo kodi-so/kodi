@@ -44,6 +44,7 @@ import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
 import { sendRecallBotAudioOutput, stopRecallBotAudioOutput } from '../../lib/providers/recall/client'
 import { storeVoiceAudio } from '../../lib/meetings/voice-audio-store'
 import { env } from '../../env'
+import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -821,7 +822,9 @@ export const meetingRouter = router({
       try {
         await markAnswerSpeaking(answer.id, meeting.id)
 
-        const voiceText = truncateForVoice(answer.answerText!)
+        const voiceText = truncateForVoice(
+          markdownToMeetingPlainText(answer.answerText!)
+        )
         const ttsResult = await generateSpeech({ text: voiceText })
 
         if (!ttsResult.ok) {
@@ -832,7 +835,12 @@ export const meetingRouter = router({
           })
         }
 
-        const token = storeVoiceAudio(ttsResult.audioBuffer)
+        const token = await storeVoiceAudio({
+          answerId: answer.id,
+          meetingSessionId: meeting.id,
+          buffer: ttsResult.audioBuffer,
+          contentType: ttsResult.contentType,
+        })
         const audioUrl = `${apiBaseUrl}/voice-output/${token}`
 
         await sendRecallBotAudioOutput(botSessionId, { url: audioUrl })

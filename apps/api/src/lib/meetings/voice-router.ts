@@ -29,6 +29,7 @@ import {
   detectVoiceTriggerInTranscript,
   isBotOwnTranscriptEvent,
 } from './interaction-triggers'
+import { markdownToMeetingPlainText } from './answer-format'
 import { generateSpeech, isTtsAvailable } from '../providers/tts/client'
 import {
   sendRecallBotAudioOutput,
@@ -125,6 +126,7 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
     orgId: org.id,
     meetingSession,
     question,
+    responseFormat: 'plain_text',
   })
 
   if (!result.ok) {
@@ -168,7 +170,7 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
     await markAnswerSpeaking(answer.id, meetingSessionId)
 
     // Generate TTS audio
-    const voiceText = truncateForVoice(result.answerText)
+    const voiceText = truncateForVoice(markdownToMeetingPlainText(result.answerText))
     const ttsResult = await generateSpeech({ text: voiceText })
 
     if (!ttsResult.ok) {
@@ -181,7 +183,12 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
     }
 
     // Store audio and build a Recall-accessible URL
-    const token = storeVoiceAudio(ttsResult.audioBuffer)
+    const token = await storeVoiceAudio({
+      answerId: answer.id,
+      meetingSessionId,
+      buffer: ttsResult.audioBuffer,
+      contentType: ttsResult.contentType,
+    })
     const apiBaseUrl = env.API_BASE_URL
     if (!apiBaseUrl) {
       await markAnswerFailed(

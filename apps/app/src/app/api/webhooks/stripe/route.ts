@@ -78,7 +78,12 @@ export async function POST(req: NextRequest) {
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const orgId = session.metadata?.orgId
-  const planId = (session.metadata?.planId ?? 'pro') as PlanId
+  const rawPlanId = session.metadata?.planId ?? 'pro'
+  if (rawPlanId !== 'pro' && rawPlanId !== 'business') {
+    console.error(`[stripe-webhook] Invalid planId in checkout metadata: ${rawPlanId}`)
+    return
+  }
+  const planId = rawPlanId as PlanId
   if (!orgId || !session.subscription || !session.customer) return
 
   const stripeSubscriptionId =

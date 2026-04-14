@@ -616,6 +616,38 @@ export const meetingAnswerEvents = pgTable(
   })
 )
 
+export const meetingVoiceMedia = pgTable(
+  'meeting_voice_media',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    answerId: text('answer_id')
+      .notNull()
+      .references(() => meetingAnswers.id, { onDelete: 'cascade' }),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    contentType: text('content_type').notNull(),
+    audioBase64: text('audio_base64').notNull(),
+    byteLength: integer('byte_length').notNull(),
+    accessCount: integer('access_count').notNull().default(0),
+    firstAccessedAt: timestamp('first_accessed_at'),
+    lastAccessedAt: timestamp('last_accessed_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    tokenIdx: uniqueIndex('meeting_voice_media_token_uidx').on(table.token),
+    answerIdx: index('meeting_voice_media_answer_idx').on(table.answerId),
+    meetingSessionIdx: index('meeting_voice_media_session_idx').on(
+      table.meetingSessionId
+    ),
+    expiresAtIdx: index('meeting_voice_media_expires_at_idx').on(table.expiresAt),
+  })
+)
+
 export const meetingAnswersRelations = relations(meetingAnswers, ({ one, many }) => ({
   meetingSession: one(meetingSessions, {
     fields: [meetingAnswers.meetingSessionId],
@@ -630,6 +662,7 @@ export const meetingAnswersRelations = relations(meetingAnswers, ({ one, many })
     references: [user.id],
   }),
   events: many(meetingAnswerEvents),
+  voiceMedia: many(meetingVoiceMedia),
 }))
 
 export const meetingAnswerEventsRelations = relations(meetingAnswerEvents, ({ one }) => ({
@@ -642,6 +675,20 @@ export const meetingAnswerEventsRelations = relations(meetingAnswerEvents, ({ on
     references: [meetingSessions.id],
   }),
 }))
+
+export const meetingVoiceMediaRelations = relations(
+  meetingVoiceMedia,
+  ({ one }) => ({
+    answer: one(meetingAnswers, {
+      fields: [meetingVoiceMedia.answerId],
+      references: [meetingAnswers.id],
+    }),
+    meetingSession: one(meetingSessions, {
+      fields: [meetingVoiceMedia.meetingSessionId],
+      references: [meetingSessions.id],
+    }),
+  })
+)
 
 export type MeetingSession = typeof meetingSessions.$inferSelect
 export type NewMeetingSession = typeof meetingSessions.$inferInsert
@@ -661,6 +708,8 @@ export type MeetingStateSnapshot = typeof meetingStateSnapshots.$inferSelect
 export type NewMeetingStateSnapshot = typeof meetingStateSnapshots.$inferInsert
 export type MeetingArtifact = typeof meetingArtifacts.$inferSelect
 export type NewMeetingArtifact = typeof meetingArtifacts.$inferInsert
+export type MeetingVoiceMedia = typeof meetingVoiceMedia.$inferSelect
+export type NewMeetingVoiceMedia = typeof meetingVoiceMedia.$inferInsert
 export type MeetingAnswer = typeof meetingAnswers.$inferSelect
 export type NewMeetingAnswer = typeof meetingAnswers.$inferInsert
 export type MeetingAnswerEvent = typeof meetingAnswerEvents.$inferSelect

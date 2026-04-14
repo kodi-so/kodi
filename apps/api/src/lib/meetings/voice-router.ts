@@ -183,7 +183,12 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
     }
 
     // Store audio and build a Recall-accessible URL
-    const token = storeVoiceAudio(ttsResult.audioBuffer)
+    const token = await storeVoiceAudio({
+      answerId: answer.id,
+      meetingSessionId,
+      buffer: ttsResult.audioBuffer,
+      contentType: ttsResult.contentType,
+    })
     const apiBaseUrl = env.API_BASE_URL
     if (!apiBaseUrl) {
       await markAnswerFailed(

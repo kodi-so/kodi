@@ -835,7 +835,12 @@ export const meetingRouter = router({
           })
         }
 
-        const token = storeVoiceAudio(ttsResult.audioBuffer)
+        const token = await storeVoiceAudio({
+          answerId: answer.id,
+          meetingSessionId: meeting.id,
+          buffer: ttsResult.audioBuffer,
+          contentType: ttsResult.contentType,
+        })
         const audioUrl = `${apiBaseUrl}/voice-output/${token}`
 
         await sendRecallBotAudioOutput(botSessionId, { url: audioUrl })

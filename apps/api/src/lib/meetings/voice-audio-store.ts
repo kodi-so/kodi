@@ -1,55 +1,90 @@
 import { randomUUID } from 'crypto'
+import { db, eq, meetingVoiceMedia, sql } from '@kodi/db'
 
-/**
- * Short-lived in-memory store for TTS audio blobs.
- *
- * Entries expire after TTL_MS to avoid unbounded growth.
- *
- * This remains intentionally simple for the pilot, but unlike a single-use
- * token store it tolerates HEAD probes and fetch retries from the media
- * consumer. A production multi-instance deployment should still use signed
- * object storage URLs instead of in-memory state.
- */
+const TTL_MS = 15 * 60 * 1000 // 15 minutes
 
-const TTL_MS = 5 * 60 * 1000 // 5 minutes
-
-type AudioEntry = {
+export type VoiceAudioPayload = {
   buffer: Buffer
-  contentType: 'audio/mpeg'
-  expiresAt: number
+  contentType: string
 }
 
-const store = new Map<string, AudioEntry>()
+function buildExpiryDate(ttlMs = TTL_MS) {
+  return new Date(Date.now() + ttlMs)
+}
 
-/** Store audio bytes and return a single-use token. */
-export function storeVoiceAudio(buffer: Buffer): string {
-  evictExpired()
+export function encodeVoiceAudio(buffer: Buffer) {
+  return buffer.toString('base64')
+}
+
+export function decodeVoiceAudio(audioBase64: string) {
+  return Buffer.from(audioBase64, 'base64')
+}
+
+async function purgeExpiredVoiceAudio() {
+  await db
+    .delete(meetingVoiceMedia)
+    .where(sql`${meetingVoiceMedia.expiresAt} < now()`)
+}
+
+/**
+ * Persist generated voice audio in durable storage so Recall can fetch it
+ * reliably across instances, retries, and HEAD probes.
+ */
+export async function storeVoiceAudio(input: {
+  answerId: string
+  meetingSessionId: string
+  buffer: Buffer
+  contentType?: string
+  ttlMs?: number
+}) {
+  await purgeExpiredVoiceAudio()
+
   const token = randomUUID()
-  store.set(token, {
-    buffer,
-    contentType: 'audio/mpeg',
-    expiresAt: Date.now() + TTL_MS,
+  const contentType = input.contentType ?? 'audio/mpeg'
+
+  await db.insert(meetingVoiceMedia).values({
+    answerId: input.answerId,
+    meetingSessionId: input.meetingSessionId,
+    token,
+    contentType,
+    audioBase64: encodeVoiceAudio(input.buffer),
+    byteLength: input.buffer.byteLength,
+    expiresAt: buildExpiryDate(input.ttlMs),
   })
+
   return token
 }
 
-/** Retrieve an audio entry by token. Returns null if missing or expired. */
-export function getVoiceAudio(
-  token: string
-): { buffer: Buffer; contentType: 'audio/mpeg' } | null {
-  const entry = store.get(token)
-  if (!entry || Date.now() > entry.expiresAt) {
-    store.delete(token)
+/**
+ * Retrieve persisted voice audio by token and update access telemetry.
+ * Expired entries are cleaned up opportunistically.
+ */
+export async function getVoiceAudio(token: string): Promise<VoiceAudioPayload | null> {
+  const record = await db.query.meetingVoiceMedia.findFirst({
+    where: (fields, { eq }) => eq(fields.token, token),
+  })
+
+  if (!record) {
     return null
   }
-  return { buffer: entry.buffer, contentType: entry.contentType }
-}
 
-function evictExpired() {
-  const now = Date.now()
-  for (const [token, entry] of store.entries()) {
-    if (now > entry.expiresAt) {
-      store.delete(token)
-    }
+  if (record.expiresAt.getTime() <= Date.now()) {
+    await db.delete(meetingVoiceMedia).where(eq(meetingVoiceMedia.id, record.id))
+    return null
+  }
+
+  const now = new Date()
+  await db
+    .update(meetingVoiceMedia)
+    .set({
+      accessCount: record.accessCount + 1,
+      firstAccessedAt: record.firstAccessedAt ?? now,
+      lastAccessedAt: now,
+    })
+    .where(eq(meetingVoiceMedia.id, record.id))
+
+  return {
+    buffer: decodeVoiceAudio(record.audioBase64),
+    contentType: record.contentType,
   }
 }

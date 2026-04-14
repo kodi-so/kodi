@@ -36,10 +36,10 @@ app.use(
 
 app.get('/health', (c) => c.json({ ok: true }))
 
-// Serve short-lived TTS audio blobs for Recall Output Media consumption.
-// Tokens are single-use and expire after 5 minutes.
-function buildVoiceAudioResponse(token: string, method: 'GET' | 'HEAD') {
-  const audio = getVoiceAudio(token)
+// Serve short-lived persisted TTS audio blobs for Recall Output Media consumption.
+// Tokens are durable for a short TTL so Recall can retry and probe with HEAD.
+async function buildVoiceAudioResponse(token: string, method: 'GET' | 'HEAD') {
+  const audio = await getVoiceAudio(token)
 
   if (!audio) {
     return new Response(JSON.stringify({ error: 'Not found or expired' }), {

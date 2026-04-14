@@ -8,8 +8,11 @@ import { registerMeetingRoutes } from './routes/meeting'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
 import { getVoiceAudio } from './lib/meetings/voice-audio-store'
+import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 
 const app = new Hono()
+
+await ensureApiSchemaReadiness()
 
 app.use('*', logger())
 registerMeetingRoutes(app)

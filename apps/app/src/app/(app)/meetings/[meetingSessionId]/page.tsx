@@ -106,8 +106,16 @@ type AskKodiAnswer = {
   question: string
   answerText: string | null
   status: string
+  failureReason: string | null
   askedAt: Date
   voiceStatus?: 'speaking' | 'delivered_to_voice' | 'voice_failed' | null
+}
+
+function failureReasonToMessage(reason: string | null): string {
+  if (reason === 'openclaw-unavailable') return "Kodi's AI instance isn't reachable. Make sure your OpenClaw instance is running."
+  if (reason === 'openclaw-failed') return "Kodi's AI instance returned an error. Try again in a moment."
+  if (reason === 'empty-response') return 'Kodi returned an empty response. Try again.'
+  return 'Something went wrong. Please try again.'
 }
 
 function asRecord(value: unknown) {
@@ -630,6 +638,38 @@ export default function MeetingDetailsPage() {
     }
   }, [orgId, meetingSessionId, pollIntervalMs])
 
+  // Load Ask Kodi answer history from the server on mount so it survives
+  // page refreshes. Only loads once; new answers are appended optimistically.
+  useEffect(() => {
+    if (!orgId || !meetingSessionId) return
+    trpc.meeting.getAnswers
+      .query({ orgId, meetingSessionId })
+      .then((data) => {
+        const uiAnswers = data
+          .filter((a) => a.source === 'ui')
+          .reverse() // getAnswers returns newest-first; we want oldest-first
+          .map((a) => ({
+            id: a.id,
+            question: a.question,
+            answerText: a.answerText ?? null,
+            status: a.status,
+            failureReason: a.suppressionReason ?? null,
+            askedAt: new Date(a.createdAt),
+            voiceStatus:
+              a.status === 'delivered_to_voice'
+                ? ('delivered_to_voice' as const)
+                : a.status === 'speaking'
+                  ? ('speaking' as const)
+                  : null,
+          }))
+        setAnswers(uiAnswers)
+      })
+      .catch(() => {
+        // Non-fatal — history just won't pre-populate
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, meetingSessionId])
+
   const meeting = consoleData?.meeting ?? null
   const participants: MeetingParticipants = consoleData?.participants ?? []
   const transcript: MeetingTranscript = consoleData?.transcript ?? []
@@ -879,7 +919,7 @@ export default function MeetingDetailsPage() {
     const askedAt = new Date()
     setAnswers((prev) => [
       ...prev,
-      { id: optimisticId, question, answerText: null, status: 'preparing', askedAt },
+      { id: optimisticId, question, answerText: null, status: 'preparing', failureReason: null, askedAt },
     ])
     setAskQuestion('')
     setAskPending(true)
@@ -900,6 +940,7 @@ export default function MeetingDetailsPage() {
                 id: result.answerId,
                 answerText: result.answerText,
                 status: result.status,
+                failureReason: result.failureReason ?? null,
               }
             : a
         )
@@ -909,7 +950,7 @@ export default function MeetingDetailsPage() {
       setAnswers((prev) =>
         prev.map((a) =>
           a.id === optimisticId
-            ? { ...a, status: 'failed', answerText: err instanceof Error ? err.message : 'Request failed.' }
+            ? { ...a, status: 'failed', answerText: null, failureReason: err instanceof Error ? err.message : null }
             : a
         )
       )
@@ -1441,7 +1482,7 @@ export default function MeetingDetailsPage() {
                                   </p>
                                 ) : answer.status === 'failed' ? (
                                   <p className="text-sm text-destructive">
-                                    {answer.answerText ?? 'Something went wrong. Please try again.'}
+                                    {failureReasonToMessage(answer.failureReason)}
                                   </p>
                                 ) : answer.answerText ? (
                                   <div className="prose prose-sm max-w-none text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_li]:text-sm [&_p]:text-sm [&_p]:leading-6">

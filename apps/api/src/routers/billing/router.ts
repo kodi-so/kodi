@@ -10,7 +10,6 @@ import {
   PLANS,
   MARKUP_FACTOR,
   toRealBudget,
-  toUserVisibleCost,
   type PlanId,
 } from '@kodi/db'
 import { z } from 'zod'
@@ -119,7 +118,6 @@ export const billingRouter = router({
         const stripeSub = await stripe.subscriptions.retrieve(
           existingSub.stripeSubscriptionId,
         )
-        // Find the flat-rate subscription item (not the metered one)
         // Find the flat-rate item (not the metered/usage-based one)
         const flatItem = stripeSub.items.data.find(
           (item) =>
@@ -221,6 +219,7 @@ export const billingRouter = router({
       // including included credits. This is the intended behavior for cap=0
       // ("freeze all usage"). To only block overage while allowing included credits,
       // the minimum cap should be set to plan.includedCreditsCents by the frontend.
+      let litellmSynced = true
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.orgId, ctx.org.id),
       })
@@ -236,9 +235,10 @@ export const billingRouter = router({
           await litellm.updateKeyBudget(plainKey, newBudgetDollars)
         } catch (e) {
           console.error('[billing.updateSpendingCap] Failed to update LiteLLM budget:', e)
+          litellmSynced = false
         }
       }
 
-      return { success: true, spendingCapCents: input.capCents }
+      return { success: true, spendingCapCents: input.capCents, litellmSynced }
     }),
 })

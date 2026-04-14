@@ -13,6 +13,8 @@ export type MeetingAnswerGrounding = {
   protocolVersion: string
 }
 
+export type MeetingAnswerFormat = 'markdown' | 'plain_text'
+
 export type GenerateMeetingAnswerResult =
   | {
       ok: true
@@ -33,19 +35,25 @@ type GenerateMeetingAnswerInput = {
   orgId: string
   meetingSession: MeetingSession
   question: string
+  responseFormat?: MeetingAnswerFormat
 }
 
 function buildAnswerMessages(input: {
   meetingSession: MeetingSession
   analysis: Awaited<ReturnType<typeof loadMeetingAnalysisContext>>
   question: string
+  responseFormat: MeetingAnswerFormat
 }) {
   const hasMeetingContext =
     input.analysis.transcriptTurns.length > 0 || input.analysis.snapshot != null
+  const responseFormatInstruction =
+    input.responseFormat === 'plain_text'
+      ? 'Respond in plain text only. Do not use markdown, bullets with asterisks, or code fences.'
+      : 'Respond in markdown.'
 
   const systemPrompt = hasMeetingContext
-    ? "You are Kodi, an AI meeting copilot. You have access to the live meeting context below including the current transcript, participants, and meeting state. Answer the user's question directly and helpfully. For questions about the meeting, use the provided context. For general questions, draw on your broader knowledge. Be concise. Respond in markdown."
-    : "You are Kodi, an AI meeting copilot. No meeting context is available yet for this session. Answer the user's question using your general knowledge. Be concise. Respond in markdown."
+    ? `You are Kodi, an AI meeting copilot. You have access to the live meeting context below including the current transcript, participants, and meeting state. Answer the user's question directly and helpfully. For questions about the meeting, use the provided context. For general questions, draw on your broader knowledge. Be concise. ${responseFormatInstruction}`
+    : `You are Kodi, an AI meeting copilot. No meeting context is available yet for this session. Answer the user's question using your general knowledge. Be concise. ${responseFormatInstruction}`
 
   if (!hasMeetingContext) {
     return [
@@ -87,6 +95,7 @@ function buildAnswerMessages(input: {
 export async function generateMeetingAnswer(
   input: GenerateMeetingAnswerInput
 ): Promise<GenerateMeetingAnswerResult> {
+  const responseFormat = input.responseFormat ?? 'markdown'
   // 20 recent turns covers the live conversation window; the rolling summary
   // and notes capture older context, so 60 turns was unnecessary overhead.
   const analysis = await loadMeetingAnalysisContext({
@@ -98,6 +107,7 @@ export async function generateMeetingAnswer(
     meetingSession: input.meetingSession,
     analysis,
     question: input.question,
+    responseFormat,
   })
 
   const response = await openClawChatCompletion({

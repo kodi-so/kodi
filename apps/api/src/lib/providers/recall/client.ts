@@ -3,7 +3,7 @@ import { getRecallClientConfig } from './config'
 export type RecallCreateBotRequest = {
   meeting_url: string
   bot_name?: string
-  automatic_audio_output?: boolean
+  automatic_audio_output?: Record<string, unknown>
   metadata?: Record<string, string | null>
   recording_config?: {
     meeting_metadata?: Record<string, unknown>

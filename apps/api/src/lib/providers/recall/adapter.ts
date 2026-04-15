@@ -27,7 +27,6 @@ import {
   type RecallRetrieveBotResponse,
 } from './client'
 import { getRecallClientConfig } from './config'
-import { createZoomZakCallbackUrl } from '../../zoom'
 import {
   inferMeetingProviderFromUrl,
   resolveMeetingIdFromJoinUrl,
@@ -299,35 +298,39 @@ function buildRecallJoinPayload(
       )
     : null
 
+  const rawMetadata: Record<string, unknown> = {
+    orgId: request.orgId,
+    provider: request.provider,
+    internalMeetingSessionId: request.session?.internalMeetingSessionId ?? null,
+    ...(request.metadata ?? {}),
+  }
+  // Recall metadata values must be strings or null
+  const metadata: Record<string, string | null> = Object.fromEntries(
+    Object.entries(rawMetadata).map(([k, v]) => [
+      k,
+      v === null || v === undefined
+        ? null
+        : typeof v === 'string'
+          ? v
+          : JSON.stringify(v),
+    ])
+  )
+
   return {
     meeting_url: request.meeting.joinUrl,
     bot_name: request.botIdentity?.displayName ?? 'Kodi',
-    zoom:
-      request.provider === 'zoom' && request.providerInstallationId
-        ? {
-            zak_url: createZoomZakCallbackUrl(request.providerInstallationId),
-          }
-        : undefined,
-    metadata: {
-      orgId: request.orgId,
-      provider: request.provider,
-      internalMeetingSessionId: request.session?.internalMeetingSessionId ?? null,
-      providerInstallationId: request.providerInstallationId ?? null,
-      ...(request.metadata ?? {}),
-    },
-    recording_config: {
-      transcript: realtimeWebhookUrl
-        ? {
+    metadata,
+    recording_config: realtimeWebhookUrl
+      ? {
+          transcript: {
             provider: {
               recallai_streaming: {
                 mode: 'prioritize_low_latency',
                 language_code: 'en',
               },
             },
-          }
-        : undefined,
-      realtime_endpoints: realtimeWebhookUrl
-        ? [
+          },
+          realtime_endpoints: [
             {
               type: 'webhook',
               url: realtimeWebhookUrl,
@@ -340,9 +343,9 @@ function buildRecallJoinPayload(
                 'transcript.partial_data',
               ],
             },
-          ]
-        : undefined,
-    },
+          ],
+        }
+      : undefined,
   }
 }
 

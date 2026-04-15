@@ -1,16 +1,25 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
+  MessageSquare,
   Mic2,
   RefreshCw,
+  SendHorizonal,
   Sparkles,
+  Trash2,
   Users,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import {
   Alert,
@@ -23,7 +32,13 @@ import {
   CardHeader,
   CardTitle,
   Separator,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
   Skeleton,
+  Textarea,
 } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { useSession } from '@/lib/auth-client'
@@ -70,6 +85,13 @@ type MeetingRetryAttempt = {
   message: string | null
   httpStatus: number | null
 }
+type MeetingParticipantIdentitySummary = {
+  classification: 'internal' | 'external' | 'unknown'
+  confidence: number | null
+  rejoinCount: number
+  matchedBy: string | null
+  matchedUserEmail: string | null
+}
 type MeetingChatItem = {
   id: string
   eventType: string
@@ -77,6 +99,23 @@ type MeetingChatItem = {
   senderName: string
   recipient: string
   occurredAt: Date | string
+}
+
+type AskKodiAnswer = {
+  id: string
+  question: string
+  answerText: string | null
+  status: string
+  failureReason: string | null
+  askedAt: Date
+  voiceStatus?: 'speaking' | 'delivered_to_voice' | 'voice_failed' | null
+}
+
+function failureReasonToMessage(reason: string | null): string {
+  if (reason === 'openclaw-unavailable') return "Kodi's AI instance isn't reachable. Make sure your OpenClaw instance is running."
+  if (reason === 'openclaw-failed') return "Kodi's AI instance returned an error. Try again in a moment."
+  if (reason === 'empty-response') return 'Kodi returned an empty response. Try again.'
+  return 'Something went wrong. Please try again.'
 }
 
 function asRecord(value: unknown) {
@@ -255,6 +294,61 @@ function formatHealthStatus(status: string | null | undefined) {
   }
 }
 
+function participantIdentitySummary(
+  participant: MeetingParticipants[number]
+): MeetingParticipantIdentitySummary | null {
+  const metadata = asRecord(participant.metadata)
+  const resolved = asRecord(metadata?.resolvedIdentity)
+  if (!resolved) return null
+
+  const classification =
+    resolved.classification === 'internal' ||
+    resolved.classification === 'external' ||
+    resolved.classification === 'unknown'
+      ? resolved.classification
+      : 'unknown'
+
+  return {
+    classification,
+    confidence:
+      typeof resolved.confidence === 'number' ? resolved.confidence : null,
+    rejoinCount:
+      typeof resolved.rejoinCount === 'number' ? resolved.rejoinCount : 0,
+    matchedBy:
+      typeof resolved.matchedBy === 'string' ? resolved.matchedBy : null,
+    matchedUserEmail:
+      typeof resolved.matchedUserEmail === 'string'
+        ? resolved.matchedUserEmail
+        : null,
+  }
+}
+
+function participantIdentityBadgeVariant(
+  classification: 'internal' | 'external' | 'unknown'
+) {
+  switch (classification) {
+    case 'internal':
+      return 'success' as const
+    case 'external':
+      return 'neutral' as const
+    default:
+      return 'warning' as const
+  }
+}
+
+function participantIdentityLabel(
+  classification: 'internal' | 'external' | 'unknown'
+) {
+  switch (classification) {
+    case 'internal':
+      return 'Internal'
+    case 'external':
+      return 'External'
+    default:
+      return 'Needs review'
+  }
+}
+
 function describeEvent(event: MeetingEventFeed[number], provider: string) {
   const payload = asRecord(event.payload)
   if (!payload) return null
@@ -426,19 +520,74 @@ function collapseTranscriptSegments(segments: MeetingTranscript) {
   return grouped
 }
 
+// Stable per-speaker colors — assigned by first-seen order, not by name hash,
+// so colors are consistent within a session regardless of name spelling.
+const SPEAKER_COLORS = [
+  'bg-blue-100 text-blue-700',
+  'bg-violet-100 text-violet-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-orange-100 text-orange-700',
+  'bg-pink-100 text-pink-700',
+]
+
+function getSpeakerInitials(name: string | null | undefined) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return (parts[0]![0] ?? '?').toUpperCase()
+  return ((parts[0]![0] ?? '') + (parts[parts.length - 1]![0] ?? '')).toUpperCase()
+}
+
+type TranscriptSpeakerGroup = {
+  groupId: string
+  speaker: string
+  startsAt: Date | string
+  turns: MeetingTranscriptTurn[]
+}
+
+function groupTranscriptBySpeaker(turns: MeetingTranscriptTurn[]): TranscriptSpeakerGroup[] {
+  const groups: TranscriptSpeakerGroup[] = []
+  for (const turn of turns) {
+    const speaker = turn.speakerName ?? 'Unknown speaker'
+    const last = groups[groups.length - 1]
+    if (last && last.speaker === speaker) {
+      last.turns.push(turn)
+    } else {
+      groups.push({ groupId: turn.id, speaker, startsAt: turn.createdAt, turns: [turn] })
+    }
+  }
+  return groups
+}
+
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
   const meetingSessionId = params.meetingSessionId
   const { activeOrg } = useOrg()
   const { data: session } = useSession()
+  const router = useRouter()
   const orgId = activeOrg?.orgId ?? null
   const currentUserId = session?.user?.id ?? null
 
   const [consoleData, setConsoleData] = useState<MeetingConsole | null>(null)
+  const [deletingMeeting, setDeletingMeeting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
   const [controlsSaving, setControlsSaving] = useState(false)
+  const [askQuestion, setAskQuestion] = useState('')
+  const [askPending, setAskPending] = useState(false)
+  const [answers, setAnswers] = useState<AskKodiAnswer[]>([])
+  const [askSheetOpen, setAskSheetOpen] = useState(false)
+  const [speakingAnswerId, setSpeakingAnswerId] = useState<string | null>(null)
+  const answerBottomRef = useRef<HTMLDivElement>(null)
+  const answerScrollRef = useRef<HTMLDivElement>(null)
+  const [collapsedSpeakers, setCollapsedSpeakers] = useState<Set<string>>(new Set())
+  const transcriptScrollRef = useRef<HTMLDivElement>(null)
+  const transcriptBottomRef = useRef<HTMLDivElement>(null)
+  const [transcriptAtBottom, setTranscriptAtBottom] = useState(true)
+  const speakerColorMap = useRef<Map<string, string>>(new Map())
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -490,6 +639,38 @@ export default function MeetingDetailsPage() {
     }
   }, [orgId, meetingSessionId, pollIntervalMs])
 
+  // Load Ask Kodi answer history from the server on mount so it survives
+  // page refreshes. Only loads once; new answers are appended optimistically.
+  useEffect(() => {
+    if (!orgId || !meetingSessionId) return
+    trpc.meeting.getAnswers
+      .query({ orgId, meetingSessionId })
+      .then((data) => {
+        const uiAnswers = data
+          .filter((a) => a.source === 'ui')
+          .reverse() // getAnswers returns newest-first; we want oldest-first
+          .map((a) => ({
+            id: a.id,
+            question: a.question,
+            answerText: a.answerText ?? null,
+            status: a.status,
+            failureReason: a.suppressionReason ?? null,
+            askedAt: new Date(a.createdAt),
+            voiceStatus:
+              a.status === 'delivered_to_voice'
+                ? ('delivered_to_voice' as const)
+                : a.status === 'speaking'
+                  ? ('speaking' as const)
+                  : null,
+          }))
+        setAnswers(uiAnswers)
+      })
+      .catch(() => {
+        // Non-fatal — history just won't pre-populate
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, meetingSessionId])
+
   const meeting = consoleData?.meeting ?? null
   const participants: MeetingParticipants = consoleData?.participants ?? []
   const transcript: MeetingTranscript = consoleData?.transcript ?? []
@@ -504,6 +685,33 @@ export default function MeetingDetailsPage() {
     () => collapseTranscriptSegments([...transcript].reverse()),
     [transcript]
   )
+  const transcriptSpeakerGroups = useMemo(() => {
+    const groups = groupTranscriptBySpeaker(chronologicalTranscript)
+    // Assign stable colors in first-seen order
+    for (const group of groups) {
+      if (!speakerColorMap.current.has(group.speaker)) {
+        const idx = speakerColorMap.current.size % SPEAKER_COLORS.length
+        speakerColorMap.current.set(group.speaker, SPEAKER_COLORS[idx]!)
+      }
+    }
+    return groups
+  }, [chronologicalTranscript])
+
+  const handleTranscriptScroll = useCallback(() => {
+    const el = transcriptScrollRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    setTranscriptAtBottom(distFromBottom < 60)
+  }, [])
+
+  // Auto-scroll to bottom when new transcript arrives, but only if already at bottom
+  useEffect(() => {
+    if (transcriptAtBottom) {
+      const el = transcriptScrollRef.current
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    }
+  }, [transcriptSpeakerGroups.length, transcriptAtBottom])
+
   const meetingMetadata = useMemo(
     () => asRecord(meeting?.metadata),
     [meeting?.metadata]
@@ -692,6 +900,93 @@ export default function MeetingDetailsPage() {
     }
   }
 
+  async function handleDeleteMeeting() {
+    if (!orgId || !meetingSessionId || deletingMeeting) return
+    if (!confirm('Delete this meeting? This cannot be undone.')) return
+    setDeletingMeeting(true)
+    try {
+      await trpc.meeting.delete.mutate({ orgId, meetingSessionId })
+      router.push('/meetings')
+    } catch {
+      setDeletingMeeting(false)
+    }
+  }
+
+  async function handleAskKodi(e: React.FormEvent) {
+    e.preventDefault()
+    const question = askQuestion.trim()
+    if (!question || !orgId || !meetingSessionId || askPending) return
+
+    const optimisticId = crypto.randomUUID()
+    const askedAt = new Date()
+    setAnswers((prev) => [
+      ...prev,
+      { id: optimisticId, question, answerText: null, status: 'preparing', failureReason: null, askedAt },
+    ])
+    setAskQuestion('')
+    setAskPending(true)
+    setTimeout(() => {
+      const el = answerScrollRef.current
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    }, 50)
+
+    try {
+      const result = await trpc.meeting.askKodi.mutate({
+        orgId,
+        meetingSessionId,
+        question,
+      })
+
+      setAnswers((prev) =>
+        prev.map((a) =>
+          a.id === optimisticId
+            ? {
+                ...a,
+                id: result.answerId,
+                answerText: result.answerText,
+                status: result.status,
+                failureReason: result.failureReason ?? null,
+              }
+            : a
+        )
+      )
+      setTimeout(() => {
+        const el = answerScrollRef.current
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+      }, 50)
+    } catch (err) {
+      setAnswers((prev) =>
+        prev.map((a) =>
+          a.id === optimisticId
+            ? { ...a, status: 'failed', answerText: null, failureReason: err instanceof Error ? err.message : null }
+            : a
+        )
+      )
+    } finally {
+      setAskPending(false)
+    }
+  }
+
+  async function handleSpeakAnswer(answerId: string) {
+    if (!orgId || !meetingSessionId || speakingAnswerId) return
+    setSpeakingAnswerId(answerId)
+    setAnswers((prev) =>
+      prev.map((a) => (a.id === answerId ? { ...a, voiceStatus: 'speaking' } : a))
+    )
+    try {
+      await trpc.meeting.speakAnswer.mutate({ orgId, meetingSessionId, answerId })
+      setAnswers((prev) =>
+        prev.map((a) => (a.id === answerId ? { ...a, voiceStatus: 'delivered_to_voice' } : a))
+      )
+    } catch {
+      setAnswers((prev) =>
+        prev.map((a) => (a.id === answerId ? { ...a, voiceStatus: 'voice_failed' } : a))
+      )
+    } finally {
+      setSpeakingAnswerId(null)
+    }
+  }
+
   const rollingNotes = useMemo(
     () =>
       typeof liveState?.rollingNotes === 'string'
@@ -739,6 +1034,40 @@ export default function MeetingDetailsPage() {
           } => task !== null
         ),
     [liveState?.candidateTasks]
+  )
+
+  const candidateActionItems = useMemo(
+    () =>
+      asArray(liveState?.candidateActionItems)
+        .map((item) => {
+          const record = asRecord(item)
+          if (!record) return null
+
+          return {
+            title:
+              typeof record.title === 'string'
+                ? record.title
+                : 'Untitled action item',
+            ownerHint:
+              typeof record.ownerHint === 'string' ? record.ownerHint : null,
+            confidence:
+              typeof record.confidence === 'number' ? record.confidence : null,
+            sourceEvidence: asArray(record.sourceEvidence).filter(
+              (value): value is string => typeof value === 'string'
+            ),
+          }
+        })
+        .filter(
+          (
+            item
+          ): item is {
+            title: string
+            ownerHint: string | null
+            confidence: number | null
+            sourceEvidence: string[]
+          } => item !== null
+        ),
+    [liveState?.candidateActionItems]
   )
 
   const draftActions = useMemo(
@@ -942,7 +1271,7 @@ export default function MeetingDetailsPage() {
     <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <section className={`${heroPanelClass} rounded-[2rem]`}>
-          <div className="border-b border-brand-line px-6 py-5">
+          <div className="flex items-center justify-between border-b border-brand-line px-6 py-5">
             <Link
               href="/meetings"
               className="inline-flex w-fit items-center gap-2 text-sm text-brand-quiet transition hover:text-foreground"
@@ -950,6 +1279,16 @@ export default function MeetingDetailsPage() {
               <ArrowLeft size={16} />
               Back to meetings
             </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleDeleteMeeting()}
+              disabled={deletingMeeting}
+              className="gap-1.5 text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 size={14} />
+              {deletingMeeting ? 'Deleting…' : 'Delete'}
+            </Button>
           </div>
 
           <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
@@ -1076,6 +1415,164 @@ export default function MeetingDetailsPage() {
               </CardContent>
             </Card>
 
+            <Sheet open={askSheetOpen} onOpenChange={setAskSheetOpen}>
+              <SheetTrigger asChild>
+                <Card className="cursor-pointer border-brand-line transition-colors hover:bg-brand-elevated/60">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                          <MessageSquare size={18} />
+                        </div>
+                        <div>
+                          <CardTitle className="text-xl text-foreground">
+                            Ask Kodi
+                          </CardTitle>
+                          <CardDescription>
+                            {answers.length > 0
+                              ? `${answers.length} question${answers.length === 1 ? '' : 's'} asked`
+                              : 'Ask a question grounded in the live meeting context.'}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <SendHorizonal size={16} className="text-muted-foreground" />
+                    </div>
+                  </CardHeader>
+                </Card>
+              </SheetTrigger>
+
+              <SheetContent className="flex w-full max-w-xl flex-col p-0 sm:max-w-xl">
+                <SheetHeader className="shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-[0.9rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                      <MessageSquare size={15} />
+                    </div>
+                    <SheetTitle>Ask Kodi</SheetTitle>
+                  </div>
+                </SheetHeader>
+
+                {/* Scrollable conversation */}
+                <div ref={answerScrollRef} className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+                  {answers.length === 0 ? (
+                    <div className={`${dashedPanelClass} flex h-full flex-col items-center justify-center gap-3 rounded-[1.5rem] p-8 text-center`}>
+                      <Sparkles size={22} className="text-brand-accent-strong/60" />
+                      <p className={`text-sm ${quietTextClass}`}>
+                        Ask anything about this meeting — decisions made, topics covered, action items, or what someone said.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {answers.map((answer) => (
+                        <div key={answer.id} className="space-y-2">
+                          {/* Question bubble */}
+                          <div className="flex justify-end">
+                            <div className="max-w-[80%] rounded-[1.2rem] rounded-tr-[0.3rem] bg-brand-accent px-4 py-2.5">
+                              <p className="text-sm font-medium text-white">{answer.question}</p>
+                            </div>
+                          </div>
+
+                          {/* Answer bubble */}
+                          <div className="flex items-start gap-2.5">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                              <Sparkles size={13} />
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <div className="rounded-[1.2rem] rounded-tl-[0.3rem] border border-brand-line bg-brand-elevated px-4 py-3">
+                                {answer.status === 'preparing' ? (
+                                  <div className="space-y-2">
+                                    <Skeleton className="h-3.5 w-full" />
+                                    <Skeleton className="h-3.5 w-4/5" />
+                                    <Skeleton className="h-3.5 w-3/5" />
+                                  </div>
+                                ) : answer.status === 'suppressed' ? (
+                                  <p className={`text-sm ${quietTextClass}`}>
+                                    Not enough meeting context yet to answer this. Try again once more of the conversation has been transcribed.
+                                  </p>
+                                ) : answer.status === 'failed' ? (
+                                  <p className="text-sm text-destructive">
+                                    {failureReasonToMessage(answer.failureReason)}
+                                  </p>
+                                ) : answer.answerText ? (
+                                  <div className="prose prose-sm max-w-none text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_li]:text-sm [&_p]:text-sm [&_p]:leading-6">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                      {answer.answerText}
+                                    </ReactMarkdown>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {/* Voice delivery controls */}
+                              {answer.answerText && controls?.participationMode === 'voice_enabled' && (
+                                <div className="flex items-center gap-2">
+                                  {answer.voiceStatus === 'speaking' ? (
+                                    <span className={`flex items-center gap-1.5 text-xs ${subtleTextClass}`}>
+                                      <Volume2 size={12} className="animate-pulse text-brand-accent" />
+                                      Speaking…
+                                    </span>
+                                  ) : answer.voiceStatus === 'delivered_to_voice' ? (
+                                    <span className={`flex items-center gap-1.5 text-xs ${subtleTextClass}`}>
+                                      <Volume2 size={12} />
+                                      Spoken
+                                    </span>
+                                  ) : answer.voiceStatus === 'voice_failed' ? (
+                                    <span className="flex items-center gap-1.5 text-xs text-destructive">
+                                      <VolumeX size={12} />
+                                      Voice failed
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleSpeakAnswer(answer.id)}
+                                      disabled={!!speakingAnswerId}
+                                      className={`flex items-center gap-1.5 rounded-full border border-brand-line px-2.5 py-1 text-xs transition hover:bg-brand-elevated disabled:opacity-40 ${subtleTextClass}`}
+                                    >
+                                      <Volume2 size={11} />
+                                      Speak
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={answerBottomRef} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Sticky input */}
+                <div className="shrink-0 border-t px-6 py-4">
+                  <form onSubmit={handleAskKodi} className="flex gap-2">
+                    <Textarea
+                      className="min-h-[2.5rem] resize-none rounded-[1.2rem] text-sm"
+                      placeholder="What has been decided so far?"
+                      value={askQuestion}
+                      onChange={(e) => setAskQuestion(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          void handleAskKodi(e as unknown as React.FormEvent)
+                        }
+                      }}
+                      disabled={askPending}
+                      rows={2}
+                      autoFocus
+                    />
+                    <Button
+                      type="submit"
+                      size="icon"
+                      variant="default"
+                      disabled={askPending || !askQuestion.trim()}
+                      className="h-10 w-10 shrink-0 rounded-[1.2rem]"
+                    >
+                      <SendHorizonal size={16} />
+                    </Button>
+                  </form>
+                </div>
+              </SheetContent>
+            </Sheet>
+
             <Card className="border-brand-line">
               <CardHeader>
                 <div className="flex items-center gap-3">
@@ -1101,33 +1598,97 @@ export default function MeetingDetailsPage() {
                     the call.
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-brand-elevated">
-                    {chronologicalTranscript.map((segment, index) => (
-                      <div
-                        key={segment.id}
-                        className={`px-4 py-4 ${
-                          index > 0 ? 'border-t border-brand-line' : ''
-                        }`}
-                      >
-                        <div
-                          className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                  <div className="relative">
+                    <div
+                      ref={transcriptScrollRef}
+                      onScroll={handleTranscriptScroll}
+                      className="max-h-[540px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[1.5rem] border border-brand-line bg-brand-elevated"
+                    >
+                      {transcriptSpeakerGroups.map((group, groupIndex) => {
+                        const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
+                        const initials = getSpeakerInitials(group.speaker)
+                        const isCollapsed = collapsedSpeakers.has(group.groupId)
+                        const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)
+                        return (
+                          <div
+                            key={group.groupId}
+                            className={groupIndex > 0 ? 'border-t border-brand-line' : ''}
+                          >
+                            {/* Speaker header row */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCollapsedSpeakers((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(group.groupId)) next.delete(group.groupId)
+                                  else next.add(group.groupId)
+                                  return next
+                                })
+                              }
+                              className="flex w-full items-center gap-2.5 px-4 py-3 text-left hover:bg-brand-line/30 transition-colors"
+                            >
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${color}`}>
+                                {initials}
+                              </span>
+                              <span className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-foreground">{group.speaker}</span>
+                                <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                  {formatTime(group.startsAt)}
+                                </span>
+                              </span>
+                              {isCollapsed && (
+                                <span className={`text-xs ${subtleTextClass}`}>
+                                  {wordCount} words
+                                </span>
+                              )}
+                              {isCollapsed
+                                ? <ChevronRight size={14} className={subtleTextClass} />
+                                : <ChevronDown size={14} className={subtleTextClass} />
+                              }
+                            </button>
+
+                            {/* Turn content */}
+                            {!isCollapsed && (
+                              <div className="space-y-3 pb-4 pl-[3.25rem] pr-4">
+                                {group.turns.map((turn) => (
+                                  <p
+                                    key={turn.id}
+                                    className="whitespace-pre-wrap text-sm leading-6 text-foreground"
+                                  >
+                                    {turn.content}
+                                    {turn.isPartial && (
+                                      <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                        …
+                                      </span>
+                                    )}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                      <div ref={transcriptBottomRef} />
+                    </div>
+
+                    {/* Jump to latest button */}
+                    {!transcriptAtBottom && (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="rounded-full shadow-md text-xs h-7 px-3 gap-1.5"
+                          onClick={() => {
+                            setTranscriptAtBottom(true)
+                            const el = transcriptScrollRef.current
+                            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+                          }}
                         >
-                          <span className="font-medium text-foreground">
-                            {segment.speakerName ?? 'Unknown speaker'}
-                          </span>
-                          <span>{formatDate(segment.createdAt)}</span>
-                          <Badge variant="neutral">
-                            {formatSourceLabel(segment.source)}
-                          </Badge>
-                          {segment.isPartial && (
-                            <Badge variant="warning">Partial</Badge>
-                          )}
-                        </div>
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
-                          {segment.content}
-                        </p>
+                          <ChevronDown size={13} />
+                          Latest
+                        </Button>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -1461,6 +2022,62 @@ export default function MeetingDetailsPage() {
                       Candidate action items
                     </p>
                     <div className="mt-3 space-y-3">
+                      {candidateActionItems.length > 0 ? (
+                        candidateActionItems.map((item, index) => (
+                          <div
+                            key={`${item.title}-${index}`}
+                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-medium text-foreground">
+                                {item.title}
+                              </p>
+                              {item.confidence != null && (
+                                <Badge variant="neutral">
+                                  {Math.round(item.confidence * 100)}%
+                                </Badge>
+                              )}
+                            </div>
+                            {item.ownerHint && (
+                              <p className={`mt-2 text-sm ${quietTextClass}`}>
+                                Owner hint: {item.ownerHint}
+                              </p>
+                            )}
+                            {item.sourceEvidence.length > 0 && (
+                              <details className="mt-3">
+                                <summary
+                                  className={`cursor-pointer text-sm ${subtleTextClass}`}
+                                >
+                                  Why Kodi suggested this
+                                </summary>
+                                <p
+                                  className={`mt-2 text-sm leading-6 ${quietTextClass}`}
+                                >
+                                  {item.sourceEvidence[0]}
+                                </p>
+                              </details>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div
+                          className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                        >
+                          Candidate action items will appear here once Kodi can
+                          separate concrete next actions from broader meeting
+                          notes.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p
+                      className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
+                    >
+                      Candidate follow-up
+                    </p>
+                    <div className="mt-3 space-y-3">
                       {candidateTasks.length > 0 ? (
                         candidateTasks.map((task, index) => (
                           <div
@@ -1702,37 +2319,72 @@ export default function MeetingDetailsPage() {
                     </p>
                   ) : (
                     <div className="mt-3 space-y-3">
-                      {participants.map((participant) => (
-                        <div
-                          key={participant.id}
-                          className="rounded-[1.2rem] border border-brand-line bg-background p-4"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {participant.displayName ??
-                                  participant.email ??
-                                  'Unknown participant'}
-                              </p>
-                              <p
-                                className={`mt-1 truncate text-xs ${subtleTextClass}`}
+                      {participants.map((participant) => {
+                        const identity = participantIdentitySummary(participant)
+
+                        return (
+                          <div
+                            key={participant.id}
+                            className="rounded-[1.2rem] border border-brand-line bg-background p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {participant.displayName ??
+                                    participant.email ??
+                                    'Unknown participant'}
+                                </p>
+                                <p
+                                  className={`mt-1 truncate text-xs ${subtleTextClass}`}
+                                >
+                                  {participant.email ?? 'No email captured'}
+                                </p>
+                                {identity && (
+                                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                    <Badge
+                                      variant={participantIdentityBadgeVariant(
+                                        identity.classification
+                                      )}
+                                    >
+                                      {participantIdentityLabel(
+                                        identity.classification
+                                      )}
+                                    </Badge>
+                                    {identity.confidence != null && (
+                                      <Badge variant="outline">
+                                        {Math.round(identity.confidence * 100)}%
+                                        {' '}confidence
+                                      </Badge>
+                                    )}
+                                    {identity.rejoinCount > 0 && (
+                                      <Badge variant="outline">
+                                        rejoined x{identity.rejoinCount}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <Badge
+                                variant={
+                                  participant.leftAt ? 'neutral' : 'success'
+                                }
                               >
-                                {participant.email ?? 'No email captured'}
-                              </p>
+                                {participant.leftAt ? 'Left' : 'In call'}
+                              </Badge>
                             </div>
-                            <Badge
-                              variant={
-                                participant.leftAt ? 'neutral' : 'success'
-                              }
-                            >
-                              {participant.leftAt ? 'Left' : 'In call'}
-                            </Badge>
+                            <p className={`mt-3 text-xs ${subtleTextClass}`}>
+                              Joined {formatDate(participant.joinedAt)}
+                            </p>
+                            {identity?.matchedBy && (
+                              <p className={`mt-2 text-xs ${subtleTextClass}`}>
+                                Matched by {identity.matchedBy.replace(/_/g, ' ')}
+                                {identity.matchedUserEmail &&
+                                  ` - ${identity.matchedUserEmail}`}
+                              </p>
+                            )}
                           </div>
-                          <p className={`mt-3 text-xs ${subtleTextClass}`}>
-                            Joined {formatDate(participant.joinedAt)}
-                          </p>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>

@@ -53,6 +53,37 @@ export const meetingArtifactTypeEnum = pgEnum('meeting_artifact_type', [
   'execution_plan',
 ])
 
+export const meetingAnswerStatusEnum = pgEnum('meeting_answer_status', [
+  'requested',
+  'preparing',
+  'grounded',
+  'suppressed',
+  'delivered_to_ui',
+  'delivered_to_chat',
+  'speaking',
+  'delivered_to_voice',
+  'failed',
+  'canceled',
+  'stale',
+])
+
+export const meetingAnswerEventTypeEnum = pgEnum('meeting_answer_event_type', [
+  'requested',
+  'generating',
+  'grounded',
+  'suppressed',
+  'canceled',
+  'delivering_to_ui',
+  'delivered_to_ui',
+  'delivering_to_chat',
+  'delivered_to_chat',
+  'delivering_to_voice',
+  'delivered_to_voice',
+  'interrupted',
+  'failed',
+  'stale',
+])
+
 export const meetingParticipationModeEnum = pgEnum(
   'meeting_participation_mode',
   meetingParticipationModeValues
@@ -521,6 +552,144 @@ export const meetingArtifactsRelations = relations(
   })
 )
 
+export const meetingAnswers = pgTable(
+  'meeting_answers',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    requestedByUserId: text('requested_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    source: text('source').notNull().default('ui'),
+    question: text('question').notNull(),
+    answerText: text('answer_text'),
+    status: meetingAnswerStatusEnum('status').notNull().default('requested'),
+    suppressionReason: text('suppression_reason'),
+    groundingContext: jsonb('grounding_context').$type<Record<string, unknown> | null>(),
+    deliveredToZoomChatAt: timestamp('delivered_to_zoom_chat_at'),
+    deliveredToVoiceAt: timestamp('delivered_to_voice_at'),
+    interruptedAt: timestamp('interrupted_at'),
+    canceledAt: timestamp('canceled_at'),
+    staleAt: timestamp('stale_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => ({
+    meetingSessionIdx: index('meeting_answers_session_idx').on(table.meetingSessionId),
+    orgIdx: index('meeting_answers_org_idx').on(table.orgId),
+    meetingSessionStatusIdx: index('meeting_answers_session_status_idx').on(
+      table.meetingSessionId,
+      table.status
+    ),
+  })
+)
+
+export const meetingAnswerEvents = pgTable(
+  'meeting_answer_events',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    answerId: text('answer_id')
+      .notNull()
+      .references(() => meetingAnswers.id, { onDelete: 'cascade' }),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    eventType: meetingAnswerEventTypeEnum('event_type').notNull(),
+    metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
+    occurredAt: timestamp('occurred_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    answerIdx: index('meeting_answer_events_answer_idx').on(table.answerId),
+    meetingSessionIdx: index('meeting_answer_events_session_idx').on(table.meetingSessionId),
+  })
+)
+
+export const meetingVoiceMedia = pgTable(
+  'meeting_voice_media',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    answerId: text('answer_id')
+      .notNull()
+      .references(() => meetingAnswers.id, { onDelete: 'cascade' }),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    contentType: text('content_type').notNull(),
+    audioBase64: text('audio_base64').notNull(),
+    byteLength: integer('byte_length').notNull(),
+    accessCount: integer('access_count').notNull().default(0),
+    firstAccessedAt: timestamp('first_accessed_at'),
+    lastAccessedAt: timestamp('last_accessed_at'),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    tokenIdx: uniqueIndex('meeting_voice_media_token_uidx').on(table.token),
+    answerIdx: index('meeting_voice_media_answer_idx').on(table.answerId),
+    meetingSessionIdx: index('meeting_voice_media_session_idx').on(
+      table.meetingSessionId
+    ),
+    expiresAtIdx: index('meeting_voice_media_expires_at_idx').on(table.expiresAt),
+  })
+)
+
+export const meetingAnswersRelations = relations(meetingAnswers, ({ one, many }) => ({
+  meetingSession: one(meetingSessions, {
+    fields: [meetingAnswers.meetingSessionId],
+    references: [meetingSessions.id],
+  }),
+  org: one(organizations, {
+    fields: [meetingAnswers.orgId],
+    references: [organizations.id],
+  }),
+  requestedByUser: one(user, {
+    fields: [meetingAnswers.requestedByUserId],
+    references: [user.id],
+  }),
+  events: many(meetingAnswerEvents),
+  voiceMedia: many(meetingVoiceMedia),
+}))
+
+export const meetingAnswerEventsRelations = relations(meetingAnswerEvents, ({ one }) => ({
+  answer: one(meetingAnswers, {
+    fields: [meetingAnswerEvents.answerId],
+    references: [meetingAnswers.id],
+  }),
+  meetingSession: one(meetingSessions, {
+    fields: [meetingAnswerEvents.meetingSessionId],
+    references: [meetingSessions.id],
+  }),
+}))
+
+export const meetingVoiceMediaRelations = relations(
+  meetingVoiceMedia,
+  ({ one }) => ({
+    answer: one(meetingAnswers, {
+      fields: [meetingVoiceMedia.answerId],
+      references: [meetingAnswers.id],
+    }),
+    meetingSession: one(meetingSessions, {
+      fields: [meetingVoiceMedia.meetingSessionId],
+      references: [meetingSessions.id],
+    }),
+  })
+)
+
 export type MeetingSession = typeof meetingSessions.$inferSelect
 export type NewMeetingSession = typeof meetingSessions.$inferInsert
 export type MeetingCopilotSetting = typeof meetingCopilotSettings.$inferSelect
@@ -539,3 +708,11 @@ export type MeetingStateSnapshot = typeof meetingStateSnapshots.$inferSelect
 export type NewMeetingStateSnapshot = typeof meetingStateSnapshots.$inferInsert
 export type MeetingArtifact = typeof meetingArtifacts.$inferSelect
 export type NewMeetingArtifact = typeof meetingArtifacts.$inferInsert
+export type MeetingVoiceMedia = typeof meetingVoiceMedia.$inferSelect
+export type NewMeetingVoiceMedia = typeof meetingVoiceMedia.$inferInsert
+export type MeetingAnswer = typeof meetingAnswers.$inferSelect
+export type NewMeetingAnswer = typeof meetingAnswers.$inferInsert
+export type MeetingAnswerEvent = typeof meetingAnswerEvents.$inferSelect
+export type NewMeetingAnswerEvent = typeof meetingAnswerEvents.$inferInsert
+export type MeetingAnswerStatus = (typeof meetingAnswerStatusEnum.enumValues)[number]
+export type MeetingAnswerEventType = (typeof meetingAnswerEventTypeEnum.enumValues)[number]

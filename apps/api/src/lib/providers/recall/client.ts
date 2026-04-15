@@ -3,10 +3,7 @@ import { getRecallClientConfig } from './config'
 export type RecallCreateBotRequest = {
   meeting_url: string
   bot_name?: string
-  metadata?: Record<string, unknown>
-  zoom?: {
-    zak_url?: string | null
-  } | null
+  metadata?: Record<string, string | null>
   recording_config?: {
     meeting_metadata?: Record<string, unknown>
     participant_events?: Record<string, unknown>
@@ -83,6 +80,18 @@ type RecallApiErrorBody = {
   detail?: string
   message?: string
   errors?: unknown
+  [key: string]: unknown
+}
+
+function extractRecallErrorMessage(body: RecallApiErrorBody): string | null {
+  if (typeof body.detail === 'string') return body.detail
+  if (typeof body.message === 'string') return body.message
+  // Field-level validation errors: { meeting_url: ["msg"], ... }
+  const fieldErrors = Object.entries(body)
+    .filter(([, v]) => Array.isArray(v))
+    .map(([k, v]) => `${k}: ${(v as unknown[]).join(', ')}`)
+  if (fieldErrors.length > 0) return fieldErrors.join('; ')
+  return null
 }
 
 export class RecallApiError extends Error {
@@ -213,10 +222,11 @@ async function recallFetch<TResponse>(
       body = null
     }
 
+    const extracted = body ? extractRecallErrorMessage(body) : null
+    console.error('[recall] API error', { status: response.status, body })
+
     throw new RecallApiError(
-      body?.detail ??
-        body?.message ??
-        `Recall API request failed with status ${response.status}.`,
+      extracted ?? `Recall API request failed with status ${response.status}.`,
       response.status,
       body
     )
@@ -254,4 +264,61 @@ export async function retrieveRecallBot(botId: string) {
   return recallFetch<RecallRetrieveBotResponse>(`/api/v1/bot/${botId}/`, {
     method: 'GET',
   })
+}
+
+export async function sendRecallBotChatMessage(botId: string, message: string) {
+  return recallFetch<Record<string, unknown>>(
+    `/api/v1/bot/${botId}/send_chat_message/`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }
+  )
+}
+
+export type RecallOutputMediaRequest = {
+  camera?: {
+    kind: 'webpage'
+    config: {
+      url: string
+    }
+  }
+  screenshare?: {
+    kind: 'webpage'
+    config: {
+      url: string
+    }
+  }
+}
+
+/**
+ * Start or refresh Recall Output Media for a bot.
+ *
+ * This streams a webpage's audio/video into the meeting, which is the provider-
+ * supported path for real-time interactive agents.
+ */
+export async function startRecallBotOutputMedia(
+  botId: string,
+  input: RecallOutputMediaRequest
+) {
+  return recallFetch<Record<string, unknown>>(
+    `/api/v1/bot/${botId}/output_media/`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+/**
+ * Stop any active Recall Output Media webpage for the bot camera.
+ */
+export async function stopRecallBotOutputMedia(botId: string) {
+  return recallFetch<Record<string, unknown>>(
+    `/api/v1/bot/${botId}/output_media/`,
+    {
+      method: 'DELETE',
+      body: JSON.stringify({ camera: true }),
+    }
+  )
 }

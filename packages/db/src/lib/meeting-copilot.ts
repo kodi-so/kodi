@@ -32,9 +32,18 @@ export const DEFAULT_MEETING_COPILOT_SETTINGS: MeetingCopilotSettings = {
 export function resolveMeetingCopilotSettings(
   overrides?: Partial<MeetingCopilotSettings> | null
 ): MeetingCopilotSettings {
+  // Strip `undefined` values before spreading — explicit undefined from
+  // `persisted?.field` would otherwise override defaults with undefined,
+  // causing all settings to be lost when no row exists yet for the org.
+  // `null` is intentional (e.g. botDisplayName) so it is preserved.
+  const clean = overrides
+    ? (Object.fromEntries(
+        Object.entries(overrides).filter(([, v]) => v !== undefined)
+      ) as Partial<MeetingCopilotSettings>)
+    : {}
   return {
     ...DEFAULT_MEETING_COPILOT_SETTINGS,
-    ...(overrides ?? {}),
+    ...clean,
   }
 }
 

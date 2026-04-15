@@ -33,9 +33,6 @@ const envSchema = z.object({
     .length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
 
   // Feature flags
-  KODI_FEATURE_ZOOM_COPILOT: envBoolean('KODI_FEATURE_ZOOM_COPILOT').default(
-    false
-  ),
   KODI_FEATURE_MEETING_INTELLIGENCE: envBoolean(
     'KODI_FEATURE_MEETING_INTELLIGENCE'
   ).default(false),
@@ -56,17 +53,6 @@ const envSchema = z.object({
   RECALL_WEBHOOK_SECRET: z.string().optional(),
   RECALL_BOT_STATUS_WEBHOOK_SECRET: z.string().optional(),
 
-  // ── Required in Phase 1 (Zoom copilot) ───────────────────────────────────
-
-  // Zoom
-  ZOOM_CLIENT_ID: z.string().optional(),
-  ZOOM_CLIENT_SECRET: z.string().optional(),
-  ZOOM_WEBHOOK_SECRET: z.string().optional(),
-  ZOOM_REDIRECT_URI: z.string().url().optional(),
-  ZOOM_APP_ID: z.string().optional(),
-  ZOOM_ACCOUNT_ID: z.string().optional(),
-  ZOOM_GATEWAY_URL: z.string().url().optional(),
-  ZOOM_GATEWAY_INTERNAL_TOKEN: z.string().optional(),
   MEETING_INTERNAL_TOKEN: z.string().optional(),
 
   // Composio tool access
@@ -125,6 +111,19 @@ const envSchema = z.object({
   // Base domain for hostnames
   BASE_DOMAIN: z.string().default('agent.kodi.so'),
 
+  // ── Phase 4: Voice Participation ──────────────────────────────────────────
+
+  // OpenAI TTS for voice responses (optional — voice output disabled if absent)
+  TTS_OPENAI_API_KEY: z.string().optional(),
+  TTS_OPENAI_VOICE: z
+    .enum(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'])
+    .default('alloy'),
+  TTS_OPENAI_MODEL: z.enum(['tts-1', 'tts-1-hd']).default('tts-1'),
+
+  // Public base URL of the API server (used to build Recall-accessible voice audio URLs)
+  // e.g. https://api.kodi.so — must be reachable by Recall.ai in production
+  API_BASE_URL: z.string().url().optional(),
+
   // ── Required in Phase 3 (invite flow) ─────────────────────────────────────
 
   // JWT secret for signing invite tokens (generate: openssl rand -hex 32)
@@ -158,42 +157,6 @@ if (!_env.success) {
 }
 
 export const env = _env.data
-
-// ── Typed accessors for optional vars ─────────────────────────────────────
-
-export function requireZoom() {
-  const {
-    ZOOM_CLIENT_ID,
-    ZOOM_CLIENT_SECRET,
-    ZOOM_WEBHOOK_SECRET,
-    ZOOM_REDIRECT_URI,
-    ZOOM_APP_ID,
-    ZOOM_ACCOUNT_ID,
-    ZOOM_GATEWAY_URL,
-    ZOOM_GATEWAY_INTERNAL_TOKEN,
-  } = env
-  if (
-    !ZOOM_CLIENT_ID ||
-    !ZOOM_CLIENT_SECRET ||
-    !ZOOM_WEBHOOK_SECRET ||
-    !ZOOM_REDIRECT_URI ||
-    !ZOOM_APP_ID
-  ) {
-    throw new Error(
-      'Zoom environment variables are not configured. Set ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_WEBHOOK_SECRET, ZOOM_REDIRECT_URI, and ZOOM_APP_ID.'
-    )
-  }
-  return {
-    ZOOM_CLIENT_ID,
-    ZOOM_CLIENT_SECRET,
-    ZOOM_WEBHOOK_SECRET,
-    ZOOM_REDIRECT_URI,
-    ZOOM_APP_ID,
-    ZOOM_ACCOUNT_ID,
-    ZOOM_GATEWAY_URL,
-    ZOOM_GATEWAY_INTERNAL_TOKEN,
-  }
-}
 
 export function requireRecall() {
   const {

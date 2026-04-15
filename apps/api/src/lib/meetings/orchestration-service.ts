@@ -1,13 +1,13 @@
-import { and, db, eq, meetingSessions, or } from '@kodi/db'
+import { and, db, eq, meetingSessions, or, organizations } from '@kodi/db'
 import {
   appendNormalizedMeetingEvent,
   type MeetingIngestionSource,
   updateMeetingSessionRuntimeState,
 } from './ingestion'
-import { processMeetingDraftActions } from './openclaw-draft-actions'
-import { processMeetingCandidateTasks } from './openclaw-candidate-tasks'
 import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
-import { processMeetingRollingNotes } from './openclaw-rolling-notes'
+import { routeMeetingChatEvent } from './chat-router'
+import { routeMeetingVoiceEvent } from './voice-router'
+import { scheduleMeetingTranscriptAnalysis } from './openclaw-background'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
@@ -168,6 +168,50 @@ export class MeetingOrchestrationService {
     event: MeetingProviderEvent
     source: MeetingIngestionSource
   }) {
+    const isFinalTranscript =
+      input.event.kind === 'transcript' && !input.event.transcript.isPartial
+    const requiresInteractiveRouting =
+      input.event.kind === 'chat' || isFinalTranscript
+
+    if (requiresInteractiveRouting) {
+      const org = await this.database.query.organizations.findFirst({
+        where: (fields, { eq }) => eq(fields.id, input.orgId),
+        columns: { id: true, name: true, slug: true },
+      })
+
+      if (org && input.event.kind === 'chat') {
+        try {
+          await routeMeetingChatEvent({
+            meetingSessionId: input.meetingSession.id,
+            org,
+            chatEvent: input.event,
+          })
+        } catch (error) {
+          console.warn('[meetings] chat routing failed', {
+            orgId: input.orgId,
+            meetingSessionId: input.meetingSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+
+      if (org && input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
+        try {
+          await routeMeetingVoiceEvent({
+            meetingSessionId: input.meetingSession.id,
+            org,
+            transcriptEvent: input.event,
+          })
+        } catch (error) {
+          console.warn('[meetings] voice routing failed', {
+            orgId: input.orgId,
+            meetingSessionId: input.meetingSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+    }
+
     const forwardResult = await forwardMeetingEventToOpenClaw({
       orgId: input.orgId,
       meetingSession: input.meetingSession,
@@ -185,78 +229,22 @@ export class MeetingOrchestrationService {
         orgId: input.orgId,
         meetingSessionId: input.meetingSession.id,
         eventId: input.persistedEvent.id,
+        eventKind: input.event.kind,
         reason: forwardResult.reason,
         error: 'error' in forwardResult ? forwardResult.error ?? null : null,
       })
     }
 
-    if (input.event.kind === 'transcript' && !input.event.transcript.isPartial) {
-      const rollingNotesResult = await processMeetingRollingNotes({
+    if (isFinalTranscript) {
+      // Final transcript analysis is latest-only work. Coalescing it per meeting
+      // avoids piling multiple near-identical OpenClaw jobs onto the same
+      // instance when Recall emits several transcript events in quick succession.
+      await scheduleMeetingTranscriptAnalysis({
         orgId: input.orgId,
-        meetingSession: input.meetingSession,
+        meetingSessionId: input.meetingSession.id,
+        eventId: input.persistedEvent.id,
         lastEventSequence: input.persistedEvent.sequence,
       })
-
-      if (
-        !rollingNotesResult.ok &&
-        'reason' in rollingNotesResult &&
-        rollingNotesResult.reason !== 'missing-instance'
-      ) {
-        console.warn('[meetings] openclaw rolling notes failed', {
-          orgId: input.orgId,
-          meetingSessionId: input.meetingSession.id,
-          eventId: input.persistedEvent.id,
-          reason: rollingNotesResult.reason,
-          error:
-            'error' in rollingNotesResult ? rollingNotesResult.error ?? null : null,
-        })
-      }
-
-      const candidateTasksResult = await processMeetingCandidateTasks({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
-
-      if (
-        !candidateTasksResult.ok &&
-        'reason' in candidateTasksResult &&
-        candidateTasksResult.reason !== 'missing-instance'
-      ) {
-        console.warn('[meetings] openclaw candidate tasks failed', {
-          orgId: input.orgId,
-          meetingSessionId: input.meetingSession.id,
-          eventId: input.persistedEvent.id,
-          reason: candidateTasksResult.reason,
-          error:
-            'error' in candidateTasksResult
-              ? candidateTasksResult.error ?? null
-              : null,
-        })
-      }
-
-      const draftActionsResult = await processMeetingDraftActions({
-        orgId: input.orgId,
-        meetingSession: input.meetingSession,
-        lastEventSequence: input.persistedEvent.sequence,
-      })
-
-      if (
-        !draftActionsResult.ok &&
-        'reason' in draftActionsResult &&
-        draftActionsResult.reason !== 'missing-instance'
-      ) {
-        console.warn('[meetings] openclaw draft actions failed', {
-          orgId: input.orgId,
-          meetingSessionId: input.meetingSession.id,
-          eventId: input.persistedEvent.id,
-          reason: draftActionsResult.reason,
-          error:
-            'error' in draftActionsResult
-              ? draftActionsResult.error ?? null
-              : null,
-        })
-      }
     }
   }
 

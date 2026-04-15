@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -334,6 +334,8 @@ export function ChatInterface({
   const [promptHandled, setPromptHandled] = useState(false)
   const channelScrollRef = useRef<HTMLDivElement>(null)
   const threadScrollRef = useRef<HTMLDivElement>(null)
+  const channelHasInitialScrollRef = useRef(false)
+  const threadHasInitialScrollRef = useRef(false)
 
   function buildChatUrl(options: {
     channelId?: string | null
@@ -475,6 +477,14 @@ export function ChatInterface({
     channels.find((channel) => channel.id === selectedChannelId) ?? null
 
   useEffect(() => {
+    channelHasInitialScrollRef.current = false
+  }, [selectedChannelId, selectedDirectId, selectedThreadId])
+
+  useEffect(() => {
+    threadHasInitialScrollRef.current = false
+  }, [selectedDirectId, selectedThreadId])
+
+  useEffect(() => {
     if (selectedDirectId || !selectedThreadId) return
 
     const exists = rootMessages.some(
@@ -494,25 +504,44 @@ export function ChatInterface({
     selectedThreadId,
   ])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!channelScrollRef.current || selectedThreadId || selectedDirectId)
       return
+
+    if (loadingMessages) return
+
     channelScrollRef.current.scrollTo({
       top: channelScrollRef.current.scrollHeight,
-      behavior: 'smooth',
+      behavior: channelHasInitialScrollRef.current ? 'smooth' : 'auto',
     })
-  }, [messages, selectedDirectId, selectedThreadId, sendingMain])
+    channelHasInitialScrollRef.current = true
+  }, [
+    loadingMessages,
+    rootMessages.length,
+    selectedDirectId,
+    selectedThreadId,
+    sendingMain,
+  ])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!threadScrollRef.current || !selectedThreadId || selectedDirectId) {
       return
     }
 
+    if (loadingMessages) return
+
     threadScrollRef.current.scrollTo({
       top: threadScrollRef.current.scrollHeight,
-      behavior: 'smooth',
+      behavior: threadHasInitialScrollRef.current ? 'smooth' : 'auto',
     })
-  }, [selectedDirectId, selectedThreadId, selectedThreadReplies, sendingThread])
+    threadHasInitialScrollRef.current = true
+  }, [
+    loadingMessages,
+    selectedDirectId,
+    selectedThreadId,
+    selectedThreadReplies.length,
+    sendingThread,
+  ])
 
   async function createChannel() {
     const name = channelDraft.trim()
@@ -857,7 +886,7 @@ export function ChatInterface({
 
             <div
               ref={channelScrollRef}
-              className="min-h-0 flex-1 overflow-y-auto"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
             >
               {loadingMessages ? (
                 <div className="px-4 py-6 text-sm text-brand-quiet sm:px-6">
@@ -928,7 +957,7 @@ export function ChatInterface({
 
             <div
               ref={threadScrollRef}
-              className="min-h-0 flex-1 overflow-y-auto"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
             >
               {loadingMessages ? (
                 <div className="px-4 py-6 text-sm text-brand-quiet sm:px-6">

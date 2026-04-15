@@ -131,8 +131,7 @@ the approval workflow directly.
 Auth:
 
 - bearer token using `TOOL_ACCESS_INTERNAL_TOKEN`
-- if unset, it falls back to `MEETING_INTERNAL_TOKEN` or
-  `ZOOM_GATEWAY_INTERNAL_TOKEN`
+- if unset, it falls back to `MEETING_INTERNAL_TOKEN`
 
 Optional JSON body:
 

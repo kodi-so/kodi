@@ -11,8 +11,7 @@ kodi/
 ├── apps/
 │   ├── web/       # Landing site (Next.js + Tailwind + ShadCN)
 │   ├── app/       # Web application (Next.js + Tailwind + ShadCN + BetterAuth + Stripe)
-│   ├── api/       # API server (Hono + tRPC)
-│   └── zoom-gateway/ # Zoom RTMS gateway (Node + Hono + native RTMS SDK)
+│   └── api/       # API server (Hono + tRPC)
 ├── packages/
 │   ├── db/        # Database (Postgres + Drizzle ORM)
 │   ├── ui/        # Shared UI components (ShadCN-style)
@@ -55,12 +54,6 @@ kodi/
    cd ../.. && bun dev
    ```
 
-   For live Zoom RTMS testing, also run:
-
-   ```bash
-   cd apps/zoom-gateway && bun run dev
-   ```
-
 ### Apps & Ports
 
 | App            | Port | Description       |
@@ -68,8 +61,33 @@ kodi/
 | `web`          | 3000 | Landing site      |
 | `app`          | 3001 | Web application   |
 | `api`          | 3002 | API server        |
-| `zoom-gateway` | 3010 | Zoom RTMS gateway |
 
 ## Deployment (Railway)
 
 Each app has a `railway.toml`. Deploy each as a separate Railway service pointing to the relevant `apps/*` directory, and set the environment variables in the Railway dashboard.
+
+## PR Safety
+
+Never continue work on a branch whose GitHub PR is already merged or closed. That creates confusing history and makes it easy to accidentally push follow-up work into an already-finished PR thread.
+
+Before opening or updating a PR, run:
+
+```bash
+bun run pr:check
+```
+
+This command uses the GitHub CLI, so it expects `gh auth status` to be healthy and the network to be available.
+
+This will:
+
+- fail if the current branch is `dev`, `main`, or `master`
+- fail if the current branch already has a merged or closed PR
+- pass if the branch has no PR yet or still has an open PR
+
+If it fails because the branch was already merged, create a fresh branch from `dev`:
+
+```bash
+git switch dev
+git pull
+git switch -c my-new-branch
+```

@@ -169,9 +169,23 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
   try {
     await markAnswerSpeaking(answer.id, meetingSessionId)
 
-    // Generate TTS audio
+    const botSessionId = meetingSession.providerBotSessionId
+    if (!botSessionId) {
+      await markAnswerFailed(
+        answer.id,
+        meetingSessionId,
+        'No active bot session to deliver voice output.'
+      )
+      return
+    }
+
+    // TTS generation and Output Media session refresh are independent — run
+    // them concurrently so the page is warm by the time the audio clip is ready.
     const voiceText = truncateForVoice(markdownToMeetingPlainText(result.answerText))
-    const ttsResult = await generateSpeech({ text: voiceText })
+    const [ttsResult] = await Promise.all([
+      generateSpeech({ text: voiceText }),
+      ensureRecallOutputMediaActive({ botSessionId, meetingSessionId }),
+    ])
 
     if (!ttsResult.ok) {
       await markAnswerFailed(
@@ -190,22 +204,6 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
       contentType: ttsResult.contentType,
     })
 
-    // Ensure Recall Output Media is running so the bot webpage can pull and
-    // play the queued clip into the meeting.
-    const botSessionId = meetingSession.providerBotSessionId
-    if (!botSessionId) {
-      await markAnswerFailed(
-        answer.id,
-        meetingSessionId,
-        'No active bot session to deliver voice output.'
-      )
-      return
-    }
-
-    await ensureRecallOutputMediaActive({
-      botSessionId,
-      meetingSessionId,
-    })
     await markAnswerDeliveredToVoice(answer.id, meetingSessionId)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

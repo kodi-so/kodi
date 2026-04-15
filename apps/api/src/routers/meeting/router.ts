@@ -820,7 +820,13 @@ export const meetingRouter = router({
         const voiceText = truncateForVoice(
           markdownToMeetingPlainText(answer.answerText!)
         )
-        const ttsResult = await generateSpeech({ text: voiceText })
+
+        // TTS generation and Output Media session refresh are independent — run
+        // them concurrently so the page is warm by the time the audio is ready.
+        const [ttsResult] = await Promise.all([
+          generateSpeech({ text: voiceText }),
+          ensureRecallOutputMediaActive({ botSessionId, meetingSessionId: meeting.id }),
+        ])
 
         if (!ttsResult.ok) {
           await markAnswerFailed(answer.id, meeting.id, `TTS failed: ${ttsResult.reason}`)
@@ -837,10 +843,6 @@ export const meetingRouter = router({
           contentType: ttsResult.contentType,
         })
 
-        await ensureRecallOutputMediaActive({
-          botSessionId,
-          meetingSessionId: meeting.id,
-        })
         await markAnswerDeliveredToVoice(answer.id, meeting.id)
 
         return { ok: true, answerId: answer.id, status: 'delivered_to_voice' as const }

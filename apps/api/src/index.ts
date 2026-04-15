@@ -73,7 +73,10 @@ app.get('/voice-agent/:token/state', async (c) => {
     interruptCurrent: state.interruptCurrent,
     nextToken: state.nextToken,
     nextAudioUrl: state.nextToken ? `/voice-output/${state.nextToken}` : null,
-    pollAfterMs: 900,
+    // Adaptive interval: poll quickly when a new clip is ready so playback
+    // starts with minimal delay; slow down when nothing is queued to reduce DB
+    // load during long silences.
+    pollAfterMs: state.nextToken ? 100 : 600,
   })
 })
 

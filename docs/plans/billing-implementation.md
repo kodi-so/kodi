@@ -841,3 +841,104 @@ New env vars needed (add to both `apps/app/src/env.ts` and `apps/api/src/env.ts`
 | **Phase 3** | Usage metering: LiteLLM sync, Stripe meter reporting, cron | Phase 2 |
 | **Phase 4** | Billing UI: settings page, usage display, spending cap, plan selection | Phase 2 (UI can start in parallel with Phase 3) |
 | **Phase 5** | Foundation tickets: BYOK, compute, seats, alerts, provisioning gating | Phase 1 (schema only, no dependencies on billing being live) |
+
+---
+
+## 12. Stripe Setup Runbook (KOD-119)
+
+> **Status:** Manual task — must be completed before billing goes live.
+> All code is deployed; this configures the Stripe side.
+
+### Step 1: Create Product
+
+Stripe Dashboard → Products → Add product
+
+- Name: **Kodi**
+- Description: "Kodi AI agent subscription"
+
+### Step 2: Create flat-rate Prices
+
+On the "Kodi" product, create two recurring prices:
+
+**Pro:**
+- Price: $59.99 / month
+- Currency: USD
+- Copy the Price ID (starts with `price_`) → `STRIPE_PRO_PRICE_ID`
+
+**Business:**
+- Price: $159.99 / month
+- Currency: USD
+- Copy the Price ID (starts with `price_`) → `STRIPE_BUSINESS_PRICE_ID`
+
+### Step 3: Create Stripe Meter
+
+Dashboard → Billing → Meters
+
+- Display name: **Kodi Usage**
+- Event name: `kodi_usage`
+- Aggregation type: **sum**
+
+### Step 4: Create metered Price
+
+On the "Kodi" product, add a usage-based price:
+
+- Pricing model: Usage-based
+- Meter: "Kodi Usage" (from step 3)
+- Price per unit: $0.01 (1 unit = 1 cent of overage)
+- Billing period: Monthly
+- Copy the Price ID → `STRIPE_USAGE_PRICE_ID`
+
+### Step 5: Configure Billing Portal
+
+Dashboard → Settings → Billing → Customer portal
+
+- Enable: View invoices, Update payment method, Cancel subscription
+- Redirect URL: `{APP_URL}/settings/billing`
+
+### Step 6: Configure Webhook Endpoint
+
+Dashboard → Developers → Webhooks → Add endpoint
+
+- Endpoint URL: `{APP_URL}/api/webhooks/stripe`
+- Events to listen for:
+  - `checkout.session.completed`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.payment_succeeded`
+  - `invoice.payment_failed`
+- Copy the Signing secret (starts with `whsec_`) → `STRIPE_WEBHOOK_SECRET`
+
+### Step 7: Set Environment Variables
+
+Set these in Railway (both `app` and `api` services where noted):
+
+| Variable | Service(s) | Value |
+|----------|-----------|-------|
+| `STRIPE_SECRET_KEY` | app, api | Dashboard → Developers → API keys (`sk_live_...` or `sk_test_...`) |
+| `STRIPE_WEBHOOK_SECRET` | app | From step 6 (`whsec_...`) |
+| `STRIPE_PRO_PRICE_ID` | app, api | From step 2 (`price_...`) |
+| `STRIPE_BUSINESS_PRICE_ID` | app, api | From step 2 (`price_...`) |
+| `STRIPE_USAGE_PRICE_ID` | app, api | From step 4 (`price_...`) |
+| `STRIPE_METER_EVENT_NAME` | api | `kodi_usage` |
+| `USAGE_SYNC_SECRET` | api | Generate: `openssl rand -hex 32` |
+| `APP_URL` | app, api | `https://app.kodi.so` (likely already set) |
+
+### Step 8: Local Development
+
+Use Stripe test mode keys. Forward webhooks locally:
+
+```bash
+stripe listen --forward-to localhost:3001/api/webhooks/stripe
+```
+
+This prints a temporary `whsec_` signing secret for local use.
+
+### Verification Checklist
+
+- [ ] Stripe Product "Kodi" exists with Pro and Business prices
+- [ ] Stripe Meter "kodi_usage" exists
+- [ ] Metered price ($0.01/unit) attached to the Kodi product
+- [ ] Webhook endpoint configured with all 5 event types
+- [ ] Billing portal configured with redirect URL
+- [ ] All env vars set in Railway for both app and api
+- [ ] Test checkout flow works end-to-end in Stripe test mode

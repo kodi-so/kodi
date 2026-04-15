@@ -44,6 +44,22 @@ app.use(
 
 app.get('/health', (c) => c.json({ ok: true }))
 
+// Billing: usage sync endpoint (called by Railway Cron or similar)
+app.post('/billing/sync-usage', async (c) => {
+  const { requireUsageSync } = await import('./env')
+  const { syncAllOrgs } = await import('./services/usage-sync')
+
+  const authHeader = c.req.header('Authorization')
+  const { USAGE_SYNC_SECRET } = requireUsageSync()
+
+  if (authHeader !== `Bearer ${USAGE_SYNC_SECRET}`) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+
+  const results = await syncAllOrgs()
+  return c.json({ results, syncedAt: new Date().toISOString() })
+})
+
 app.get('/voice-agent/:token', (c) => {
   const token = c.req.param('token') ?? ''
   const session = verifyVoiceOutputMediaSessionToken(token)

@@ -239,32 +239,138 @@ export function renderVoiceOutputMediaPage(token: string) {
       const audioEl = document.getElementById('voice-audio')
 
       let currentToken = null
+      let activeObjectUrl = null
       let pollTimer = null
+      let retryTimer = null
       let pollInFlight = false
+      let playInFlight = false
+      const queuedTokens = new Set()
+      const queuedClips = []
+      const inflightFetchTokens = new Set()
 
       function setStatus(text, speaking) {
         statusTextEl.textContent = text
         statusEl.dataset.speaking = speaking ? 'true' : 'false'
       }
 
-      function clearAudio() {
+      function resetAudioElement() {
         audioEl.pause()
         audioEl.removeAttribute('src')
         audioEl.load()
       }
 
-      async function playClip(token, url) {
-        currentToken = token
-        audioEl.src = url
+      function revokeObjectUrl(objectUrl) {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl)
+        }
+      }
+
+      function clearCurrentClip() {
+        resetAudioElement()
+        currentToken = null
+        revokeObjectUrl(activeObjectUrl)
+        activeObjectUrl = null
+      }
+
+      function clearQueuedClips() {
+        while (queuedClips.length > 0) {
+          const clip = queuedClips.shift()
+          revokeObjectUrl(clip && clip.objectUrl)
+        }
+        queuedTokens.clear()
+      }
+
+      function schedulePlaybackRetry(delayMs = 750) {
+        if (retryTimer) return
+
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          void maybePlayNextClip()
+        }, delayMs)
+      }
+
+      async function maybePlayNextClip() {
+        if (playInFlight || !audioEl.paused || queuedClips.length === 0) {
+          return
+        }
+
+        const clip = queuedClips.shift()
+        if (!clip) return
+
+        playInFlight = true
+        queuedTokens.delete(clip.token)
+        clearCurrentClip()
+
+        currentToken = clip.token
+        activeObjectUrl = clip.objectUrl
+        audioEl.src = clip.objectUrl
         setStatus('Speaking into the meeting', true)
 
         try {
           await audioEl.play()
         } catch (error) {
           console.error('[voice-agent] audio playback failed', error)
+          resetAudioElement()
           currentToken = null
-          clearAudio()
+          activeObjectUrl = null
+          queuedTokens.add(clip.token)
+          queuedClips.unshift(clip)
           setStatus('Playback blocked, retrying...', false)
+          schedulePlaybackRetry()
+        } finally {
+          playInFlight = false
+        }
+      }
+
+      async function queueClip(token, url) {
+        if (
+          !token ||
+          !url ||
+          token === currentToken ||
+          queuedTokens.has(token) ||
+          inflightFetchTokens.has(token)
+        ) {
+          return
+        }
+
+        inflightFetchTokens.add(token)
+
+        if (!currentToken && queuedClips.length === 0) {
+          setStatus('Buffering response...', false)
+        }
+
+        try {
+          const response = await fetch(url, {
+            cache: 'no-store',
+            headers: {
+              accept: 'audio/*'
+            }
+          })
+
+          if (!response.ok) {
+            throw new Error('Voice audio request failed with ' + response.status)
+          }
+
+          const audioBlob = await response.blob()
+          const objectUrl = URL.createObjectURL(audioBlob)
+
+          if (token === currentToken || queuedTokens.has(token)) {
+            revokeObjectUrl(objectUrl)
+            return
+          }
+
+          queuedTokens.add(token)
+          queuedClips.push({ token, objectUrl })
+
+          await maybePlayNextClip()
+        } catch (error) {
+          console.error('[voice-agent] audio fetch failed', error)
+
+          if (!currentToken && queuedClips.length === 0) {
+            setStatus('Reconnecting voice stream...', false)
+          }
+        } finally {
+          inflightFetchTokens.delete(token)
         }
       }
 
@@ -290,17 +396,22 @@ export function renderVoiceOutputMediaPage(token: string) {
           const state = await response.json()
 
           if (state.interruptCurrent && currentToken) {
-            currentToken = null
-            clearAudio()
+            clearCurrentClip()
             setStatus('Response interrupted, listening for the next one', false)
           }
 
-          if (state.nextToken && state.nextAudioUrl && state.nextToken !== currentToken) {
-            if (!audioEl.paused) {
-              clearAudio()
-            }
-            await playClip(state.nextToken, state.nextAudioUrl)
-          } else if (!currentToken && audioEl.paused) {
+          if (state.nextToken && state.nextAudioUrl) {
+            await queueClip(state.nextToken, state.nextAudioUrl)
+          }
+
+          await maybePlayNextClip()
+
+          if (
+            !currentToken &&
+            audioEl.paused &&
+            queuedClips.length === 0 &&
+            inflightFetchTokens.size === 0
+          ) {
             setStatus('Listening for the next response', false)
           }
 
@@ -316,19 +427,45 @@ export function renderVoiceOutputMediaPage(token: string) {
       }
 
       audioEl.addEventListener('ended', () => {
-        currentToken = null
-        clearAudio()
+        clearCurrentClip()
+        if (queuedClips.length > 0) {
+          setStatus('Buffering next response...', false)
+          void maybePlayNextClip()
+          return
+        }
+
         setStatus('Listening for the next response', false)
       })
 
       audioEl.addEventListener('error', () => {
-        currentToken = null
-        clearAudio()
+        if (currentToken && activeObjectUrl) {
+          const failedClip = {
+            token: currentToken,
+            objectUrl: activeObjectUrl,
+          }
+
+          resetAudioElement()
+          currentToken = null
+          activeObjectUrl = null
+
+          if (!queuedTokens.has(failedClip.token)) {
+            queuedTokens.add(failedClip.token)
+            queuedClips.unshift(failedClip)
+          }
+
+          setStatus('Audio playback hiccup, retrying...', false)
+          schedulePlaybackRetry()
+          return
+        }
+
         setStatus('Audio playback failed, waiting for retry', false)
       })
 
       window.addEventListener('beforeunload', () => {
         if (pollTimer) clearTimeout(pollTimer)
+        if (retryTimer) clearTimeout(retryTimer)
+        clearQueuedClips()
+        clearCurrentClip()
       })
 
       poll()

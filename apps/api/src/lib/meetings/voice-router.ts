@@ -126,6 +126,7 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
     meetingSession,
     question,
     responseFormat: 'plain_text',
+    deliveryMode: 'voice',
   })
 
   if (!result.ok) {

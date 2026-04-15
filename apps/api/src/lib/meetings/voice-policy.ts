@@ -99,7 +99,7 @@ export function isAnswerSpeakable(answer: MeetingAnswer): VoiceEligibilityResult
  * Truncate answer text to a safe maximum length for voice output.
  * Long answers are cut at a sentence boundary where possible.
  */
-export function truncateForVoice(text: string, maxChars = 800): string {
+export function truncateForVoice(text: string, maxChars = 320): string {
   if (text.length <= maxChars) return text
 
   const truncated = text.slice(0, maxChars)

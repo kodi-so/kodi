@@ -319,6 +319,8 @@ function buildRecallJoinPayload(
   return {
     meeting_url: request.meeting.joinUrl,
     bot_name: request.botIdentity?.displayName ?? 'Kodi',
+    // Required for POST /output_audio/ to work — enables direct audio injection.
+    automatic_audio_output: true,
     metadata,
     recording_config: realtimeWebhookUrl
       ? {

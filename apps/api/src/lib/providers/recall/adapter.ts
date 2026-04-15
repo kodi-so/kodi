@@ -32,6 +32,12 @@ import {
   resolveMeetingIdFromJoinUrl,
 } from '../../meetings/provider-url'
 
+// Minimal silent MP3 required by Recall's automatic_audio_output.in_call_recording.data.
+// Recall mandates a data payload at bot creation to enable POST /output_audio/.
+// This is a 0.1s 8kHz mono silent clip — actual TTS audio is injected separately.
+const SILENT_MP3_B64 =
+  'SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYxLjEuMTAwAAAAAAAAAAAAAAD/4zjAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAAB+ACSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpK2tra2tra2tra2tra2tra2tra2tra2tra229vb29vb29vb29vb29vb29vb29vb29vb2/////////////////////////////////8AAAAATGF2YzYxLjMuAAAAAAAAAAAAAAAAJAOgAAAAAAAAAfhBGjTSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4xjEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEOwAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEdgAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEsQAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU='
+
 function resolveRecallMeetingId(
   responseMeetingUrl: unknown,
   fallbackJoinUrl: string,
@@ -319,9 +325,17 @@ function buildRecallJoinPayload(
   return {
     meeting_url: request.meeting.joinUrl,
     bot_name: request.botIdentity?.displayName ?? 'Kodi',
-    // Required for POST /output_audio/ to work — enables direct audio injection.
-    // Recall requires in_call_recording to be specified with the audio format.
-    automatic_audio_output: { in_call_recording: { kind: 'mp3' } },
+    // Required for POST /output_audio/ to work. Recall requires in_call_recording
+    // with a data payload at bot creation time. We pass a minimal silent MP3 as
+    // the placeholder — actual TTS audio is injected separately via output_audio.
+    automatic_audio_output: {
+      in_call_recording: {
+        data: {
+          kind: 'mp3',
+          b64_data: SILENT_MP3_B64,
+        },
+      },
+    },
     metadata,
     recording_config: realtimeWebhookUrl
       ? {

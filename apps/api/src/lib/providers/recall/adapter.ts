@@ -320,8 +320,8 @@ function buildRecallJoinPayload(
     meeting_url: request.meeting.joinUrl,
     bot_name: request.botIdentity?.displayName ?? 'Kodi',
     // Required for POST /output_audio/ to work — enables direct audio injection.
-    // Recall expects an object (not a boolean) to configure audio output.
-    automatic_audio_output: {},
+    // Recall requires in_call_recording to be specified with the audio format.
+    automatic_audio_output: { in_call_recording: { kind: 'mp3' } },
     metadata,
     recording_config: realtimeWebhookUrl
       ? {

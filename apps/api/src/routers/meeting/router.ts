@@ -41,12 +41,8 @@ import {
 } from '../../lib/meetings/voice-policy'
 import { acquireVoiceLock, interruptActiveVoice } from '../../lib/meetings/voice-concurrency'
 import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
-import { storeVoiceAudio } from '../../lib/meetings/voice-audio-store'
 import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
-import {
-  ensureRecallOutputMediaActive,
-  stopRecallOutputMediaSession,
-} from '../../lib/meetings/voice-output-delivery'
+import { sendRecallBotOutputAudio } from '../../lib/providers/recall/client'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -821,12 +817,7 @@ export const meetingRouter = router({
           markdownToMeetingPlainText(answer.answerText!)
         )
 
-        // TTS generation and Output Media session refresh are independent — run
-        // them concurrently so the page is warm by the time the audio is ready.
-        const [ttsResult] = await Promise.all([
-          generateSpeech({ text: voiceText }),
-          ensureRecallOutputMediaActive({ botSessionId, meetingSessionId: meeting.id }),
-        ])
+        const ttsResult = await generateSpeech({ text: voiceText })
 
         if (!ttsResult.ok) {
           await markAnswerFailed(answer.id, meeting.id, `TTS failed: ${ttsResult.reason}`)
@@ -836,12 +827,7 @@ export const meetingRouter = router({
           })
         }
 
-        await storeVoiceAudio({
-          answerId: answer.id,
-          meetingSessionId: meeting.id,
-          buffer: ttsResult.audioBuffer,
-          contentType: ttsResult.contentType,
-        })
+        await sendRecallBotOutputAudio(botSessionId, ttsResult.audioBuffer)
 
         await markAnswerDeliveredToVoice(answer.id, meeting.id)
 
@@ -884,14 +870,6 @@ export const meetingRouter = router({
           meeting.id,
           'Voice output stopped by operator.'
         )
-      }
-
-      if (meeting.providerBotSessionId) {
-        try {
-          await stopRecallOutputMediaSession(meeting.providerBotSessionId)
-        } catch {
-          // Best-effort — bot may no longer be in call
-        }
       }
 
       return { ok: true, stoppedAnswerId: interruptedAnswerId ?? null }

@@ -8,6 +8,7 @@ import { ChevronLeft, CornerUpRight, Hash, Plus, Send } from 'lucide-react'
 import { Button, Textarea, cn } from '@kodi/ui'
 import { trpc } from '@/lib/trpc'
 import { useSession } from '@/lib/auth-client'
+import { getBudgetErrorMessage, BILLING_SETTINGS_PATH } from '@/lib/billing-errors'
 import { DashboardAssistant } from '../../dashboard/_components/dashboard-assistant'
 
 type Channel = {
@@ -656,10 +657,12 @@ export function ChatInterface({
       setMessages((current) =>
         current.filter((message) => message.id !== optimisticMessageId)
       )
+      const budgetMsg = getBudgetErrorMessage(sendError)
       setError(
-        sendError instanceof Error
-          ? sendError.message
-          : 'Failed to send message.'
+        budgetMsg ??
+          (sendError instanceof Error
+            ? sendError.message
+            : 'Failed to send message.'),
       )
 
       if (isThreadReply) {
@@ -922,9 +925,17 @@ export function ChatInterface({
             />
 
             {error ? (
-              <p className="px-4 pb-4 text-sm text-brand-danger sm:px-6">
+              <div className="px-4 pb-4 text-sm text-brand-danger sm:px-6">
                 {error}
-              </p>
+                {getBudgetErrorMessage(error) && (
+                  <a
+                    href={BILLING_SETTINGS_PATH}
+                    className="ml-1 text-brand-info underline underline-offset-2"
+                  >
+                    Go to Billing Settings
+                  </a>
+                )}
+              </div>
             ) : null}
           </div>
         ) : (
@@ -1051,9 +1062,17 @@ export function ChatInterface({
             />
 
             {error ? (
-              <p className="px-4 pb-4 text-sm text-brand-danger sm:px-6">
+              <div className="px-4 pb-4 text-sm text-brand-danger sm:px-6">
                 {error}
-              </p>
+                {getBudgetErrorMessage(error) && (
+                  <a
+                    href={BILLING_SETTINGS_PATH}
+                    className="ml-1 text-brand-info underline underline-offset-2"
+                  >
+                    Go to Billing Settings
+                  </a>
+                )}
+              </div>
             ) : null}
           </div>
         )}

@@ -7,6 +7,7 @@ import { Plus, Send } from 'lucide-react'
 import { Button, Textarea, cn } from '@kodi/ui'
 import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
+import { getBudgetErrorMessage, BILLING_SETTINGS_PATH } from '@/lib/billing-errors'
 
 type ConversationMessage = {
   id: string
@@ -232,10 +233,12 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
         current.filter((message) => message.id !== optimisticUserId)
       )
       setDraft(content)
+      const budgetMsg = getBudgetErrorMessage(sendError)
       setError(
-        sendError instanceof Error
-          ? sendError.message
-          : 'Failed to send message.'
+        budgetMsg ??
+          (sendError instanceof Error
+            ? sendError.message
+            : 'Failed to send message.'),
       )
     } finally {
       setSending(false)
@@ -367,7 +370,17 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
         </div>
 
         {error ? (
-          <p className="mt-2 text-sm text-brand-danger">{error}</p>
+          <div className="mt-2 text-sm text-brand-danger">
+            {error}
+            {getBudgetErrorMessage(error) && (
+              <a
+                href={BILLING_SETTINGS_PATH}
+                className="ml-1 text-brand-info underline underline-offset-2"
+              >
+                Go to Billing Settings
+              </a>
+            )}
+          </div>
         ) : null}
       </div>
     </section>

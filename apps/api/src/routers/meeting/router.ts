@@ -620,6 +620,7 @@ export const meetingRouter = router({
         orgId: ctx.org.id,
         meetingSession: meeting,
         question: input.question,
+        deliveryMode: 'ui',
       })
 
       if (!result.ok) {

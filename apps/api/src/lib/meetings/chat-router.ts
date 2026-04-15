@@ -105,6 +105,7 @@ export async function routeMeetingChatEvent(ctx: ChatRouterContext): Promise<voi
     meetingSession,
     question,
     responseFormat: 'plain_text',
+    deliveryMode: 'chat',
   })
 
   if (!result.ok) {

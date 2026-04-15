@@ -74,6 +74,7 @@ export function detectVoiceTriggerInTranscript(
     const patterns = [
       new RegExp(`^@${escaped}\\b[\\s,:-]*(.+)$`, 'i'),
       new RegExp(`^(?:hey|hi|hello|ok|okay|yo)\\s+${escaped}\\b[\\s,:-]+(.+)$`, 'i'),
+      new RegExp(`^.*\\b(?:hey|hi|hello|ok|okay|yo)\\s+${escaped}\\b[\\s,:-]+(.+)$`, 'i'),
       new RegExp(`^${escaped}\\b[\\s,:-]+(.+)$`, 'i'),
     ]
 

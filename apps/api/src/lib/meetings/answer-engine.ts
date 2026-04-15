@@ -14,6 +14,7 @@ export type MeetingAnswerGrounding = {
 }
 
 export type MeetingAnswerFormat = 'markdown' | 'plain_text'
+export type MeetingAnswerDeliveryMode = 'ui' | 'chat' | 'voice'
 
 export type GenerateMeetingAnswerResult =
   | {
@@ -36,6 +37,7 @@ type GenerateMeetingAnswerInput = {
   meetingSession: MeetingSession
   question: string
   responseFormat?: MeetingAnswerFormat
+  deliveryMode?: MeetingAnswerDeliveryMode
 }
 
 function buildAnswerMessages(input: {
@@ -43,6 +45,7 @@ function buildAnswerMessages(input: {
   analysis: Awaited<ReturnType<typeof loadMeetingAnalysisContext>>
   question: string
   responseFormat: MeetingAnswerFormat
+  deliveryMode: MeetingAnswerDeliveryMode
 }) {
   const hasMeetingContext =
     input.analysis.transcriptTurns.length > 0 || input.analysis.snapshot != null
@@ -50,10 +53,16 @@ function buildAnswerMessages(input: {
     input.responseFormat === 'plain_text'
       ? 'Respond in plain text only. Do not use markdown, bullets with asterisks, or code fences.'
       : 'Respond in markdown.'
+  const deliveryInstruction =
+    input.deliveryMode === 'voice'
+      ? 'This answer will be spoken aloud in a live meeting. Make it easy to hear in one pass: lead with the answer, use 1 to 2 short sentences, stay under 45 words unless absolutely necessary, and avoid lists, quoted transcript, parentheticals, or filler.'
+      : input.deliveryMode === 'chat'
+        ? 'Keep the answer concise and easy to scan.'
+        : 'Be concise.'
 
   const systemPrompt = hasMeetingContext
-    ? `You are Kodi, an AI meeting copilot. You have access to the live meeting context below including the current transcript, participants, and meeting state. Answer the user's question directly and helpfully. For questions about the meeting, use the provided context. For general questions, draw on your broader knowledge. Be concise. ${responseFormatInstruction}`
-    : `You are Kodi, an AI meeting copilot. No meeting context is available yet for this session. Answer the user's question using your general knowledge. Be concise. ${responseFormatInstruction}`
+    ? `You are Kodi, an AI meeting copilot. You have access to the live meeting context below including the current transcript, participants, and meeting state. Answer the user's question directly and helpfully. For questions about the meeting, use the provided context. For general questions, draw on your broader knowledge. ${deliveryInstruction} ${responseFormatInstruction}`
+    : `You are Kodi, an AI meeting copilot. No meeting context is available yet for this session. Answer the user's question using your general knowledge. ${deliveryInstruction} ${responseFormatInstruction}`
 
   if (!hasMeetingContext) {
     return [
@@ -96,6 +105,7 @@ export async function generateMeetingAnswer(
   input: GenerateMeetingAnswerInput
 ): Promise<GenerateMeetingAnswerResult> {
   const responseFormat = input.responseFormat ?? 'markdown'
+  const deliveryMode = input.deliveryMode ?? 'ui'
   // 20 recent turns covers the live conversation window; the rolling summary
   // and notes capture older context, so 60 turns was unnecessary overhead.
   const analysis = await loadMeetingAnalysisContext({
@@ -108,6 +118,7 @@ export async function generateMeetingAnswer(
     analysis,
     question: input.question,
     responseFormat,
+    deliveryMode,
   })
 
   const response = await openClawChatCompletion({
@@ -120,7 +131,7 @@ export async function generateMeetingAnswer(
     temperature: 0,
     // Cap response length — Q&A answers don't need to be essays, and a tight
     // max_tokens bound reduces generation time on the model side.
-    maxTokens: 600,
+    maxTokens: deliveryMode === 'voice' ? 160 : 600,
   })
 
   if (!response.ok) {

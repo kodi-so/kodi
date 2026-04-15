@@ -57,6 +57,18 @@ describe('voice-router triggers', () => {
     })
   })
 
+  it('supports wake phrases that appear after conversational lead-in text', () => {
+    expect(
+      detectVoiceTriggerInTranscript(
+        'That was wild hey cody can you say that again?',
+        ['Kodi']
+      )
+    ).toEqual({
+      isVoiceTrigger: true,
+      question: 'can you say that again?',
+    })
+  })
+
   it('does not trigger on unrelated transcript text', () => {
     expect(
       detectVoiceTriggerInTranscript(

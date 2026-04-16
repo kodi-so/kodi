@@ -7,12 +7,14 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   ArrowLeft,
+  ArrowUpRight,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
   ClipboardList,
+  ExternalLink,
   FileText,
   Loader2,
   MessageSquare,
@@ -20,6 +22,7 @@ import {
   Pencil,
   RefreshCw,
   RotateCcw,
+  Send,
   SendHorizonal,
   Sparkles,
   Trash2,
@@ -126,6 +129,9 @@ type MeetingArtifact = Awaited<
 type WorkItem = Awaited<
   ReturnType<typeof trpc.work.listByMeeting.query>
 >[number]
+
+type SyncTarget = 'linear' | 'github'
+type RecapTarget = 'slack' | 'zoom'
 
 function failureReasonToMessage(reason: string | null): string {
   if (reason === 'openclaw-unavailable') return "Kodi's AI instance isn't reachable. Make sure your OpenClaw instance is running."
@@ -610,6 +616,14 @@ type PostMeetingReviewProps = {
   onEditDueAtChange: (v: string) => void
   onApprove: (id: string) => void
   onReject: (id: string) => void
+  // Phase 6 — sync + recap delivery
+  syncingItem: { id: string; target: SyncTarget } | null
+  onSync: (id: string, target: SyncTarget) => void
+  syncError: string | null
+  recapDelivering: boolean
+  recapDeliverTarget: RecapTarget | null
+  onDeliverRecap: (target: RecapTarget) => void
+  recapDeliverError: string | null
   quietTextClass: string
   subtleTextClass: string
   dashedPanelClass: string
@@ -622,6 +636,11 @@ function workItemStatusTone(status: string) {
     case 'cancelled':
       return 'destructive' as const
     case 'draft':
+      return 'warning' as const
+    case 'synced':
+    case 'done':
+      return 'info' as const
+    case 'executing':
       return 'warning' as const
     default:
       return 'neutral' as const
@@ -638,6 +657,8 @@ function workItemStatusLabel(status: string) {
       return 'Rejected'
     case 'synced':
       return 'Synced'
+    case 'executing':
+      return 'Executing'
     case 'done':
       return 'Done'
     default:
@@ -691,6 +712,13 @@ function PostMeetingReview({
   onEditDueAtChange,
   onApprove,
   onReject,
+  syncingItem,
+  onSync,
+  syncError,
+  recapDelivering,
+  recapDeliverTarget,
+  onDeliverRecap,
+  recapDeliverError,
   quietTextClass,
   subtleTextClass,
   dashedPanelClass,
@@ -781,6 +809,52 @@ function PostMeetingReview({
         </CardHeader>
 
         <CardContent className="space-y-5">
+          {/* Recap delivery (Slack / Zoom) */}
+          {!isSummarizing && !loading && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className={`text-xs ${subtleTextClass}`}>
+                Deliver this recap to your team
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={recapDelivering}
+                  onClick={() => onDeliverRecap('slack')}
+                  className="gap-1.5 text-xs"
+                >
+                  {recapDelivering && recapDeliverTarget === 'slack' ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Send size={12} />
+                  )}
+                  {recapDelivering && recapDeliverTarget === 'slack' ? 'Sending…' : 'Send to Slack'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={recapDelivering}
+                  onClick={() => onDeliverRecap('zoom')}
+                  className="gap-1.5 text-xs"
+                >
+                  {recapDelivering && recapDeliverTarget === 'zoom' ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Send size={12} />
+                  )}
+                  {recapDelivering && recapDeliverTarget === 'zoom' ? 'Sending…' : 'Send to Zoom'}
+                </Button>
+              </div>
+            </div>
+          )}
+          {recapDeliverError && (
+            <p className="rounded-[0.8rem] bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {recapDeliverError}
+            </p>
+          )}
+
           {/* Summary */}
           <div>
             <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
@@ -1064,7 +1138,67 @@ function PostMeetingReview({
                                 Suggested: {dueDateHint}
                               </span>
                             )}
+                            {/* External link once synced */}
+                            {item.externalId && (
+                              <span className="flex items-center gap-1 text-brand-accent-strong">
+                                {item.externalSystem && (
+                                  <span className="capitalize">{item.externalSystem}:</span>
+                                )}
+                                {getArtifactMetaString(meta, 'externalUrl') ? (
+                                  <a
+                                    href={getArtifactMetaString(meta, 'externalUrl')!}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-0.5 hover:underline"
+                                  >
+                                    {item.externalId}
+                                    <ArrowUpRight size={11} />
+                                  </a>
+                                ) : (
+                                  item.externalId
+                                )}
+                              </span>
+                            )}
                           </div>
+
+                          {/* Sync to Linear / GitHub for approved items */}
+                          {item.status === 'approved' && !item.externalId && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {syncError && syncingItem?.id === item.id && (
+                                <p className="w-full text-xs text-destructive">{syncError}</p>
+                              )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={syncingItem !== null}
+                                onClick={() => onSync(item.id, 'linear')}
+                                className="h-7 gap-1 text-xs"
+                              >
+                                {syncingItem?.id === item.id && syncingItem.target === 'linear' ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <ExternalLink size={11} />
+                                )}
+                                Linear
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={syncingItem !== null}
+                                onClick={() => onSync(item.id, 'github')}
+                                className="h-7 gap-1 text-xs"
+                              >
+                                {syncingItem?.id === item.id && syncingItem.target === 'github' ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <ExternalLink size={11} />
+                                )}
+                                GitHub
+                              </Button>
+                            </div>
+                          )}
                         </div>
 
                         {item.status !== 'cancelled' && (
@@ -1179,6 +1313,12 @@ export default function MeetingDetailsPage() {
   const [editWorkItemOwnerHint, setEditWorkItemOwnerHint] = useState('')
   const [editWorkItemDueAt, setEditWorkItemDueAt] = useState('')
   const [workItemSaving, setWorkItemSaving] = useState<string | null>(null)
+  // Phase 6 — sync + recap delivery state
+  const [syncingItem, setSyncingItem] = useState<{ id: string; target: SyncTarget } | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [recapDelivering, setRecapDelivering] = useState(false)
+  const [recapDeliverTarget, setRecapDeliverTarget] = useState<RecapTarget | null>(null)
+  const [recapDeliverError, setRecapDeliverError] = useState<string | null>(null)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -1627,6 +1767,48 @@ export default function MeetingDetailsPage() {
       // Non-fatal — status poll will reflect changes
     } finally {
       setRetryingArtifacts(false)
+    }
+  }
+
+  async function syncWorkItem(itemId: string, target: SyncTarget) {
+    if (!orgId || syncingItem) return
+    setSyncingItem({ id: itemId, target })
+    setSyncError(null)
+    try {
+      const result = await trpc.work.queueSync.mutate({ orgId, workItemId: itemId, target })
+      if (result.mode === 'executed') {
+        // Direct execution: mark the item as synced in local state
+        setWorkItemsList((prev) =>
+          prev.map((w) => (w.id === itemId ? { ...w, status: 'synced' as const } : w))
+        )
+      } else {
+        // Queued for approval: reload the item to pick up status changes
+        setWorkItemsList((prev) =>
+          prev.map((w) => (w.id === itemId ? { ...w, status: 'executing' as const } : w))
+        )
+      }
+    } catch (err) {
+      setSyncError(
+        err instanceof Error ? err.message : 'Failed to queue sync. Check your integrations.'
+      )
+    } finally {
+      setSyncingItem(null)
+    }
+  }
+
+  async function deliverRecap(target: RecapTarget) {
+    if (!orgId || recapDelivering) return
+    setRecapDelivering(true)
+    setRecapDeliverTarget(target)
+    setRecapDeliverError(null)
+    try {
+      await trpc.meeting.deliverRecap.mutate({ orgId, meetingSessionId, target })
+    } catch (err) {
+      setRecapDeliverError(
+        err instanceof Error ? err.message : `Failed to deliver recap to ${target}.`
+      )
+    } finally {
+      setRecapDelivering(false)
     }
   }
 
@@ -2109,6 +2291,13 @@ export default function MeetingDetailsPage() {
             onEditDueAtChange={setEditWorkItemDueAt}
             onApprove={(id) => void approveWorkItem(id)}
             onReject={(id) => void rejectWorkItem(id)}
+            syncingItem={syncingItem}
+            onSync={(id, target) => void syncWorkItem(id, target)}
+            syncError={syncError}
+            recapDelivering={recapDelivering}
+            recapDeliverTarget={recapDeliverTarget}
+            onDeliverRecap={(target) => void deliverRecap(target)}
+            recapDeliverError={recapDeliverError}
             quietTextClass={quietTextClass}
             subtleTextClass={subtleTextClass}
             dashedPanelClass={dashedPanelClass}

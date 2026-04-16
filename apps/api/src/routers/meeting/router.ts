@@ -45,6 +45,10 @@ import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
 import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
 import { sendRecallBotOutputAudio } from '../../lib/providers/recall/client'
 import { retryPostMeetingArtifacts } from '../../lib/meetings/post-meeting-service'
+import {
+  queueMeetingRecap,
+  type RecapDeliveryTarget,
+} from '../../lib/meetings/work-item-sync'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -932,5 +936,50 @@ export const meetingRouter = router({
       })
 
       return { ok: true }
+    }),
+
+  deliverRecap: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        target: z.enum(['slack', 'zoom']),
+        channelId: z.string().trim().max(200).nullish(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true, title: true, status: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      try {
+        const result = await queueMeetingRecap({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          meetingSessionId: meeting.id,
+          meetingTitle: meeting.title,
+          target: input.target as RecapDeliveryTarget,
+          channelId: input.channelId ?? null,
+        })
+
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Failed to queue meeting recap delivery.',
+        })
+      }
     }),
 })

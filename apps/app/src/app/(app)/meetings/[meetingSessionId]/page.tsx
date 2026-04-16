@@ -592,6 +592,130 @@ function groupTranscriptBySpeaker(turns: MeetingTranscriptTurn[]): TranscriptSpe
 }
 
 // ---------------------------------------------------------------------------
+// SlackSendModal
+// ---------------------------------------------------------------------------
+
+function SlackSendModal({
+  open,
+  onClose,
+  onSend,
+  delivering,
+  defaultChannel,
+  meetingTitle,
+  summaryContent,
+}: {
+  open: boolean
+  onClose: () => void
+  onSend: (channel: string) => void
+  delivering: boolean
+  defaultChannel: string | null
+  meetingTitle: string | null
+  summaryContent: string | null
+}) {
+  const [channel, setChannel] = useState(defaultChannel ?? '')
+
+  useEffect(() => {
+    if (open) setChannel(defaultChannel ?? '')
+  }, [open, defaultChannel])
+
+  if (!open) return null
+
+  const cleanChannel = channel.replace(/^#/, '').trim()
+  const previewText = `*${meetingTitle ?? 'Meeting'} — Meeting Recap*\n\n${summaryContent ?? '(Summary not yet available)'}`
+
+  function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.target === e.currentTarget && !delivering) onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={handleBackdropClick}
+    >
+      <div className="w-full max-w-lg rounded-[1.6rem] border border-brand-line bg-background shadow-2xl">
+        <div className="space-y-4 p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Send recap to Slack</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Choose a channel and review the message before sending.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={delivering}
+              onClick={onClose}
+              className="shrink-0 text-muted-foreground"
+            >
+              <X size={16} />
+            </Button>
+          </div>
+
+          {/* Message preview */}
+          <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Message preview
+            </p>
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-foreground line-clamp-6">
+              {previewText}
+            </pre>
+          </div>
+
+          {/* Channel input */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground" htmlFor="slack-channel-input">
+              Channel <span className="text-destructive">*</span>
+            </label>
+            <div className="flex items-center rounded-[0.8rem] border border-brand-line bg-brand-elevated px-3 focus-within:ring-2 focus-within:ring-brand-accent/40">
+              <span className="mr-1 select-none text-sm text-muted-foreground">#</span>
+              <Input
+                id="slack-channel-input"
+                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                placeholder="general"
+                value={channel.replace(/^#/, '')}
+                onChange={(e) => setChannel(e.target.value.replace(/^#/, ''))}
+                disabled={delivering}
+                autoFocus
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Enter the channel name without the # prefix.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-brand-line px-6 py-4">
+          <Button
+            type="button"
+            variant="ghost"
+            className="border border-brand-line"
+            disabled={delivering}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!cleanChannel || delivering}
+            onClick={() => onSend(cleanChannel)}
+            className="gap-1.5"
+          >
+            {delivering ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Send size={14} />
+            )}
+            {delivering ? 'Sending…' : 'Send to Slack'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // PostMeetingReview — KOD-73 + KOD-74
 // ---------------------------------------------------------------------------
 
@@ -622,7 +746,10 @@ type PostMeetingReviewProps = {
   syncError: string | null
   recapDelivering: boolean
   recapDeliverTarget: RecapTarget | null
-  onDeliverRecap: (target: RecapTarget) => void
+  onDeliverRecap: (target: RecapTarget, channelId?: string) => void
+  onOpenSlackModal: () => void
+  hasSlackConnection: boolean
+  hasZoomConnection: boolean
   recapDeliverError: string | null
   quietTextClass: string
   subtleTextClass: string
@@ -718,6 +845,9 @@ function PostMeetingReview({
   recapDelivering,
   recapDeliverTarget,
   onDeliverRecap,
+  onOpenSlackModal,
+  hasSlackConnection,
+  hasZoomConnection,
   recapDeliverError,
   quietTextClass,
   subtleTextClass,
@@ -809,43 +939,47 @@ function PostMeetingReview({
         </CardHeader>
 
         <CardContent className="space-y-5">
-          {/* Recap delivery (Slack / Zoom) */}
-          {!isSummarizing && !loading && (
+          {/* Recap delivery (Slack / Zoom) — only shown when at least one integration is connected */}
+          {!isSummarizing && !loading && (hasSlackConnection || hasZoomConnection) && (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className={`text-xs ${subtleTextClass}`}>
                 Deliver this recap to your team
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={recapDelivering}
-                  onClick={() => onDeliverRecap('slack')}
-                  className="gap-1.5 text-xs"
-                >
-                  {recapDelivering && recapDeliverTarget === 'slack' ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Send size={12} />
-                  )}
-                  {recapDelivering && recapDeliverTarget === 'slack' ? 'Sending…' : 'Send to Slack'}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={recapDelivering}
-                  onClick={() => onDeliverRecap('zoom')}
-                  className="gap-1.5 text-xs"
-                >
-                  {recapDelivering && recapDeliverTarget === 'zoom' ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Send size={12} />
-                  )}
-                  {recapDelivering && recapDeliverTarget === 'zoom' ? 'Sending…' : 'Send to Zoom'}
-                </Button>
+                {hasSlackConnection && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={recapDelivering}
+                    onClick={onOpenSlackModal}
+                    className="gap-1.5 text-xs"
+                  >
+                    {recapDelivering && recapDeliverTarget === 'slack' ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Send size={12} />
+                    )}
+                    {recapDelivering && recapDeliverTarget === 'slack' ? 'Sending…' : 'Send to Slack'}
+                  </Button>
+                )}
+                {hasZoomConnection && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={recapDelivering}
+                    onClick={() => onDeliverRecap('zoom')}
+                    className="gap-1.5 text-xs"
+                  >
+                    {recapDelivering && recapDeliverTarget === 'zoom' ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Send size={12} />
+                    )}
+                    {recapDelivering && recapDeliverTarget === 'zoom' ? 'Sending…' : 'Zoom Team Chat'}
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1319,6 +1453,10 @@ export default function MeetingDetailsPage() {
   const [recapDelivering, setRecapDelivering] = useState(false)
   const [recapDeliverTarget, setRecapDeliverTarget] = useState<RecapTarget | null>(null)
   const [recapDeliverError, setRecapDeliverError] = useState<string | null>(null)
+  // Slack send modal
+  const [slackModalOpen, setSlackModalOpen] = useState(false)
+  const [slackDefaultChannel, setSlackDefaultChannel] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, boolean> | null>(null)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -1413,6 +1551,40 @@ export default function MeetingDetailsPage() {
   // Re-load when status transitions into or within post-meeting states
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId, meetingSessionId, consoleData?.meeting.status])
+
+  // Load integration connection status and Slack default channel once the
+  // meeting enters a post-meeting state (where the delivery buttons appear).
+  useEffect(() => {
+    if (!orgId) return
+    const status = consoleData?.meeting?.status
+    const isPostMeeting =
+      status === 'summarizing' ||
+      status === 'completed' ||
+      status === 'awaiting_approval' ||
+      status === 'executing' ||
+      status === 'ended'
+    if (!isPostMeeting || connectionStatus !== null) return
+
+    async function loadDeliveryConfig() {
+      if (!orgId) return
+      try {
+        const [status, defaults] = await Promise.all([
+          trpc.toolAccess.checkConnections.query({
+            orgId,
+            toolkitSlugs: ['slack', 'zoom'],
+          }),
+          trpc.toolAccess.getToolkitDefaults.query({ orgId, toolkitSlug: 'slack' }),
+        ])
+        setConnectionStatus(status)
+        setSlackDefaultChannel(defaults.defaultChannel)
+      } catch {
+        // Non-fatal — delivery buttons stay hidden if check fails
+      }
+    }
+
+    void loadDeliveryConfig()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, consoleData?.meeting?.status])
 
   // Load Ask Kodi answer history from the server on mount so it survives
   // page refreshes. Only loads once; new answers are appended optimistically.
@@ -1796,13 +1968,18 @@ export default function MeetingDetailsPage() {
     }
   }
 
-  async function deliverRecap(target: RecapTarget) {
+  async function deliverRecap(target: RecapTarget, channelId?: string) {
     if (!orgId || recapDelivering) return
     setRecapDelivering(true)
     setRecapDeliverTarget(target)
     setRecapDeliverError(null)
     try {
-      await trpc.meeting.deliverRecap.mutate({ orgId, meetingSessionId, target })
+      await trpc.meeting.deliverRecap.mutate({
+        orgId,
+        meetingSessionId,
+        target,
+        channelId: channelId ?? null,
+      })
     } catch (err) {
       setRecapDeliverError(
         err instanceof Error ? err.message : `Failed to deliver recap to ${target}.`
@@ -1810,6 +1987,11 @@ export default function MeetingDetailsPage() {
     } finally {
       setRecapDelivering(false)
     }
+  }
+
+  function handleSlackSend(channel: string) {
+    setSlackModalOpen(false)
+    void deliverRecap('slack', channel)
   }
 
   async function handleAskKodi(e: React.FormEvent) {
@@ -2296,13 +2478,28 @@ export default function MeetingDetailsPage() {
             syncError={syncError}
             recapDelivering={recapDelivering}
             recapDeliverTarget={recapDeliverTarget}
-            onDeliverRecap={(target) => void deliverRecap(target)}
+            onDeliverRecap={(target, channelId) => void deliverRecap(target, channelId)}
+            onOpenSlackModal={() => setSlackModalOpen(true)}
+            hasSlackConnection={connectionStatus?.['slack'] ?? false}
+            hasZoomConnection={connectionStatus?.['zoom'] ?? false}
             recapDeliverError={recapDeliverError}
             quietTextClass={quietTextClass}
             subtleTextClass={subtleTextClass}
             dashedPanelClass={dashedPanelClass}
           />
         )}
+
+        <SlackSendModal
+          open={slackModalOpen}
+          onClose={() => setSlackModalOpen(false)}
+          onSend={handleSlackSend}
+          delivering={recapDelivering && recapDeliverTarget === 'slack'}
+          defaultChannel={slackDefaultChannel}
+          meetingTitle={meeting?.title ?? null}
+          summaryContent={
+            artifacts.find((a) => a.artifactType === 'summary')?.content ?? null
+          }
+        />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
           <div className="space-y-6">

@@ -636,7 +636,7 @@ function SlackSendModal({
     if (!orgId) return
     setChannelsLoading(true)
     trpc.toolAccess.listSlackChannels
-      .query()
+      .query({ orgId })
       .then((result) => {
         setChannels(result.channels)
         if (result.error) setChannelsError(result.error)

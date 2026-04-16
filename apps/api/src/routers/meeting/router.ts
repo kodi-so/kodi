@@ -6,6 +6,7 @@ import { TRPCError } from '@trpc/server'
 import {
   eq,
   meetingAnswers,
+  meetingArtifacts,
   meetingCopilotSettings,
   meetingParticipationModeValues,
   meetingSessionControls,
@@ -43,6 +44,7 @@ import { acquireVoiceLock, interruptActiveVoice } from '../../lib/meetings/voice
 import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
 import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
 import { sendRecallBotOutputAudio } from '../../lib/providers/recall/client'
+import { retryPostMeetingArtifacts } from '../../lib/meetings/post-meeting-service'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -873,5 +875,62 @@ export const meetingRouter = router({
       }
 
       return { ok: true, stoppedAnswerId: interruptedAnswerId ?? null }
+    }),
+
+  listArtifacts: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      return ctx.db.query.meetingArtifacts.findMany({
+        where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+        orderBy: (fields, { asc }) => asc(fields.createdAt),
+      })
+    }),
+
+  retryArtifacts: ownerProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      void retryPostMeetingArtifacts(meeting.id, ctx.org.id).catch((error) => {
+        console.warn('[meetings] retryArtifacts failed', {
+          orgId: ctx.org.id,
+          meetingSessionId: meeting.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+
+      return { ok: true }
     }),
 })

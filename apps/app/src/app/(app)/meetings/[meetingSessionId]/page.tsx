@@ -603,6 +603,7 @@ function SlackSendModal({
   defaultChannel,
   meetingTitle,
   summaryContent,
+  orgId,
 }: {
   open: boolean
   onClose: () => void
@@ -611,17 +612,62 @@ function SlackSendModal({
   defaultChannel: string | null
   meetingTitle: string | null
   summaryContent: string | null
+  orgId: string | null
 }) {
-  const [channel, setChannel] = useState(defaultChannel ?? '')
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState(defaultChannel ?? '')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [channels, setChannels] = useState<Array<{ id: string; name: string }>>([])
+  const [channelsLoading, setChannelsLoading] = useState(false)
+  const inputRef = useCallback((el: HTMLInputElement | null) => {
+    if (el && open) setTimeout(() => el.focus(), 50)
+  }, [open])
 
+  // Reset and load channels when modal opens
   useEffect(() => {
-    if (open) setChannel(defaultChannel ?? '')
-  }, [open, defaultChannel])
+    if (!open) return
+    setSelected(defaultChannel ?? '')
+    setQuery(defaultChannel ?? '')
+    setDropdownOpen(false)
+    setChannels([])
+
+    if (!orgId) return
+    setChannelsLoading(true)
+    trpc.toolAccess.listSlackChannels
+      .query({ orgId })
+      .then((result) => {
+        setChannels(result.channels)
+      })
+      .catch(() => {
+        // Non-fatal: fall back to free-text entry
+      })
+      .finally(() => {
+        setChannelsLoading(false)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   if (!open) return null
 
-  const cleanChannel = channel.replace(/^#/, '').trim()
+  const cleanSelected = selected.replace(/^#/, '').trim()
   const previewText = `*${meetingTitle ?? 'Meeting'} — Meeting Recap*\n\n${summaryContent ?? '(Summary not yet available)'}`
+
+  const filteredChannels = channels.filter((c) =>
+    c.name.toLowerCase().includes(query.toLowerCase().replace(/^#/, ''))
+  )
+
+  function handleSelect(name: string) {
+    setSelected(name)
+    setQuery(name)
+    setDropdownOpen(false)
+  }
+
+  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/^#/, '')
+    setQuery(val)
+    setSelected(val)
+    setDropdownOpen(true)
+  }
 
   function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
     if (e.target === e.currentTarget && !delivering) onClose()
@@ -658,30 +704,78 @@ function SlackSendModal({
             <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               Message preview
             </p>
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-foreground line-clamp-6">
+            <pre className="line-clamp-6 whitespace-pre-wrap font-sans text-sm leading-6 text-foreground">
               {previewText}
             </pre>
           </div>
 
-          {/* Channel input */}
+          {/* Channel picker */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground" htmlFor="slack-channel-input">
               Channel <span className="text-destructive">*</span>
             </label>
-            <div className="flex items-center rounded-[0.8rem] border border-brand-line bg-brand-elevated px-3 focus-within:ring-2 focus-within:ring-brand-accent/40">
-              <span className="mr-1 select-none text-sm text-muted-foreground">#</span>
-              <Input
-                id="slack-channel-input"
-                className="h-8 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-                placeholder="general"
-                value={channel.replace(/^#/, '')}
-                onChange={(e) => setChannel(e.target.value.replace(/^#/, ''))}
-                disabled={delivering}
-                autoFocus
-              />
+            <div className="relative">
+              <div className="flex items-center rounded-[0.8rem] border border-brand-line bg-brand-elevated px-3 focus-within:ring-2 focus-within:ring-brand-accent/40">
+                {channelsLoading ? (
+                  <Loader2 size={13} className="mr-2 shrink-0 animate-spin text-muted-foreground" />
+                ) : (
+                  <span className="mr-1 select-none text-sm text-muted-foreground">#</span>
+                )}
+                <Input
+                  id="slack-channel-input"
+                  ref={inputRef}
+                  className="h-8 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                  placeholder={channelsLoading ? 'Loading channels…' : 'Search channels…'}
+                  value={query}
+                  onChange={handleQueryChange}
+                  onFocus={() => setDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setDropdownOpen(false), 120)}
+                  disabled={delivering}
+                  autoComplete="off"
+                />
+                {cleanSelected && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    title="Clear channel"
+                    className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => { setSelected(''); setQuery(''); setDropdownOpen(true) }}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {dropdownOpen && filteredChannels.length > 0 && (
+                <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-[0.8rem] border border-brand-line bg-background shadow-lg">
+                  {filteredChannels.map((ch) => (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-brand-elevated ${
+                        selected === ch.name ? 'bg-brand-elevated font-medium text-foreground' : 'text-foreground'
+                      }`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelect(ch.name)}
+                    >
+                      <span className="text-muted-foreground">#</span>
+                      {ch.name}
+                      {selected === ch.name && <Check size={13} className="ml-auto shrink-0 text-brand-accent-strong" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {dropdownOpen && !channelsLoading && channels.length === 0 && query.trim().length > 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-[0.8rem] border border-brand-line bg-background px-3 py-2 text-sm text-muted-foreground shadow-lg">
+                  No channels found. The name you typed will be used directly.
+                </div>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Enter the channel name without the # prefix.
+              {channels.length > 0
+                ? `${channels.length} channels available — type to filter.`
+                : 'Type the channel name without the # prefix.'}
             </p>
           </div>
         </div>
@@ -698,8 +792,8 @@ function SlackSendModal({
           </Button>
           <Button
             type="button"
-            disabled={!cleanChannel || delivering}
-            onClick={() => onSend(cleanChannel)}
+            disabled={!cleanSelected || delivering}
+            onClick={() => onSend(cleanSelected)}
             className="gap-1.5"
           >
             {delivering ? (
@@ -2499,6 +2593,7 @@ export default function MeetingDetailsPage() {
           summaryContent={
             artifacts.find((a) => a.artifactType === 'summary')?.content ?? null
           }
+          orgId={orgId}
         />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">

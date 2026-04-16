@@ -41,7 +41,8 @@ import {
 } from '@/lib/brand-styles'
 import { getMeetingRuntimeCopy } from './_lib/runtime-state'
 
-type MeetingListItem = Awaited<ReturnType<typeof trpc.meeting.list.query>>
+type MeetingListResponse = Awaited<ReturnType<typeof trpc.meeting.list.query>>
+type MeetingListItem = MeetingListResponse['items']
 type MeetingCopilotConfig = Awaited<
   ReturnType<typeof trpc.meeting.getCopilotSettings.query>
 >
@@ -162,6 +163,8 @@ export default function MeetingsPage() {
   const router = useRouter()
   const { activeOrg } = useOrg()
   const [meetings, setMeetings] = useState<MeetingListItem>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [copilotConfig, setCopilotConfig] =
     useState<MeetingCopilotConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -205,12 +208,13 @@ export default function MeetingsPage() {
 
     async function load() {
       try {
-        const [meetingItems, nextCopilotConfig] = await Promise.all([
+        const [listResult, nextCopilotConfig] = await Promise.all([
           trpc.meeting.list.query({ orgId, limit: 20 }),
           trpc.meeting.getCopilotSettings.query({ orgId }),
         ])
         if (cancelled) return
-        setMeetings(meetingItems)
+        setMeetings(listResult.items)
+        setNextCursor(listResult.nextCursor)
         setCopilotConfig(nextCopilotConfig)
       } catch (err) {
         if (cancelled) return
@@ -234,11 +238,12 @@ export default function MeetingsPage() {
     startRefreshTransition(() => {
       void (async () => {
         try {
-          const meetingItems = await trpc.meeting.list.query({
+          const listResult = await trpc.meeting.list.query({
             orgId: activeOrg.orgId,
             limit: 20,
           })
-          setMeetings(meetingItems)
+          setMeetings(listResult.items)
+          setNextCursor(listResult.nextCursor)
           setError(null)
         } catch (err) {
           setError(
@@ -247,6 +252,24 @@ export default function MeetingsPage() {
         }
       })()
     })
+  }
+
+  async function loadMore() {
+    if (!activeOrg || !nextCursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const listResult = await trpc.meeting.list.query({
+        orgId: activeOrg.orgId,
+        limit: 20,
+        cursor: nextCursor,
+      })
+      setMeetings((prev) => [...prev, ...listResult.items])
+      setNextCursor(listResult.nextCursor)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load more meetings.')
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   async function startMeeting() {
@@ -524,6 +547,22 @@ export default function MeetingsPage() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {nextCursor && !loading && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="ghost"
+                    className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+                    onClick={() => void loadMore()}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? (
+                      <RefreshCcw size={15} className="animate-spin" />
+                    ) : null}
+                    {loadingMore ? 'Loading…' : 'Load more'}
+                  </Button>
                 </div>
               )}
             </section>

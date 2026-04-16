@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
-import { eq, workItems } from '@kodi/db'
+import { eq, workItems, toolActionRuns } from '@kodi/db'
+import {
+  queueWorkItemSync,
+  retryWorkItemSync,
+  type WorkItemSyncTarget,
+} from '../../lib/meetings/work-item-sync'
 
 export const workRouter = router({
   list: memberProcedure
@@ -166,5 +171,103 @@ export const workRouter = router({
         .returning()
 
       return updated ?? item
+    }),
+
+  queueSync: memberProcedure
+    .input(
+      z.object({
+        workItemId: z.string(),
+        target: z.enum(['linear', 'github']),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.query.workItems.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.workItemId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+      })
+
+      if (!item) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Work item not found.' })
+      }
+
+      if (item.status !== 'approved') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Work item must be approved before it can be synced.',
+        })
+      }
+
+      try {
+        const result = await queueWorkItemSync({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          workItem: item,
+          target: input.target as WorkItemSyncTarget,
+        })
+
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            error instanceof Error ? error.message : 'Failed to queue work item sync.',
+        })
+      }
+    }),
+
+  listRuns: memberProcedure
+    .input(
+      z.object({
+        workItemId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Verify work item belongs to org
+      const item = await ctx.db.query.workItems.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.workItemId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!item) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Work item not found.' })
+      }
+
+      return ctx.db.query.toolActionRuns.findMany({
+        where: (fields, { eq }) => eq(fields.workItemId, input.workItemId),
+        orderBy: (fields, { desc }) => desc(fields.createdAt),
+      })
+    }),
+
+  retrySync: memberProcedure
+    .input(
+      z.object({
+        runId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const result = await retryWorkItemSync({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          originalRunId: input.runId,
+        })
+
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            error instanceof Error ? error.message : 'Failed to retry work item sync.',
+        })
+      }
     }),
 })

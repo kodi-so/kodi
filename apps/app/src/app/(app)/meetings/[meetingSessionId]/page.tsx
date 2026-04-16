@@ -619,6 +619,7 @@ function SlackSendModal({
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [channels, setChannels] = useState<Array<{ id: string; name: string }>>([])
   const [channelsLoading, setChannelsLoading] = useState(false)
+  const [channelsError, setChannelsError] = useState<string | null>(null)
   const inputRef = useCallback((el: HTMLInputElement | null) => {
     if (el && open) setTimeout(() => el.focus(), 50)
   }, [open])
@@ -630,16 +631,19 @@ function SlackSendModal({
     setQuery(defaultChannel ?? '')
     setDropdownOpen(false)
     setChannels([])
+    setChannelsError(null)
 
     if (!orgId) return
     setChannelsLoading(true)
     trpc.toolAccess.listSlackChannels
-      .query({ orgId })
+      .query()
       .then((result) => {
         setChannels(result.channels)
+        if (result.error) setChannelsError(result.error)
       })
-      .catch(() => {
-        // Non-fatal: fall back to free-text entry
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Failed to load channels.'
+        setChannelsError(msg)
       })
       .finally(() => {
         setChannelsLoading(false)
@@ -775,7 +779,9 @@ function SlackSendModal({
             <p className="text-xs text-muted-foreground">
               {channels.length > 0
                 ? `${channels.length} channels available — type to filter.`
-                : 'Type the channel name without the # prefix.'}
+                : channelsError
+                  ? `Could not load channels: ${channelsError}`
+                  : 'Type the channel name without the # prefix.'}
             </p>
           </div>
         </div>

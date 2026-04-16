@@ -273,7 +273,7 @@ export const toolAccessRouter = router({
   listSlackChannels: memberProcedure.query(async ({ ctx }) => {
     const setup = getToolAccessSetupStatus()
     if (!setup.apiConfigured) {
-      return { channels: [] as Array<{ id: string; name: string }> }
+      return { channels: [] as Array<{ id: string; name: string }>, error: null as string | null }
     }
 
     const connections = await listPersistedConnections(ctx.db, ctx.org.id, ctx.session.user.id)
@@ -287,11 +287,13 @@ export const toolAccessRouter = router({
     )
 
     if (!connection || connection.connectedAccountStatus !== 'ACTIVE') {
-      return { channels: [] as Array<{ id: string; name: string }> }
+      return { channels: [] as Array<{ id: string; name: string }>, error: null as string | null }
     }
 
     try {
       const composio = getComposioClient()
+      // Create a short-lived session scoped to Slack and execute directly —
+      // avoids a redundant toolRouter.use() round-trip for a read-only call.
       const session = await composio.create(ctx.session.user.id, {
         toolkits: { enable: ['slack'] },
         connectedAccounts: { slack: connection.connectedAccountId },
@@ -302,17 +304,18 @@ export const toolAccessRouter = router({
         workbench: { enable: false, enableProxyExecution: false },
       })
 
-      const scoped = await composio.toolRouter.use(session.sessionId)
-      const response = (await scoped.execute('SLACK_LIST_CHANNELS', {
+      const response = await session.execute('SLACK_LIST_CHANNELS', {
         exclude_archived: true,
         limit: 200,
-      })) as { data?: Record<string, unknown>; error?: string | null }
+      })
 
-      if (response.error || !response.data) {
-        return { channels: [] as Array<{ id: string; name: string }> }
+      if (response.error) {
+        console.error('[listSlackChannels] Composio returned error:', response.error)
+        return { channels: [] as Array<{ id: string; name: string }>, error: response.error }
       }
 
-      // Composio wraps the Slack API response under data
+      // Composio wraps the Slack API response under data.
+      // Handle both { channels: [...] } and { data: { channels: [...] } } shapes.
       const raw = response.data
       const channelsRaw =
         Array.isArray(raw['channels'])
@@ -326,10 +329,11 @@ export const toolAccessRouter = router({
         .map((c) => ({ id: c['id'] as string, name: c['name'] as string }))
         .sort((a, b) => a.name.localeCompare(b.name))
 
-      return { channels }
-    } catch {
-      // Non-fatal: fall back to manual text entry
-      return { channels: [] as Array<{ id: string; name: string }> }
+      return { channels, error: null as string | null }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load Slack channels.'
+      console.error('[listSlackChannels] Unexpected error:', message)
+      return { channels: [] as Array<{ id: string; name: string }>, error: message }
     }
   }),
 

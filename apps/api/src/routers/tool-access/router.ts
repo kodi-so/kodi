@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { toolkitPolicies } from '@kodi/db'
+import { eq, toolkitPolicies } from '@kodi/db'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { getFeatureFlags } from '../../lib/features'
 import {
@@ -8,6 +8,7 @@ import {
   clearToolkitAccountPreference,
   createConnectLink,
   disableConnectedAccount,
+  getComposioClient,
   getEffectiveToolkitPolicy,
   getToolkit,
   getToolAccessPresentation,
@@ -165,6 +166,174 @@ export const toolAccessRouter = router({
       setup: result.setup,
       summary: result.summary,
       syncError: result.syncError,
+    }
+  }),
+
+  // Lightweight DB-only check — no Composio sync. Used to gate UI elements.
+  checkConnections: memberProcedure
+    .input(
+      z.object({
+        toolkitSlugs: z.array(z.string().min(1)).min(1).max(10),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const connections = await ctx.db.query.toolkitConnections.findMany({
+        where: (fields, { and, eq, inArray }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.userId, ctx.session.user.id),
+            eq(fields.connectedAccountStatus, 'ACTIVE'),
+            inArray(fields.toolkitSlug, input.toolkitSlugs)
+          ),
+        columns: { toolkitSlug: true },
+      })
+
+      return Object.fromEntries(
+        input.toolkitSlugs.map((slug) => [
+          slug,
+          connections.some((c) => c.toolkitSlug === slug),
+        ])
+      ) as Record<string, boolean>
+    }),
+
+  // Returns toolkit-level defaults stored in policy metadata (e.g. Slack default channel).
+  getToolkitDefaults: memberProcedure
+    .input(z.object({ toolkitSlug: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const policy = await ctx.db.query.toolkitPolicies.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.toolkitSlug, input.toolkitSlug)
+          ),
+        columns: { metadata: true },
+      })
+
+      const meta = policy?.metadata ?? null
+      const defaultChannel =
+        meta && typeof meta['defaultChannel'] === 'string' && meta['defaultChannel'].trim()
+          ? (meta['defaultChannel'] as string).trim()
+          : null
+
+      return { defaultChannel }
+    }),
+
+  // Saves toolkit-level defaults to policy metadata. Owner only.
+  setDefaultChannel: ownerProcedure
+    .input(
+      z.object({
+        toolkitSlug: z.string().min(1),
+        channel: z.string().trim().max(200),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.toolkitPolicies.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.toolkitSlug, input.toolkitSlug)
+          ),
+      })
+
+      const channel = input.channel.replace(/^#/, '').trim()
+      const updatedMetadata = {
+        ...(existing?.metadata ?? {}),
+        defaultChannel: channel || null,
+      }
+
+      if (existing) {
+        await ctx.db
+          .update(toolkitPolicies)
+          .set({ metadata: updatedMetadata, updatedAt: new Date(), updatedByUserId: ctx.session.user.id })
+          .where(eq(toolkitPolicies.id, existing.id))
+      } else {
+        await ctx.db.insert(toolkitPolicies).values({
+          orgId: ctx.org.id,
+          toolkitSlug: input.toolkitSlug,
+          metadata: updatedMetadata,
+          createdByUserId: ctx.session.user.id,
+          updatedByUserId: ctx.session.user.id,
+        })
+      }
+
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'tool_access.defaults_updated',
+        { toolkitSlug: input.toolkitSlug, defaultChannel: channel || null },
+        ctx.session.user.id
+      )
+
+      return { defaultChannel: channel || null }
+    }),
+
+  // Executes SLACK_LIST_CHANNELS via a short-lived Composio session and returns
+  // the channel list for display in the recap-delivery modal. Read-only; no DB
+  // audit records are written.
+  listSlackChannels: memberProcedure.query(async ({ ctx }) => {
+    const setup = getToolAccessSetupStatus()
+    if (!setup.apiConfigured) {
+      return { channels: [] as Array<{ id: string; name: string }>, error: null as string | null }
+    }
+
+    const connections = await listPersistedConnections(ctx.db, ctx.org.id, ctx.session.user.id)
+    const preferences = await listToolkitAccountPreferences(ctx.db, ctx.org.id, ctx.session.user.id)
+
+    const slackConnections = connections.filter((c) => c.toolkitSlug === 'slack')
+    const preference = preferences.find((p) => p.toolkitSlug === 'slack')
+    const connection = choosePrimaryConnection(
+      slackConnections,
+      preference?.preferredConnectedAccountId ?? null
+    )
+
+    if (!connection || connection.connectedAccountStatus !== 'ACTIVE') {
+      return { channels: [] as Array<{ id: string; name: string }>, error: null as string | null }
+    }
+
+    try {
+      const composio = getComposioClient()
+      // Create a short-lived session scoped to Slack and execute directly —
+      // avoids a redundant toolRouter.use() round-trip for a read-only call.
+      const session = await composio.create(ctx.session.user.id, {
+        toolkits: { enable: ['slack'] },
+        connectedAccounts: { slack: connection.connectedAccountId },
+        authConfigs: connection.authConfigId
+          ? { slack: connection.authConfigId }
+          : undefined,
+        manageConnections: { enable: false, waitForConnections: false },
+        workbench: { enable: false, enableProxyExecution: false },
+      })
+
+      const response = await session.execute('SLACK_LIST_CHANNELS', {
+        exclude_archived: true,
+        limit: 200,
+      })
+
+      if (response.error) {
+        console.error('[listSlackChannels] Composio returned error:', response.error)
+        return { channels: [] as Array<{ id: string; name: string }>, error: response.error }
+      }
+
+      // Composio wraps the Slack API response under data.
+      // Handle both { channels: [...] } and { data: { channels: [...] } } shapes.
+      const raw = response.data
+      const channelsRaw =
+        Array.isArray(raw['channels'])
+          ? (raw['channels'] as Array<Record<string, unknown>>)
+          : Array.isArray((raw['data'] as Record<string, unknown> | undefined)?.['channels'])
+            ? ((raw['data'] as Record<string, unknown>)['channels'] as Array<Record<string, unknown>>)
+            : []
+
+      const channels = channelsRaw
+        .filter((c) => typeof c['name'] === 'string' && typeof c['id'] === 'string')
+        .map((c) => ({ id: c['id'] as string, name: c['name'] as string }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+      return { channels, error: null as string | null }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load Slack channels.'
+      console.error('[listSlackChannels] Unexpected error:', message)
+      return { channels: [] as Array<{ id: string; name: string }>, error: message }
     }
   }),
 

@@ -7,19 +7,29 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   ArrowLeft,
+  ArrowUpRight,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
+  ClipboardList,
+  ExternalLink,
+  FileText,
+  Loader2,
   MessageSquare,
   Mic2,
+  Pencil,
   RefreshCw,
+  RotateCcw,
+  Send,
   SendHorizonal,
   Sparkles,
   Trash2,
   Users,
   Volume2,
   VolumeX,
+  X,
 } from 'lucide-react'
 import {
   Alert,
@@ -31,6 +41,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
   Separator,
   Sheet,
   SheetContent,
@@ -111,6 +122,17 @@ type AskKodiAnswer = {
   voiceStatus?: 'speaking' | 'delivered_to_voice' | 'voice_failed' | null
 }
 
+type MeetingArtifact = Awaited<
+  ReturnType<typeof trpc.meeting.listArtifacts.query>
+>[number]
+
+type WorkItem = Awaited<
+  ReturnType<typeof trpc.work.listByMeeting.query>
+>[number]
+
+type SyncTarget = 'linear' | 'github'
+type RecapTarget = 'slack' | 'zoom'
+
 function failureReasonToMessage(reason: string | null): string {
   if (reason === 'openclaw-unavailable') return "Kodi's AI instance isn't reachable. Make sure your OpenClaw instance is running."
   if (reason === 'openclaw-failed') return "Kodi's AI instance returned an error. Try again in a moment."
@@ -168,8 +190,10 @@ function pollIntervalForStatus(status: string | null | undefined) {
       return 3000
     case 'processing':
     case 'scheduled':
-      return 8000
+    case 'summarizing':
+      return 5000
     case 'ended':
+    case 'completed':
     case 'failed':
       return 15000
     default:
@@ -184,11 +208,13 @@ function statusTone(status: string) {
     case 'admitted':
       return 'info' as const
     case 'processing':
+    case 'summarizing':
       return 'warning' as const
     case 'joining':
     case 'scheduled':
     case 'preparing':
       return 'warning' as const
+    case 'completed':
     case 'ended':
       return 'neutral' as const
     case 'failed':
@@ -206,6 +232,10 @@ function statusLabel(status: string) {
       return 'Admitted'
     case 'processing':
       return 'Summarizing'
+    case 'summarizing':
+      return 'Generating recap'
+    case 'completed':
+      return 'Recap ready'
     case 'preparing':
       return 'Preparing'
     case 'joining':
@@ -561,6 +591,923 @@ function groupTranscriptBySpeaker(turns: MeetingTranscriptTurn[]): TranscriptSpe
   return groups
 }
 
+// ---------------------------------------------------------------------------
+// SlackSendModal
+// ---------------------------------------------------------------------------
+
+function SlackSendModal({
+  open,
+  onClose,
+  onSend,
+  delivering,
+  defaultChannel,
+  meetingTitle,
+  summaryContent,
+  orgId,
+}: {
+  open: boolean
+  onClose: () => void
+  onSend: (channel: string) => void
+  delivering: boolean
+  defaultChannel: string | null
+  meetingTitle: string | null
+  summaryContent: string | null
+  orgId: string | null
+}) {
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState(defaultChannel ?? '')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [channels, setChannels] = useState<Array<{ id: string; name: string }>>([])
+  const [channelsLoading, setChannelsLoading] = useState(false)
+  const [channelsError, setChannelsError] = useState<string | null>(null)
+  const inputRef = useCallback((el: HTMLInputElement | null) => {
+    if (el && open) setTimeout(() => el.focus(), 50)
+  }, [open])
+
+  // Reset and load channels when modal opens
+  useEffect(() => {
+    if (!open) return
+    setSelected(defaultChannel ?? '')
+    setQuery(defaultChannel ?? '')
+    setDropdownOpen(false)
+    setChannels([])
+    setChannelsError(null)
+
+    if (!orgId) return
+    setChannelsLoading(true)
+    trpc.toolAccess.listSlackChannels
+      .query({ orgId })
+      .then((result) => {
+        setChannels(result.channels)
+        if (result.error) setChannelsError(result.error)
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Failed to load channels.'
+        setChannelsError(msg)
+      })
+      .finally(() => {
+        setChannelsLoading(false)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  if (!open) return null
+
+  const cleanSelected = selected.replace(/^#/, '').trim()
+  const previewText = `*${meetingTitle ?? 'Meeting'} — Meeting Recap*\n\n${summaryContent ?? '(Summary not yet available)'}`
+
+  const filteredChannels = channels.filter((c) =>
+    c.name.toLowerCase().includes(query.toLowerCase().replace(/^#/, ''))
+  )
+
+  function handleSelect(name: string) {
+    setSelected(name)
+    setQuery(name)
+    setDropdownOpen(false)
+  }
+
+  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/^#/, '')
+    setQuery(val)
+    setSelected(val)
+    setDropdownOpen(true)
+  }
+
+  function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.target === e.currentTarget && !delivering) onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={handleBackdropClick}
+    >
+      <div className="w-full max-w-lg rounded-[1.6rem] border border-brand-line bg-background shadow-2xl">
+        <div className="space-y-4 p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Send recap to Slack</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Choose a channel and review the message before sending.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={delivering}
+              onClick={onClose}
+              className="shrink-0 text-muted-foreground"
+            >
+              <X size={16} />
+            </Button>
+          </div>
+
+          {/* Message preview */}
+          <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Message preview
+            </p>
+            <pre className="line-clamp-6 whitespace-pre-wrap font-sans text-sm leading-6 text-foreground">
+              {previewText}
+            </pre>
+          </div>
+
+          {/* Channel picker */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground" htmlFor="slack-channel-input">
+              Channel <span className="text-destructive">*</span>
+            </label>
+            <div className="relative">
+              <div className="flex items-center rounded-[0.8rem] border border-brand-line bg-brand-elevated px-3 focus-within:ring-2 focus-within:ring-brand-accent/40">
+                {channelsLoading ? (
+                  <Loader2 size={13} className="mr-2 shrink-0 animate-spin text-muted-foreground" />
+                ) : (
+                  <span className="mr-1 select-none text-sm text-muted-foreground">#</span>
+                )}
+                <Input
+                  id="slack-channel-input"
+                  ref={inputRef}
+                  className="h-8 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+                  placeholder={channelsLoading ? 'Loading channels…' : 'Search channels…'}
+                  value={query}
+                  onChange={handleQueryChange}
+                  onFocus={() => setDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setDropdownOpen(false), 120)}
+                  disabled={delivering}
+                  autoComplete="off"
+                />
+                {cleanSelected && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    title="Clear channel"
+                    className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => { setSelected(''); setQuery(''); setDropdownOpen(true) }}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {dropdownOpen && filteredChannels.length > 0 && (
+                <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-[0.8rem] border border-brand-line bg-background shadow-lg">
+                  {filteredChannels.map((ch) => (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-brand-elevated ${
+                        selected === ch.name ? 'bg-brand-elevated font-medium text-foreground' : 'text-foreground'
+                      }`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelect(ch.name)}
+                    >
+                      <span className="text-muted-foreground">#</span>
+                      {ch.name}
+                      {selected === ch.name && <Check size={13} className="ml-auto shrink-0 text-brand-accent-strong" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {dropdownOpen && !channelsLoading && channels.length === 0 && query.trim().length > 0 && (
+                <div className="absolute z-10 mt-1 w-full rounded-[0.8rem] border border-brand-line bg-background px-3 py-2 text-sm text-muted-foreground shadow-lg">
+                  No channels found. The name you typed will be used directly.
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {channels.length > 0
+                ? `${channels.length} channels available — type to filter.`
+                : channelsError
+                  ? `Could not load channels: ${channelsError}`
+                  : 'Type the channel name without the # prefix.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-brand-line px-6 py-4">
+          <Button
+            type="button"
+            variant="ghost"
+            className="border border-brand-line"
+            disabled={delivering}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!cleanSelected || delivering}
+            onClick={() => onSend(cleanSelected)}
+            className="gap-1.5"
+          >
+            {delivering ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Send size={14} />
+            )}
+            {delivering ? 'Sending…' : 'Send to Slack'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PostMeetingReview — KOD-73 + KOD-74
+// ---------------------------------------------------------------------------
+
+type PostMeetingReviewProps = {
+  meeting: { id: string; status: string; title?: string | null }
+  artifacts: MeetingArtifact[]
+  workItems: WorkItem[]
+  loading: boolean
+  retrying: boolean
+  editingWorkItemId: string | null
+  editWorkItemTitle: string
+  editWorkItemOwnerHint: string
+  editWorkItemDueAt: string
+  workItemSaving: string | null
+  canRetry: boolean
+  onRetry: () => void
+  onStartEdit: (item: WorkItem) => void
+  onCancelEdit: () => void
+  onSaveEdit: (id: string) => void
+  onEditTitleChange: (v: string) => void
+  onEditOwnerHintChange: (v: string) => void
+  onEditDueAtChange: (v: string) => void
+  onApprove: (id: string) => void
+  onReject: (id: string) => void
+  // Phase 6 — sync + recap delivery
+  syncingItem: { id: string; target: SyncTarget } | null
+  onSync: (id: string, target: SyncTarget) => void
+  syncError: string | null
+  recapDelivering: boolean
+  recapDeliverTarget: RecapTarget | null
+  onDeliverRecap: (target: RecapTarget, channelId?: string) => void
+  onOpenSlackModal: () => void
+  hasSlackConnection: boolean
+  hasZoomConnection: boolean
+  recapDeliverError: string | null
+  quietTextClass: string
+  subtleTextClass: string
+  dashedPanelClass: string
+}
+
+function workItemStatusTone(status: string) {
+  switch (status) {
+    case 'approved':
+      return 'success' as const
+    case 'cancelled':
+      return 'destructive' as const
+    case 'draft':
+      return 'warning' as const
+    case 'synced':
+    case 'done':
+      return 'info' as const
+    case 'executing':
+      return 'warning' as const
+    default:
+      return 'neutral' as const
+  }
+}
+
+function workItemStatusLabel(status: string) {
+  switch (status) {
+    case 'draft':
+      return 'Needs review'
+    case 'approved':
+      return 'Approved'
+    case 'cancelled':
+      return 'Rejected'
+    case 'synced':
+      return 'Synced'
+    case 'executing':
+      return 'Executing'
+    case 'done':
+      return 'Done'
+    default:
+      return status
+  }
+}
+
+function workItemKindLabel(kind: string) {
+  switch (kind) {
+    case 'task':
+      return 'Task'
+    case 'ticket':
+      return 'Ticket'
+    case 'follow_up':
+      return 'Follow-up'
+    case 'goal':
+      return 'Goal'
+    case 'outcome':
+      return 'Outcome'
+    default:
+      return kind
+  }
+}
+
+function getArtifactMetaString(
+  metadata: Record<string, unknown>,
+  key: string
+): string | null {
+  const val = metadata[key]
+  return typeof val === 'string' ? val : null
+}
+
+function PostMeetingReview({
+  meeting,
+  artifacts,
+  workItems,
+  loading,
+  retrying,
+  editingWorkItemId,
+  editWorkItemTitle,
+  editWorkItemOwnerHint,
+  editWorkItemDueAt,
+  workItemSaving,
+  canRetry,
+  onRetry,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onEditTitleChange,
+  onEditOwnerHintChange,
+  onEditDueAtChange,
+  onApprove,
+  onReject,
+  syncingItem,
+  onSync,
+  syncError,
+  recapDelivering,
+  recapDeliverTarget,
+  onDeliverRecap,
+  onOpenSlackModal,
+  hasSlackConnection,
+  hasZoomConnection,
+  recapDeliverError,
+  quietTextClass,
+  subtleTextClass,
+  dashedPanelClass,
+}: PostMeetingReviewProps) {
+  const isSummarizing = meeting.status === 'summarizing'
+
+  const summaryArtifact = artifacts.find((a) => a.artifactType === 'summary')
+  const decisionArtifact = artifacts.find(
+    (a) => a.artifactType === 'decision_log'
+  )
+
+  const decisions: Array<{
+    summary: string
+    context: string | null
+    madeBy: string | null
+    confidence: number | null
+    sourceEvidence: string[]
+  }> = Array.isArray(decisionArtifact?.structuredData)
+    ? (decisionArtifact.structuredData as Record<string, unknown>[]).map(
+        (d) => ({
+          summary: typeof d.summary === 'string' ? d.summary : '',
+          context: typeof d.context === 'string' ? d.context : null,
+          madeBy: typeof d.madeBy === 'string' ? d.madeBy : null,
+          confidence:
+            typeof d.confidence === 'number' ? d.confidence : null,
+          sourceEvidence: Array.isArray(d.sourceEvidence)
+            ? (d.sourceEvidence as string[]).filter((s) => typeof s === 'string')
+            : [],
+        })
+      ).filter((d) => d.summary)
+    : []
+
+  const activeWorkItems = workItems.filter((w) => w.status !== 'cancelled')
+  const draftCount = workItems.filter((w) => w.status === 'draft').length
+
+  return (
+    <div className="space-y-4">
+      {/* Status banner */}
+      {isSummarizing && (
+        <div className="flex items-center gap-3 rounded-[1.5rem] border border-brand-line bg-brand-elevated px-5 py-4">
+          <Loader2
+            size={16}
+            className="shrink-0 animate-spin text-brand-accent-strong"
+          />
+          <p className="text-sm text-foreground">
+            Kodi is generating the meeting recap — summary, decisions, and action items.
+            This usually takes 15–30 seconds.
+          </p>
+        </div>
+      )}
+
+      {/* Post-meeting package card */}
+      <Card className="border-brand-line">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                <FileText size={18} />
+              </div>
+              <div>
+                <CardTitle className="text-xl text-foreground">
+                  Meeting recap
+                </CardTitle>
+                <CardDescription>
+                  {isSummarizing
+                    ? 'Kodi is generating the post-meeting package.'
+                    : 'Summary and key decisions captured from this session.'}
+                </CardDescription>
+              </div>
+            </div>
+
+            {canRetry && !isSummarizing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRetry}
+                disabled={retrying}
+                className="gap-1.5 text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw
+                  size={13}
+                  className={retrying ? 'animate-spin' : ''}
+                />
+                {retrying ? 'Retrying…' : 'Retry'}
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5">
+          {/* Recap delivery (Slack / Zoom) — only shown when at least one integration is connected */}
+          {!isSummarizing && !loading && (hasSlackConnection || hasZoomConnection) && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className={`text-xs ${subtleTextClass}`}>
+                Deliver this recap to your team
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {hasSlackConnection && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={recapDelivering}
+                    onClick={onOpenSlackModal}
+                    className="gap-1.5 text-xs"
+                  >
+                    {recapDelivering && recapDeliverTarget === 'slack' ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Send size={12} />
+                    )}
+                    {recapDelivering && recapDeliverTarget === 'slack' ? 'Sending…' : 'Send to Slack'}
+                  </Button>
+                )}
+                {hasZoomConnection && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={recapDelivering}
+                    onClick={() => onDeliverRecap('zoom')}
+                    className="gap-1.5 text-xs"
+                  >
+                    {recapDelivering && recapDeliverTarget === 'zoom' ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Send size={12} />
+                    )}
+                    {recapDelivering && recapDeliverTarget === 'zoom' ? 'Sending…' : 'Zoom Team Chat'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {recapDeliverError && (
+            <p className="rounded-[0.8rem] bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {recapDeliverError}
+            </p>
+          )}
+
+          {/* Summary */}
+          <div>
+            <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
+              Summary
+            </p>
+
+            {loading || isSummarizing ? (
+              <div className="mt-3 space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-4 w-3/5" />
+              </div>
+            ) : summaryArtifact?.content ? (
+              <div className="mt-3 rounded-[1.5rem] border border-brand-line bg-brand-elevated p-5">
+                <p className="text-sm leading-7 text-foreground">
+                  {summaryArtifact.content}
+                </p>
+                {Array.isArray(
+                  (summaryArtifact.structuredData as Record<string, unknown> | null)
+                    ?.keyOutcomes
+                ) && (
+                  <div className="mt-4 space-y-1">
+                    <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
+                      Key outcomes
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {(
+                        (summaryArtifact.structuredData as Record<string, unknown>)
+                          .keyOutcomes as string[]
+                      ).map((outcome) => (
+                        <li
+                          key={outcome}
+                          className="flex items-start gap-2 text-sm text-foreground"
+                        >
+                          <CheckCircle2
+                            size={14}
+                            className="mt-0.5 shrink-0 text-brand-success"
+                          />
+                          {outcome}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className={`mt-3 ${dashedPanelClass} rounded-[1.5rem] p-4 text-sm ${quietTextClass}`}
+              >
+                {meeting.status === 'ended'
+                  ? 'Summary was not generated for this meeting. Use the retry button to generate it.'
+                  : 'Summary will appear here once Kodi finishes processing.'}
+              </div>
+            )}
+          </div>
+
+          {/* Decisions */}
+          <div>
+            <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
+              Decisions
+            </p>
+
+            {loading || isSummarizing ? (
+              <div className="mt-3 space-y-2">
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+              </div>
+            ) : decisions.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {decisions.map((decision, index) => (
+                  <div
+                    key={`decision-${index}`}
+                    className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2
+                        size={15}
+                        className="mt-0.5 shrink-0 text-brand-success"
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-sm text-foreground">{decision.summary}</p>
+                        {decision.context && (
+                          <p className={`text-xs leading-5 ${quietTextClass}`}>
+                            {decision.context}
+                          </p>
+                        )}
+                        <div className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}>
+                          {decision.madeBy && (
+                            <span>by {decision.madeBy}</span>
+                          )}
+                          {decision.confidence != null && (
+                            <Badge variant="outline">
+                              {Math.round(decision.confidence * 100)}% confident
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !loading ? (
+              <div
+                className={`mt-3 ${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+              >
+                No decisions were identified in this meeting.
+              </div>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Action items / work items with correction UX */}
+      <Card className="border-brand-line">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+              <ClipboardList size={18} />
+            </div>
+            <div>
+              <CardTitle className="text-xl text-foreground">
+                Action items
+              </CardTitle>
+              <CardDescription>
+                {draftCount > 0
+                  ? `${draftCount} item${draftCount === 1 ? '' : 's'} need${draftCount === 1 ? 's' : ''} review — approve to queue for follow-through or reject to dismiss.`
+                  : 'Review and correct what Kodi extracted from the meeting.'}
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {loading || isSummarizing ? (
+            <div className="space-y-3">
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+            </div>
+          ) : activeWorkItems.length === 0 && workItems.filter((w) => w.status === 'cancelled').length === 0 ? (
+            <div
+              className={`${dashedPanelClass} rounded-[1.4rem] p-5 text-sm ${quietTextClass}`}
+            >
+              {meeting.status === 'ended'
+                ? 'No action items were generated. Use retry to regenerate the post-meeting package.'
+                : 'Action items will appear here once the recap is ready.'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {workItems.map((item) => {
+                const isEditing = editingWorkItemId === item.id
+                const isSaving = workItemSaving === item.id
+                const meta =
+                  item.metadata &&
+                  typeof item.metadata === 'object' &&
+                  !Array.isArray(item.metadata)
+                    ? (item.metadata as Record<string, unknown>)
+                    : {}
+                const ownerHint = getArtifactMetaString(meta, 'ownerHint')
+                const dueDateHint = getArtifactMetaString(meta, 'dueDateHint')
+                const confidence =
+                  typeof meta.confidence === 'number' ? meta.confidence : null
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-[1.4rem] border p-4 transition-colors ${
+                      item.status === 'cancelled'
+                        ? 'border-brand-line bg-brand-elevated opacity-50'
+                        : item.status === 'approved'
+                          ? 'border-brand-success/30 bg-brand-elevated'
+                          : 'border-brand-line bg-brand-elevated'
+                    }`}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                            Title
+                          </p>
+                          <Input
+                            value={editWorkItemTitle}
+                            onChange={(e) => onEditTitleChange(e.target.value)}
+                            className="h-9 text-sm"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                              Owner
+                            </p>
+                            <Input
+                              value={editWorkItemOwnerHint}
+                              onChange={(e) =>
+                                onEditOwnerHintChange(e.target.value)
+                              }
+                              placeholder="Name or team"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                              Due date
+                            </p>
+                            <Input
+                              type="date"
+                              value={editWorkItemDueAt}
+                              onChange={(e) =>
+                                onEditDueAtChange(e.target.value)
+                              }
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => onSaveEdit(item.id)}
+                            disabled={isSaving || !editWorkItemTitle.trim()}
+                            className="gap-1.5"
+                          >
+                            <Check size={13} />
+                            {isSaving ? 'Saving…' : 'Save'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={onCancelEdit}
+                            disabled={isSaving}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={workItemStatusTone(item.status)}>
+                              {workItemStatusLabel(item.status)}
+                            </Badge>
+                            <Badge variant="neutral">
+                              {workItemKindLabel(item.kind)}
+                            </Badge>
+                            {confidence != null && (
+                              <Badge variant="outline">
+                                {Math.round(confidence * 100)}%
+                              </Badge>
+                            )}
+                          </div>
+
+                          <p className="text-sm font-medium text-foreground">
+                            {item.title}
+                          </p>
+
+                          {item.description && (
+                            <p className={`text-sm leading-6 ${quietTextClass}`}>
+                              {item.description}
+                            </p>
+                          )}
+
+                          <div
+                            className={`flex flex-wrap items-center gap-3 text-xs ${subtleTextClass}`}
+                          >
+                            {ownerHint && (
+                              <span>Owner: {ownerHint}</span>
+                            )}
+                            {item.dueAt && (
+                              <span>
+                                Due{' '}
+                                {new Date(item.dueAt).toLocaleDateString([], {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
+                              </span>
+                            )}
+                            {dueDateHint && !item.dueAt && (
+                              <span className={quietTextClass}>
+                                Suggested: {dueDateHint}
+                              </span>
+                            )}
+                            {/* External link once synced */}
+                            {item.externalId && (
+                              <span className="flex items-center gap-1 text-brand-accent-strong">
+                                {item.externalSystem && (
+                                  <span className="capitalize">{item.externalSystem}:</span>
+                                )}
+                                {getArtifactMetaString(meta, 'externalUrl') ? (
+                                  <a
+                                    href={getArtifactMetaString(meta, 'externalUrl')!}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-0.5 hover:underline"
+                                  >
+                                    {item.externalId}
+                                    <ArrowUpRight size={11} />
+                                  </a>
+                                ) : (
+                                  item.externalId
+                                )}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Sync to Linear / GitHub for approved items */}
+                          {item.status === 'approved' && !item.externalId && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {syncError && syncingItem?.id === item.id && (
+                                <p className="w-full text-xs text-destructive">{syncError}</p>
+                              )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={syncingItem !== null}
+                                onClick={() => onSync(item.id, 'linear')}
+                                className="h-7 gap-1 text-xs"
+                              >
+                                {syncingItem?.id === item.id && syncingItem.target === 'linear' ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <ExternalLink size={11} />
+                                )}
+                                Linear
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={syncingItem !== null}
+                                onClick={() => onSync(item.id, 'github')}
+                                className="h-7 gap-1 text-xs"
+                              >
+                                {syncingItem?.id === item.id && syncingItem.target === 'github' ? (
+                                  <Loader2 size={11} className="animate-spin" />
+                                ) : (
+                                  <ExternalLink size={11} />
+                                )}
+                                GitHub
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {item.status !== 'cancelled' && (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => onStartEdit(item)}
+                              disabled={isSaving}
+                              className={`rounded-lg p-1.5 transition-colors hover:bg-brand-line/50 ${subtleTextClass} disabled:opacity-40`}
+                              title="Edit"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            {item.status === 'draft' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => onApprove(item.id)}
+                                  disabled={isSaving}
+                                  className="rounded-lg p-1.5 text-brand-success transition-colors hover:bg-brand-success/10 disabled:opacity-40"
+                                  title="Approve"
+                                >
+                                  <Check size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onReject(item.id)}
+                                  disabled={isSaving}
+                                  className="rounded-lg p-1.5 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
+                                  title="Reject"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {workItems.some((w) => w.status === 'cancelled') && (
+                <details className="group">
+                  <summary
+                    className={`cursor-pointer list-none text-xs marker:hidden ${subtleTextClass}`}
+                  >
+                    Show rejected items (
+                    {workItems.filter((w) => w.status === 'cancelled').length})
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {workItems
+                      .filter((w) => w.status === 'cancelled')
+                      .map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-3 opacity-50"
+                        >
+                          <p className={`text-sm line-through ${quietTextClass}`}>
+                            {item.title}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
   const meetingSessionId = params.meetingSessionId
@@ -588,6 +1535,28 @@ export default function MeetingDetailsPage() {
   const transcriptBottomRef = useRef<HTMLDivElement>(null)
   const [transcriptAtBottom, setTranscriptAtBottom] = useState(true)
   const speakerColorMap = useRef<Map<string, string>>(new Map())
+
+  // Post-meeting review state
+  const [artifacts, setArtifacts] = useState<MeetingArtifact[]>([])
+  const [workItemsList, setWorkItemsList] = useState<WorkItem[]>([])
+  const [artifactsLoading, setArtifactsLoading] = useState(false)
+  const [artifactsLoaded, setArtifactsLoaded] = useState(false)
+  const [retryingArtifacts, setRetryingArtifacts] = useState(false)
+  const [editingWorkItemId, setEditingWorkItemId] = useState<string | null>(null)
+  const [editWorkItemTitle, setEditWorkItemTitle] = useState('')
+  const [editWorkItemOwnerHint, setEditWorkItemOwnerHint] = useState('')
+  const [editWorkItemDueAt, setEditWorkItemDueAt] = useState('')
+  const [workItemSaving, setWorkItemSaving] = useState<string | null>(null)
+  // Phase 6 — sync + recap delivery state
+  const [syncingItem, setSyncingItem] = useState<{ id: string; target: SyncTarget } | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [recapDelivering, setRecapDelivering] = useState(false)
+  const [recapDeliverTarget, setRecapDeliverTarget] = useState<RecapTarget | null>(null)
+  const [recapDeliverError, setRecapDeliverError] = useState<string | null>(null)
+  // Slack send modal
+  const [slackModalOpen, setSlackModalOpen] = useState(false)
+  const [slackDefaultChannel, setSlackDefaultChannel] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, boolean> | null>(null)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -638,6 +1607,84 @@ export default function MeetingDetailsPage() {
       window.clearInterval(interval)
     }
   }, [orgId, meetingSessionId, pollIntervalMs])
+
+  // Load post-meeting artifacts and work items when the meeting is in a
+  // post-meeting status or has already completed.
+  useEffect(() => {
+    if (!orgId || !meetingSessionId) return
+
+    const status = consoleData?.meeting.status
+    const isPostMeeting =
+      status === 'summarizing' ||
+      status === 'completed' ||
+      status === 'awaiting_approval' ||
+      status === 'executing' ||
+      status === 'ended'
+
+    if (!isPostMeeting) return
+
+    let cancelled = false
+
+    async function loadPostMeeting() {
+      if (!orgId) return
+      setArtifactsLoading(true)
+      try {
+        const [arts, items] = await Promise.all([
+          trpc.meeting.listArtifacts.query({ orgId, meetingSessionId }),
+          trpc.work.listByMeeting.query({ orgId, meetingSessionId }),
+        ])
+        if (cancelled) return
+        setArtifacts(arts)
+        setWorkItemsList(items)
+        setArtifactsLoaded(true)
+      } catch {
+        // Non-fatal — post-meeting section will show empty state
+      } finally {
+        if (!cancelled) setArtifactsLoading(false)
+      }
+    }
+
+    void loadPostMeeting()
+    return () => {
+      cancelled = true
+    }
+  // Re-load when status transitions into or within post-meeting states
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, meetingSessionId, consoleData?.meeting.status])
+
+  // Load integration connection status and Slack default channel once the
+  // meeting enters a post-meeting state (where the delivery buttons appear).
+  useEffect(() => {
+    if (!orgId) return
+    const status = consoleData?.meeting?.status
+    const isPostMeeting =
+      status === 'summarizing' ||
+      status === 'completed' ||
+      status === 'awaiting_approval' ||
+      status === 'executing' ||
+      status === 'ended'
+    if (!isPostMeeting || connectionStatus !== null) return
+
+    async function loadDeliveryConfig() {
+      if (!orgId) return
+      try {
+        const [status, defaults] = await Promise.all([
+          trpc.toolAccess.checkConnections.query({
+            orgId,
+            toolkitSlugs: ['slack', 'zoom'],
+          }),
+          trpc.toolAccess.getToolkitDefaults.query({ orgId, toolkitSlug: 'slack' }),
+        ])
+        setConnectionStatus(status)
+        setSlackDefaultChannel(defaults.defaultChannel)
+      } catch {
+        // Non-fatal — delivery buttons stay hidden if check fails
+      }
+    }
+
+    void loadDeliveryConfig()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, consoleData?.meeting?.status])
 
   // Load Ask Kodi answer history from the server on mount so it survives
   // page refreshes. Only loads once; new answers are appended optimistically.
@@ -910,6 +1957,141 @@ export default function MeetingDetailsPage() {
     } catch {
       setDeletingMeeting(false)
     }
+  }
+
+  function startEditWorkItem(item: WorkItem) {
+    const meta = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+      ? (item.metadata as Record<string, unknown>)
+      : {}
+    setEditingWorkItemId(item.id)
+    setEditWorkItemTitle(item.title)
+    setEditWorkItemOwnerHint(typeof meta.ownerHint === 'string' ? meta.ownerHint : '')
+    setEditWorkItemDueAt(
+      item.dueAt ? new Date(item.dueAt).toISOString().slice(0, 10) : ''
+    )
+  }
+
+  function cancelEditWorkItem() {
+    setEditingWorkItemId(null)
+    setEditWorkItemTitle('')
+    setEditWorkItemOwnerHint('')
+    setEditWorkItemDueAt('')
+  }
+
+  async function saveEditWorkItem(itemId: string) {
+    if (!orgId || workItemSaving) return
+    setWorkItemSaving(itemId)
+    try {
+      const updated = await trpc.work.update.mutate({
+        orgId,
+        workItemId: itemId,
+        title: editWorkItemTitle.trim() || undefined,
+        ownerHint: editWorkItemOwnerHint.trim() || null,
+        dueAt: editWorkItemDueAt ? new Date(editWorkItemDueAt).toISOString() : null,
+      })
+      setWorkItemsList((prev) =>
+        prev.map((w) => (w.id === itemId ? (updated as WorkItem) : w))
+      )
+      cancelEditWorkItem()
+    } catch {
+      // Silently ignore — user can retry
+    } finally {
+      setWorkItemSaving(null)
+    }
+  }
+
+  async function approveWorkItem(itemId: string) {
+    if (!orgId || workItemSaving) return
+    setWorkItemSaving(itemId)
+    try {
+      await trpc.work.approve.mutate({ orgId, workItemId: itemId })
+      setWorkItemsList((prev) =>
+        prev.map((w) => (w.id === itemId ? { ...w, status: 'approved' as const } : w))
+      )
+    } catch {
+      // Silently ignore
+    } finally {
+      setWorkItemSaving(null)
+    }
+  }
+
+  async function rejectWorkItem(itemId: string) {
+    if (!orgId || workItemSaving) return
+    setWorkItemSaving(itemId)
+    try {
+      await trpc.work.reject.mutate({ orgId, workItemId: itemId })
+      setWorkItemsList((prev) =>
+        prev.map((w) => (w.id === itemId ? { ...w, status: 'cancelled' as const } : w))
+      )
+    } catch {
+      // Silently ignore
+    } finally {
+      setWorkItemSaving(null)
+    }
+  }
+
+  async function handleRetryArtifacts() {
+    if (!orgId || retryingArtifacts) return
+    setRetryingArtifacts(true)
+    try {
+      await trpc.meeting.retryArtifacts.mutate({ orgId, meetingSessionId })
+    } catch {
+      // Non-fatal — status poll will reflect changes
+    } finally {
+      setRetryingArtifacts(false)
+    }
+  }
+
+  async function syncWorkItem(itemId: string, target: SyncTarget) {
+    if (!orgId || syncingItem) return
+    setSyncingItem({ id: itemId, target })
+    setSyncError(null)
+    try {
+      const result = await trpc.work.queueSync.mutate({ orgId, workItemId: itemId, target })
+      if (result.mode === 'executed') {
+        // Direct execution: mark the item as synced in local state
+        setWorkItemsList((prev) =>
+          prev.map((w) => (w.id === itemId ? { ...w, status: 'synced' as const } : w))
+        )
+      } else {
+        // Queued for approval: reload the item to pick up status changes
+        setWorkItemsList((prev) =>
+          prev.map((w) => (w.id === itemId ? { ...w, status: 'executing' as const } : w))
+        )
+      }
+    } catch (err) {
+      setSyncError(
+        err instanceof Error ? err.message : 'Failed to queue sync. Check your integrations.'
+      )
+    } finally {
+      setSyncingItem(null)
+    }
+  }
+
+  async function deliverRecap(target: RecapTarget, channelId?: string) {
+    if (!orgId || recapDelivering) return
+    setRecapDelivering(true)
+    setRecapDeliverTarget(target)
+    setRecapDeliverError(null)
+    try {
+      await trpc.meeting.deliverRecap.mutate({
+        orgId,
+        meetingSessionId,
+        target,
+        channelId: channelId ?? null,
+      })
+    } catch (err) {
+      setRecapDeliverError(
+        err instanceof Error ? err.message : `Failed to deliver recap to ${target}.`
+      )
+    } finally {
+      setRecapDelivering(false)
+    }
+  }
+
+  function handleSlackSend(channel: string) {
+    setSlackModalOpen(false)
+    void deliverRecap('slack', channel)
   }
 
   async function handleAskKodi(e: React.FormEvent) {
@@ -1363,6 +2545,62 @@ export default function MeetingDetailsPage() {
             </AlertDescription>
           </Alert>
         )}
+
+        {/* Post-meeting review section — shown when meeting has ended/completed */}
+        {(meeting.status === 'summarizing' ||
+          meeting.status === 'completed' ||
+          meeting.status === 'awaiting_approval' ||
+          meeting.status === 'executing' ||
+          meeting.status === 'ended') && (
+          <PostMeetingReview
+            meeting={meeting}
+            artifacts={artifacts}
+            workItems={workItemsList}
+            loading={artifactsLoading && !artifactsLoaded}
+            retrying={retryingArtifacts}
+            editingWorkItemId={editingWorkItemId}
+            editWorkItemTitle={editWorkItemTitle}
+            editWorkItemOwnerHint={editWorkItemOwnerHint}
+            editWorkItemDueAt={editWorkItemDueAt}
+            workItemSaving={workItemSaving}
+            canRetry={activeOrg?.role === 'owner'}
+            onRetry={() => void handleRetryArtifacts()}
+            onStartEdit={startEditWorkItem}
+            onCancelEdit={cancelEditWorkItem}
+            onSaveEdit={(id) => void saveEditWorkItem(id)}
+            onEditTitleChange={setEditWorkItemTitle}
+            onEditOwnerHintChange={setEditWorkItemOwnerHint}
+            onEditDueAtChange={setEditWorkItemDueAt}
+            onApprove={(id) => void approveWorkItem(id)}
+            onReject={(id) => void rejectWorkItem(id)}
+            syncingItem={syncingItem}
+            onSync={(id, target) => void syncWorkItem(id, target)}
+            syncError={syncError}
+            recapDelivering={recapDelivering}
+            recapDeliverTarget={recapDeliverTarget}
+            onDeliverRecap={(target, channelId) => void deliverRecap(target, channelId)}
+            onOpenSlackModal={() => setSlackModalOpen(true)}
+            hasSlackConnection={connectionStatus?.['slack'] ?? false}
+            hasZoomConnection={connectionStatus?.['zoom'] ?? false}
+            recapDeliverError={recapDeliverError}
+            quietTextClass={quietTextClass}
+            subtleTextClass={subtleTextClass}
+            dashedPanelClass={dashedPanelClass}
+          />
+        )}
+
+        <SlackSendModal
+          open={slackModalOpen}
+          onClose={() => setSlackModalOpen(false)}
+          onSend={handleSlackSend}
+          delivering={recapDelivering && recapDeliverTarget === 'slack'}
+          defaultChannel={slackDefaultChannel}
+          meetingTitle={meeting?.title ?? null}
+          summaryContent={
+            artifacts.find((a) => a.artifactType === 'summary')?.content ?? null
+          }
+          orgId={orgId}
+        />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
           <div className="space-y-6">

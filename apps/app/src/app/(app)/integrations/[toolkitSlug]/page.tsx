@@ -11,7 +11,7 @@ import {
   RefreshCcw,
   ShieldCheck,
 } from 'lucide-react'
-import { Alert, AlertDescription, Badge, Button, Skeleton, cn } from '@kodi/ui'
+import { Alert, AlertDescription, Badge, Button, Input, Skeleton, cn } from '@kodi/ui'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import {
@@ -195,19 +195,29 @@ export default function IntegrationDetailPage() {
   const [policySaving, setPolicySaving] = useState(false)
   const [identitiesExpanded, setIdentitiesExpanded] = useState(true)
   const [defaultsExpanded, setDefaultsExpanded] = useState(true)
+  const [defaultChannel, setDefaultChannel] = useState<string | null>(null)
+  const [channelDraft, setChannelDraft] = useState('')
+  const [channelSaving, setChannelSaving] = useState(false)
+  const [channelSaved, setChannelSaved] = useState(false)
 
   const callbackStatus = searchParams.get('connectionStatus')
   const callbackAppName = searchParams.get('appName')
   const isOwner = activeOrg?.role === 'owner'
 
   async function loadToolkitDetail(orgId: string) {
-    const result = await trpc.toolAccess.getToolkitDetail.query({
-      orgId,
-      toolkitSlug,
-    })
+    const [result, defaults] = await Promise.all([
+      trpc.toolAccess.getToolkitDetail.query({ orgId, toolkitSlug }),
+      toolkitSlug === 'slack'
+        ? trpc.toolAccess.getToolkitDefaults.query({ orgId, toolkitSlug })
+        : Promise.resolve(null),
+    ])
 
     setDetail(result)
     setPolicyDraft(createPolicyDraft(result.policy))
+    if (defaults !== null) {
+      setDefaultChannel(defaults.defaultChannel)
+      setChannelDraft(defaults.defaultChannel ?? '')
+    }
     return result
   }
 
@@ -225,14 +235,20 @@ export default function IntegrationDetailPage() {
 
     async function load() {
       try {
-        const result = await trpc.toolAccess.getToolkitDetail.query({
-          orgId,
-          toolkitSlug,
-        })
+        const [result, defaults] = await Promise.all([
+          trpc.toolAccess.getToolkitDetail.query({ orgId, toolkitSlug }),
+          toolkitSlug === 'slack'
+            ? trpc.toolAccess.getToolkitDefaults.query({ orgId, toolkitSlug })
+            : Promise.resolve(null),
+        ])
 
         if (cancelled) return
         setDetail(result)
         setPolicyDraft(createPolicyDraft(result.policy))
+        if (defaults !== null) {
+          setDefaultChannel(defaults.defaultChannel)
+          setChannelDraft(defaults.defaultChannel ?? '')
+        }
       } catch (nextError) {
         if (cancelled) return
         setError(
@@ -444,6 +460,33 @@ export default function IntegrationDetailPage() {
   function resetPolicyDraft() {
     if (!detail) return
     setPolicyDraft(createPolicyDraft(detail.policy))
+  }
+
+  async function saveDefaultChannel() {
+    if (!activeOrg) return
+    setChannelSaving(true)
+    setChannelSaved(false)
+    setError(null)
+
+    try {
+      const result = await trpc.toolAccess.setDefaultChannel.mutate({
+        orgId: activeOrg.orgId,
+        toolkitSlug,
+        channel: channelDraft.trim(),
+      })
+      setDefaultChannel(result.defaultChannel)
+      setChannelDraft(result.defaultChannel ?? '')
+      setChannelSaved(true)
+      setTimeout(() => setChannelSaved(false), 2000)
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Failed to save default channel.'
+      )
+    } finally {
+      setChannelSaving(false)
+    }
   }
 
   if (!activeOrg) {
@@ -1040,6 +1083,46 @@ export default function IntegrationDetailPage() {
                       falseLabel="Disabled"
                       disabled={policySaving}
                     />
+
+                    {toolkitSlug === 'slack' && (
+                      <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-foreground">Default channel for meeting recaps</p>
+                          <p className={`text-sm leading-6 ${quietTextClass}`}>
+                            When sending a meeting recap to Slack, this channel is pre-filled in the send dialog. Members can override it per send.
+                          </p>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <Input
+                            className="h-8 w-48 text-sm"
+                            placeholder="e.g. general"
+                            value={channelDraft}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setChannelDraft(e.target.value.replace(/^#+/, ''))}
+                            disabled={channelSaving}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void saveDefaultChannel()}
+                            disabled={channelSaving || channelDraft.trim() === (defaultChannel ?? '')}
+                          >
+                            {channelSaving ? 'Saving...' : channelSaved ? 'Saved' : 'Save channel'}
+                          </Button>
+                          {defaultChannel && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="border border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground"
+                              disabled={channelSaving}
+                              onClick={() => setChannelDraft('')}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-2 border-t border-brand-line pt-4">
                       <Button

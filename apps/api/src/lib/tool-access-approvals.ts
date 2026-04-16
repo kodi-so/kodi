@@ -13,6 +13,11 @@ import {
   revalidatePersistedConnection,
 } from './composio'
 import { logActivity } from './activity'
+import {
+  extractExternalResult,
+  updateWorkItemAfterSync,
+  type WorkItemSyncTarget,
+} from './meetings/work-item-sync'
 
 type AnyDb = typeof db
 
@@ -751,6 +756,27 @@ export async function decideToolApprovalRequest(params: {
         }),
       })
       .where(eq(toolActionRuns.id as never, toolRun.id as never) as never)
+
+    // If this run is linked to a work item (e.g. from work item sync), update it
+    if (succeeded && toolRun.workItemId && toolRun.toolkitSlug) {
+      const extracted = extractExternalResult(
+        toolRun.toolkitSlug as WorkItemSyncTarget,
+        response.data
+      )
+      await updateWorkItemAfterSync(
+        params.db,
+        toolRun.workItemId,
+        toolRun.toolkitSlug as WorkItemSyncTarget,
+        extracted.externalId,
+        extracted.externalUrl
+      ).catch((err) => {
+        // Non-fatal: log but don't fail the approval response
+        console.warn('[approvals] Failed to update work item after sync', {
+          workItemId: toolRun.workItemId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
 
     await expireApprovalExecutionSession({
       db: params.db,

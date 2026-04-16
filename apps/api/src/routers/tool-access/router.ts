@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { toolkitPolicies } from '@kodi/db'
+import { eq, toolkitPolicies } from '@kodi/db'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { getFeatureFlags } from '../../lib/features'
 import {
@@ -167,6 +167,104 @@ export const toolAccessRouter = router({
       syncError: result.syncError,
     }
   }),
+
+  // Lightweight DB-only check — no Composio sync. Used to gate UI elements.
+  checkConnections: memberProcedure
+    .input(
+      z.object({
+        toolkitSlugs: z.array(z.string().min(1)).min(1).max(10),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const connections = await ctx.db.query.toolkitConnections.findMany({
+        where: (fields, { and, eq, inArray }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.userId, ctx.session.user.id),
+            eq(fields.connectedAccountStatus, 'ACTIVE'),
+            inArray(fields.toolkitSlug, input.toolkitSlugs)
+          ),
+        columns: { toolkitSlug: true },
+      })
+
+      return Object.fromEntries(
+        input.toolkitSlugs.map((slug) => [
+          slug,
+          connections.some((c) => c.toolkitSlug === slug),
+        ])
+      ) as Record<string, boolean>
+    }),
+
+  // Returns toolkit-level defaults stored in policy metadata (e.g. Slack default channel).
+  getToolkitDefaults: memberProcedure
+    .input(z.object({ toolkitSlug: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const policy = await ctx.db.query.toolkitPolicies.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.toolkitSlug, input.toolkitSlug)
+          ),
+        columns: { metadata: true },
+      })
+
+      const meta = policy?.metadata ?? null
+      const defaultChannel =
+        meta && typeof meta['defaultChannel'] === 'string' && meta['defaultChannel'].trim()
+          ? (meta['defaultChannel'] as string).trim()
+          : null
+
+      return { defaultChannel }
+    }),
+
+  // Saves toolkit-level defaults to policy metadata. Owner only.
+  setDefaultChannel: ownerProcedure
+    .input(
+      z.object({
+        toolkitSlug: z.string().min(1),
+        channel: z.string().trim().max(200),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.toolkitPolicies.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.toolkitSlug, input.toolkitSlug)
+          ),
+      })
+
+      const channel = input.channel.replace(/^#/, '').trim()
+      const updatedMetadata = {
+        ...(existing?.metadata ?? {}),
+        defaultChannel: channel || null,
+      }
+
+      if (existing) {
+        await ctx.db
+          .update(toolkitPolicies)
+          .set({ metadata: updatedMetadata, updatedAt: new Date(), updatedByUserId: ctx.session.user.id })
+          .where(eq(toolkitPolicies.id, existing.id))
+      } else {
+        await ctx.db.insert(toolkitPolicies).values({
+          orgId: ctx.org.id,
+          toolkitSlug: input.toolkitSlug,
+          metadata: updatedMetadata,
+          createdByUserId: ctx.session.user.id,
+          updatedByUserId: ctx.session.user.id,
+        })
+      }
+
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'tool_access.defaults_updated',
+        { toolkitSlug: input.toolkitSlug, defaultChannel: channel || null },
+        ctx.session.user.id
+      )
+
+      return { defaultChannel: channel || null }
+    }),
 
   getCatalog: memberProcedure
     .input(

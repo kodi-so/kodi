@@ -7,19 +7,26 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   ArrowLeft,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
+  ClipboardList,
+  FileText,
+  Loader2,
   MessageSquare,
   Mic2,
+  Pencil,
   RefreshCw,
+  RotateCcw,
   SendHorizonal,
   Sparkles,
   Trash2,
   Users,
   Volume2,
   VolumeX,
+  X,
 } from 'lucide-react'
 import {
   Alert,
@@ -31,6 +38,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Input,
   Separator,
   Sheet,
   SheetContent,
@@ -111,6 +119,14 @@ type AskKodiAnswer = {
   voiceStatus?: 'speaking' | 'delivered_to_voice' | 'voice_failed' | null
 }
 
+type MeetingArtifact = Awaited<
+  ReturnType<typeof trpc.meeting.listArtifacts.query>
+>[number]
+
+type WorkItem = Awaited<
+  ReturnType<typeof trpc.work.listByMeeting.query>
+>[number]
+
 function failureReasonToMessage(reason: string | null): string {
   if (reason === 'openclaw-unavailable') return "Kodi's AI instance isn't reachable. Make sure your OpenClaw instance is running."
   if (reason === 'openclaw-failed') return "Kodi's AI instance returned an error. Try again in a moment."
@@ -168,8 +184,10 @@ function pollIntervalForStatus(status: string | null | undefined) {
       return 3000
     case 'processing':
     case 'scheduled':
-      return 8000
+    case 'summarizing':
+      return 5000
     case 'ended':
+    case 'completed':
     case 'failed':
       return 15000
     default:
@@ -184,11 +202,13 @@ function statusTone(status: string) {
     case 'admitted':
       return 'info' as const
     case 'processing':
+    case 'summarizing':
       return 'warning' as const
     case 'joining':
     case 'scheduled':
     case 'preparing':
       return 'warning' as const
+    case 'completed':
     case 'ended':
       return 'neutral' as const
     case 'failed':
@@ -206,6 +226,10 @@ function statusLabel(status: string) {
       return 'Admitted'
     case 'processing':
       return 'Summarizing'
+    case 'summarizing':
+      return 'Generating recap'
+    case 'completed':
+      return 'Recap ready'
     case 'preparing':
       return 'Preparing'
     case 'joining':
@@ -561,6 +585,561 @@ function groupTranscriptBySpeaker(turns: MeetingTranscriptTurn[]): TranscriptSpe
   return groups
 }
 
+// ---------------------------------------------------------------------------
+// PostMeetingReview — KOD-73 + KOD-74
+// ---------------------------------------------------------------------------
+
+type PostMeetingReviewProps = {
+  meeting: { id: string; status: string; title?: string | null }
+  artifacts: MeetingArtifact[]
+  workItems: WorkItem[]
+  loading: boolean
+  retrying: boolean
+  editingWorkItemId: string | null
+  editWorkItemTitle: string
+  editWorkItemOwnerHint: string
+  editWorkItemDueAt: string
+  workItemSaving: string | null
+  canRetry: boolean
+  onRetry: () => void
+  onStartEdit: (item: WorkItem) => void
+  onCancelEdit: () => void
+  onSaveEdit: (id: string) => void
+  onEditTitleChange: (v: string) => void
+  onEditOwnerHintChange: (v: string) => void
+  onEditDueAtChange: (v: string) => void
+  onApprove: (id: string) => void
+  onReject: (id: string) => void
+  quietTextClass: string
+  subtleTextClass: string
+  dashedPanelClass: string
+}
+
+function workItemStatusTone(status: string) {
+  switch (status) {
+    case 'approved':
+      return 'success' as const
+    case 'cancelled':
+      return 'destructive' as const
+    case 'draft':
+      return 'warning' as const
+    default:
+      return 'neutral' as const
+  }
+}
+
+function workItemStatusLabel(status: string) {
+  switch (status) {
+    case 'draft':
+      return 'Needs review'
+    case 'approved':
+      return 'Approved'
+    case 'cancelled':
+      return 'Rejected'
+    case 'synced':
+      return 'Synced'
+    case 'done':
+      return 'Done'
+    default:
+      return status
+  }
+}
+
+function workItemKindLabel(kind: string) {
+  switch (kind) {
+    case 'task':
+      return 'Task'
+    case 'ticket':
+      return 'Ticket'
+    case 'follow_up':
+      return 'Follow-up'
+    case 'goal':
+      return 'Goal'
+    case 'outcome':
+      return 'Outcome'
+    default:
+      return kind
+  }
+}
+
+function getArtifactMetaString(
+  metadata: Record<string, unknown>,
+  key: string
+): string | null {
+  const val = metadata[key]
+  return typeof val === 'string' ? val : null
+}
+
+function PostMeetingReview({
+  meeting,
+  artifacts,
+  workItems,
+  loading,
+  retrying,
+  editingWorkItemId,
+  editWorkItemTitle,
+  editWorkItemOwnerHint,
+  editWorkItemDueAt,
+  workItemSaving,
+  canRetry,
+  onRetry,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onEditTitleChange,
+  onEditOwnerHintChange,
+  onEditDueAtChange,
+  onApprove,
+  onReject,
+  quietTextClass,
+  subtleTextClass,
+  dashedPanelClass,
+}: PostMeetingReviewProps) {
+  const isSummarizing = meeting.status === 'summarizing'
+
+  const summaryArtifact = artifacts.find((a) => a.artifactType === 'summary')
+  const decisionArtifact = artifacts.find(
+    (a) => a.artifactType === 'decision_log'
+  )
+
+  const decisions: Array<{
+    summary: string
+    context: string | null
+    madeBy: string | null
+    confidence: number | null
+    sourceEvidence: string[]
+  }> = Array.isArray(decisionArtifact?.structuredData)
+    ? (decisionArtifact.structuredData as Record<string, unknown>[]).map(
+        (d) => ({
+          summary: typeof d.summary === 'string' ? d.summary : '',
+          context: typeof d.context === 'string' ? d.context : null,
+          madeBy: typeof d.madeBy === 'string' ? d.madeBy : null,
+          confidence:
+            typeof d.confidence === 'number' ? d.confidence : null,
+          sourceEvidence: Array.isArray(d.sourceEvidence)
+            ? (d.sourceEvidence as string[]).filter((s) => typeof s === 'string')
+            : [],
+        })
+      ).filter((d) => d.summary)
+    : []
+
+  const activeWorkItems = workItems.filter((w) => w.status !== 'cancelled')
+  const draftCount = workItems.filter((w) => w.status === 'draft').length
+
+  return (
+    <div className="space-y-4">
+      {/* Status banner */}
+      {isSummarizing && (
+        <div className="flex items-center gap-3 rounded-[1.5rem] border border-brand-line bg-brand-elevated px-5 py-4">
+          <Loader2
+            size={16}
+            className="shrink-0 animate-spin text-brand-accent-strong"
+          />
+          <p className="text-sm text-foreground">
+            Kodi is generating the meeting recap — summary, decisions, and action items.
+            This usually takes 15–30 seconds.
+          </p>
+        </div>
+      )}
+
+      {/* Post-meeting package card */}
+      <Card className="border-brand-line">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                <FileText size={18} />
+              </div>
+              <div>
+                <CardTitle className="text-xl text-foreground">
+                  Meeting recap
+                </CardTitle>
+                <CardDescription>
+                  {isSummarizing
+                    ? 'Kodi is generating the post-meeting package.'
+                    : 'Summary and key decisions captured from this session.'}
+                </CardDescription>
+              </div>
+            </div>
+
+            {canRetry && !isSummarizing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRetry}
+                disabled={retrying}
+                className="gap-1.5 text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw
+                  size={13}
+                  className={retrying ? 'animate-spin' : ''}
+                />
+                {retrying ? 'Retrying…' : 'Retry'}
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5">
+          {/* Summary */}
+          <div>
+            <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
+              Summary
+            </p>
+
+            {loading || isSummarizing ? (
+              <div className="mt-3 space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-4 w-3/5" />
+              </div>
+            ) : summaryArtifact?.content ? (
+              <div className="mt-3 rounded-[1.5rem] border border-brand-line bg-brand-elevated p-5">
+                <p className="text-sm leading-7 text-foreground">
+                  {summaryArtifact.content}
+                </p>
+                {Array.isArray(
+                  (summaryArtifact.structuredData as Record<string, unknown> | null)
+                    ?.keyOutcomes
+                ) && (
+                  <div className="mt-4 space-y-1">
+                    <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
+                      Key outcomes
+                    </p>
+                    <ul className="mt-2 space-y-1">
+                      {(
+                        (summaryArtifact.structuredData as Record<string, unknown>)
+                          .keyOutcomes as string[]
+                      ).map((outcome) => (
+                        <li
+                          key={outcome}
+                          className="flex items-start gap-2 text-sm text-foreground"
+                        >
+                          <CheckCircle2
+                            size={14}
+                            className="mt-0.5 shrink-0 text-brand-success"
+                          />
+                          {outcome}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className={`mt-3 ${dashedPanelClass} rounded-[1.5rem] p-4 text-sm ${quietTextClass}`}
+              >
+                {meeting.status === 'ended'
+                  ? 'Summary was not generated for this meeting. Use the retry button to generate it.'
+                  : 'Summary will appear here once Kodi finishes processing.'}
+              </div>
+            )}
+          </div>
+
+          {/* Decisions */}
+          <div>
+            <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
+              Decisions
+            </p>
+
+            {loading || isSummarizing ? (
+              <div className="mt-3 space-y-2">
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+              </div>
+            ) : decisions.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {decisions.map((decision, index) => (
+                  <div
+                    key={`decision-${index}`}
+                    className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <CheckCircle2
+                        size={15}
+                        className="mt-0.5 shrink-0 text-brand-success"
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-sm text-foreground">{decision.summary}</p>
+                        {decision.context && (
+                          <p className={`text-xs leading-5 ${quietTextClass}`}>
+                            {decision.context}
+                          </p>
+                        )}
+                        <div className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}>
+                          {decision.madeBy && (
+                            <span>by {decision.madeBy}</span>
+                          )}
+                          {decision.confidence != null && (
+                            <Badge variant="outline">
+                              {Math.round(decision.confidence * 100)}% confident
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !loading ? (
+              <div
+                className={`mt-3 ${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+              >
+                No decisions were identified in this meeting.
+              </div>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Action items / work items with correction UX */}
+      <Card className="border-brand-line">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+              <ClipboardList size={18} />
+            </div>
+            <div>
+              <CardTitle className="text-xl text-foreground">
+                Action items
+              </CardTitle>
+              <CardDescription>
+                {draftCount > 0
+                  ? `${draftCount} item${draftCount === 1 ? '' : 's'} need${draftCount === 1 ? 's' : ''} review — approve to queue for follow-through or reject to dismiss.`
+                  : 'Review and correct what Kodi extracted from the meeting.'}
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {loading || isSummarizing ? (
+            <div className="space-y-3">
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+              <Skeleton className="h-16" />
+            </div>
+          ) : activeWorkItems.length === 0 && workItems.filter((w) => w.status === 'cancelled').length === 0 ? (
+            <div
+              className={`${dashedPanelClass} rounded-[1.4rem] p-5 text-sm ${quietTextClass}`}
+            >
+              {meeting.status === 'ended'
+                ? 'No action items were generated. Use retry to regenerate the post-meeting package.'
+                : 'Action items will appear here once the recap is ready.'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {workItems.map((item) => {
+                const isEditing = editingWorkItemId === item.id
+                const isSaving = workItemSaving === item.id
+                const meta =
+                  item.metadata &&
+                  typeof item.metadata === 'object' &&
+                  !Array.isArray(item.metadata)
+                    ? (item.metadata as Record<string, unknown>)
+                    : {}
+                const ownerHint = getArtifactMetaString(meta, 'ownerHint')
+                const dueDateHint = getArtifactMetaString(meta, 'dueDateHint')
+                const confidence =
+                  typeof meta.confidence === 'number' ? meta.confidence : null
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-[1.4rem] border p-4 transition-colors ${
+                      item.status === 'cancelled'
+                        ? 'border-brand-line bg-brand-elevated opacity-50'
+                        : item.status === 'approved'
+                          ? 'border-brand-success/30 bg-brand-elevated'
+                          : 'border-brand-line bg-brand-elevated'
+                    }`}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                            Title
+                          </p>
+                          <Input
+                            value={editWorkItemTitle}
+                            onChange={(e) => onEditTitleChange(e.target.value)}
+                            className="h-9 text-sm"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                              Owner
+                            </p>
+                            <Input
+                              value={editWorkItemOwnerHint}
+                              onChange={(e) =>
+                                onEditOwnerHintChange(e.target.value)
+                              }
+                              placeholder="Name or team"
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                              Due date
+                            </p>
+                            <Input
+                              type="date"
+                              value={editWorkItemDueAt}
+                              onChange={(e) =>
+                                onEditDueAtChange(e.target.value)
+                              }
+                              className="h-9 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => onSaveEdit(item.id)}
+                            disabled={isSaving || !editWorkItemTitle.trim()}
+                            className="gap-1.5"
+                          >
+                            <Check size={13} />
+                            {isSaving ? 'Saving…' : 'Save'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={onCancelEdit}
+                            disabled={isSaving}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={workItemStatusTone(item.status)}>
+                              {workItemStatusLabel(item.status)}
+                            </Badge>
+                            <Badge variant="neutral">
+                              {workItemKindLabel(item.kind)}
+                            </Badge>
+                            {confidence != null && (
+                              <Badge variant="outline">
+                                {Math.round(confidence * 100)}%
+                              </Badge>
+                            )}
+                          </div>
+
+                          <p className="text-sm font-medium text-foreground">
+                            {item.title}
+                          </p>
+
+                          {item.description && (
+                            <p className={`text-sm leading-6 ${quietTextClass}`}>
+                              {item.description}
+                            </p>
+                          )}
+
+                          <div
+                            className={`flex flex-wrap items-center gap-3 text-xs ${subtleTextClass}`}
+                          >
+                            {ownerHint && (
+                              <span>Owner: {ownerHint}</span>
+                            )}
+                            {item.dueAt && (
+                              <span>
+                                Due{' '}
+                                {new Date(item.dueAt).toLocaleDateString([], {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
+                              </span>
+                            )}
+                            {dueDateHint && !item.dueAt && (
+                              <span className={quietTextClass}>
+                                Suggested: {dueDateHint}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {item.status !== 'cancelled' && (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => onStartEdit(item)}
+                              disabled={isSaving}
+                              className={`rounded-lg p-1.5 transition-colors hover:bg-brand-line/50 ${subtleTextClass} disabled:opacity-40`}
+                              title="Edit"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            {item.status === 'draft' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => onApprove(item.id)}
+                                  disabled={isSaving}
+                                  className="rounded-lg p-1.5 text-brand-success transition-colors hover:bg-brand-success/10 disabled:opacity-40"
+                                  title="Approve"
+                                >
+                                  <Check size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onReject(item.id)}
+                                  disabled={isSaving}
+                                  className="rounded-lg p-1.5 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
+                                  title="Reject"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {workItems.some((w) => w.status === 'cancelled') && (
+                <details className="group">
+                  <summary
+                    className={`cursor-pointer list-none text-xs marker:hidden ${subtleTextClass}`}
+                  >
+                    Show rejected items (
+                    {workItems.filter((w) => w.status === 'cancelled').length})
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {workItems
+                      .filter((w) => w.status === 'cancelled')
+                      .map((item) => (
+                        <div
+                          key={item.id}
+                          className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-3 opacity-50"
+                        >
+                          <p className={`text-sm line-through ${quietTextClass}`}>
+                            {item.title}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
   const meetingSessionId = params.meetingSessionId
@@ -588,6 +1167,18 @@ export default function MeetingDetailsPage() {
   const transcriptBottomRef = useRef<HTMLDivElement>(null)
   const [transcriptAtBottom, setTranscriptAtBottom] = useState(true)
   const speakerColorMap = useRef<Map<string, string>>(new Map())
+
+  // Post-meeting review state
+  const [artifacts, setArtifacts] = useState<MeetingArtifact[]>([])
+  const [workItemsList, setWorkItemsList] = useState<WorkItem[]>([])
+  const [artifactsLoading, setArtifactsLoading] = useState(false)
+  const [artifactsLoaded, setArtifactsLoaded] = useState(false)
+  const [retryingArtifacts, setRetryingArtifacts] = useState(false)
+  const [editingWorkItemId, setEditingWorkItemId] = useState<string | null>(null)
+  const [editWorkItemTitle, setEditWorkItemTitle] = useState('')
+  const [editWorkItemOwnerHint, setEditWorkItemOwnerHint] = useState('')
+  const [editWorkItemDueAt, setEditWorkItemDueAt] = useState('')
+  const [workItemSaving, setWorkItemSaving] = useState<string | null>(null)
 
   const pollIntervalMs = useMemo(
     () => pollIntervalForStatus(consoleData?.meeting.status),
@@ -638,6 +1229,50 @@ export default function MeetingDetailsPage() {
       window.clearInterval(interval)
     }
   }, [orgId, meetingSessionId, pollIntervalMs])
+
+  // Load post-meeting artifacts and work items when the meeting is in a
+  // post-meeting status or has already completed.
+  useEffect(() => {
+    if (!orgId || !meetingSessionId) return
+
+    const status = consoleData?.meeting.status
+    const isPostMeeting =
+      status === 'summarizing' ||
+      status === 'completed' ||
+      status === 'awaiting_approval' ||
+      status === 'executing' ||
+      status === 'ended'
+
+    if (!isPostMeeting) return
+
+    let cancelled = false
+
+    async function loadPostMeeting() {
+      if (!orgId) return
+      setArtifactsLoading(true)
+      try {
+        const [arts, items] = await Promise.all([
+          trpc.meeting.listArtifacts.query({ orgId, meetingSessionId }),
+          trpc.work.listByMeeting.query({ orgId, meetingSessionId }),
+        ])
+        if (cancelled) return
+        setArtifacts(arts)
+        setWorkItemsList(items)
+        setArtifactsLoaded(true)
+      } catch {
+        // Non-fatal — post-meeting section will show empty state
+      } finally {
+        if (!cancelled) setArtifactsLoading(false)
+      }
+    }
+
+    void loadPostMeeting()
+    return () => {
+      cancelled = true
+    }
+  // Re-load when status transitions into or within post-meeting states
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, meetingSessionId, consoleData?.meeting.status])
 
   // Load Ask Kodi answer history from the server on mount so it survives
   // page refreshes. Only loads once; new answers are appended optimistically.
@@ -909,6 +1544,89 @@ export default function MeetingDetailsPage() {
       router.push('/meetings')
     } catch {
       setDeletingMeeting(false)
+    }
+  }
+
+  function startEditWorkItem(item: WorkItem) {
+    const meta = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+      ? (item.metadata as Record<string, unknown>)
+      : {}
+    setEditingWorkItemId(item.id)
+    setEditWorkItemTitle(item.title)
+    setEditWorkItemOwnerHint(typeof meta.ownerHint === 'string' ? meta.ownerHint : '')
+    setEditWorkItemDueAt(
+      item.dueAt ? new Date(item.dueAt).toISOString().slice(0, 10) : ''
+    )
+  }
+
+  function cancelEditWorkItem() {
+    setEditingWorkItemId(null)
+    setEditWorkItemTitle('')
+    setEditWorkItemOwnerHint('')
+    setEditWorkItemDueAt('')
+  }
+
+  async function saveEditWorkItem(itemId: string) {
+    if (!orgId || workItemSaving) return
+    setWorkItemSaving(itemId)
+    try {
+      const updated = await trpc.work.update.mutate({
+        orgId,
+        workItemId: itemId,
+        title: editWorkItemTitle.trim() || undefined,
+        ownerHint: editWorkItemOwnerHint.trim() || null,
+        dueAt: editWorkItemDueAt ? new Date(editWorkItemDueAt).toISOString() : null,
+      })
+      setWorkItemsList((prev) =>
+        prev.map((w) => (w.id === itemId ? (updated as WorkItem) : w))
+      )
+      cancelEditWorkItem()
+    } catch {
+      // Silently ignore — user can retry
+    } finally {
+      setWorkItemSaving(null)
+    }
+  }
+
+  async function approveWorkItem(itemId: string) {
+    if (!orgId || workItemSaving) return
+    setWorkItemSaving(itemId)
+    try {
+      await trpc.work.approve.mutate({ orgId, workItemId: itemId })
+      setWorkItemsList((prev) =>
+        prev.map((w) => (w.id === itemId ? { ...w, status: 'approved' as const } : w))
+      )
+    } catch {
+      // Silently ignore
+    } finally {
+      setWorkItemSaving(null)
+    }
+  }
+
+  async function rejectWorkItem(itemId: string) {
+    if (!orgId || workItemSaving) return
+    setWorkItemSaving(itemId)
+    try {
+      await trpc.work.reject.mutate({ orgId, workItemId: itemId })
+      setWorkItemsList((prev) =>
+        prev.map((w) => (w.id === itemId ? { ...w, status: 'cancelled' as const } : w))
+      )
+    } catch {
+      // Silently ignore
+    } finally {
+      setWorkItemSaving(null)
+    }
+  }
+
+  async function handleRetryArtifacts() {
+    if (!orgId || retryingArtifacts) return
+    setRetryingArtifacts(true)
+    try {
+      await trpc.meeting.retryArtifacts.mutate({ orgId, meetingSessionId })
+    } catch {
+      // Non-fatal — status poll will reflect changes
+    } finally {
+      setRetryingArtifacts(false)
     }
   }
 
@@ -1362,6 +2080,39 @@ export default function MeetingDetailsPage() {
               {runtimeCopy.alertDescription}
             </AlertDescription>
           </Alert>
+        )}
+
+        {/* Post-meeting review section — shown when meeting has ended/completed */}
+        {(meeting.status === 'summarizing' ||
+          meeting.status === 'completed' ||
+          meeting.status === 'awaiting_approval' ||
+          meeting.status === 'executing' ||
+          meeting.status === 'ended') && (
+          <PostMeetingReview
+            meeting={meeting}
+            artifacts={artifacts}
+            workItems={workItemsList}
+            loading={artifactsLoading && !artifactsLoaded}
+            retrying={retryingArtifacts}
+            editingWorkItemId={editingWorkItemId}
+            editWorkItemTitle={editWorkItemTitle}
+            editWorkItemOwnerHint={editWorkItemOwnerHint}
+            editWorkItemDueAt={editWorkItemDueAt}
+            workItemSaving={workItemSaving}
+            canRetry={activeOrg?.role === 'owner'}
+            onRetry={() => void handleRetryArtifacts()}
+            onStartEdit={startEditWorkItem}
+            onCancelEdit={cancelEditWorkItem}
+            onSaveEdit={(id) => void saveEditWorkItem(id)}
+            onEditTitleChange={setEditWorkItemTitle}
+            onEditOwnerHintChange={setEditWorkItemOwnerHint}
+            onEditDueAtChange={setEditWorkItemDueAt}
+            onApprove={(id) => void approveWorkItem(id)}
+            onReject={(id) => void rejectWorkItem(id)}
+            quietTextClass={quietTextClass}
+            subtleTextClass={subtleTextClass}
+            dashedPanelClass={dashedPanelClass}
+          />
         )}
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">

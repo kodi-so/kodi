@@ -78,11 +78,13 @@ function statusTone(status: string) {
     case 'admitted':
       return 'info' as const
     case 'processing':
+    case 'summarizing':
       return 'warning' as const
     case 'joining':
     case 'scheduled':
     case 'preparing':
       return 'warning' as const
+    case 'completed':
     case 'ended':
       return 'neutral' as const
     case 'failed':
@@ -100,6 +102,10 @@ function statusLabel(status: string) {
       return 'Admitted'
     case 'processing':
       return 'Summarizing'
+    case 'summarizing':
+      return 'Generating recap'
+    case 'completed':
+      return 'Recap ready'
     case 'preparing':
       return 'Preparing'
     case 'joining':
@@ -123,9 +129,11 @@ function meetingSnapshot(meeting: MeetingListItem[number]) {
 }
 
 function meetingOutcomeLabel(meeting: MeetingListItem[number]) {
-  if (meeting.liveSummary) return 'Summary ready'
-
   switch (meeting.status) {
+    case 'completed':
+      return 'Recap ready'
+    case 'summarizing':
+      return 'Generating recap'
     case 'listening':
       return 'Transcript live'
     case 'processing':
@@ -133,7 +141,7 @@ function meetingOutcomeLabel(meeting: MeetingListItem[number]) {
     case 'failed':
       return 'Needs retry'
     case 'ended':
-      return 'Review available'
+      return meeting.liveSummary ? 'Summary ready' : 'Review available'
     default:
       return 'In progress'
   }
@@ -277,6 +285,7 @@ export default function MeetingsPage() {
           'admitted',
           'listening',
           'processing',
+          'summarizing',
         ].includes(meeting.status)
       ).length,
     [meetings]

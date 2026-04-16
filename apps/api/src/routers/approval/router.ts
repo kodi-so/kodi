@@ -4,6 +4,7 @@ import {
   decideToolApprovalRequest,
   listToolApprovalRequests,
 } from '../../lib/tool-access-approvals'
+import { retryWorkItemSync } from '../../lib/meetings/work-item-sync'
 import { router, memberProcedure } from '../../trpc'
 
 export const approvalRouter = router({
@@ -56,6 +57,74 @@ export const approvalRouter = router({
             error instanceof Error
               ? error.message
               : 'Failed to decide the approval request.',
+        })
+      }
+    }),
+
+  listByWorkItem: memberProcedure
+    .input(
+      z.object({
+        workItemId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Verify work item belongs to org
+      const item = await ctx.db.query.workItems.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.workItemId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!item) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Work item not found.' })
+      }
+
+      const runs = await ctx.db.query.toolActionRuns.findMany({
+        where: (fields, { eq }) => eq(fields.workItemId, input.workItemId),
+        orderBy: (fields, { desc }) => desc(fields.createdAt),
+      })
+
+      return runs.map((run) => ({
+        id: run.id,
+        action: run.action,
+        toolkitSlug: run.toolkitSlug,
+        status: run.status,
+        targetText: run.targetText,
+        error: run.error,
+        attemptCount: run.attemptCount,
+        idempotencyKey: run.idempotencyKey,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+        createdAt: run.createdAt,
+        approvalRequestId: run.approvalRequestId,
+        responsePayload: run.responsePayload,
+      }))
+    }),
+
+  retryRun: memberProcedure
+    .input(
+      z.object({
+        runId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const result = await retryWorkItemSync({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          originalRunId: input.runId,
+        })
+
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            error instanceof Error ? error.message : 'Failed to retry the action run.',
         })
       }
     }),

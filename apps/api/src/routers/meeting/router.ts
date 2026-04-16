@@ -6,6 +6,7 @@ import { TRPCError } from '@trpc/server'
 import {
   eq,
   meetingAnswers,
+  meetingArtifacts,
   meetingCopilotSettings,
   meetingParticipationModeValues,
   meetingSessionControls,
@@ -41,12 +42,13 @@ import {
 } from '../../lib/meetings/voice-policy'
 import { acquireVoiceLock, interruptActiveVoice } from '../../lib/meetings/voice-concurrency'
 import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
-import { storeVoiceAudio } from '../../lib/meetings/voice-audio-store'
 import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
+import { sendRecallBotOutputAudio } from '../../lib/providers/recall/client'
+import { retryPostMeetingArtifacts } from '../../lib/meetings/post-meeting-service'
 import {
-  ensureRecallOutputMediaActive,
-  stopRecallOutputMediaSession,
-} from '../../lib/meetings/voice-output-delivery'
+  queueMeetingRecap,
+  type RecapDeliveryTarget,
+} from '../../lib/meetings/work-item-sync'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
 
@@ -66,13 +68,20 @@ export const meetingRouter = router({
     .input(
       z.object({
         limit: z.number().int().min(1).max(100).default(20),
+        // Cursor is the createdAt ISO string of the last item in the previous page.
+        cursor: z.string().datetime().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      return ctx.db.query.meetingSessions.findMany({
-        where: (fields, { eq }) => eq(fields.orgId, ctx.org.id),
+      const limit = input.limit
+      // Fetch one extra to know whether a next page exists.
+      const rows = await ctx.db.query.meetingSessions.findMany({
+        where: (fields, { eq, and, lt }) =>
+          input.cursor
+            ? and(eq(fields.orgId, ctx.org.id), lt(fields.createdAt, new Date(input.cursor!)))
+            : eq(fields.orgId, ctx.org.id),
         orderBy: (fields, { desc }) => desc(fields.createdAt),
-        limit: input.limit,
+        limit: limit + 1,
         columns: {
           id: true,
           provider: true,
@@ -86,6 +95,12 @@ export const meetingRouter = router({
           updatedAt: true,
         },
       })
+
+      const hasNextPage = rows.length > limit
+      const items = hasNextPage ? rows.slice(0, limit) : rows
+      const nextCursor = hasNextPage ? items[items.length - 1]!.createdAt.toISOString() : null
+
+      return { items, nextCursor }
     }),
 
   delete: memberProcedure
@@ -821,12 +836,7 @@ export const meetingRouter = router({
           markdownToMeetingPlainText(answer.answerText!)
         )
 
-        // TTS generation and Output Media session refresh are independent — run
-        // them concurrently so the page is warm by the time the audio is ready.
-        const [ttsResult] = await Promise.all([
-          generateSpeech({ text: voiceText }),
-          ensureRecallOutputMediaActive({ botSessionId, meetingSessionId: meeting.id }),
-        ])
+        const ttsResult = await generateSpeech({ text: voiceText })
 
         if (!ttsResult.ok) {
           await markAnswerFailed(answer.id, meeting.id, `TTS failed: ${ttsResult.reason}`)
@@ -836,12 +846,7 @@ export const meetingRouter = router({
           })
         }
 
-        await storeVoiceAudio({
-          answerId: answer.id,
-          meetingSessionId: meeting.id,
-          buffer: ttsResult.audioBuffer,
-          contentType: ttsResult.contentType,
-        })
+        await sendRecallBotOutputAudio(botSessionId, ttsResult.audioBuffer)
 
         await markAnswerDeliveredToVoice(answer.id, meeting.id)
 
@@ -886,14 +891,108 @@ export const meetingRouter = router({
         )
       }
 
-      if (meeting.providerBotSessionId) {
-        try {
-          await stopRecallOutputMediaSession(meeting.providerBotSessionId)
-        } catch {
-          // Best-effort — bot may no longer be in call
-        }
+      return { ok: true, stoppedAnswerId: interruptedAnswerId ?? null }
+    }),
+
+  listArtifacts: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
       }
 
-      return { ok: true, stoppedAnswerId: interruptedAnswerId ?? null }
+      return ctx.db.query.meetingArtifacts.findMany({
+        where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
+        orderBy: (fields, { asc }) => asc(fields.createdAt),
+      })
+    }),
+
+  retryArtifacts: ownerProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      void retryPostMeetingArtifacts(meeting.id, ctx.org.id).catch((error) => {
+        console.warn('[meetings] retryArtifacts failed', {
+          orgId: ctx.org.id,
+          meetingSessionId: meeting.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+
+      return { ok: true }
+    }),
+
+  deliverRecap: memberProcedure
+    .input(
+      z.object({
+        meetingSessionId: z.string(),
+        target: z.enum(['slack', 'zoom']),
+        channelId: z.string().trim().max(200).nullish(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const meeting = await ctx.db.query.meetingSessions.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
+        columns: { id: true, title: true, status: true },
+      })
+
+      if (!meeting) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+      }
+
+      try {
+        const result = await queueMeetingRecap({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          meetingSessionId: meeting.id,
+          meetingTitle: meeting.title,
+          target: input.target as RecapDeliveryTarget,
+          channelId: input.channelId ?? null,
+        })
+
+        return result
+      } catch (error) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Failed to queue meeting recap delivery.',
+        })
+      }
     }),
 })

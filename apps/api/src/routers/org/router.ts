@@ -84,6 +84,7 @@ export const orgRouter = router({
         .from(orgMembers)
         .innerJoin(user, eq(orgMembers.userId, user.id))
         .where(eq(orgMembers.orgId, ctx.org.id))
+        .orderBy(desc(orgMembers.createdAt))
 
       return members
     }),

@@ -8,6 +8,7 @@ import { forwardMeetingEventToOpenClaw } from './openclaw-forwarder'
 import { routeMeetingChatEvent } from './chat-router'
 import { routeMeetingVoiceEvent } from './voice-router'
 import { scheduleMeetingTranscriptAnalysis } from './openclaw-background'
+import { generatePostMeetingArtifacts } from './post-meeting-service'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
@@ -400,6 +401,20 @@ export class MeetingOrchestrationService {
 
     if (!updated) {
       throw new Error('Failed to load updated meeting session')
+    }
+
+    // Fire-and-forget post-meeting artifact generation when the session ends
+    // normally. Failed meetings are excluded since they may have no transcript.
+    if ((input.status ?? 'ended') === 'ended') {
+      void generatePostMeetingArtifacts(meetingSession.id, input.orgId).catch(
+        (error) => {
+          console.warn('[meetings] post-meeting artifact generation failed', {
+            orgId: input.orgId,
+            meetingSessionId: meetingSession.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      )
     }
 
     return updated

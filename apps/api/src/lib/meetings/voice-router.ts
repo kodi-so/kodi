@@ -31,11 +31,7 @@ import {
 } from './interaction-triggers'
 import { markdownToMeetingPlainText } from './answer-format'
 import { generateSpeech, isTtsAvailable } from '../providers/tts/client'
-import { storeVoiceAudio } from './voice-audio-store'
-import {
-  ensureRecallOutputMediaActive,
-  stopRecallOutputMediaSession,
-} from './voice-output-delivery'
+import { sendRecallBotOutputAudio } from '../providers/recall/client'
 
 type OrgIdentity = {
   id: string
@@ -55,6 +51,11 @@ type VoiceRouterContext = {
  * Called fire-and-forget from the orchestration service when voice_enabled mode
  * is active and a transcript turn completes. The function handles policy gating,
  * TTS generation, Recall audio output, and full lifecycle tracking.
+ *
+ * Audio is delivered via Recall's POST /output_audio/ endpoint, which injects
+ * MP3 bytes directly into the meeting. This bypasses the headless-browser
+ * capture pipeline (output_media + webpage) and produces clean, artifact-free
+ * audio in the Zoom call.
  */
 export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<void> {
   const { meetingSessionId, org, transcriptEvent } = ctx
@@ -179,13 +180,8 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
       return
     }
 
-    // TTS generation and Output Media session refresh are independent — run
-    // them concurrently so the page is warm by the time the audio clip is ready.
     const voiceText = truncateForVoice(markdownToMeetingPlainText(result.answerText))
-    const [ttsResult] = await Promise.all([
-      generateSpeech({ text: voiceText }),
-      ensureRecallOutputMediaActive({ botSessionId, meetingSessionId }),
-    ])
+    const ttsResult = await generateSpeech({ text: voiceText })
 
     if (!ttsResult.ok) {
       await markAnswerFailed(
@@ -196,13 +192,11 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
       return
     }
 
-    // Persist the clip so the Output Media webpage can fetch and play it.
-    await storeVoiceAudio({
-      answerId: answer.id,
-      meetingSessionId,
-      buffer: ttsResult.audioBuffer,
-      contentType: ttsResult.contentType,
-    })
+    // Inject audio directly via Recall's output_audio endpoint.
+    // This delivers MP3 bytes straight to the meeting without routing through
+    // a headless browser, eliminating the PulseAudio capture jitter that caused
+    // choppy audio with the previous output_media (webpage) approach.
+    await sendRecallBotOutputAudio(botSessionId, ttsResult.audioBuffer)
 
     await markAnswerDeliveredToVoice(answer.id, meetingSessionId)
   } catch (err) {
@@ -220,7 +214,6 @@ export async function routeMeetingVoiceEvent(ctx: VoiceRouterContext): Promise<v
  */
 export async function stopMeetingVoiceOutput(
   meetingSessionId: string,
-  botSessionId: string
 ): Promise<void> {
   const interruptedAnswerId = interruptActiveVoice(meetingSessionId)
 
@@ -230,14 +223,5 @@ export async function stopMeetingVoiceOutput(
       meetingSessionId,
       'Voice output stopped by operator.'
     )
-  }
-
-  try {
-    await stopRecallOutputMediaSession(botSessionId)
-  } catch (err) {
-    console.warn('[voice] stop output media failed', {
-      meetingSessionId,
-      error: err instanceof Error ? err.message : String(err),
-    })
   }
 }

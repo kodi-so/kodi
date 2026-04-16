@@ -480,6 +480,7 @@ export default function MeetingsPage() {
                 </Card>
               ) : (
                 <div className="overflow-hidden rounded-[1.75rem] border border-brand-line bg-card">
+                  <div className="max-h-[30rem] overflow-y-auto">
                   {meetings.map((meeting, index) => (
                     <div
                       key={meeting.id}
@@ -547,6 +548,7 @@ export default function MeetingsPage() {
                       </button>
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
 

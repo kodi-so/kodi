@@ -8,6 +8,7 @@ import {
   clearToolkitAccountPreference,
   createConnectLink,
   disableConnectedAccount,
+  getComposioClient,
   getEffectiveToolkitPolicy,
   getToolkit,
   getToolAccessPresentation,
@@ -265,6 +266,72 @@ export const toolAccessRouter = router({
 
       return { defaultChannel: channel || null }
     }),
+
+  // Executes SLACK_LIST_CHANNELS via a short-lived Composio session and returns
+  // the channel list for display in the recap-delivery modal. Read-only; no DB
+  // audit records are written.
+  listSlackChannels: memberProcedure.query(async ({ ctx }) => {
+    const setup = getToolAccessSetupStatus()
+    if (!setup.apiConfigured) {
+      return { channels: [] as Array<{ id: string; name: string }> }
+    }
+
+    const connections = await listPersistedConnections(ctx.db, ctx.org.id, ctx.session.user.id)
+    const preferences = await listToolkitAccountPreferences(ctx.db, ctx.org.id, ctx.session.user.id)
+
+    const slackConnections = connections.filter((c) => c.toolkitSlug === 'slack')
+    const preference = preferences.find((p) => p.toolkitSlug === 'slack')
+    const connection = choosePrimaryConnection(
+      slackConnections,
+      preference?.preferredConnectedAccountId ?? null
+    )
+
+    if (!connection || connection.connectedAccountStatus !== 'ACTIVE') {
+      return { channels: [] as Array<{ id: string; name: string }> }
+    }
+
+    try {
+      const composio = getComposioClient()
+      const session = await composio.create(ctx.session.user.id, {
+        toolkits: { enable: ['slack'] },
+        connectedAccounts: { slack: connection.connectedAccountId },
+        authConfigs: connection.authConfigId
+          ? { slack: connection.authConfigId }
+          : undefined,
+        manageConnections: { enable: false, waitForConnections: false },
+        workbench: { enable: false, enableProxyExecution: false },
+      })
+
+      const scoped = await composio.toolRouter.use(session.sessionId)
+      const response = (await scoped.execute('SLACK_LIST_CHANNELS', {
+        exclude_archived: true,
+        limit: 200,
+      })) as { data?: Record<string, unknown>; error?: string | null }
+
+      if (response.error || !response.data) {
+        return { channels: [] as Array<{ id: string; name: string }> }
+      }
+
+      // Composio wraps the Slack API response under data
+      const raw = response.data
+      const channelsRaw =
+        Array.isArray(raw['channels'])
+          ? (raw['channels'] as Array<Record<string, unknown>>)
+          : Array.isArray((raw['data'] as Record<string, unknown> | undefined)?.['channels'])
+            ? ((raw['data'] as Record<string, unknown>)['channels'] as Array<Record<string, unknown>>)
+            : []
+
+      const channels = channelsRaw
+        .filter((c) => typeof c['name'] === 'string' && typeof c['id'] === 'string')
+        .map((c) => ({ id: c['id'] as string, name: c['name'] as string }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+      return { channels }
+    } catch {
+      // Non-fatal: fall back to manual text entry
+      return { channels: [] as Array<{ id: string; name: string }> }
+    }
+  }),
 
   getCatalog: memberProcedure
     .input(

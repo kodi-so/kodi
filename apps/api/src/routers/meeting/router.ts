@@ -68,13 +68,20 @@ export const meetingRouter = router({
     .input(
       z.object({
         limit: z.number().int().min(1).max(100).default(20),
+        // Cursor is the createdAt ISO string of the last item in the previous page.
+        cursor: z.string().datetime().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      return ctx.db.query.meetingSessions.findMany({
-        where: (fields, { eq }) => eq(fields.orgId, ctx.org.id),
+      const limit = input.limit
+      // Fetch one extra to know whether a next page exists.
+      const rows = await ctx.db.query.meetingSessions.findMany({
+        where: (fields, { eq, and, lt }) =>
+          input.cursor
+            ? and(eq(fields.orgId, ctx.org.id), lt(fields.createdAt, new Date(input.cursor!)))
+            : eq(fields.orgId, ctx.org.id),
         orderBy: (fields, { desc }) => desc(fields.createdAt),
-        limit: input.limit,
+        limit: limit + 1,
         columns: {
           id: true,
           provider: true,
@@ -88,6 +95,12 @@ export const meetingRouter = router({
           updatedAt: true,
         },
       })
+
+      const hasNextPage = rows.length > limit
+      const items = hasNextPage ? rows.slice(0, limit) : rows
+      const nextCursor = hasNextPage ? items[items.length - 1]!.createdAt.toISOString() : null
+
+      return { items, nextCursor }
     }),
 
   delete: memberProcedure

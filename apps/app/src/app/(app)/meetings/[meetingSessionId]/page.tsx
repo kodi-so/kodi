@@ -7,29 +7,19 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   ArrowLeft,
-  ArrowUpRight,
-  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
-  ClipboardList,
-  ExternalLink,
-  FileText,
-  Loader2,
   MessageSquare,
   Mic2,
-  Pencil,
   RefreshCw,
-  RotateCcw,
-  Send,
   SendHorizonal,
   Sparkles,
   Trash2,
   Users,
   Volume2,
   VolumeX,
-  X,
 } from 'lucide-react'
 import {
   Alert,
@@ -41,16 +31,19 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Input,
   Separator,
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
   Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
 } from '@kodi/ui'
+import { SectionIcon } from '@/components/section-icon'
 import { useOrg } from '@/lib/org-context'
 import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
@@ -61,10 +54,7 @@ import {
   subtleTextClass,
 } from '@/lib/brand-styles'
 import { resolveSessionId } from '@/lib/meeting-id'
-import {
-  describeMeetingLifecycleEvent,
-  getMeetingRuntimeCopy,
-} from '../_lib/runtime-state'
+import { getMeetingRuntimeCopy } from '../_lib/runtime-state'
 import {
   buildMeetingCopilotDisclosure,
   formatRetentionDays,
@@ -72,1441 +62,54 @@ import {
   getMeetingParticipationModeLabel,
 } from '@kodi/db/client'
 
-type MeetingConsole = NonNullable<
-  Awaited<ReturnType<typeof trpc.meeting.getConsole.query>>
->
-type MeetingParticipants = MeetingConsole['participants']
-type MeetingTranscript = MeetingConsole['transcript']
-type MeetingLiveState = MeetingConsole['liveState'] | null
-type MeetingEventFeed = MeetingConsole['events']
-type MeetingHealth = MeetingConsole['health'] | null
-type MeetingWorkspaceSettings = MeetingConsole['workspaceSettings'] | null
-type MeetingControls = MeetingConsole['controls'] | null
-type MeetingTranscriptSegment = MeetingTranscript[number]
-type MeetingTranscriptTurn = MeetingTranscriptSegment & {
-  mergedSegmentCount: number
-}
-type MeetingRetryAttempt = {
-  attempt: number | null
-  status: string | null
-  startedAt: string | null
-  completedAt: string | null
-  failureKind: string | null
-  retryable: boolean | null
-  message: string | null
-  httpStatus: number | null
-}
-type MeetingParticipantIdentitySummary = {
-  classification: 'internal' | 'external' | 'unknown'
-  confidence: number | null
-  rejoinCount: number
-  matchedBy: string | null
-  matchedUserEmail: string | null
-}
-type MeetingChatItem = {
-  id: string
-  eventType: string
-  content: string
-  senderName: string
-  recipient: string
-  occurredAt: Date | string
-}
-
-type AskKodiAnswer = {
-  id: string
-  question: string
-  answerText: string | null
-  status: string
-  failureReason: string | null
-  askedAt: Date
-  voiceStatus?: 'speaking' | 'delivered_to_voice' | 'voice_failed' | null
-}
-
-type MeetingArtifact = Awaited<
-  ReturnType<typeof trpc.meeting.listArtifacts.query>
->[number]
-
-type WorkItem = Awaited<
-  ReturnType<typeof trpc.work.listByMeeting.query>
->[number]
-
-type SyncTarget = 'linear' | 'github'
-type RecapTarget = 'slack' | 'zoom'
-
-function failureReasonToMessage(reason: string | null): string {
-  if (reason === 'openclaw-unavailable') return "Kodi's AI instance isn't reachable. Make sure your OpenClaw instance is running."
-  if (reason === 'openclaw-failed') return "Kodi's AI instance returned an error. Try again in a moment."
-  if (reason === 'empty-response') return 'Kodi returned an empty response. Try again.'
-  return 'Something went wrong. Please try again.'
-}
-
-function asRecord(value: unknown) {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
-}
-
-function asArray(value: unknown) {
-  return Array.isArray(value) ? value : []
-}
-
-function formatDate(value: Date | string | null | undefined) {
-  if (!value) return 'Not available'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Not available'
-  return parsed.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-function formatTime(value: Date | string | null | undefined) {
-  if (!value) return 'Not available'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Not available'
-  return parsed.toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
-
-function truncateMiddle(value: string | null | undefined, max = 28) {
-  if (!value) return 'Not available'
-  if (value.length <= max) return value
-
-  const edge = Math.max(6, Math.floor((max - 3) / 2))
-  return `${value.slice(0, edge)}...${value.slice(-edge)}`
-}
-
-function pollIntervalForStatus(status: string | null | undefined) {
-  switch (status) {
-    case 'preparing':
-    case 'joining':
-    case 'admitted':
-    case 'listening':
-      return 3000
-    case 'processing':
-    case 'scheduled':
-    case 'summarizing':
-      return 5000
-    case 'ended':
-    case 'completed':
-    case 'failed':
-      return 15000
-    default:
-      return 10000
-  }
-}
-
-function statusTone(status: string) {
-  switch (status) {
-    case 'listening':
-      return 'success' as const
-    case 'admitted':
-      return 'info' as const
-    case 'processing':
-    case 'summarizing':
-      return 'warning' as const
-    case 'joining':
-    case 'scheduled':
-    case 'preparing':
-      return 'warning' as const
-    case 'completed':
-    case 'ended':
-      return 'neutral' as const
-    case 'failed':
-      return 'destructive' as const
-    default:
-      return 'neutral' as const
-  }
-}
-
-function statusLabel(status: string) {
-  switch (status) {
-    case 'listening':
-      return 'Live'
-    case 'admitted':
-      return 'Admitted'
-    case 'processing':
-      return 'Summarizing'
-    case 'summarizing':
-      return 'Generating recap'
-    case 'completed':
-      return 'Recap ready'
-    case 'preparing':
-      return 'Preparing'
-    case 'joining':
-      return 'Joining'
-    case 'ended':
-      return 'Ended'
-    case 'failed':
-      return 'Needs attention'
-    default:
-      return status
-  }
-}
-
-function formatProviderLabel(provider: string) {
-  switch (provider) {
-    case 'google_meet':
-      return 'Google Meet'
-    case 'zoom':
-      return 'Zoom'
-    default:
-      return provider.replace(/_/g, ' ')
-  }
-}
-
-function formatSourceLabel(source: string) {
-  switch (source) {
-    case 'recall_webhook':
-      return 'Recall webhook'
-    case 'zoom_webhook':
-      return 'Zoom webhook'
-    case 'rtms':
-      return 'RTMS'
-    default:
-      return source.replace(/_/g, ' ')
-  }
-}
-
-function formatEventLabel(eventType: string) {
-  switch (eventType) {
-    case 'meeting.joining':
-      return 'Joining'
-    case 'meeting.admitted':
-      return 'Admitted'
-    case 'meeting.started':
-      return 'Started'
-    case 'meeting.chat_message.received':
-      return 'Chat received'
-    case 'meeting.chat_message.sent':
-      return 'Chat sent'
-    case 'meeting.ended':
-      return 'Ended'
-    case 'meeting.failed':
-      return 'Failed'
-    case 'participant.joined':
-      return 'Participant joined'
-    case 'meeting.transcript.segment_received':
-      return 'Transcript'
-    default:
-      return eventType.replace(/^meeting\./, '').replace(/\./g, ' ')
-  }
-}
-
-function healthTone(status: string | null | undefined) {
-  switch (status) {
-    case 'healthy':
-      return 'success' as const
-    case 'degraded':
-      return 'warning' as const
-    case 'down':
-      return 'destructive' as const
-    default:
-      return 'neutral' as const
-  }
-}
-
-function formatHealthStatus(status: string | null | undefined) {
-  switch (status) {
-    case 'healthy':
-      return 'Provider healthy'
-    case 'degraded':
-      return 'Needs attention'
-    case 'down':
-      return 'Provider down'
-    default:
-      return 'Health unknown'
-  }
-}
-
-function participantIdentitySummary(
-  participant: MeetingParticipants[number]
-): MeetingParticipantIdentitySummary | null {
-  const metadata = asRecord(participant.metadata)
-  const resolved = asRecord(metadata?.resolvedIdentity)
-  if (!resolved) return null
-
-  const classification =
-    resolved.classification === 'internal' ||
-    resolved.classification === 'external' ||
-    resolved.classification === 'unknown'
-      ? resolved.classification
-      : 'unknown'
-
-  return {
-    classification,
-    confidence:
-      typeof resolved.confidence === 'number' ? resolved.confidence : null,
-    rejoinCount:
-      typeof resolved.rejoinCount === 'number' ? resolved.rejoinCount : 0,
-    matchedBy:
-      typeof resolved.matchedBy === 'string' ? resolved.matchedBy : null,
-    matchedUserEmail:
-      typeof resolved.matchedUserEmail === 'string'
-        ? resolved.matchedUserEmail
-        : null,
-  }
-}
-
-function participantIdentityBadgeVariant(
-  classification: 'internal' | 'external' | 'unknown'
-) {
-  switch (classification) {
-    case 'internal':
-      return 'success' as const
-    case 'external':
-      return 'neutral' as const
-    default:
-      return 'warning' as const
-  }
-}
-
-function participantIdentityLabel(
-  classification: 'internal' | 'external' | 'unknown'
-) {
-  switch (classification) {
-    case 'internal':
-      return 'Internal'
-    case 'external':
-      return 'External'
-    default:
-      return 'Needs review'
-  }
-}
-
-function describeEvent(event: MeetingEventFeed[number], provider: string) {
-  const payload = asRecord(event.payload)
-  if (!payload) return null
-
-  if (event.eventType === 'meeting.transcript.segment_received') {
-    const transcript = asRecord(payload.transcript)
-    const speaker = asRecord(transcript?.speaker)
-    const speakerName =
-      typeof speaker?.displayName === 'string'
-        ? speaker.displayName
-        : typeof transcript?.speakerName === 'string'
-          ? transcript.speakerName
-          : 'Unknown speaker'
-    const content =
-      typeof transcript?.content === 'string' ? transcript.content : null
-
-    return content ? `${speakerName}: ${content}` : speakerName
-  }
-
-  if (event.eventType === 'participant.joined') {
-    const participant = asRecord(payload.participant)
-    return (
-      (typeof participant?.displayName === 'string' &&
-        participant.displayName) ||
-      (typeof participant?.email === 'string' && participant.email) ||
-      'Participant joined'
-    )
-  }
-
-  return describeMeetingLifecycleEvent({
-    provider,
-    eventType: event.eventType,
-    payload,
-  })
-}
-
-function normalizeTranscriptContent(value: string) {
-  return value.trim().replace(/\s+/g, ' ').toLowerCase()
-}
-
-function shouldCollapseTranscriptSegments(
-  previous: MeetingTranscriptSegment,
-  current: MeetingTranscriptSegment
-) {
-  const previousSpeaker = previous.speakerName ?? 'Unknown speaker'
-  const currentSpeaker = current.speakerName ?? 'Unknown speaker'
-
-  if (previousSpeaker !== currentSpeaker) return false
-  if (previous.source !== current.source) return false
-  if (!previous.isPartial && !current.isPartial) return false
-
-  const previousCreatedAt = new Date(previous.createdAt).getTime()
-  const currentCreatedAt = new Date(current.createdAt).getTime()
-  if (
-    Number.isNaN(previousCreatedAt) ||
-    Number.isNaN(currentCreatedAt) ||
-    currentCreatedAt - previousCreatedAt > 90_000
-  ) {
-    return false
-  }
-
-  const previousContent = normalizeTranscriptContent(previous.content)
-  const currentContent = normalizeTranscriptContent(current.content)
-
-  if (!previousContent || !currentContent) return false
-
-  return (
-    previousContent === currentContent ||
-    previousContent.startsWith(currentContent) ||
-    currentContent.startsWith(previousContent)
-  )
-}
-
-function shouldMergeTranscriptTurns(
-  previous: MeetingTranscriptSegment,
-  current: MeetingTranscriptSegment
-) {
-  const previousSpeaker = previous.speakerName ?? 'Unknown speaker'
-  const currentSpeaker = current.speakerName ?? 'Unknown speaker'
-
-  if (previousSpeaker !== currentSpeaker) return false
-  if (previous.source !== current.source) return false
-
-  const previousCreatedAt = new Date(previous.createdAt).getTime()
-  const currentCreatedAt = new Date(current.createdAt).getTime()
-  if (
-    Number.isNaN(previousCreatedAt) ||
-    Number.isNaN(currentCreatedAt) ||
-    currentCreatedAt - previousCreatedAt > 90_000
-  ) {
-    return false
-  }
-
-  return !previous.isPartial && !current.isPartial
-}
-
-function joinTranscriptContent(previous: string, current: string) {
-  const previousNormalized = normalizeTranscriptContent(previous)
-  const currentNormalized = normalizeTranscriptContent(current)
-
-  if (!previousNormalized) return current.trim()
-  if (!currentNormalized) return previous.trim()
-
-  if (previousNormalized === currentNormalized) {
-    return previous.length >= current.length ? previous.trim() : current.trim()
-  }
-
-  if (previousNormalized.startsWith(currentNormalized)) {
-    return previous.trim()
-  }
-
-  if (currentNormalized.startsWith(previousNormalized)) {
-    return current.trim()
-  }
-
-  const left = previous.trim()
-  const right = current.trim()
-  if (!left) return right
-  if (!right) return left
-
-  return `${left}${/\s$/.test(left) ? '' : ' '}${right}`
-}
-
-function collapseTranscriptSegments(segments: MeetingTranscript) {
-  const collapsed: MeetingTranscriptTurn[] = []
-
-  for (const segment of segments) {
-    const previous = collapsed[collapsed.length - 1]
-    if (!previous || !shouldCollapseTranscriptSegments(previous, segment)) {
-      collapsed.push({
-        ...segment,
-        mergedSegmentCount: 1,
-      })
-      continue
-    }
-
-    const preferCurrent =
-      (!segment.isPartial && previous.isPartial) ||
-      segment.content.length >= previous.content.length
-
-    if (preferCurrent) {
-      collapsed[collapsed.length - 1] = {
-        ...segment,
-        mergedSegmentCount: previous.mergedSegmentCount,
-      }
-    }
-  }
-
-  const grouped: MeetingTranscriptTurn[] = []
-
-  for (const segment of collapsed) {
-    const previous = grouped[grouped.length - 1]
-
-    if (!previous || !shouldMergeTranscriptTurns(previous, segment)) {
-      grouped.push(segment)
-      continue
-    }
-
-    grouped[grouped.length - 1] = {
-      ...segment,
-      id: previous.id,
-      createdAt: previous.createdAt,
-      content: joinTranscriptContent(previous.content, segment.content),
-      mergedSegmentCount:
-        previous.mergedSegmentCount + segment.mergedSegmentCount,
-    }
-  }
-
-  return grouped
-}
-
-// Stable per-speaker colors — assigned by first-seen order, not by name hash,
-// so colors are consistent within a session regardless of name spelling.
-const SPEAKER_COLORS = [
-  'bg-blue-100 text-blue-700',
-  'bg-violet-100 text-violet-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-amber-100 text-amber-700',
-  'bg-rose-100 text-rose-700',
-  'bg-cyan-100 text-cyan-700',
-  'bg-orange-100 text-orange-700',
-  'bg-pink-100 text-pink-700',
-]
-
-function getSpeakerInitials(name: string | null | undefined) {
-  if (!name) return '?'
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return (parts[0]![0] ?? '?').toUpperCase()
-  return ((parts[0]![0] ?? '') + (parts[parts.length - 1]![0] ?? '')).toUpperCase()
-}
-
-type TranscriptSpeakerGroup = {
-  groupId: string
-  speaker: string
-  startsAt: Date | string
-  turns: MeetingTranscriptTurn[]
-}
-
-function groupTranscriptBySpeaker(turns: MeetingTranscriptTurn[]): TranscriptSpeakerGroup[] {
-  const groups: TranscriptSpeakerGroup[] = []
-  for (const turn of turns) {
-    const speaker = turn.speakerName ?? 'Unknown speaker'
-    const last = groups[groups.length - 1]
-    if (last && last.speaker === speaker) {
-      last.turns.push(turn)
-    } else {
-      groups.push({ groupId: turn.id, speaker, startsAt: turn.createdAt, turns: [turn] })
-    }
-  }
-  return groups
-}
-
-// ---------------------------------------------------------------------------
-// SlackSendModal
-// ---------------------------------------------------------------------------
-
-function SlackSendModal({
-  open,
-  onClose,
-  onSend,
-  delivering,
-  defaultChannel,
-  meetingTitle,
-  summaryContent,
-  orgId,
-}: {
-  open: boolean
-  onClose: () => void
-  onSend: (channel: string) => void
-  delivering: boolean
-  defaultChannel: string | null
-  meetingTitle: string | null
-  summaryContent: string | null
-  orgId: string | null
-}) {
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState(defaultChannel ?? '')
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [channels, setChannels] = useState<Array<{ id: string; name: string }>>([])
-  const [channelsLoading, setChannelsLoading] = useState(false)
-  const [channelsError, setChannelsError] = useState<string | null>(null)
-  const inputRef = useCallback((el: HTMLInputElement | null) => {
-    if (el && open) setTimeout(() => el.focus(), 50)
-  }, [open])
-
-  // Reset and load channels when modal opens
-  useEffect(() => {
-    if (!open) return
-    setSelected(defaultChannel ?? '')
-    setQuery(defaultChannel ?? '')
-    setDropdownOpen(false)
-    setChannels([])
-    setChannelsError(null)
-
-    if (!orgId) return
-    setChannelsLoading(true)
-    trpc.toolAccess.listSlackChannels
-      .query({ orgId })
-      .then((result) => {
-        setChannels(result.channels)
-        if (result.error) setChannelsError(result.error)
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : 'Failed to load channels.'
-        setChannelsError(msg)
-      })
-      .finally(() => {
-        setChannelsLoading(false)
-      })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  if (!open) return null
-
-  const cleanSelected = selected.replace(/^#/, '').trim()
-  const previewText = `*${meetingTitle ?? 'Meeting'} — Meeting Recap*\n\n${summaryContent ?? '(Summary not yet available)'}`
-
-  const filteredChannels = channels.filter((c) =>
-    c.name.toLowerCase().includes(query.toLowerCase().replace(/^#/, ''))
-  )
-
-  function handleSelect(name: string) {
-    setSelected(name)
-    setQuery(name)
-    setDropdownOpen(false)
-  }
-
-  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value.replace(/^#/, '')
-    setQuery(val)
-    setSelected(val)
-    setDropdownOpen(true)
-  }
-
-  function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (e.target === e.currentTarget && !delivering) onClose()
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-      onClick={handleBackdropClick}
-    >
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-background shadow-2xl">
-        <div className="space-y-4 p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Send recap to Slack</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Choose a channel and review the message before sending.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={delivering}
-              onClick={onClose}
-              className="shrink-0 text-muted-foreground"
-            >
-              <X size={16} />
-            </Button>
-          </div>
-
-          {/* Message preview */}
-          <div className="rounded-xl border border-border bg-secondary p-4">
-            <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Message preview
-            </p>
-            <pre className="line-clamp-6 whitespace-pre-wrap font-sans text-sm leading-6 text-foreground">
-              {previewText}
-            </pre>
-          </div>
-
-          {/* Channel picker */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground" htmlFor="slack-channel-input">
-              Channel <span className="text-destructive">*</span>
-            </label>
-            <div className="relative">
-              <div className="flex items-center rounded-lg border border-border bg-secondary px-3 focus-within:ring-2 focus-within:ring-ring/40">
-                {channelsLoading ? (
-                  <Loader2 size={13} className="mr-2 shrink-0 animate-spin text-muted-foreground" />
-                ) : (
-                  <span className="mr-1 select-none text-sm text-muted-foreground">#</span>
-                )}
-                <Input
-                  id="slack-channel-input"
-                  ref={inputRef}
-                  className="h-8 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-                  placeholder={channelsLoading ? 'Loading channels…' : 'Search channels…'}
-                  value={query}
-                  onChange={handleQueryChange}
-                  onFocus={() => setDropdownOpen(true)}
-                  onBlur={() => setTimeout(() => setDropdownOpen(false), 120)}
-                  disabled={delivering}
-                  autoComplete="off"
-                />
-                {cleanSelected && (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    title="Clear channel"
-                    className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => { setSelected(''); setQuery(''); setDropdownOpen(true) }}
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-
-              {dropdownOpen && filteredChannels.length > 0 && (
-                <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-border bg-background shadow-lg">
-                  {filteredChannels.map((ch) => (
-                    <button
-                      key={ch.id}
-                      type="button"
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary ${
-                        selected === ch.name ? 'bg-secondary font-medium text-foreground' : 'text-foreground'
-                      }`}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleSelect(ch.name)}
-                    >
-                      <span className="text-muted-foreground">#</span>
-                      {ch.name}
-                      {selected === ch.name && <Check size={13} className="ml-auto shrink-0 text-primary" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {dropdownOpen && !channelsLoading && channels.length === 0 && query.trim().length > 0 && (
-                <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground shadow-lg">
-                  No channels found. The name you typed will be used directly.
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {channels.length > 0
-                ? `${channels.length} channels available — type to filter.`
-                : channelsError
-                  ? `Could not load channels: ${channelsError}`
-                  : 'Type the channel name without the # prefix.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
-          <Button
-            type="button"
-            variant="ghost"
-            className="border border-border"
-            disabled={delivering}
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={!cleanSelected || delivering}
-            onClick={() => onSend(cleanSelected)}
-            className="gap-1.5"
-          >
-            {delivering ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Send size={14} />
-            )}
-            {delivering ? 'Sending…' : 'Send to Slack'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// PostMeetingReview — KOD-73 + KOD-74
-// ---------------------------------------------------------------------------
-
-type PostMeetingReviewProps = {
-  meeting: { id: string; status: string; title?: string | null }
-  artifacts: MeetingArtifact[]
-  workItems: WorkItem[]
-  loading: boolean
-  retrying: boolean
-  editingWorkItemId: string | null
-  editWorkItemTitle: string
-  editWorkItemOwnerHint: string
-  editWorkItemDueAt: string
-  workItemSaving: string | null
-  canRetry: boolean
-  onRetry: () => void
-  onStartEdit: (item: WorkItem) => void
-  onCancelEdit: () => void
-  onSaveEdit: (id: string) => void
-  onEditTitleChange: (v: string) => void
-  onEditOwnerHintChange: (v: string) => void
-  onEditDueAtChange: (v: string) => void
-  onApprove: (id: string) => void
-  onReject: (id: string) => void
-  // Phase 6 — sync + recap delivery
-  syncingItem: { id: string; target: SyncTarget } | null
-  onSync: (id: string, target: SyncTarget) => void
-  syncError: string | null
-  recapDelivering: boolean
-  recapDeliverTarget: RecapTarget | null
-  onDeliverRecap: (target: RecapTarget, channelId?: string) => void
-  onOpenSlackModal: () => void
-  hasSlackConnection: boolean
-  hasZoomConnection: boolean
-  recapDeliverError: string | null
-  quietTextClass: string
-  subtleTextClass: string
-  dashedPanelClass: string
-}
-
-function workItemStatusTone(status: string) {
-  switch (status) {
-    case 'approved':
-      return 'success' as const
-    case 'cancelled':
-      return 'destructive' as const
-    case 'draft':
-      return 'warning' as const
-    case 'synced':
-    case 'done':
-      return 'info' as const
-    case 'executing':
-      return 'warning' as const
-    default:
-      return 'neutral' as const
-  }
-}
-
-function workItemStatusLabel(status: string) {
-  switch (status) {
-    case 'draft':
-      return 'Needs review'
-    case 'approved':
-      return 'Approved'
-    case 'cancelled':
-      return 'Rejected'
-    case 'synced':
-      return 'Synced'
-    case 'executing':
-      return 'Executing'
-    case 'done':
-      return 'Done'
-    default:
-      return status
-  }
-}
-
-function workItemKindLabel(kind: string) {
-  switch (kind) {
-    case 'task':
-      return 'Task'
-    case 'ticket':
-      return 'Ticket'
-    case 'follow_up':
-      return 'Follow-up'
-    case 'goal':
-      return 'Goal'
-    case 'outcome':
-      return 'Outcome'
-    default:
-      return kind
-  }
-}
-
-function getArtifactMetaString(
-  metadata: Record<string, unknown>,
-  key: string
-): string | null {
-  const val = metadata[key]
-  return typeof val === 'string' ? val : null
-}
-
-function PostMeetingReview({
-  meeting,
-  artifacts,
-  workItems,
-  loading,
-  retrying,
-  editingWorkItemId,
-  editWorkItemTitle,
-  editWorkItemOwnerHint,
-  editWorkItemDueAt,
-  workItemSaving,
-  canRetry,
-  onRetry,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onEditTitleChange,
-  onEditOwnerHintChange,
-  onEditDueAtChange,
-  onApprove,
-  onReject,
-  syncingItem,
-  onSync,
-  syncError,
-  recapDelivering,
-  recapDeliverTarget,
-  onDeliverRecap,
-  onOpenSlackModal,
-  hasSlackConnection,
-  hasZoomConnection,
-  recapDeliverError,
-  quietTextClass,
-  subtleTextClass,
-  dashedPanelClass,
-}: PostMeetingReviewProps) {
-  const isSummarizing = meeting.status === 'summarizing'
-
-  const summaryArtifact = artifacts.find((a) => a.artifactType === 'summary')
-  const decisionArtifact = artifacts.find(
-    (a) => a.artifactType === 'decision_log'
-  )
-
-  const decisions: Array<{
-    summary: string
-    context: string | null
-    madeBy: string | null
-    confidence: number | null
-    sourceEvidence: string[]
-  }> = Array.isArray(decisionArtifact?.structuredData)
-    ? (decisionArtifact.structuredData as Record<string, unknown>[]).map(
-        (d) => ({
-          summary: typeof d.summary === 'string' ? d.summary : '',
-          context: typeof d.context === 'string' ? d.context : null,
-          madeBy: typeof d.madeBy === 'string' ? d.madeBy : null,
-          confidence:
-            typeof d.confidence === 'number' ? d.confidence : null,
-          sourceEvidence: Array.isArray(d.sourceEvidence)
-            ? (d.sourceEvidence as string[]).filter((s) => typeof s === 'string')
-            : [],
-        })
-      ).filter((d) => d.summary)
-    : []
-
-  const activeWorkItems = workItems.filter((w) => w.status !== 'cancelled')
-  const draftCount = workItems.filter((w) => w.status === 'draft').length
-
-  return (
-    <div className="space-y-4">
-      {/* Status banner */}
-      {isSummarizing && (
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary px-5 py-4">
-          <Loader2
-            size={16}
-            className="shrink-0 animate-spin text-primary"
-          />
-          <p className="text-sm text-foreground">
-            Kodi is generating the meeting recap — summary, decisions, and action items.
-            This usually takes 15–30 seconds.
-          </p>
-        </div>
-      )}
-
-      {/* Post-meeting package card */}
-      <Card className="border-border shadow-sm">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
-                <FileText size={18} />
-              </div>
-              <div>
-                <CardTitle className="text-lg text-foreground">
-                  Meeting recap
-                </CardTitle>
-                <CardDescription>
-                  {isSummarizing
-                    ? 'Kodi is generating the post-meeting package.'
-                    : 'Summary and key decisions captured from this session.'}
-                </CardDescription>
-              </div>
-            </div>
-
-            {canRetry && !isSummarizing && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRetry}
-                disabled={retrying}
-                className="gap-1.5 text-muted-foreground hover:text-foreground"
-              >
-                <RotateCcw
-                  size={13}
-                  className={retrying ? 'animate-spin' : ''}
-                />
-                {retrying ? 'Retrying…' : 'Retry'}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-5">
-          {/* Recap delivery (Slack / Zoom) — only shown when at least one integration is connected */}
-          {!isSummarizing && !loading && (hasSlackConnection || hasZoomConnection) && (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className={`text-xs ${subtleTextClass}`}>
-                Deliver this recap to your team
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {hasSlackConnection && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={recapDelivering}
-                    onClick={onOpenSlackModal}
-                    className="gap-1.5 text-xs"
-                  >
-                    {recapDelivering && recapDeliverTarget === 'slack' ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Send size={12} />
-                    )}
-                    {recapDelivering && recapDeliverTarget === 'slack' ? 'Sending…' : 'Send to Slack'}
-                  </Button>
-                )}
-                {hasZoomConnection && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={recapDelivering}
-                    onClick={() => onDeliverRecap('zoom')}
-                    className="gap-1.5 text-xs"
-                  >
-                    {recapDelivering && recapDeliverTarget === 'zoom' ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Send size={12} />
-                    )}
-                    {recapDelivering && recapDeliverTarget === 'zoom' ? 'Sending…' : 'Zoom Team Chat'}
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-          {recapDeliverError && (
-            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {recapDeliverError}
-            </p>
-          )}
-
-          {/* Summary */}
-          <div>
-            <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
-              Summary
-            </p>
-
-            {loading || isSummarizing ? (
-              <div className="mt-3 space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-4/5" />
-                <Skeleton className="h-4 w-3/5" />
-              </div>
-            ) : summaryArtifact?.content ? (
-              <div className="mt-3 rounded-xl border border-border bg-secondary p-5">
-                <p className="text-sm leading-7 text-foreground">
-                  {summaryArtifact.content}
-                </p>
-                {Array.isArray(
-                  (summaryArtifact.structuredData as Record<string, unknown> | null)
-                    ?.keyOutcomes
-                ) && (
-                  <div className="mt-4 space-y-1">
-                    <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
-                      Key outcomes
-                    </p>
-                    <ul className="mt-2 space-y-1">
-                      {(
-                        (summaryArtifact.structuredData as Record<string, unknown>)
-                          .keyOutcomes as string[]
-                      ).map((outcome) => (
-                        <li
-                          key={outcome}
-                          className="flex items-start gap-2 text-sm text-foreground"
-                        >
-                          <CheckCircle2
-                            size={14}
-                            className="mt-0.5 shrink-0 text-brand-success"
-                          />
-                          {outcome}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div
-                className={`mt-3 ${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-              >
-                {meeting.status === 'ended'
-                  ? 'Summary was not generated for this meeting. Use the retry button to generate it.'
-                  : 'Summary will appear here once Kodi finishes processing.'}
-              </div>
-            )}
-          </div>
-
-          {/* Decisions */}
-          <div>
-            <p className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}>
-              Decisions
-            </p>
-
-            {loading || isSummarizing ? (
-              <div className="mt-3 space-y-2">
-                <Skeleton className="h-12" />
-                <Skeleton className="h-12" />
-              </div>
-            ) : decisions.length > 0 ? (
-              <div className="mt-3 space-y-2">
-                {decisions.map((decision, index) => (
-                  <div
-                    key={`decision-${index}`}
-                    className="rounded-xl border border-border bg-secondary p-4"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <CheckCircle2
-                        size={15}
-                        className="mt-0.5 shrink-0 text-brand-success"
-                      />
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="text-sm text-foreground">{decision.summary}</p>
-                        {decision.context && (
-                          <p className={`text-xs leading-5 ${quietTextClass}`}>
-                            {decision.context}
-                          </p>
-                        )}
-                        <div className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}>
-                          {decision.madeBy && (
-                            <span>by {decision.madeBy}</span>
-                          )}
-                          {decision.confidence != null && (
-                            <Badge variant="outline">
-                              {Math.round(decision.confidence * 100)}% confident
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : !loading ? (
-              <div
-                className={`mt-3 ${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-              >
-                No decisions were identified in this meeting.
-              </div>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Action items / work items with correction UX */}
-      <Card className="border-border shadow-sm">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-              <ClipboardList size={18} />
-            </div>
-            <div>
-              <CardTitle className="text-lg text-foreground">
-                Action items
-              </CardTitle>
-              <CardDescription>
-                {draftCount > 0
-                  ? `${draftCount} item${draftCount === 1 ? '' : 's'} need${draftCount === 1 ? 's' : ''} review — approve to queue for follow-through or reject to dismiss.`
-                  : 'Review and correct what Kodi extracted from the meeting.'}
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          {loading || isSummarizing ? (
-            <div className="space-y-3">
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-            </div>
-          ) : activeWorkItems.length === 0 && workItems.filter((w) => w.status === 'cancelled').length === 0 ? (
-            <div
-              className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
-            >
-              {meeting.status === 'ended'
-                ? 'No action items were generated. Use retry to regenerate the post-meeting package.'
-                : 'Action items will appear here once the recap is ready.'}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {workItems.map((item) => {
-                const isEditing = editingWorkItemId === item.id
-                const isSaving = workItemSaving === item.id
-                const meta =
-                  item.metadata &&
-                  typeof item.metadata === 'object' &&
-                  !Array.isArray(item.metadata)
-                    ? (item.metadata as Record<string, unknown>)
-                    : {}
-                const ownerHint = getArtifactMetaString(meta, 'ownerHint')
-                const dueDateHint = getArtifactMetaString(meta, 'dueDateHint')
-                const confidence =
-                  typeof meta.confidence === 'number' ? meta.confidence : null
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`rounded-xl border p-4 transition-colors ${
-                      item.status === 'cancelled'
-                        ? 'border-border bg-secondary opacity-50'
-                        : item.status === 'approved'
-                          ? 'border-brand-success/30 bg-secondary'
-                          : 'border-border bg-secondary'
-                    }`}
-                  >
-                    {isEditing ? (
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
-                            Title
-                          </p>
-                          <Input
-                            value={editWorkItemTitle}
-                            onChange={(e) => onEditTitleChange(e.target.value)}
-                            className="h-9 text-sm"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-1.5">
-                            <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
-                              Owner
-                            </p>
-                            <Input
-                              value={editWorkItemOwnerHint}
-                              onChange={(e) =>
-                                onEditOwnerHintChange(e.target.value)
-                              }
-                              placeholder="Name or team"
-                              className="h-9 text-sm"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <p className={`text-[11px] uppercase tracking-[0.18em] ${subtleTextClass}`}>
-                              Due date
-                            </p>
-                            <Input
-                              type="date"
-                              value={editWorkItemDueAt}
-                              onChange={(e) =>
-                                onEditDueAtChange(e.target.value)
-                              }
-                              className="h-9 text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => onSaveEdit(item.id)}
-                            disabled={isSaving || !editWorkItemTitle.trim()}
-                            className="gap-1.5"
-                          >
-                            <Check size={13} />
-                            {isSaving ? 'Saving…' : 'Save'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={onCancelEdit}
-                            disabled={isSaving}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-3">
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={workItemStatusTone(item.status)}>
-                              {workItemStatusLabel(item.status)}
-                            </Badge>
-                            <Badge variant="neutral">
-                              {workItemKindLabel(item.kind)}
-                            </Badge>
-                            {confidence != null && (
-                              <Badge variant="outline">
-                                {Math.round(confidence * 100)}%
-                              </Badge>
-                            )}
-                          </div>
-
-                          <p className="text-sm font-medium text-foreground">
-                            {item.title}
-                          </p>
-
-                          {item.description && (
-                            <p className={`text-sm leading-6 ${quietTextClass}`}>
-                              {item.description}
-                            </p>
-                          )}
-
-                          <div
-                            className={`flex flex-wrap items-center gap-3 text-xs ${subtleTextClass}`}
-                          >
-                            {ownerHint && (
-                              <span>Owner: {ownerHint}</span>
-                            )}
-                            {item.dueAt && (
-                              <span>
-                                Due{' '}
-                                {new Date(item.dueAt).toLocaleDateString([], {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                })}
-                              </span>
-                            )}
-                            {dueDateHint && !item.dueAt && (
-                              <span className={quietTextClass}>
-                                Suggested: {dueDateHint}
-                              </span>
-                            )}
-                            {/* External link once synced */}
-                            {item.externalId && (
-                              <span className="flex items-center gap-1 text-primary">
-                                {item.externalSystem && (
-                                  <span className="capitalize">{item.externalSystem}:</span>
-                                )}
-                                {getArtifactMetaString(meta, 'externalUrl') ? (
-                                  <a
-                                    href={getArtifactMetaString(meta, 'externalUrl')!}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-0.5 hover:underline"
-                                  >
-                                    {item.externalId}
-                                    <ArrowUpRight size={11} />
-                                  </a>
-                                ) : (
-                                  item.externalId
-                                )}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Sync to Linear / GitHub for approved items */}
-                          {item.status === 'approved' && !item.externalId && (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {syncError && syncingItem?.id === item.id && (
-                                <p className="w-full text-xs text-destructive">{syncError}</p>
-                              )}
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={syncingItem !== null}
-                                onClick={() => onSync(item.id, 'linear')}
-                                className="h-7 gap-1 text-xs"
-                              >
-                                {syncingItem?.id === item.id && syncingItem.target === 'linear' ? (
-                                  <Loader2 size={11} className="animate-spin" />
-                                ) : (
-                                  <ExternalLink size={11} />
-                                )}
-                                Linear
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={syncingItem !== null}
-                                onClick={() => onSync(item.id, 'github')}
-                                className="h-7 gap-1 text-xs"
-                              >
-                                {syncingItem?.id === item.id && syncingItem.target === 'github' ? (
-                                  <Loader2 size={11} className="animate-spin" />
-                                ) : (
-                                  <ExternalLink size={11} />
-                                )}
-                                GitHub
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-
-                        {item.status !== 'cancelled' && (
-                          <div className="flex shrink-0 items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => onStartEdit(item)}
-                              disabled={isSaving}
-                              className={`rounded-lg p-1.5 transition-colors hover:bg-brand-line/50 ${subtleTextClass} disabled:opacity-40`}
-                              title="Edit"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            {item.status === 'draft' && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => onApprove(item.id)}
-                                  disabled={isSaving}
-                                  className="rounded-lg p-1.5 text-brand-success transition-colors hover:bg-brand-success/10 disabled:opacity-40"
-                                  title="Approve"
-                                >
-                                  <Check size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => onReject(item.id)}
-                                  disabled={isSaving}
-                                  className="rounded-lg p-1.5 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
-                                  title="Reject"
-                                >
-                                  <X size={13} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {workItems.some((w) => w.status === 'cancelled') && (
-                <details className="group">
-                  <summary
-                    className={`cursor-pointer list-none text-xs marker:hidden ${subtleTextClass}`}
-                  >
-                    Show rejected items (
-                    {workItems.filter((w) => w.status === 'cancelled').length})
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    {workItems
-                      .filter((w) => w.status === 'cancelled')
-                      .map((item) => (
-                        <div
-                          key={item.id}
-                          className="rounded-xl border border-border bg-secondary p-3 opacity-50"
-                        >
-                          <p className={`text-sm line-through ${quietTextClass}`}>
-                            {item.title}
-                          </p>
-                        </div>
-                      ))}
-                  </div>
-                </details>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+import type {
+  AskKodiAnswer,
+  MeetingArtifact,
+  MeetingChatItem,
+  MeetingConsole,
+  MeetingControls,
+  MeetingEventFeed,
+  MeetingHealth,
+  MeetingLiveState,
+  MeetingParticipants,
+  MeetingRetryAttempt,
+  MeetingTranscript,
+  MeetingWorkspaceSettings,
+  RecapTarget,
+  SyncTarget,
+  WorkItem,
+} from './_components/types'
+import {
+  asArray,
+  asRecord,
+  describeEvent,
+  formatDate,
+  formatEventLabel,
+  formatHealthStatus,
+  formatProviderLabel,
+  formatTime,
+  healthTone,
+  participantIdentityBadgeVariant,
+  participantIdentityLabel,
+  participantIdentitySummary,
+  pollIntervalForStatus,
+  statusLabel,
+  statusTone,
+  truncateMiddle,
+  failureReasonToMessage,
+} from './_components/utils'
+import {
+  collapseTranscriptSegments,
+  getSpeakerInitials,
+  groupTranscriptBySpeaker,
+  SPEAKER_COLORS,
+} from './_components/transcript-utils'
+import { SlackSendModal } from './_components/slack-send-modal'
+import { PostMeetingReview } from './_components/post-meeting-review'
+
+
+// Types, utils, transcript processing, SlackSendModal, and PostMeetingReview
+// are extracted to ./_components/ — see imports above.
 
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
@@ -2408,7 +1011,7 @@ export default function MeetingDetailsPage() {
 
   if (!activeOrg) {
     return (
-      <div className="flex min-h-full items-center justify-center p-6 text-sm text-brand-subtle">
+      <div className="flex min-h-full items-center justify-center p-6 text-sm text-muted-foreground">
         Select a workspace to view meetings.
       </div>
     )
@@ -2513,7 +1116,7 @@ export default function MeetingDetailsPage() {
                   size="sm"
                   onClick={() => void handleDeleteMeeting()}
                   disabled={deletingMeeting}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:bg-transparent hover:text-destructive"
                 >
                   <Trash2 size={14} />
                 </Button>
@@ -2601,89 +1204,14 @@ export default function MeetingDetailsPage() {
           orgId={orgId}
         />
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
-          <div className="space-y-6">
-            <Card className="border-border shadow-sm">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
-                    <Sparkles size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg text-foreground">
-                      Meeting summary
-                    </CardTitle>
-                    <CardDescription>
-                      The shortest useful version of the meeting so far.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {activeTopics.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {activeTopics.map((topic) => (
-                      <Badge key={topic} variant="neutral">
-                        {topic}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <div className="rounded-xl border border-border bg-secondary p-5">
-                  <p className="text-sm leading-7 text-foreground">
-                    {meeting.liveSummary ??
-                      liveState?.summary ??
-                      'Kodi has not produced a meeting summary yet.'}
-                  </p>
-                </div>
-
-                <details className="group rounded-xl border border-border bg-secondary p-5">
-                  <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
-                    Working notes
-                  </summary>
-                  <p
-                    className={`mt-4 whitespace-pre-wrap text-sm leading-6 ${quietTextClass}`}
-                  >
-                    {rollingNotes ??
-                      'Kodi will keep a tighter running set of notes here as the meeting develops.'}
-                  </p>
-                </details>
-              </CardContent>
-            </Card>
-
-            <Sheet open={askSheetOpen} onOpenChange={setAskSheetOpen}>
-              <SheetTrigger asChild>
-                <Card className="cursor-pointer border-border transition-colors hover:bg-secondary/60">
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
-                          <MessageSquare size={18} />
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg text-foreground">
-                            Ask Kodi
-                          </CardTitle>
-                          <CardDescription>
-                            {answers.length > 0
-                              ? `${answers.length} question${answers.length === 1 ? '' : 's'} asked`
-                              : 'Ask a question grounded in the live meeting context.'}
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <SendHorizonal size={16} className="text-muted-foreground" />
-                    </div>
-                  </CardHeader>
-                </Card>
-              </SheetTrigger>
+        {/* Ask Kodi sheet — accessible from any tab */}
+        <Sheet open={askSheetOpen} onOpenChange={setAskSheetOpen}>
+          <div /> {/* Empty trigger — opened via button in header */}
 
               <SheetContent className="flex w-full max-w-xl flex-col p-0 sm:max-w-xl">
                 <SheetHeader className="shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground ring-1 ring-border">
-                      <MessageSquare size={15} />
-                    </div>
+                    <SectionIcon icon={MessageSquare} />
                     <SheetTitle>Ask Kodi</SheetTitle>
                   </div>
                 </SheetHeader>
@@ -2808,354 +1336,78 @@ export default function MeetingDetailsPage() {
                   </form>
                 </div>
               </SheetContent>
-            </Sheet>
+        </Sheet>
 
-            <Card className="border-border shadow-sm">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-                    <Mic2 size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg text-foreground">
-                      Transcript
-                    </CardTitle>
-                    <CardDescription>
-                      Raw meeting language, grouped into readable speaker turns.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {chronologicalTranscript.length === 0 ? (
-                  <div
-                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
-                  >
-                    Transcript lines will appear here once Kodi starts hearing
-                    the call.
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <div
-                      ref={transcriptScrollRef}
-                      onScroll={handleTranscriptScroll}
-                      className="max-h-[540px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-border bg-secondary"
-                    >
-                      {transcriptSpeakerGroups.map((group, groupIndex) => {
-                        const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
-                        const initials = getSpeakerInitials(group.speaker)
-                        const isCollapsed = collapsedSpeakers.has(group.groupId)
-                        const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)
-                        return (
-                          <div
-                            key={group.groupId}
-                            className={groupIndex > 0 ? 'border-t border-border' : ''}
-                          >
-                            {/* Speaker header row */}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCollapsedSpeakers((prev) => {
-                                  const next = new Set(prev)
-                                  if (next.has(group.groupId)) next.delete(group.groupId)
-                                  else next.add(group.groupId)
-                                  return next
-                                })
-                              }
-                              className="flex w-full items-center gap-2.5 px-4 py-3 text-left hover:bg-brand-line/30 transition-colors"
-                            >
-                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${color}`}>
-                                {initials}
-                              </span>
-                              <span className="flex-1 min-w-0">
-                                <span className="text-sm font-medium text-foreground">{group.speaker}</span>
-                                <span className={`ml-2 text-xs ${subtleTextClass}`}>
-                                  {formatTime(group.startsAt)}
-                                </span>
-                              </span>
-                              {isCollapsed && (
-                                <span className={`text-xs ${subtleTextClass}`}>
-                                  {wordCount} words
-                                </span>
-                              )}
-                              {isCollapsed
-                                ? <ChevronRight size={14} className={subtleTextClass} />
-                                : <ChevronDown size={14} className={subtleTextClass} />
-                              }
-                            </button>
-
-                            {/* Turn content */}
-                            {!isCollapsed && (
-                              <div className="space-y-3 pb-4 pl-[3.25rem] pr-4">
-                                {group.turns.map((turn) => (
-                                  <p
-                                    key={turn.id}
-                                    className="whitespace-pre-wrap text-sm leading-6 text-foreground"
-                                  >
-                                    {turn.content}
-                                    {turn.isPartial && (
-                                      <span className={`ml-2 text-xs ${subtleTextClass}`}>
-                                        …
-                                      </span>
-                                    )}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                      <div ref={transcriptBottomRef} />
-                    </div>
-
-                    {/* Jump to latest button */}
-                    {!transcriptAtBottom && (
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="rounded-full shadow-md text-xs h-7 px-3 gap-1.5"
-                          onClick={() => {
-                            setTranscriptAtBottom(true)
-                            const el = transcriptScrollRef.current
-                            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-                          }}
-                        >
-                          <ChevronDown size={13} />
-                          Latest
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        {/* Tabbed content */}
+        <Tabs defaultValue="overview">
+          <div className="flex items-center justify-between gap-4">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="transcript">Transcript</TabsTrigger>
+              <TabsTrigger value="details">Details</TabsTrigger>
+            </TabsList>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setAskSheetOpen(true)}
+            >
+              <MessageSquare size={14} />
+              Ask Kodi
+              {answers.length > 0 && (
+                <Badge variant="neutral" className="ml-1 text-[10px]">
+                  {answers.length}
+                </Badge>
+              )}
+            </Button>
           </div>
 
-          <div className="space-y-6">
-            {workspaceSettings && controls && (
-              <Card className="border-border shadow-sm">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-                      <CheckCircle2 size={18} />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg text-foreground">
-                        Live participation controls
-                      </CardTitle>
-                      <CardDescription>
-                        These controls narrow how Kodi can participate in this
-                        meeting without changing the workspace defaults.
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">
-                      {getMeetingParticipationModeLabel(
-                        controls.participationMode
-                      )}
-                    </Badge>
-                    {controls.liveResponsesDisabled ? (
-                      <Badge variant="destructive">Live replies paused</Badge>
-                    ) : (
-                      <Badge variant="success">Live replies allowed</Badge>
-                    )}
-                    {controls.allowHostControls && (
-                      <Badge variant="neutral">Starter controls on</Badge>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3">
-                    {(
-                      ['listen_only', 'chat_enabled', 'voice_enabled'] as const
-                    ).map((mode) => {
-                      const active = controls.participationMode === mode
-
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          disabled={!canManageControls || controlsSaving}
-                          onClick={() =>
-                            void updateControls({
-                              participationMode: mode,
-                            })
-                          }
-                          className={`rounded-xl border px-4 py-4 text-left transition ${
-                            active
-                              ? 'border-foreground bg-brand-accent-soft text-foreground'
-                              : 'border-border bg-secondary text-brand-quiet hover:border-foreground/20 hover:text-foreground'
-                          }`}
-                        >
-                          <p className="text-sm font-medium">
-                            {getMeetingParticipationModeLabel(mode)}
-                          </p>
-                          <p className="mt-2 text-xs leading-5">
-                            {getMeetingParticipationModeDescription(mode)}
-                          </p>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="rounded-xl border border-border bg-secondary p-4">
-                    <p className="text-sm font-medium text-foreground">
-                      Live reply kill switch
-                    </p>
-                    <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
-                      Pause live chat and voice replies immediately without
-                      ending the meeting session. Owners can always do this. If
-                      starter controls are enabled, the meeting starter can too.
-                    </p>
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <Button
-                        type="button"
-                        variant={
-                          controls.liveResponsesDisabled
-                            ? 'outline'
-                            : 'destructive'
-                        }
-                        disabled={!canManageControls || controlsSaving}
-                        onClick={() =>
-                          void updateControls({
-                            liveResponsesDisabled:
-                              !controls.liveResponsesDisabled,
-                            liveResponsesDisabledReason:
-                              controls.liveResponsesDisabled
-                                ? undefined
-                                : 'Paused from the meeting detail page.',
-                          })
-                        }
-                      >
-                        {controlsSaving
-                          ? 'Updating...'
-                          : controls.liveResponsesDisabled
-                            ? 'Resume live replies'
-                            : 'Pause live replies'}
-                      </Button>
-                      {controls.liveResponsesDisabledReason && (
-                        <span className="text-xs text-brand-quiet">
-                          {controls.liveResponsesDisabledReason}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-dashed border-border bg-secondary p-4">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
-                      Meeting trust contract
-                    </p>
-                    <div className="mt-3 space-y-2 text-sm leading-6 text-foreground">
-                      {buildMeetingCopilotDisclosure(workspaceSettings).map(
-                        (line) => (
-                          <p key={line}>{line}</p>
-                        )
-                      )}
-                    </div>
-                    <Separator className="my-4" />
-                    <div className="flex flex-wrap gap-3 text-xs text-brand-quiet">
-                      <span>
-                        Transcript retention:{' '}
-                        {formatRetentionDays(
-                          workspaceSettings.transcriptRetentionDays
-                        )}
-                      </span>
-                      <span>
-                        Artifact retention:{' '}
-                        {formatRetentionDays(
-                          workspaceSettings.artifactRetentionDays
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {!canManageControls && (
-                    <Alert>
-                      <AlertDescription>
-                        Only workspace owners and, when enabled, the meeting
-                        starter can change these live controls.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
+          {/* Overview tab — summary, recap, follow-up */}
+          <TabsContent value="overview" className="mt-6 space-y-6">
             <Card className="border-border shadow-sm">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-                    <Users size={18} />
-                  </div>
+                  <SectionIcon icon={Sparkles} />
                   <div>
                     <CardTitle className="text-lg text-foreground">
-                      Meeting chat
+                      Meeting summary
                     </CardTitle>
                     <CardDescription>
-                      Review in-meeting Zoom chat messages that Kodi observed
-                      during the session.
+                      The shortest useful version of the meeting so far.
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {meeting.provider === 'zoom' ? (
-                  <>
-                    <div
-                      className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-                    >
-                      This branch keeps meeting chat as a read-only activity
-                      feed. Sending new in-meeting chat messages is not included
-                      here.
-                    </div>
-
-                    {chatMessages.length === 0 ? (
-                      <div
-                        className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-                      >
-                        In-meeting Zoom chat messages will appear here once Kodi
-                        receives or sends them.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {chatMessages.map((message) => (
-                          <div
-                            key={message.id}
-                            className="rounded-xl border border-border bg-secondary p-4"
-                          >
-                            <div
-                              className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
-                            >
-                              <span className="font-medium text-foreground">
-                                {message.senderName}
-                              </span>
-                              <Badge variant="neutral">
-                                {formatEventLabel(message.eventType)}
-                              </Badge>
-                              <span>{formatDate(message.occurredAt)}</span>
-                              <span>
-                                to {message.recipient.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
-                              {message.content}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div
-                    className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-                  >
-                    In-meeting chat activity is available for Zoom sessions
-                    right now.
+                {activeTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {activeTopics.map((topic) => (
+                      <Badge key={topic} variant="neutral">
+                        {topic}
+                      </Badge>
+                    ))}
                   </div>
                 )}
+
+                <div className="rounded-xl border border-border bg-secondary p-5">
+                  <p className="text-sm leading-7 text-foreground">
+                    {meeting.liveSummary ??
+                      liveState?.summary ??
+                      'Kodi has not produced a meeting summary yet.'}
+                  </p>
+                </div>
+
+                <details className="group rounded-xl border border-border bg-secondary p-5">
+                  <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
+                    Working notes
+                  </summary>
+                  <p
+                    className={`mt-4 whitespace-pre-wrap text-sm leading-6 ${quietTextClass}`}
+                  >
+                    {rollingNotes ??
+                      'Kodi will keep a tighter running set of notes here as the meeting develops.'}
+                  </p>
+                </details>
               </CardContent>
             </Card>
 
@@ -3425,129 +1677,314 @@ export default function MeetingDetailsPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            <details className="group rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
-                People, activity, and diagnostics
-              </summary>
-              <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
-                Keep the meeting page focused by tucking roster, raw lifecycle,
-                and provider details here.
-              </p>
-
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl border border-border bg-secondary p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <RefreshCw size={16} className="text-brand-quiet" />
-                    Transport health
+          {/* Transcript tab — full width for readability */}
+          <TabsContent value="transcript" className="mt-6">
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <SectionIcon icon={Mic2} />
+                  <div>
+                    <CardTitle className="text-lg text-foreground">
+                      Transcript
+                    </CardTitle>
+                    <CardDescription>
+                      Raw meeting language, grouped into readable speaker turns.
+                    </CardDescription>
                   </div>
-
-                  {health ? (
-                    <>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <Badge variant={healthTone(health.status)}>
-                          {formatHealthStatus(health.status)}
-                        </Badge>
-                        {health.lifecycleState && (
-                          <Badge variant="neutral">
-                            {health.lifecycleState.replace(/_/g, ' ')}
-                          </Badge>
-                        )}
-                        {typeof healthMetadata?.recallStatusCode === 'string' && (
-                          <Badge variant="outline">
-                            {healthMetadata.recallStatusCode.replace(/^bot\./, '')}
-                          </Badge>
-                        )}
-                        {typeof healthMetadata?.recallSubCode === 'string' && (
-                          <Badge variant="outline">
-                            {healthMetadata.recallSubCode}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <p className="mt-3 text-sm leading-6 text-foreground">
-                        {typeof health.detail === 'string' && health.detail
-                          ? health.detail
-                          : 'Kodi has a current provider health snapshot, but no extra detail yet.'}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-3 text-xs text-brand-quiet">
-                        <span>Checked {formatDate(health.observedAt)}</span>
-                        {typeof healthMetadata?.transport === 'string' && (
-                          <span>
-                            via {String(healthMetadata.transport).replace(/_/g, ' ')}
-                          </span>
-                        )}
-                        {typeof healthMetadata?.healthProbeError === 'string' && (
-                          <span>{healthMetadata.healthProbeError}</span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <p className={`mt-3 text-sm ${quietTextClass}`}>
-                      Kodi has not recorded a provider health snapshot for this
-                      meeting yet.
-                    </p>
-                  )}
-
-                  {retryHistory.length > 0 && (
-                    <div className="mt-4 border-t border-border pt-4">
-                      <p
-                        className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
-                      >
-                        Join and retry history
-                      </p>
-                      <div className="mt-3 space-y-3">
-                        {retryHistory.map((attempt, index) => (
+                </div>
+              </CardHeader>
+              <CardContent>
+                {chronologicalTranscript.length === 0 ? (
+                  <div
+                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
+                  >
+                    Transcript lines will appear here once Kodi starts hearing
+                    the call.
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div
+                      ref={transcriptScrollRef}
+                      onScroll={handleTranscriptScroll}
+                      className="max-h-[640px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-border bg-secondary"
+                    >
+                      {transcriptSpeakerGroups.map((group, groupIndex) => {
+                        const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
+                        const initials = getSpeakerInitials(group.speaker)
+                        const isCollapsed = collapsedSpeakers.has(group.groupId)
+                        const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)
+                        return (
                           <div
-                            key={`${attempt.attempt ?? index}-${attempt.completedAt ?? attempt.startedAt ?? index}`}
-                            className="rounded-xl border border-border bg-background p-4"
+                            key={group.groupId}
+                            className={groupIndex > 0 ? 'border-t border-border' : ''}
                           >
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-brand-quiet">
-                              <span className="font-medium text-foreground">
-                                Attempt {attempt.attempt ?? index + 1}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCollapsedSpeakers((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(group.groupId)) next.delete(group.groupId)
+                                  else next.add(group.groupId)
+                                  return next
+                                })
+                              }
+                              className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-secondary/80"
+                            >
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${color}`}>
+                                {initials}
                               </span>
-                              {attempt.status && (
-                                <Badge
-                                  variant={
-                                    attempt.status === 'succeeded'
-                                      ? 'success'
-                                      : 'destructive'
-                                  }
-                                >
-                                  {attempt.status}
-                                </Badge>
-                              )}
-                              {attempt.httpStatus != null && (
-                                <span>HTTP {attempt.httpStatus}</span>
-                              )}
-                              {attempt.failureKind && (
-                                <span>{attempt.failureKind.replace(/_/g, ' ')}</span>
-                              )}
-                              {attempt.retryable != null && (
-                                <span>
-                                  {attempt.retryable ? 'retryable' : 'not retryable'}
+                              <span className="min-w-0 flex-1">
+                                <span className="text-sm font-medium text-foreground">{group.speaker}</span>
+                                <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                  {formatTime(group.startsAt)}
+                                </span>
+                              </span>
+                              {isCollapsed && (
+                                <span className={`text-xs ${subtleTextClass}`}>
+                                  {wordCount} words
                                 </span>
                               )}
-                            </div>
-                            {(attempt.message || attempt.completedAt || attempt.startedAt) && (
-                              <p className="mt-2 text-sm leading-6 text-foreground">
-                                {attempt.message ?? 'No provider message captured.'}
-                              </p>
+                              {isCollapsed
+                                ? <ChevronRight size={14} className={subtleTextClass} />
+                                : <ChevronDown size={14} className={subtleTextClass} />
+                              }
+                            </button>
+
+                            {!isCollapsed && (
+                              <div className="space-y-3 pb-4 pl-[3.25rem] pr-4">
+                                {group.turns.map((turn) => (
+                                  <p
+                                    key={turn.id}
+                                    className="whitespace-pre-wrap text-sm leading-6 text-foreground"
+                                  >
+                                    {turn.content}
+                                    {turn.isPartial && (
+                                      <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                        …
+                                      </span>
+                                    )}
+                                  </p>
+                                ))}
+                              </div>
                             )}
-                            <p className={`mt-2 text-xs ${subtleTextClass}`}>
-                              {formatDate(attempt.completedAt ?? attempt.startedAt)}
-                            </p>
                           </div>
-                        ))}
+                        )
+                      })}
+                      <div ref={transcriptBottomRef} />
+                    </div>
+
+                    {!transcriptAtBottom && (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-7 gap-1.5 rounded-full px-3 text-xs shadow-md"
+                          onClick={() => {
+                            setTranscriptAtBottom(true)
+                            const el = transcriptScrollRef.current
+                            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+                          }}
+                        >
+                          <ChevronDown size={13} />
+                          Latest
+                        </Button>
                       </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Details tab — controls, chat, people, diagnostics */}
+          <TabsContent value="details" className="mt-6 space-y-6">
+            {workspaceSettings && controls && (
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <SectionIcon icon={CheckCircle2} />
+                    <div>
+                      <CardTitle className="text-lg text-foreground">
+                        Live participation controls
+                      </CardTitle>
+                      <CardDescription>
+                        These controls narrow how Kodi can participate in this
+                        meeting without changing the workspace defaults.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {getMeetingParticipationModeLabel(
+                        controls.participationMode
+                      )}
+                    </Badge>
+                    {controls.liveResponsesDisabled ? (
+                      <Badge variant="destructive">Live replies paused</Badge>
+                    ) : (
+                      <Badge variant="success">Live replies allowed</Badge>
+                    )}
+                    {controls.allowHostControls && (
+                      <Badge variant="neutral">Starter controls on</Badge>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {(
+                      ['listen_only', 'chat_enabled', 'voice_enabled'] as const
+                    ).map((mode) => {
+                      const active = controls.participationMode === mode
+
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          disabled={!canManageControls || controlsSaving}
+                          onClick={() =>
+                            void updateControls({
+                              participationMode: mode,
+                            })
+                          }
+                          className={`rounded-xl border px-4 py-4 text-left transition ${
+                            active
+                              ? 'border-foreground bg-brand-accent-soft text-foreground'
+                              : 'border-border bg-secondary text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+                          }`}
+                        >
+                          <p className="text-sm font-medium">
+                            {getMeetingParticipationModeLabel(mode)}
+                          </p>
+                          <p className="mt-2 text-xs leading-5">
+                            {getMeetingParticipationModeDescription(mode)}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-secondary p-4">
+                    <p className="text-sm font-medium text-foreground">
+                      Live reply kill switch
+                    </p>
+                    <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
+                      Pause live chat and voice replies immediately without
+                      ending the meeting session.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        variant={
+                          controls.liveResponsesDisabled
+                            ? 'outline'
+                            : 'destructive'
+                        }
+                        disabled={!canManageControls || controlsSaving}
+                        onClick={() =>
+                          void updateControls({
+                            liveResponsesDisabled:
+                              !controls.liveResponsesDisabled,
+                            liveResponsesDisabledReason:
+                              controls.liveResponsesDisabled
+                                ? undefined
+                                : 'Paused from the meeting detail page.',
+                          })
+                        }
+                      >
+                        {controlsSaving
+                          ? 'Updating...'
+                          : controls.liveResponsesDisabled
+                            ? 'Resume live replies'
+                            : 'Pause live replies'}
+                      </Button>
+                      {controls.liveResponsesDisabledReason && (
+                        <span className="text-xs text-muted-foreground">
+                          {controls.liveResponsesDisabledReason}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {!canManageControls && (
+                    <Alert>
+                      <AlertDescription>
+                        Only workspace owners and, when enabled, the meeting
+                        starter can change these live controls.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {meeting.provider === 'zoom' && (
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <SectionIcon icon={Users} />
+                    <div>
+                      <CardTitle className="text-lg text-foreground">
+                        Meeting chat
+                      </CardTitle>
+                      <CardDescription>
+                        In-meeting Zoom chat messages observed during the session.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {chatMessages.length === 0 ? (
+                    <div
+                      className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
+                    >
+                      In-meeting Zoom chat messages will appear here once Kodi
+                      receives or sends them.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {chatMessages.map((message) => (
+                        <div
+                          key={message.id}
+                          className="rounded-xl border border-border bg-secondary p-4"
+                        >
+                          <div
+                            className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                          >
+                            <span className="font-medium text-foreground">
+                              {message.senderName}
+                            </span>
+                            <Badge variant="neutral">
+                              {formatEventLabel(message.eventType)}
+                            </Badge>
+                            <span>{formatDate(message.occurredAt)}</span>
+                          </div>
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                            {message.content}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
+                </CardContent>
+              </Card>
+            )}
 
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">
+                  People and activity
+                </CardTitle>
+                <CardDescription>
+                  Participants, timeline events, and transport diagnostics.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="rounded-xl border border-border bg-secondary p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Users size={16} className="text-brand-quiet" />
+                    <Users size={14} className="text-muted-foreground" />
                     People
                   </div>
                   {participants.length === 0 ? (
@@ -3558,7 +1995,6 @@ export default function MeetingDetailsPage() {
                     <div className="mt-3 space-y-3">
                       {participants.map((participant) => {
                         const identity = participantIdentitySummary(participant)
-
                         return (
                           <div
                             key={participant.id}
@@ -3571,9 +2007,7 @@ export default function MeetingDetailsPage() {
                                     participant.email ??
                                     'Unknown participant'}
                                 </p>
-                                <p
-                                  className={`mt-1 truncate text-xs ${subtleTextClass}`}
-                                >
+                                <p className={`mt-1 truncate text-xs ${subtleTextClass}`}>
                                   {participant.email ?? 'No email captured'}
                                 </p>
                                 {identity && (
@@ -3583,42 +2017,23 @@ export default function MeetingDetailsPage() {
                                         identity.classification
                                       )}
                                     >
-                                      {participantIdentityLabel(
-                                        identity.classification
-                                      )}
+                                      {participantIdentityLabel(identity.classification)}
                                     </Badge>
                                     {identity.confidence != null && (
                                       <Badge variant="outline">
-                                        {Math.round(identity.confidence * 100)}%
-                                        {' '}confidence
-                                      </Badge>
-                                    )}
-                                    {identity.rejoinCount > 0 && (
-                                      <Badge variant="outline">
-                                        rejoined x{identity.rejoinCount}
+                                        {Math.round(identity.confidence * 100)}% confidence
                                       </Badge>
                                     )}
                                   </div>
                                 )}
                               </div>
-                              <Badge
-                                variant={
-                                  participant.leftAt ? 'neutral' : 'success'
-                                }
-                              >
+                              <Badge variant={participant.leftAt ? 'neutral' : 'success'}>
                                 {participant.leftAt ? 'Left' : 'In call'}
                               </Badge>
                             </div>
                             <p className={`mt-3 text-xs ${subtleTextClass}`}>
                               Joined {formatDate(participant.joinedAt)}
                             </p>
-                            {identity?.matchedBy && (
-                              <p className={`mt-2 text-xs ${subtleTextClass}`}>
-                                Matched by {identity.matchedBy.replace(/_/g, ' ')}
-                                {identity.matchedUserEmail &&
-                                  ` - ${identity.matchedUserEmail}`}
-                              </p>
-                            )}
                           </div>
                         )
                       })}
@@ -3626,56 +2041,48 @@ export default function MeetingDetailsPage() {
                   )}
                 </div>
 
-                {compactTimelineEvents.length === 0 ? (
-                  <div
-                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
-                  >
-                    Kodi will add the important meeting moments here.
-                  </div>
-                ) : (
-                  compactTimelineEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-xl border border-border bg-secondary p-4"
-                    >
+                {compactTimelineEvents.length > 0 && (
+                  <div className="space-y-3">
+                    {compactTimelineEvents.map((event) => (
                       <div
-                        className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                        key={event.id}
+                        className="rounded-xl border border-border bg-secondary p-4"
                       >
-                        <Badge variant="neutral">
-                          {formatEventLabel(event.eventType)}
-                        </Badge>
-                        <span>{formatDate(event.occurredAt)}</span>
+                        <div className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}>
+                          <Badge variant="neutral">
+                            {formatEventLabel(event.eventType)}
+                          </Badge>
+                          <span>{formatDate(event.occurredAt)}</span>
+                        </div>
+                        {describeEvent(event, meeting.provider) && (
+                          <p className="mt-3 text-sm leading-6 text-foreground">
+                            {describeEvent(event, meeting.provider)}
+                          </p>
+                        )}
                       </div>
-                      {describeEvent(event, meeting.provider) && (
-                        <p className="mt-3 text-sm leading-6 text-foreground">
-                          {describeEvent(event, meeting.provider)}
-                        </p>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="mt-4 rounded-xl border border-border bg-secondary px-4 py-3">
-                {technicalDetails.map((detail, index) => (
-                  <div key={detail.label}>
-                    {index > 0 && <Separator className="bg-border" />}
-                    <div className="flex items-start justify-between gap-4 py-3">
-                      <p
-                        className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}
-                      >
-                        {detail.label}
-                      </p>
-                      <p className="max-w-[16rem] text-right text-sm text-foreground">
-                        {detail.value}
-                      </p>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </details>
-          </div>
-        </div>
+                )}
+
+                <div className="rounded-xl border border-border bg-secondary px-4 py-3">
+                  {technicalDetails.map((detail, index) => (
+                    <div key={detail.label}>
+                      {index > 0 && <Separator className="bg-border" />}
+                      <div className="flex items-start justify-between gap-4 py-3">
+                        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                          {detail.label}
+                        </p>
+                        <p className="max-w-[16rem] text-right text-sm text-foreground">
+                          {detail.value}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

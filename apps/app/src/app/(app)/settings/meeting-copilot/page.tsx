@@ -4,30 +4,25 @@ import { useEffect, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
-import { Bot, ChevronDown } from 'lucide-react'
 import {
-  buildMeetingCopilotDisclosure,
   deriveMeetingBotIdentity,
-  formatRetentionDays,
-  getMeetingParticipationModeDescription,
-  getMeetingParticipationModeLabel,
-  meetingParticipationModeValues,
   type MeetingCopilotSettings,
 } from '@kodi/db/client'
 import {
-  Alert,
-  AlertDescription,
   Badge,
-  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-  Input,
-  Label,
   Skeleton,
 } from '@kodi/ui'
+import { PageHeader } from './_components/page-header'
+import { DisplayNameField } from './_components/display-name-field'
+import { BotIdentityPreview } from './_components/bot-identity-preview'
+import { ParticipationModeSelector } from './_components/participation-mode-selector'
+import { AdvancedSettings } from './_components/advanced-settings'
+import { SaveFooter } from './_components/save-footer'
 
 export default function MeetingCopilotSettingsPage() {
   const { activeOrg } = useOrg()
@@ -40,7 +35,6 @@ export default function MeetingCopilotSettingsPage() {
   const [copilotSaving, setCopilotSaving] = useState(false)
   const [copilotSaved, setCopilotSaved] = useState(false)
   const [copilotError, setCopilotError] = useState<string | null>(null)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   useEffect(() => {
     if (!activeOrg) {
@@ -136,20 +130,7 @@ export default function MeetingCopilotSettingsPage() {
   return (
     <SettingsLayout>
       <div className="mx-auto max-w-3xl space-y-8">
-        <div>
-          <div className="mb-2 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong shadow-brand-panel">
-              <Bot size={18} />
-            </div>
-            <h1 className="text-2xl font-medium tracking-tight text-foreground">
-              Meeting copilot
-            </h1>
-          </div>
-          <p className="ml-[3.25rem] text-sm leading-7 text-brand-quiet">
-            Configure Kodi&apos;s identity and participation behavior for
-            meetings.
-          </p>
-        </div>
+        <PageHeader />
 
         <Card className="border-brand-line">
           <CardHeader className="space-y-1">
@@ -174,359 +155,39 @@ export default function MeetingCopilotSettingsPage() {
               </div>
             ) : (
               <form onSubmit={handleCopilotSave} className="space-y-6">
-                {/* Primary settings */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="meeting-bot-display-name"
-                    className="text-foreground"
-                  >
-                    Visible meeting display name
-                  </Label>
-                  <Input
-                    id="meeting-bot-display-name"
-                    value={copilotForm.botDisplayName ?? ''}
-                    onChange={(event) =>
-                      setCopilotForm((current) =>
-                        current
-                          ? {
-                              ...current,
-                              botDisplayName:
-                                event.target.value.trim().length > 0
-                                  ? event.target.value
-                                  : null,
-                            }
-                          : current
-                      )
-                    }
-                    disabled={!isOwner || copilotSaving}
-                    placeholder={`Kodi for ${currentOrg.orgName}`}
-                    className="h-12 rounded-xl border-brand-line bg-brand-elevated"
-                  />
-                  <p className="text-xs text-brand-subtle">
-                    Leave blank to use the default derived workspace identity.
-                  </p>
-                </div>
+                <DisplayNameField
+                  value={copilotForm.botDisplayName}
+                  placeholder={`Kodi for ${currentOrg.orgName}`}
+                  disabled={!isOwner || copilotSaving}
+                  onChange={setCopilotForm}
+                />
 
                 {botIdentity && (
-                  <div className="rounded-2xl border border-brand-line bg-brand-elevated p-4">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
-                      Identity preview
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      <p className="text-sm font-medium text-foreground">
-                        {botIdentity.displayName}
-                      </p>
-                      <p className="text-sm text-brand-quiet">
-                        Invite address: {botIdentity.inviteEmail}
-                      </p>
-                    </div>
-                  </div>
+                  <BotIdentityPreview
+                    displayName={botIdentity.displayName}
+                    inviteEmail={botIdentity.inviteEmail}
+                  />
                 )}
 
-                <div className="space-y-3">
-                  <Label className="text-foreground">
-                    Default participation mode
-                  </Label>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {meetingParticipationModeValues.map((mode) => {
-                      const active =
-                        copilotForm.defaultParticipationMode === mode
+                <ParticipationModeSelector
+                  activeMode={copilotForm.defaultParticipationMode}
+                  disabled={!isOwner || copilotSaving}
+                  onChange={setCopilotForm}
+                />
 
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          disabled={!isOwner || copilotSaving}
-                          onClick={() =>
-                            setCopilotForm((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    defaultParticipationMode: mode,
-                                  }
-                                : current
-                            )
-                          }
-                          className={`rounded-2xl border px-4 py-4 text-left transition ${
-                            active
-                              ? 'border-foreground bg-brand-accent-soft text-foreground'
-                              : 'border-brand-line bg-brand-elevated text-brand-quiet hover:border-foreground/20 hover:text-foreground'
-                          }`}
-                        >
-                          <p className="text-sm font-medium">
-                            {getMeetingParticipationModeLabel(mode)}
-                          </p>
-                          <p className="mt-2 text-xs leading-5">
-                            {getMeetingParticipationModeDescription(mode)}
-                          </p>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <AdvancedSettings
+                  form={copilotForm}
+                  disabled={!isOwner || copilotSaving}
+                  onChange={setCopilotForm}
+                />
 
-                {/* Advanced settings accordion */}
-                <div className="rounded-2xl border border-brand-line">
-                  <button
-                    type="button"
-                    onClick={() => setAdvancedOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-medium text-brand-quiet hover:text-foreground transition-colors"
-                  >
-                    <span>Advanced settings</span>
-                    <ChevronDown
-                      size={16}
-                      className={`transition-transform duration-200 ${advancedOpen ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-
-                  {advancedOpen && (
-                    <div className="space-y-6 border-t border-brand-line px-4 pb-4 pt-4">
-                      {/* Guardrails */}
-                      <div className="space-y-3">
-                        <Label className="text-foreground">
-                          Pilot response guardrails
-                        </Label>
-                        <div className="space-y-3">
-                          <label className="flex items-start gap-3 rounded-2xl border border-brand-line bg-brand-elevated p-4">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-brand-line"
-                              checked={
-                                copilotForm.chatResponsesRequireExplicitAsk
-                              }
-                              disabled={!isOwner || copilotSaving}
-                              onChange={(event) =>
-                                setCopilotForm((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        chatResponsesRequireExplicitAsk:
-                                          event.target.checked,
-                                      }
-                                    : current
-                                )
-                              }
-                            />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-foreground">
-                                Require an explicit ask before Kodi replies in
-                                chat
-                              </p>
-                              <p className="text-xs leading-5 text-brand-quiet">
-                                Keeps live chat participation limited to direct
-                                asks and mentions.
-                              </p>
-                            </div>
-                          </label>
-
-                          <label className="flex items-start gap-3 rounded-2xl border border-brand-line bg-brand-elevated p-4">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-brand-line"
-                              checked={
-                                copilotForm.voiceResponsesRequireExplicitPrompt
-                              }
-                              disabled={!isOwner || copilotSaving}
-                              onChange={(event) =>
-                                setCopilotForm((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        voiceResponsesRequireExplicitPrompt:
-                                          event.target.checked,
-                                      }
-                                    : current
-                                )
-                              }
-                            />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-foreground">
-                                Require an explicit prompt before Kodi speaks
-                              </p>
-                              <p className="text-xs leading-5 text-brand-quiet">
-                                Voice stays request-driven and avoids autonomous
-                                interruption.
-                              </p>
-                            </div>
-                          </label>
-
-                          <label className="flex items-start gap-3 rounded-2xl border border-brand-line bg-brand-elevated p-4">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-brand-line"
-                              checked={copilotForm.allowMeetingHostControls}
-                              disabled={!isOwner || copilotSaving}
-                              onChange={(event) =>
-                                setCopilotForm((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        allowMeetingHostControls:
-                                          event.target.checked,
-                                      }
-                                    : current
-                                )
-                              }
-                            />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-foreground">
-                                Let the meeting starter narrow live participation
-                              </p>
-                              <p className="text-xs leading-5 text-brand-quiet">
-                                Workspace owners can always change controls. This
-                                lets the meeting starter also move Kodi to
-                                listen-only or stop live replies during a
-                                session.
-                              </p>
-                            </div>
-                          </label>
-
-                          <label className="flex items-start gap-3 rounded-2xl border border-brand-line bg-brand-elevated p-4">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-brand-line"
-                              checked={copilotForm.consentNoticeEnabled}
-                              disabled={!isOwner || copilotSaving}
-                              onChange={(event) =>
-                                setCopilotForm((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        consentNoticeEnabled:
-                                          event.target.checked,
-                                      }
-                                    : current
-                                )
-                              }
-                            />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-foreground">
-                                Show consent and disclosure notices in product
-                              </p>
-                              <p className="text-xs leading-5 text-brand-quiet">
-                                Keeps Kodi&apos;s listening and speaking behavior
-                                visible before and during a meeting.
-                              </p>
-                            </div>
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* Retention settings */}
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label
-                            htmlFor="transcript-retention-days"
-                            className="text-foreground"
-                          >
-                            Transcript retention
-                          </Label>
-                          <Input
-                            id="transcript-retention-days"
-                            type="number"
-                            min={1}
-                            max={3650}
-                            value={copilotForm.transcriptRetentionDays}
-                            onChange={(event) =>
-                              setCopilotForm((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      transcriptRetentionDays: Math.max(
-                                        1,
-                                        Number(event.target.value) || 1
-                                      ),
-                                    }
-                                  : current
-                              )
-                            }
-                            disabled={!isOwner || copilotSaving}
-                            className="h-12 rounded-xl border-brand-line bg-brand-elevated"
-                          />
-                          <p className="text-xs text-brand-subtle">
-                            Current:{' '}
-                            {formatRetentionDays(
-                              copilotForm.transcriptRetentionDays
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label
-                            htmlFor="artifact-retention-days"
-                            className="text-foreground"
-                          >
-                            Artifact retention
-                          </Label>
-                          <Input
-                            id="artifact-retention-days"
-                            type="number"
-                            min={1}
-                            max={3650}
-                            value={copilotForm.artifactRetentionDays}
-                            onChange={(event) =>
-                              setCopilotForm((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      artifactRetentionDays: Math.max(
-                                        1,
-                                        Number(event.target.value) || 1
-                                      ),
-                                    }
-                                  : current
-                              )
-                            }
-                            disabled={!isOwner || copilotSaving}
-                            className="h-12 rounded-xl border-brand-line bg-brand-elevated"
-                          />
-                          <p className="text-xs text-brand-subtle">
-                            Current:{' '}
-                            {formatRetentionDays(
-                              copilotForm.artifactRetentionDays
-                            )}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Disclosure contract */}
-                      <div className="rounded-2xl border border-dashed border-brand-line bg-brand-elevated p-4">
-                        <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
-                          Disclosure contract
-                        </p>
-                        <div className="mt-3 space-y-2 text-sm leading-6 text-foreground">
-                          {buildMeetingCopilotDisclosure(copilotForm).map(
-                            (line) => (
-                              <p key={line}>{line}</p>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {copilotError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{copilotError}</AlertDescription>
-                  </Alert>
-                )}
-
-                {isOwner && (
-                  <div className="flex items-center gap-3">
-                    <Button
-                      type="submit"
-                      disabled={!copilotIsDirty || copilotSaving}
-                    >
-                      {copilotSaving ? 'Saving…' : 'Save copilot defaults'}
-                    </Button>
-                    {copilotSaved && (
-                      <span className="text-sm font-medium text-brand-success">
-                        Saved
-                      </span>
-                    )}
-                  </div>
-                )}
+                <SaveFooter
+                  error={copilotError}
+                  isOwner={isOwner}
+                  isDirty={copilotIsDirty}
+                  saving={copilotSaving}
+                  saved={copilotSaved}
+                />
               </form>
             )}
           </CardContent>

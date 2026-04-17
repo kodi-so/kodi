@@ -8,27 +8,36 @@ import {
   Link2,
   ShieldCheck,
   Settings,
-  Menu,
-  X,
-  ChevronDown,
-  ChevronUp,
   Check,
   LogOut,
+  ChevronsUpDown,
 } from 'lucide-react'
-import { useState } from 'react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
 import {
   Avatar,
   AvatarFallback,
   BrandLogo,
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarInset,
+  SidebarRail,
+  SidebarTrigger,
 } from '@kodi/ui'
 
 const navItems = [
@@ -45,195 +54,178 @@ function OrgSwitcher() {
 
   if (orgs.length === 1 && activeOrg) {
     return (
-      <div className="px-5 py-4">
-        <p className="mb-0.5 text-[11px] uppercase tracking-widest text-muted-foreground">
-          Workspace
-        </p>
-        <p className="truncate text-sm font-medium text-foreground">{activeOrg.orgName}</p>
-      </div>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton size="lg" className="cursor-default">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent text-[10px] font-bold text-sidebar-accent-foreground">
+              {activeOrg.orgName[0]?.toUpperCase() ?? 'K'}
+            </div>
+            <span className="truncate text-sm font-medium">
+              {activeOrg.orgName}
+            </span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
     )
   }
 
   return (
-    <div className="px-4 py-3">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent">
-            <span className="truncate text-foreground">
-              {activeOrg?.orgName ?? 'Select workspace'}
-            </span>
-            <ChevronDown size={14} className="flex-shrink-0 text-muted-foreground" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width]">
-          {orgs.map((org) => (
-            <DropdownMenuItem
-              key={org.orgId}
-              onClick={() => setActiveOrg(org)}
-              className="flex items-center justify-between gap-2"
-            >
-              <div className="min-w-0 text-left">
-                <p className="truncate text-foreground">{org.orgName}</p>
-                <p className="text-xs capitalize text-muted-foreground">
-                  {org.role}
-                </p>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton size="lg">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent text-[10px] font-bold text-sidebar-accent-foreground">
+                {activeOrg?.orgName[0]?.toUpperCase() ?? 'K'}
               </div>
-              {org.orgId === activeOrg?.orgId && (
-                <Check size={14} className="flex-shrink-0 text-primary" />
-              )}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+              <span className="truncate text-sm font-medium">
+                {activeOrg?.orgName ?? 'Select workspace'}
+              </span>
+              <ChevronsUpDown className="ml-auto" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            side="bottom"
+            className="w-[--radix-dropdown-menu-trigger-width]"
+          >
+            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {orgs.map((org) => (
+              <DropdownMenuItem
+                key={org.orgId}
+                onClick={() => setActiveOrg(org)}
+              >
+                <span className="truncate">{org.orgName}</span>
+                {org.orgId === activeOrg?.orgId && (
+                  <Check className="ml-auto h-4 w-4 shrink-0" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   )
 }
 
-function UserMenu({
-  session,
-  onSignOut,
-  onNavigate,
-}: {
-  session: { user?: { name?: string | null; email?: string | null } } | null
-  onSignOut: () => void
-  onNavigate: () => void
-}) {
+function UserMenu() {
+  const { data: session } = useSession()
+  const router = useRouter()
+
   const initials =
     session?.user?.name?.[0]?.toUpperCase() ??
     session?.user?.email?.[0]?.toUpperCase() ??
     '?'
-
-  return (
-    <div className="px-4 py-3">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-foreground/[0.04]">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-foreground/[0.08] text-xs font-medium text-foreground">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <span className="truncate text-sm text-foreground">
-              {session?.user?.name ?? 'User'}
-            </span>
-            <ChevronUp size={14} className="ml-auto flex-shrink-0 text-muted-foreground" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-[--radix-dropdown-menu-trigger-width] mb-2">
-          <DropdownMenuLabel className="font-normal">
-            <p className="truncate text-sm font-medium text-foreground">
-              {session?.user?.name ?? 'User'}
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {session?.user?.email}
-            </p>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href="/settings" onClick={onNavigate} className="gap-3">
-              <Settings size={16} />
-              Settings
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onSignOut} className="gap-3">
-            <LogOut size={16} />
-            Sign out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  )
-}
-
-export function Sidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const { data: session } = useSession()
-  const [mobileOpen, setMobileOpen] = useState(false)
 
   async function handleSignOut() {
     await signOut()
     router.push('/login')
   }
 
-  const navContent = (
-    <div className="flex h-full flex-col">
-      <div className="px-5 py-5">
-        <BrandLogo size={34} />
-      </div>
-
-      <OrgSwitcher />
-
-      <nav className="flex-1 space-y-1 px-4 py-5">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Button
-              key={href}
-              asChild
-              variant={active ? 'secondary' : 'ghost'}
-              className={`h-11 w-full justify-start gap-3 rounded-lg px-3 text-sm ${
-                active
-                  ? 'bg-foreground/[0.06] text-foreground font-medium'
-                  : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground'
-              }`}
-            >
-              <Link href={href} onClick={() => setMobileOpen(false)}>
-                <Icon size={18} />
-                {label}
-              </Link>
-            </Button>
-          )
-        })}
-      </nav>
-
-      <UserMenu
-        session={session}
-        onSignOut={handleSignOut}
-        onNavigate={() => setMobileOpen(false)}
-      />
-    </div>
-  )
-
   return (
-    <>
-      <aside className="bg-card sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col border-r border-border md:flex">
-        {navContent}
-      </aside>
-
-      <Button
-        onClick={() => setMobileOpen(true)}
-        variant="outline"
-        size="icon"
-        className="fixed left-4 top-4 z-50 md:hidden"
-        aria-label="Open menu"
-      >
-        <Menu size={20} />
-      </Button>
-
-      {mobileOpen && (
-        <div
-          className="kodi-overlay-scrim fixed inset-0 z-40 backdrop-blur-sm md:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      <aside
-        className={`bg-card fixed inset-y-0 left-0 z-50 w-72 border-r border-border transition-transform duration-200 md:hidden ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <Button
-          onClick={() => setMobileOpen(false)}
-          variant="ghost"
-          size="icon"
-          className="absolute right-4 top-4 p-1 text-muted-foreground hover:text-foreground"
-          aria-label="Close menu"
-        >
-          <X size={20} />
-        </Button>
-        {navContent}
-      </aside>
-    </>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton size="lg">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="text-[10px] font-medium">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <span className="truncate text-sm">
+                {session?.user?.name ?? 'User'}
+              </span>
+              <ChevronsUpDown className="ml-auto" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            className="w-[--radix-dropdown-menu-trigger-width]"
+          >
+            <DropdownMenuLabel className="font-normal">
+              <p className="truncate text-sm font-medium">
+                {session?.user?.name ?? 'User'}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {session?.user?.email}
+              </p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void handleSignOut()}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   )
 }
+
+function AppSidebar() {
+  const pathname = usePathname()
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <Link href="/chat">
+                <BrandLogo size={28} />
+                <span className="text-sm font-semibold">Kodi</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <OrgSwitcher />
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map(({ href, label, icon: Icon }) => {
+                const active =
+                  pathname === href || pathname.startsWith(href + '/')
+                return (
+                  <SidebarMenuItem key={href}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={label}>
+                      <Link href={href}>
+                        <Icon />
+                        <span>{label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <UserMenu />
+      </SidebarFooter>
+
+      <SidebarRail />
+    </Sidebar>
+  )
+}
+
+export { AppSidebar, SidebarProvider, SidebarInset, SidebarTrigger }

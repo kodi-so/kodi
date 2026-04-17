@@ -28,6 +28,7 @@ import { SlackSendModal } from './_components/slack-send-modal'
 import { PostMeetingReview } from './_components/post-meeting-review'
 import { OverviewTab } from './_components/overview-tab'
 import { TranscriptTab } from './_components/transcript-tab'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 export default function MeetingDetailsPage() {
   const m = useMeetingDetail()
@@ -139,7 +140,7 @@ export default function MeetingDetailsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void m.handleDeleteMeeting()}
+                  onClick={m.requestDeleteMeeting}
                   disabled={m.deletingMeeting}
                   className="text-muted-foreground hover:bg-transparent hover:text-destructive"
                 >
@@ -298,15 +299,16 @@ export default function MeetingDetailsPage() {
                                   Voice failed
                                 </span>
                               ) : (
-                                <button
-                                  type="button"
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => void m.handleSpeakAnswer(answer.id)}
                                   disabled={!!m.speakingAnswerId}
-                                  className={`flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs transition hover:bg-secondary disabled:opacity-40 ${subtleTextClass}`}
+                                  className={`h-auto gap-1.5 rounded-full px-2.5 py-1 text-xs ${subtleTextClass}`}
                                 >
                                   <Volume2 size={11} />
                                   Speak
-                                </button>
+                                </Button>
                               )}
                             </div>
                           )}
@@ -396,6 +398,14 @@ export default function MeetingDetailsPage() {
             isEmpty={m.transcriptSpeakerGroups.length === 0}
           />
         </Tabs>
+
+        <ConfirmDialog
+          open={m.deleteConfirmOpen}
+          onOpenChange={m.setDeleteConfirmOpen}
+          title="Delete this meeting?"
+          description="This action cannot be undone. The meeting, its transcript, and all artifacts will be permanently deleted."
+          onConfirm={() => void m.executeDeleteMeeting()}
+        />
       </div>
     </div>
   )

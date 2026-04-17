@@ -25,6 +25,9 @@ import {
   CardTitle,
   Input,
   Skeleton,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@kodi/ui'
 import { SectionIcon } from '@/components/section-icon'
 import type { MeetingArtifact, RecapTarget, SyncTarget, WorkItem } from './types'
@@ -686,35 +689,53 @@ export function PostMeetingReview({
 
                         {item.status !== 'cancelled' && (
                           <div className="flex shrink-0 items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => onStartEdit(item)}
-                              disabled={isSaving}
-                              className={`rounded-lg p-1.5 transition-colors hover:bg-border/50 ${subtleTextClass} disabled:opacity-40`}
-                              title="Edit"
-                            >
-                              <Pencil size={13} />
-                            </button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => onStartEdit(item)}
+                                  disabled={isSaving}
+                                  className={`h-auto w-auto rounded-lg p-1.5 hover:bg-border/50 ${subtleTextClass}`}
+                                >
+                                  <Pencil size={13} />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Edit</TooltipContent>
+                            </Tooltip>
                             {item.status === 'draft' && (
                               <>
-                                <button
-                                  type="button"
-                                  onClick={() => onApprove(item.id)}
-                                  disabled={isSaving}
-                                  className="rounded-lg p-1.5 text-brand-success transition-colors hover:bg-brand-success/10 disabled:opacity-40"
-                                  title="Approve"
-                                >
-                                  <Check size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => onReject(item.id)}
-                                  disabled={isSaving}
-                                  className="rounded-lg p-1.5 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-40"
-                                  title="Reject"
-                                >
-                                  <X size={13} />
-                                </button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => onApprove(item.id)}
+                                      disabled={isSaving}
+                                      className="h-auto w-auto rounded-lg p-1.5 text-brand-success hover:bg-brand-success/10"
+                                    >
+                                      <Check size={13} />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Approve</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => onReject(item.id)}
+                                      disabled={isSaving}
+                                      className="h-auto w-auto rounded-lg p-1.5 text-destructive hover:bg-destructive/10"
+                                    >
+                                      <X size={13} />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Reject</TooltipContent>
+                                </Tooltip>
                               </>
                             )}
                           </div>

@@ -17,6 +17,7 @@ import { MeetingRow } from './_components/meeting-row'
 import { StartMeetingDialog } from './_components/start-meeting-dialog'
 import { BotIdentityButton } from './_components/bot-identity-bar'
 import { EmptyState } from './_components/empty-state'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 export default function MeetingsPage() {
   const router = useRouter()
@@ -33,13 +34,19 @@ export default function MeetingsPage() {
   const [isStarting, startStartTransition] = useTransition()
   const [isRefreshing, startRefreshTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  async function handleDeleteMeeting(e: React.MouseEvent, meetingId: string) {
+  function handleDeleteClick(e: React.MouseEvent, meetingId: string) {
     e.preventDefault()
     e.stopPropagation()
-    if (deletingId || !activeOrg) return
-    if (!confirm('Delete this meeting? This cannot be undone.')) return
+    setDeleteConfirmId(meetingId)
+  }
+
+  async function executeDelete() {
+    if (!deleteConfirmId || deletingId || !activeOrg) return
+    const meetingId = deleteConfirmId
+    setDeleteConfirmId(null)
     setDeletingId(meetingId)
     try {
       await trpc.meeting.delete.mutate({
@@ -293,7 +300,7 @@ export default function MeetingsPage() {
                   key={meeting.id}
                   meeting={meeting}
                   deletingId={deletingId}
-                  onDelete={handleDeleteMeeting}
+                  onDelete={handleDeleteClick}
                 />
               ))}
             </div>
@@ -321,6 +328,14 @@ export default function MeetingsPage() {
             </div>
           )}
         </div>
+
+        <ConfirmDialog
+          open={deleteConfirmId !== null}
+          onOpenChange={(open) => { if (!open) setDeleteConfirmId(null) }}
+          title="Delete this meeting?"
+          description="This action cannot be undone. The meeting, its transcript, and all artifacts will be permanently deleted."
+          onConfirm={() => void executeDelete()}
+        />
       </div>
     </div>
   )

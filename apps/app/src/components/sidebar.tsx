@@ -11,9 +11,11 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronUp,
   Check,
+  LogOut,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
 import { BrandLogo, Button, Card } from '@kodi/ui'
@@ -23,7 +25,6 @@ const navItems = [
   { href: '/meetings', label: 'Meetings', icon: Video },
   { href: '/integrations', label: 'Integrations', icon: Link2 },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
 function OrgSwitcher() {
@@ -90,6 +91,91 @@ function OrgSwitcher() {
   )
 }
 
+function UserMenu({
+  session,
+  onSignOut,
+  onNavigate,
+}: {
+  session: { user?: { name?: string | null; email?: string | null } } | null
+  onSignOut: () => void
+  onNavigate: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  const initials =
+    session?.user?.name?.[0]?.toUpperCase() ??
+    session?.user?.email?.[0]?.toUpperCase() ??
+    '?'
+
+  return (
+    <div ref={ref} className="relative border-t border-brand-line px-4 py-4">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm transition-colors hover:bg-foreground/[0.04]"
+      >
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-xs font-medium text-foreground">
+          {initials}
+        </div>
+        <span className="truncate text-sm text-foreground">
+          {session?.user?.name ?? 'User'}
+        </span>
+        <ChevronUp
+          size={14}
+          className={`ml-auto flex-shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <Card className="absolute bottom-full left-4 right-4 z-50 mb-2 overflow-hidden border-border">
+          <div className="px-3 py-3">
+            <p className="truncate text-sm font-medium text-foreground">
+              {session?.user?.name ?? 'User'}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {session?.user?.email}
+            </p>
+          </div>
+          <div className="border-t border-border">
+            <Link
+              href="/settings"
+              onClick={() => {
+                setOpen(false)
+                onNavigate()
+              }}
+              className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-foreground/[0.04]"
+            >
+              <Settings size={16} />
+              Settings
+            </Link>
+            <button
+              onClick={() => {
+                setOpen(false)
+                onSignOut()
+              }}
+              className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-foreground/[0.04]"
+            >
+              <LogOut size={16} />
+              Sign out
+            </button>
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -117,10 +203,10 @@ export function Sidebar() {
               key={href}
               asChild
               variant={active ? 'secondary' : 'ghost'}
-              className={`h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sm font-medium ${
+              className={`h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sm ${
                 active
-                  ? 'border border-brand-line bg-brand-accent-soft text-brand-accent-foreground shadow-brand-panel hover:bg-brand-accent-soft'
-                  : 'text-brand-quiet hover:bg-brand-panel hover:text-foreground'
+                  ? 'bg-foreground/[0.06] text-foreground font-medium'
+                  : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground'
               }`}
             >
               <Link href={href} onClick={() => setMobileOpen(false)}>
@@ -132,32 +218,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-brand-line px-4 py-4">
-        <div className="mb-3 flex items-center gap-3 rounded-2xl border border-brand-line bg-brand-elevated px-3 py-3 shadow-brand-panel">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-accent-soft text-xs text-brand-accent-foreground">
-            <span>
-              {session?.user?.name?.[0]?.toUpperCase() ??
-                session?.user?.email?.[0]?.toUpperCase() ??
-                '?'}
-            </span>
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm text-foreground">
-              {session?.user?.name ?? 'User'}
-            </p>
-            <p className="truncate text-xs text-brand-quiet">
-              {session?.user?.email}
-            </p>
-          </div>
-        </div>
-        <Button
-          onClick={handleSignOut}
-          variant="ghost"
-          className="w-full justify-center gap-2 rounded-2xl"
-        >
-          Sign out
-        </Button>
-      </div>
+      <UserMenu session={session} onSignOut={handleSignOut} onNavigate={() => setMobileOpen(false)} />
     </div>
   )
 

@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import tailwindAnimate from 'tailwindcss-animate'
 import { kodiTailwindTheme } from '@kodi/ui/tailwind-theme'
 
 const config: Config = {
@@ -8,7 +9,7 @@ const config: Config = {
       ...kodiTailwindTheme,
     },
   },
-  plugins: [],
+  plugins: [tailwindAnimate],
 }
 
 export default config

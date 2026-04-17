@@ -38,6 +38,7 @@ import {
   SidebarInset,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from '@kodi/ui'
 
 const navItems = [
@@ -49,6 +50,7 @@ const navItems = [
 
 function OrgSwitcher() {
   const { orgs, activeOrg, setActiveOrg } = useOrg()
+  const { isMobile } = useSidebar()
 
   if (orgs.length === 0) return null
 
@@ -56,13 +58,18 @@ function OrgSwitcher() {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton size="lg" className="cursor-default">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent text-[10px] font-bold text-sidebar-accent-foreground">
-              {activeOrg.orgName[0]?.toUpperCase() ?? 'K'}
+          <SidebarMenuButton
+            size="lg"
+            className="cursor-default data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+          >
+            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <span className="text-xs font-bold">
+                {activeOrg.orgName[0]?.toUpperCase() ?? 'K'}
+              </span>
             </div>
-            <span className="truncate text-sm font-medium">
-              {activeOrg.orgName}
-            </span>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">{activeOrg.orgName}</span>
+            </div>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -74,29 +81,44 @@ function OrgSwitcher() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-accent text-[10px] font-bold text-sidebar-accent-foreground">
-                {activeOrg?.orgName[0]?.toUpperCase() ?? 'K'}
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <span className="text-xs font-bold">
+                  {activeOrg?.orgName[0]?.toUpperCase() ?? 'K'}
+                </span>
               </div>
-              <span className="truncate text-sm font-medium">
-                {activeOrg?.orgName ?? 'Select workspace'}
-              </span>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">
+                  {activeOrg?.orgName ?? 'Select workspace'}
+                </span>
+              </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
             align="start"
-            side="bottom"
-            className="w-[--radix-dropdown-menu-trigger-width]"
+            side={isMobile ? 'bottom' : 'right'}
+            sideOffset={4}
           >
-            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Workspaces
+            </DropdownMenuLabel>
             {orgs.map((org) => (
               <DropdownMenuItem
                 key={org.orgId}
                 onClick={() => setActiveOrg(org)}
+                className="gap-2 p-2"
               >
-                <span className="truncate">{org.orgName}</span>
+                <div className="flex size-6 items-center justify-center rounded-md border">
+                  <span className="text-[10px] font-bold">
+                    {org.orgName[0]?.toUpperCase() ?? '?'}
+                  </span>
+                </div>
+                {org.orgName}
                 {org.orgId === activeOrg?.orgId && (
                   <Check className="ml-auto h-4 w-4 shrink-0" />
                 )}
@@ -111,6 +133,7 @@ function OrgSwitcher() {
 
 function UserMenu() {
   const { data: session } = useSession()
+  const { isMobile } = useSidebar()
   const router = useRouter()
 
   const initials =
@@ -128,40 +151,58 @@ function UserMenu() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="text-[10px] font-medium">
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarFallback className="rounded-lg text-[10px] font-medium">
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <span className="truncate text-sm">
-                {session?.user?.name ?? 'User'}
-              </span>
-              <ChevronsUpDown className="ml-auto" />
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">
+                  {session?.user?.name ?? 'User'}
+                </span>
+                <span className="truncate text-xs">
+                  {session?.user?.email}
+                </span>
+              </div>
+              <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            side="top"
-            align="start"
-            className="w-[--radix-dropdown-menu-trigger-width]"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            side={isMobile ? 'bottom' : 'right'}
+            align="end"
+            sideOffset={4}
           >
-            <DropdownMenuLabel className="font-normal">
-              <p className="truncate text-sm font-medium">
-                {session?.user?.name ?? 'User'}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {session?.user?.email}
-              </p>
+            <DropdownMenuLabel className="p-0 font-normal">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                <Avatar className="h-8 w-8 rounded-lg">
+                  <AvatarFallback className="rounded-lg text-[10px] font-medium">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">
+                    {session?.user?.name ?? 'User'}
+                  </span>
+                  <span className="truncate text-xs">
+                    {session?.user?.email}
+                  </span>
+                </div>
+              </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/settings">
-                <Settings className="mr-2 h-4 w-4" />
+                <Settings />
                 Settings
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => void handleSignOut()}>
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut />
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

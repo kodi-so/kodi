@@ -132,7 +132,7 @@ export default function MeetingCopilotSettingsPage() {
       <div className="mx-auto max-w-3xl space-y-8">
         <PageHeader />
 
-        <Card className="border-brand-line">
+        <Card className="border-border">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold text-foreground">
@@ -140,7 +140,7 @@ export default function MeetingCopilotSettingsPage() {
               </CardTitle>
               {!isOwner && <Badge variant="neutral">Read only</Badge>}
             </div>
-            <CardDescription className="text-brand-quiet">
+            <CardDescription className="text-muted-foreground">
               Set Kodi&apos;s visible identity and live participation mode for
               new meetings.
             </CardDescription>

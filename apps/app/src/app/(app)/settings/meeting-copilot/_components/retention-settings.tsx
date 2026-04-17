@@ -42,9 +42,9 @@ export function RetentionSettings({
             )
           }
           disabled={disabled}
-          className="h-12 rounded-xl border-brand-line bg-brand-elevated"
+          className="h-12 rounded-xl border-border bg-card"
         />
-        <p className="text-xs text-brand-subtle">
+        <p className="text-xs text-muted-foreground">
           Current: {formatRetentionDays(transcriptRetentionDays)}
         </p>
       </div>
@@ -73,9 +73,9 @@ export function RetentionSettings({
             )
           }
           disabled={disabled}
-          className="h-12 rounded-xl border-brand-line bg-brand-elevated"
+          className="h-12 rounded-xl border-border bg-card"
         />
-        <p className="text-xs text-brand-subtle">
+        <p className="text-xs text-muted-foreground">
           Current: {formatRetentionDays(artifactRetentionDays)}
         </p>
       </div>

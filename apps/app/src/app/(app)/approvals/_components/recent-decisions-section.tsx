@@ -19,7 +19,7 @@ export function RecentDecisionsSection({
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-[1.4rem] border border-dashed border-brand-line bg-brand-elevated p-6 text-sm text-brand-quiet">
+        <div className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
           No approvals have been decided yet.
         </div>
       ) : (

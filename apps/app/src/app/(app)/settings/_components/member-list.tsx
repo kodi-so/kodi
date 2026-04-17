@@ -55,7 +55,7 @@ export function MemberList({
 
   return (
     <>
-      <Card className="overflow-hidden rounded-xl border-brand-line">
+      <Card className="overflow-hidden rounded-xl border-border">
         <CardContent className="divide-y divide-border p-0">
           {members.map((member) => {
             const isSelf = member.userId === currentUserId
@@ -66,8 +66,8 @@ export function MemberList({
                 key={member.id}
                 className="flex items-center gap-4 bg-transparent px-5 py-4 transition-colors hover:bg-brand-muted"
               >
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-brand-line bg-brand-accent-soft">
-                  <span className="text-xs font-bold text-brand-accent-foreground">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-border bg-accent">
+                  <span className="text-xs font-bold text-foreground">
                     {getInitials(member.name)}
                   </span>
                 </div>
@@ -76,24 +76,24 @@ export function MemberList({
                   <p className="truncate text-sm font-medium text-foreground">
                     {member.name}
                     {isSelf && (
-                      <span className="ml-1 font-normal text-brand-subtle">
+                      <span className="ml-1 font-normal text-muted-foreground">
                         (you)
                       </span>
                     )}
                   </p>
-                  <p className="truncate text-xs text-brand-quiet">
+                  <p className="truncate text-xs text-muted-foreground">
                     {member.email}
                   </p>
                 </div>
 
-                <p className="hidden flex-shrink-0 text-xs text-brand-subtle sm:block">
+                <p className="hidden flex-shrink-0 text-xs text-muted-foreground sm:block">
                   Joined {formatDate(member.joinedAt)}
                 </p>
 
                 {member.role === 'owner' ? (
                   <Badge
                     variant="neutral"
-                    className="flex-shrink-0 border-brand-accent-soft bg-brand-accent-soft text-brand-accent-strong hover:bg-brand-accent-soft"
+                    className="flex-shrink-0 border-accent bg-accent text-primary hover:bg-accent"
                   >
                     Owner
                   </Badge>
@@ -118,8 +118,8 @@ export function MemberList({
                     size="sm"
                     className={`flex-shrink-0 text-xs ${
                       canRemove
-                        ? 'border-brand-line text-brand-quiet hover:border-brand-danger hover:bg-brand-danger-soft hover:text-brand-danger'
-                        : 'border-brand-line text-brand-subtle'
+                        ? 'border-border text-muted-foreground hover:border-brand-danger hover:bg-brand-danger-soft hover:text-brand-danger'
+                        : 'border-border text-muted-foreground'
                     }`}
                   >
                     Remove
@@ -130,7 +130,7 @@ export function MemberList({
           })}
 
           {members.length === 0 && (
-            <div className="bg-transparent px-5 py-10 text-center text-sm text-brand-quiet">
+            <div className="bg-transparent px-5 py-10 text-center text-sm text-muted-foreground">
               No members yet.
             </div>
           )}

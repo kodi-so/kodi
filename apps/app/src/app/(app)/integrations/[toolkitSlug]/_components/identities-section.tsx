@@ -65,7 +65,7 @@ export function IdentitiesSection({
             <Button
               type="button"
               variant="ghost"
-              className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+              className="gap-2 border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
               disabled={preferenceActionKey !== null}
               onClick={onClearPreferred}
             >
@@ -90,7 +90,7 @@ export function IdentitiesSection({
     >
       {visibleConnections.length === 0 ? (
         <div
-          className={`${dashedPanelClass} mt-4 rounded-[1.2rem] p-5`}
+          className={`${dashedPanelClass} mt-4 rounded-lg p-5`}
         >
           <p className="text-sm font-medium text-foreground">
             No identities connected yet.

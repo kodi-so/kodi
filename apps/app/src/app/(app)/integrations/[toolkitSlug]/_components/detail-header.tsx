@@ -35,7 +35,7 @@ export function DetailHeader({
         <Button
           asChild
           variant="ghost"
-          className="w-fit gap-2 px-0 text-brand-quiet hover:bg-transparent hover:text-foreground"
+          className="w-fit gap-2 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
         >
           <Link href="/integrations">
             <ArrowLeft size={16} />
@@ -69,7 +69,7 @@ export function DetailHeader({
               <ToolkitLogo
                 name={detail.toolkit.name}
                 logoUrl={detail.toolkit.logo}
-                className="h-14 w-14 flex-shrink-0 rounded-[1.35rem] border-brand-line bg-brand-elevated"
+                className="h-14 w-14 flex-shrink-0 rounded-lg border-border bg-card"
                 imageClassName="p-3"
               />
               <div className="space-y-2">
@@ -101,7 +101,7 @@ export function DetailHeader({
         <Button
           onClick={onRefresh}
           variant="ghost"
-          className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+          className="gap-2 border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
           disabled={loading || actionKey === 'refresh'}
         >
           <RefreshCcw
@@ -114,7 +114,7 @@ export function DetailHeader({
         <Button
           asChild
           variant="ghost"
-          className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+          className="gap-2 border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <Link href="/integrations/add">Browse catalog</Link>
         </Button>

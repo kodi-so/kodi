@@ -33,10 +33,10 @@ export function ConnectionCard({
   return (
     <div
       className={cn(
-        'rounded-[1.2rem] border p-4',
+        'rounded-lg border p-4',
         connection.isPreferred
           ? 'border-brand-success/20 bg-brand-success-soft'
-          : 'border-brand-line bg-brand-elevated'
+          : 'border-border bg-card'
       )}
     >
       <div className="flex flex-col gap-4">
@@ -77,7 +77,7 @@ export function ConnectionCard({
               <Button
                 type="button"
                 variant="ghost"
-                className="border border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground"
+                className="border border-border bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"
                 disabled={actionKey !== null}
                 onClick={() =>
                   void onRevalidate(connection.connectedAccountId)
@@ -92,7 +92,7 @@ export function ConnectionCard({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="border border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground"
+                  className="border border-border bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"
                   disabled={preferenceActionKey !== null}
                   onClick={() =>
                     void onSelectPreferred(

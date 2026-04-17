@@ -2,31 +2,31 @@
   --font-abeezee:
     'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --kodi-canvas: 220 14% 96%;
-  --kodi-canvas-shade: 220 10% 93%;
-  --kodi-panel: 220 14% 98%;
-  --kodi-panel-elevated: 220 16% 99%;
-  --kodi-panel-muted: 220 10% 93%;
-  --kodi-sidebar: 220 10% 91%;
-  --kodi-sidebar-elevated: 220 12% 95%;
-  --kodi-border: 220 9% 80%;
-  --kodi-border-strong: 220 8% 72%;
-  --kodi-text: 220 20% 18%;
-  --kodi-text-muted: 220 12% 39%;
-  --kodi-text-subtle: 220 8% 50%;
+  --kodi-canvas-shade: 220 10% 94%;
+  --kodi-panel: 0 0% 100%;
+  --kodi-panel-elevated: 0 0% 100%;
+  --kodi-panel-muted: 220 10% 95%;
+  --kodi-sidebar: 220 10% 97%;
+  --kodi-sidebar-elevated: 220 10% 98%;
+  --kodi-border: 220 9% 89%;
+  --kodi-border-strong: 220 8% 78%;
+  --kodi-text: 220 20% 12%;
+  --kodi-text-muted: 220 10% 42%;
+  --kodi-text-subtle: 220 8% 55%;
   --kodi-accent: 39 74% 58%;
-  --kodi-accent-soft: 41 74% 91%;
+  --kodi-accent-soft: 39 50% 95%;
   --kodi-accent-strong: 35 79% 49%;
-  --kodi-accent-foreground: 220 20% 18%;
+  --kodi-accent-foreground: 0 0% 100%;
   --kodi-success: 150 36% 38%;
-  --kodi-success-soft: 151 34% 91%;
+  --kodi-success-soft: 151 34% 93%;
   --kodi-warning: 37 84% 54%;
-  --kodi-warning-soft: 39 86% 91%;
+  --kodi-warning-soft: 39 86% 93%;
   --kodi-danger: 8 62% 54%;
-  --kodi-danger-soft: 8 68% 92%;
+  --kodi-danger-soft: 8 68% 94%;
   --kodi-info: 199 34% 44%;
-  --kodi-info-soft: 201 38% 92%;
-  --kodi-overlay: 220 18% 18%;
-  --kodi-shadow: 220 22% 18%;
+  --kodi-info-soft: 201 38% 94%;
+  --kodi-overlay: 220 18% 10%;
+  --kodi-shadow: 220 22% 10%;
 
   --background: var(--kodi-canvas);
   --foreground: var(--kodi-text);
@@ -40,69 +40,47 @@
   --secondary-foreground: var(--kodi-text);
   --muted: var(--kodi-panel-muted);
   --muted-foreground: var(--kodi-text-muted);
-  --accent: var(--kodi-accent-soft);
-  --accent-foreground: var(--kodi-accent-foreground);
+  --accent: 220 10% 95%;
+  --accent-foreground: var(--kodi-text);
   --destructive: var(--kodi-danger);
-  --destructive-foreground: 220 14% 99%;
+  --destructive-foreground: 0 0% 100%;
   --border: var(--kodi-border);
   --input: var(--kodi-border);
-  --ring: var(--kodi-accent-strong);
-  --radius: 1rem;
+  --ring: 220 14% 50%;
+  --radius: 0.625rem;
+
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 220 20% 12%;
+  --sidebar-primary: 220 20% 12%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 10% 95%;
+  --sidebar-accent-foreground: 220 20% 12%;
+  --sidebar-border: 220 9% 91%;
+  --sidebar-ring: 220 14% 50%;
 }
 
 .kodi-shell-bg {
-  background:
-    radial-gradient(
-      circle at top left,
-      hsl(var(--kodi-accent) / 0.04),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      hsl(var(--kodi-sidebar-elevated) / 0.78),
-      transparent 34%
-    ),
-    linear-gradient(
-      180deg,
-      hsl(var(--kodi-canvas)),
-      hsl(var(--kodi-canvas-shade))
-    );
+  background: hsl(var(--kodi-canvas));
 }
 
 .kodi-app-shell {
-  background: linear-gradient(
-    180deg,
-    hsl(var(--kodi-panel-elevated) / 0.52),
-    transparent 18rem
-  );
+  background: transparent;
 }
 
 .kodi-sidebar-surface {
-  background: linear-gradient(
-    180deg,
-    hsl(var(--kodi-sidebar-elevated)),
-    hsl(var(--kodi-sidebar))
-  );
+  background: hsl(var(--kodi-sidebar));
 }
 
 .kodi-panel-surface {
-  background: linear-gradient(
-    180deg,
-    hsl(var(--kodi-panel-elevated)),
-    hsl(var(--kodi-panel))
-  );
+  background: hsl(var(--kodi-panel));
 }
 
 .kodi-panel-muted-surface {
-  background: linear-gradient(
-    180deg,
-    hsl(var(--kodi-panel)),
-    hsl(var(--kodi-panel-muted))
-  );
+  background: hsl(var(--kodi-panel-muted));
 }
 
 .kodi-surface-elevated {
-  background: hsl(var(--kodi-panel-elevated));
+  background: hsl(var(--kodi-panel));
 }
 
 .kodi-surface-muted {
@@ -110,11 +88,10 @@
 }
 
 .kodi-overlay-scrim {
-  background: hsl(var(--kodi-overlay) / 0.28);
+  background: hsl(var(--kodi-overlay) / 0.4);
 }
 
 .shadow-brand-panel {
-  box-shadow:
-    0 28px 60px -36px hsl(var(--kodi-shadow) / 0.24),
-    inset 0 1px 0 hsl(var(--kodi-panel-elevated));
+  box-shadow: 0 1px 3px 0 hsl(var(--kodi-shadow) / 0.08),
+    0 1px 2px -1px hsl(var(--kodi-shadow) / 0.08);
 }

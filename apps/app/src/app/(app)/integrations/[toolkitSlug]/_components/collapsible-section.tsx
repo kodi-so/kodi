@@ -28,7 +28,7 @@ export function CollapsibleSection({
   children: React.ReactNode
 }) {
   return (
-    <section className={`${heroPanelClass} rounded-[1.6rem]`}>
+    <section className={`${heroPanelClass} rounded-xl`}>
       <div className="p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-3">
@@ -37,7 +37,7 @@ export function CollapsibleSection({
               onClick={onToggle}
               className="group inline-flex items-center gap-3 text-left"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-brand-elevated text-brand-quiet transition group-hover:border-foreground/15 group-hover:text-foreground">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition group-hover:border-foreground/15 group-hover:text-foreground">
                 <ChevronDown
                   size={16}
                   className={cn(
@@ -75,7 +75,7 @@ export function CollapsibleSection({
               type="button"
               variant="ghost"
               onClick={onToggle}
-              className="border border-border bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+              className="border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               {expanded ? 'Collapse' : 'Expand'}
             </Button>

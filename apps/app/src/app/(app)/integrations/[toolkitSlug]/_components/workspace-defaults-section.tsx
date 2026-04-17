@@ -198,7 +198,7 @@ export function WorkspaceDefaultsSection({
             />
           )}
 
-          <div className="flex flex-wrap gap-2 border-t border-brand-line pt-4">
+          <div className="flex flex-wrap gap-2 border-t border-border pt-4">
             <Button
               onClick={onSavePolicy}
               disabled={!policyDirty || policySaving}
@@ -208,7 +208,7 @@ export function WorkspaceDefaultsSection({
             <Button
               onClick={onResetPolicy}
               variant="ghost"
-              className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+              className="border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
               disabled={!policyDirty || policySaving}
             >
               Reset
@@ -216,7 +216,7 @@ export function WorkspaceDefaultsSection({
           </div>
         </div>
       ) : (
-        <div className="mt-4 rounded-[1.2rem] border border-brand-line bg-brand-elevated p-5">
+        <div className="mt-4 rounded-lg border border-border bg-card p-5">
           <p className="text-sm font-medium text-foreground">
             Workspace policy is view-only here.
           </p>

@@ -46,7 +46,7 @@ export default function ProvisionPage() {
 
   if (!activeOrg) {
     return (
-      <div className="flex min-h-full items-center justify-center p-6 text-sm text-brand-quiet">
+      <div className="flex min-h-full items-center justify-center p-6 text-sm text-muted-foreground">
         Select a team to manage your agent.
       </div>
     )

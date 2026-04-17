@@ -23,7 +23,7 @@ export function PendingApprovalsSection({
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-[1.4rem] border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
           Nothing is waiting for approval right now.
         </div>
       ) : (

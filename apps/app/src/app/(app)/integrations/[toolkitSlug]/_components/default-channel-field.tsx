@@ -19,7 +19,7 @@ export function DefaultChannelField({
   onClear: () => void
 }) {
   return (
-    <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">Default channel for meeting recaps</p>
         <p className={`text-sm leading-6 ${quietTextClass}`}>
@@ -47,7 +47,7 @@ export function DefaultChannelField({
             type="button"
             size="sm"
             variant="ghost"
-            className="border border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground"
+            className="border border-border bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"
             disabled={channelSaving}
             onClick={onClear}
           >

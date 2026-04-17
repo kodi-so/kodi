@@ -12,7 +12,7 @@ export function ExpandCollapseControls({
       <Button
         type="button"
         variant="ghost"
-        className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+        className="border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
         onClick={onExpandAll}
       >
         Expand all
@@ -20,7 +20,7 @@ export function ExpandCollapseControls({
       <Button
         type="button"
         variant="ghost"
-        className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+        className="border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
         onClick={onCollapseAll}
       >
         Collapse all

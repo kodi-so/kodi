@@ -8,13 +8,13 @@ export function BotIdentityPreview({
   inviteEmail,
 }: BotIdentityPreviewProps) {
   return (
-    <div className="rounded-2xl border border-brand-line bg-brand-elevated p-4">
-      <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
         Identity preview
       </p>
       <div className="mt-3 space-y-2">
         <p className="text-sm font-medium text-foreground">{displayName}</p>
-        <p className="text-sm text-brand-quiet">
+        <p className="text-sm text-muted-foreground">
           Invite address: {inviteEmail}
         </p>
       </div>

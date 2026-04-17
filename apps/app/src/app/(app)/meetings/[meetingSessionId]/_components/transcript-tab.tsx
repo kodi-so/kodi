@@ -30,8 +30,8 @@ export function TranscriptTab({
   speakerGroups: TranscriptSpeakerGroup[]
   collapsedSpeakers: Set<string>
   setCollapsedSpeakers: React.Dispatch<React.SetStateAction<Set<string>>>
-  scrollRef: RefObject<HTMLDivElement | null>
-  bottomRef: RefObject<HTMLDivElement | null>
+  scrollRef: RefObject<HTMLDivElement>
+  bottomRef: RefObject<HTMLDivElement>
   atBottom: boolean
   onScroll: () => void
   speakerColorMap: RefObject<Map<string, string>>

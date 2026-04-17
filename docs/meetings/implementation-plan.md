@@ -8,7 +8,7 @@ The goal is to let a workspace-level agent join meetings, listen in real time, e
 
 This starts with Google Meet, but the architecture is intentionally provider-agnostic so Zoom, Teams, and future providers can slot into the same core pipeline.
 
-For the ticket-level planning breakdown, see [meeting-intelligence-linear-plan.md](./meeting-intelligence-linear-plan.md).
+For the ticket-level planning breakdown, see [linear-plan.md](./linear-plan.md).
 
 ## Product Goal
 

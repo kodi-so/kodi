@@ -12,8 +12,8 @@ It translates the high-level Phase 0 decisions into a target database shape that
 
 Kodi currently has two relevant integration models:
 
-- [provider-installations.ts](/Users/noahmilberger/Documents/kodi/kodi/packages/db/src/schema/provider-installations.ts)
-- [tool-connections.ts](/Users/noahmilberger/Documents/kodi/kodi/packages/db/src/schema/tool-connections.ts)
+- [provider-installations.ts](/Users/gabeliss/Desktop/kodi/packages/db/src/schema/provider-installations.ts)
+- [tool-connections.ts](/Users/gabeliss/Desktop/kodi/packages/db/src/schema/tool-connections.ts)
 
 Those tables reflect two earlier assumptions:
 

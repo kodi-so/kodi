@@ -61,6 +61,7 @@ import {
   quietTextClass,
   subtleTextClass,
 } from '@/lib/brand-styles'
+import { resolveSessionId } from '@/lib/meeting-id'
 import {
   describeMeetingLifecycleEvent,
   getMeetingRuntimeCopy,
@@ -1510,7 +1511,7 @@ function PostMeetingReview({
 
 export default function MeetingDetailsPage() {
   const params = useParams<{ meetingSessionId: string }>()
-  const meetingSessionId = params.meetingSessionId
+  const meetingSessionId = resolveSessionId(params.meetingSessionId)
   const { activeOrg } = useOrg()
   const { data: session } = useSession()
   const router = useRouter()

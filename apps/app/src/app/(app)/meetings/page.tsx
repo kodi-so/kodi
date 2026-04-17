@@ -36,6 +36,7 @@ import {
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import { pageShellClass } from '@/lib/brand-styles'
+import { encodeMeetingId } from '@/lib/meeting-id'
 import { getMeetingRuntimeCopy } from './_lib/runtime-state'
 
 type MeetingListResponse = Awaited<ReturnType<typeof trpc.meeting.list.query>>
@@ -281,7 +282,7 @@ export default function MeetingsPage() {
           setMeetingUrl('')
           setTitle('')
           setDialogOpen(false)
-          router.push(`/meetings/${result.meetingSessionId}`)
+          router.push(`/meetings/${encodeMeetingId(result.meetingSessionId)}`)
         } catch (err) {
           setError(
             err instanceof Error
@@ -513,7 +514,7 @@ export default function MeetingsPage() {
 
                   {/* Clickable content area */}
                   <Link
-                    href={`/meetings/${meeting.id}`}
+                    href={`/meetings/${encodeMeetingId(meeting.id)}`}
                     className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3.5 transition-colors hover:bg-secondary/50"
                   >
                     <Badge

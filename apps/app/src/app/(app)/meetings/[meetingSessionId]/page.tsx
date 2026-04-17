@@ -56,7 +56,6 @@ import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
 import {
   dashedPanelClass,
-  heroPanelClass,
   pageShellClass,
   quietTextClass,
   subtleTextClass,
@@ -683,7 +682,7 @@ function SlackSendModal({
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
       onClick={handleBackdropClick}
     >
-      <div className="w-full max-w-lg rounded-[1.6rem] border border-brand-line bg-background shadow-2xl">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-background shadow-2xl">
         <div className="space-y-4 p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -705,7 +704,7 @@ function SlackSendModal({
           </div>
 
           {/* Message preview */}
-          <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+          <div className="rounded-xl border border-border bg-secondary p-4">
             <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               Message preview
             </p>
@@ -720,7 +719,7 @@ function SlackSendModal({
               Channel <span className="text-destructive">*</span>
             </label>
             <div className="relative">
-              <div className="flex items-center rounded-[0.8rem] border border-brand-line bg-brand-elevated px-3 focus-within:ring-2 focus-within:ring-brand-accent/40">
+              <div className="flex items-center rounded-lg border border-border bg-secondary px-3 focus-within:ring-2 focus-within:ring-ring/40">
                 {channelsLoading ? (
                   <Loader2 size={13} className="mr-2 shrink-0 animate-spin text-muted-foreground" />
                 ) : (
@@ -752,27 +751,27 @@ function SlackSendModal({
               </div>
 
               {dropdownOpen && filteredChannels.length > 0 && (
-                <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-[0.8rem] border border-brand-line bg-background shadow-lg">
+                <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-border bg-background shadow-lg">
                   {filteredChannels.map((ch) => (
                     <button
                       key={ch.id}
                       type="button"
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-brand-elevated ${
-                        selected === ch.name ? 'bg-brand-elevated font-medium text-foreground' : 'text-foreground'
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary ${
+                        selected === ch.name ? 'bg-secondary font-medium text-foreground' : 'text-foreground'
                       }`}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => handleSelect(ch.name)}
                     >
                       <span className="text-muted-foreground">#</span>
                       {ch.name}
-                      {selected === ch.name && <Check size={13} className="ml-auto shrink-0 text-brand-accent-strong" />}
+                      {selected === ch.name && <Check size={13} className="ml-auto shrink-0 text-primary" />}
                     </button>
                   ))}
                 </div>
               )}
 
               {dropdownOpen && !channelsLoading && channels.length === 0 && query.trim().length > 0 && (
-                <div className="absolute z-10 mt-1 w-full rounded-[0.8rem] border border-brand-line bg-background px-3 py-2 text-sm text-muted-foreground shadow-lg">
+                <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground shadow-lg">
                   No channels found. The name you typed will be used directly.
                 </div>
               )}
@@ -787,11 +786,11 @@ function SlackSendModal({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-brand-line px-6 py-4">
+        <div className="flex justify-end gap-2 border-t border-border px-6 py-4">
           <Button
             type="button"
             variant="ghost"
-            className="border border-brand-line"
+            className="border border-border"
             disabled={delivering}
             onClick={onClose}
           >
@@ -989,10 +988,10 @@ function PostMeetingReview({
     <div className="space-y-4">
       {/* Status banner */}
       {isSummarizing && (
-        <div className="flex items-center gap-3 rounded-[1.5rem] border border-brand-line bg-brand-elevated px-5 py-4">
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary px-5 py-4">
           <Loader2
             size={16}
-            className="shrink-0 animate-spin text-brand-accent-strong"
+            className="shrink-0 animate-spin text-primary"
           />
           <p className="text-sm text-foreground">
             Kodi is generating the meeting recap — summary, decisions, and action items.
@@ -1002,15 +1001,15 @@ function PostMeetingReview({
       )}
 
       {/* Post-meeting package card */}
-      <Card className="border-brand-line">
+      <Card className="border-border shadow-sm">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
                 <FileText size={18} />
               </div>
               <div>
-                <CardTitle className="text-xl text-foreground">
+                <CardTitle className="text-lg text-foreground">
                   Meeting recap
                 </CardTitle>
                 <CardDescription>
@@ -1085,7 +1084,7 @@ function PostMeetingReview({
             </div>
           )}
           {recapDeliverError && (
-            <p className="rounded-[0.8rem] bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {recapDeliverError}
             </p>
           )}
@@ -1103,7 +1102,7 @@ function PostMeetingReview({
                 <Skeleton className="h-4 w-3/5" />
               </div>
             ) : summaryArtifact?.content ? (
-              <div className="mt-3 rounded-[1.5rem] border border-brand-line bg-brand-elevated p-5">
+              <div className="mt-3 rounded-xl border border-border bg-secondary p-5">
                 <p className="text-sm leading-7 text-foreground">
                   {summaryArtifact.content}
                 </p>
@@ -1137,7 +1136,7 @@ function PostMeetingReview({
               </div>
             ) : (
               <div
-                className={`mt-3 ${dashedPanelClass} rounded-[1.5rem] p-4 text-sm ${quietTextClass}`}
+                className={`mt-3 ${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
               >
                 {meeting.status === 'ended'
                   ? 'Summary was not generated for this meeting. Use the retry button to generate it.'
@@ -1162,7 +1161,7 @@ function PostMeetingReview({
                 {decisions.map((decision, index) => (
                   <div
                     key={`decision-${index}`}
-                    className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                    className="rounded-xl border border-border bg-secondary p-4"
                   >
                     <div className="flex items-start gap-2.5">
                       <CheckCircle2
@@ -1193,7 +1192,7 @@ function PostMeetingReview({
               </div>
             ) : !loading ? (
               <div
-                className={`mt-3 ${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                className={`mt-3 ${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
               >
                 No decisions were identified in this meeting.
               </div>
@@ -1203,14 +1202,14 @@ function PostMeetingReview({
       </Card>
 
       {/* Action items / work items with correction UX */}
-      <Card className="border-brand-line">
+      <Card className="border-border shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
               <ClipboardList size={18} />
             </div>
             <div>
-              <CardTitle className="text-xl text-foreground">
+              <CardTitle className="text-lg text-foreground">
                 Action items
               </CardTitle>
               <CardDescription>
@@ -1231,7 +1230,7 @@ function PostMeetingReview({
             </div>
           ) : activeWorkItems.length === 0 && workItems.filter((w) => w.status === 'cancelled').length === 0 ? (
             <div
-              className={`${dashedPanelClass} rounded-[1.4rem] p-5 text-sm ${quietTextClass}`}
+              className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
             >
               {meeting.status === 'ended'
                 ? 'No action items were generated. Use retry to regenerate the post-meeting package.'
@@ -1256,12 +1255,12 @@ function PostMeetingReview({
                 return (
                   <div
                     key={item.id}
-                    className={`rounded-[1.4rem] border p-4 transition-colors ${
+                    className={`rounded-xl border p-4 transition-colors ${
                       item.status === 'cancelled'
-                        ? 'border-brand-line bg-brand-elevated opacity-50'
+                        ? 'border-border bg-secondary opacity-50'
                         : item.status === 'approved'
-                          ? 'border-brand-success/30 bg-brand-elevated'
-                          : 'border-brand-line bg-brand-elevated'
+                          ? 'border-brand-success/30 bg-secondary'
+                          : 'border-border bg-secondary'
                     }`}
                   >
                     {isEditing ? (
@@ -1375,7 +1374,7 @@ function PostMeetingReview({
                             )}
                             {/* External link once synced */}
                             {item.externalId && (
-                              <span className="flex items-center gap-1 text-brand-accent-strong">
+                              <span className="flex items-center gap-1 text-primary">
                                 {item.externalSystem && (
                                   <span className="capitalize">{item.externalSystem}:</span>
                                 )}
@@ -1491,7 +1490,7 @@ function PostMeetingReview({
                       .map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-3 opacity-50"
+                          className="rounded-xl border border-border bg-secondary p-3 opacity-50"
                         >
                           <p className={`text-sm line-through ${quietTextClass}`}>
                             {item.title}
@@ -2417,12 +2416,23 @@ export default function MeetingDetailsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <Skeleton className="h-9 w-48 bg-brand-muted" />
-        <Skeleton className="h-[220px] bg-brand-muted" />
-        <div className="grid gap-6 lg:grid-cols-[1.18fr_0.82fr]">
-          <Skeleton className="h-[640px] bg-brand-muted" />
-          <Skeleton className="h-[640px] bg-brand-muted" />
+      <div className={pageShellClass}>
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+          <Skeleton className="h-5 w-24" />
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <div className="space-y-3">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-7 w-72" />
+              <Skeleton className="h-4 w-96" />
+            </div>
+          </div>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
+            <div className="space-y-4">
+              <Skeleton className="h-[320px] rounded-2xl" />
+              <Skeleton className="h-[200px] rounded-2xl" />
+            </div>
+            <Skeleton className="h-[540px] rounded-2xl" />
+          </div>
         </div>
       </div>
     )
@@ -2453,76 +2463,64 @@ export default function MeetingDetailsPage() {
   return (
     <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <section className={`${heroPanelClass} rounded-[2rem]`}>
-          <div className="flex items-center justify-between border-b border-brand-line px-6 py-5">
-            <Link
-              href="/meetings"
-              className="inline-flex w-fit items-center gap-2 text-sm text-brand-quiet transition hover:text-foreground"
-            >
-              <ArrowLeft size={16} />
-              Back to meetings
-            </Link>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void handleDeleteMeeting()}
-              disabled={deletingMeeting}
-              className="gap-1.5 text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 size={14} />
-              {deletingMeeting ? 'Deleting…' : 'Delete'}
-            </Button>
-          </div>
+        {/* Page header */}
+        <div className="space-y-4">
+          <Link
+            href="/meetings"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+          >
+            <ArrowLeft size={15} />
+            Meetings
+          </Link>
 
-          <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={statusTone(meeting.status)}>
-                  {statusLabel(meeting.status)}
-                </Badge>
-                <Badge variant="neutral">
-                  {formatProviderLabel(meeting.provider)}
-                </Badge>
-                <Badge variant={healthTone(health?.status)}>
-                  {formatHealthStatus(health?.status)}
-                </Badge>
-                <Badge variant="neutral">
-                  refresh {Math.round(pollIntervalMs / 1000)}s
-                </Badge>
-              </div>
-
-              <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          <div className="rounded-2xl border border-border bg-card px-6 py-6 shadow-sm">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={statusTone(meeting.status)}>
+                    {statusLabel(meeting.status)}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {formatProviderLabel(meeting.provider)}
+                  </span>
+                </div>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                   {meeting.title ?? 'Untitled meeting'}
                 </h1>
-                <p className={`max-w-2xl text-sm leading-7 ${quietTextClass}`}>
+                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
                   {runtimeCopy.description}
                 </p>
               </div>
-            </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated px-4 py-4">
-                <div className={`flex items-center gap-2 ${subtleTextClass}`}>
-                  <Clock3 size={14} />
-                  Started
+              <div className="flex shrink-0 items-center gap-5">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1.5" title="Started">
+                    <Clock3 size={13} />
+                    <span className="whitespace-nowrap tabular-nums">
+                      {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+                    </span>
+                  </div>
+                  <div className="h-4 w-px bg-border" />
+                  <div className="flex items-center gap-1.5" title="Last activity">
+                    <RefreshCw size={13} />
+                    <span className="whitespace-nowrap tabular-nums">
+                      {formatDate(latestActivityAt)}
+                    </span>
+                  </div>
                 </div>
-                <p className="mt-3 text-sm text-foreground">
-                  {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
-                </p>
-              </div>
-              <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated px-4 py-4">
-                <div className={`flex items-center gap-2 ${subtleTextClass}`}>
-                  <RefreshCw size={14} />
-                  Last activity
-                </div>
-                <p className="mt-3 text-sm text-foreground">
-                  {formatDate(latestActivityAt)}
-                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleDeleteMeeting()}
+                  disabled={deletingMeeting}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 size={14} />
+                </Button>
               </div>
             </div>
           </div>
-        </section>
+        </div>
 
         {failureReason && (
           <Alert variant="destructive">
@@ -2605,14 +2603,14 @@ export default function MeetingDetailsPage() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
           <div className="space-y-6">
-            <Card className="border-brand-line">
+            <Card className="border-border shadow-sm">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
                     <Sparkles size={18} />
                   </div>
                   <div>
-                    <CardTitle className="text-xl text-foreground">
+                    <CardTitle className="text-lg text-foreground">
                       Meeting summary
                     </CardTitle>
                     <CardDescription>
@@ -2632,7 +2630,7 @@ export default function MeetingDetailsPage() {
                   </div>
                 )}
 
-                <div className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-5">
+                <div className="rounded-xl border border-border bg-secondary p-5">
                   <p className="text-sm leading-7 text-foreground">
                     {meeting.liveSummary ??
                       liveState?.summary ??
@@ -2640,7 +2638,7 @@ export default function MeetingDetailsPage() {
                   </p>
                 </div>
 
-                <details className="group rounded-[1.5rem] border border-brand-line bg-brand-elevated p-5">
+                <details className="group rounded-xl border border-border bg-secondary p-5">
                   <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
                     Working notes
                   </summary>
@@ -2656,15 +2654,15 @@ export default function MeetingDetailsPage() {
 
             <Sheet open={askSheetOpen} onOpenChange={setAskSheetOpen}>
               <SheetTrigger asChild>
-                <Card className="cursor-pointer border-brand-line transition-colors hover:bg-brand-elevated/60">
+                <Card className="cursor-pointer border-border transition-colors hover:bg-secondary/60">
                   <CardHeader>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
                           <MessageSquare size={18} />
                         </div>
                         <div>
-                          <CardTitle className="text-xl text-foreground">
+                          <CardTitle className="text-lg text-foreground">
                             Ask Kodi
                           </CardTitle>
                           <CardDescription>
@@ -2683,7 +2681,7 @@ export default function MeetingDetailsPage() {
               <SheetContent className="flex w-full max-w-xl flex-col p-0 sm:max-w-xl">
                 <SheetHeader className="shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-[0.9rem] border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground ring-1 ring-border">
                       <MessageSquare size={15} />
                     </div>
                     <SheetTitle>Ask Kodi</SheetTitle>
@@ -2693,8 +2691,8 @@ export default function MeetingDetailsPage() {
                 {/* Scrollable conversation */}
                 <div ref={answerScrollRef} className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
                   {answers.length === 0 ? (
-                    <div className={`${dashedPanelClass} flex h-full flex-col items-center justify-center gap-3 rounded-[1.5rem] p-8 text-center`}>
-                      <Sparkles size={22} className="text-brand-accent-strong/60" />
+                    <div className={`${dashedPanelClass} flex h-full flex-col items-center justify-center gap-3 rounded-xl p-8 text-center`}>
+                      <Sparkles size={22} className="text-muted-foreground/60" />
                       <p className={`text-sm ${quietTextClass}`}>
                         Ask anything about this meeting — decisions made, topics covered, action items, or what someone said.
                       </p>
@@ -2705,18 +2703,18 @@ export default function MeetingDetailsPage() {
                         <div key={answer.id} className="space-y-2">
                           {/* Question bubble */}
                           <div className="flex justify-end">
-                            <div className="max-w-[80%] rounded-[1.2rem] rounded-tr-[0.3rem] bg-brand-accent px-4 py-2.5">
+                            <div className="max-w-[80%] rounded-xl rounded-tr-[0.3rem] bg-brand-accent px-4 py-2.5">
                               <p className="text-sm font-medium text-white">{answer.question}</p>
                             </div>
                           </div>
 
                           {/* Answer bubble */}
                           <div className="flex items-start gap-2.5">
-                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-accent/20 bg-brand-accent-soft text-brand-accent-strong">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-accent/20 bg-brand-accent-soft text-primary">
                               <Sparkles size={13} />
                             </div>
                             <div className="min-w-0 flex-1 space-y-2">
-                              <div className="rounded-[1.2rem] rounded-tl-[0.3rem] border border-brand-line bg-brand-elevated px-4 py-3">
+                              <div className="rounded-xl rounded-tl-[0.3rem] border border-border bg-secondary px-4 py-3">
                                 {answer.status === 'preparing' ? (
                                   <div className="space-y-2">
                                     <Skeleton className="h-3.5 w-full" />
@@ -2763,7 +2761,7 @@ export default function MeetingDetailsPage() {
                                       type="button"
                                       onClick={() => void handleSpeakAnswer(answer.id)}
                                       disabled={!!speakingAnswerId}
-                                      className={`flex items-center gap-1.5 rounded-full border border-brand-line px-2.5 py-1 text-xs transition hover:bg-brand-elevated disabled:opacity-40 ${subtleTextClass}`}
+                                      className={`flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs transition hover:bg-secondary disabled:opacity-40 ${subtleTextClass}`}
                                     >
                                       <Volume2 size={11} />
                                       Speak
@@ -2784,7 +2782,7 @@ export default function MeetingDetailsPage() {
                 <div className="shrink-0 border-t px-6 py-4">
                   <form onSubmit={handleAskKodi} className="flex gap-2">
                     <Textarea
-                      className="min-h-[2.5rem] resize-none rounded-[1.2rem] text-sm"
+                      className="min-h-[2.5rem] resize-none rounded-xl text-sm"
                       placeholder="What has been decided so far?"
                       value={askQuestion}
                       onChange={(e) => setAskQuestion(e.target.value)}
@@ -2803,7 +2801,7 @@ export default function MeetingDetailsPage() {
                       size="icon"
                       variant="default"
                       disabled={askPending || !askQuestion.trim()}
-                      className="h-10 w-10 shrink-0 rounded-[1.2rem]"
+                      className="h-10 w-10 shrink-0 rounded-xl"
                     >
                       <SendHorizonal size={16} />
                     </Button>
@@ -2812,14 +2810,14 @@ export default function MeetingDetailsPage() {
               </SheetContent>
             </Sheet>
 
-            <Card className="border-brand-line">
+            <Card className="border-border shadow-sm">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
                     <Mic2 size={18} />
                   </div>
                   <div>
-                    <CardTitle className="text-xl text-foreground">
+                    <CardTitle className="text-lg text-foreground">
                       Transcript
                     </CardTitle>
                     <CardDescription>
@@ -2831,7 +2829,7 @@ export default function MeetingDetailsPage() {
               <CardContent>
                 {chronologicalTranscript.length === 0 ? (
                   <div
-                    className={`${dashedPanelClass} rounded-[1.5rem] p-5 text-sm ${quietTextClass}`}
+                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
                   >
                     Transcript lines will appear here once Kodi starts hearing
                     the call.
@@ -2841,7 +2839,7 @@ export default function MeetingDetailsPage() {
                     <div
                       ref={transcriptScrollRef}
                       onScroll={handleTranscriptScroll}
-                      className="max-h-[540px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[1.5rem] border border-brand-line bg-brand-elevated"
+                      className="max-h-[540px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-border bg-secondary"
                     >
                       {transcriptSpeakerGroups.map((group, groupIndex) => {
                         const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
@@ -2851,7 +2849,7 @@ export default function MeetingDetailsPage() {
                         return (
                           <div
                             key={group.groupId}
-                            className={groupIndex > 0 ? 'border-t border-brand-line' : ''}
+                            className={groupIndex > 0 ? 'border-t border-border' : ''}
                           >
                             {/* Speaker header row */}
                             <button
@@ -2936,14 +2934,14 @@ export default function MeetingDetailsPage() {
 
           <div className="space-y-6">
             {workspaceSettings && controls && (
-              <Card className="border-brand-line">
+              <Card className="border-border shadow-sm">
                 <CardHeader>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
                       <CheckCircle2 size={18} />
                     </div>
                     <div>
-                      <CardTitle className="text-xl text-foreground">
+                      <CardTitle className="text-lg text-foreground">
                         Live participation controls
                       </CardTitle>
                       <CardDescription>
@@ -2986,10 +2984,10 @@ export default function MeetingDetailsPage() {
                               participationMode: mode,
                             })
                           }
-                          className={`rounded-[1.25rem] border px-4 py-4 text-left transition ${
+                          className={`rounded-xl border px-4 py-4 text-left transition ${
                             active
                               ? 'border-foreground bg-brand-accent-soft text-foreground'
-                              : 'border-brand-line bg-brand-elevated text-brand-quiet hover:border-foreground/20 hover:text-foreground'
+                              : 'border-border bg-secondary text-brand-quiet hover:border-foreground/20 hover:text-foreground'
                           }`}
                         >
                           <p className="text-sm font-medium">
@@ -3003,7 +3001,7 @@ export default function MeetingDetailsPage() {
                     })}
                   </div>
 
-                  <div className="rounded-[1.25rem] border border-brand-line bg-brand-elevated p-4">
+                  <div className="rounded-xl border border-border bg-secondary p-4">
                     <p className="text-sm font-medium text-foreground">
                       Live reply kill switch
                     </p>
@@ -3046,7 +3044,7 @@ export default function MeetingDetailsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-[1.25rem] border border-dashed border-brand-line bg-brand-elevated p-4">
+                  <div className="rounded-xl border border-dashed border-border bg-secondary p-4">
                     <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
                       Meeting trust contract
                     </p>
@@ -3086,14 +3084,14 @@ export default function MeetingDetailsPage() {
               </Card>
             )}
 
-            <Card className="border-brand-line">
+            <Card className="border-border shadow-sm">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[1.1rem] border border-brand-line bg-brand-elevated text-brand-quiet">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
                     <Users size={18} />
                   </div>
                   <div>
-                    <CardTitle className="text-xl text-foreground">
+                    <CardTitle className="text-lg text-foreground">
                       Meeting chat
                     </CardTitle>
                     <CardDescription>
@@ -3107,7 +3105,7 @@ export default function MeetingDetailsPage() {
                 {meeting.provider === 'zoom' ? (
                   <>
                     <div
-                      className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                      className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
                     >
                       This branch keeps meeting chat as a read-only activity
                       feed. Sending new in-meeting chat messages is not included
@@ -3116,7 +3114,7 @@ export default function MeetingDetailsPage() {
 
                     {chatMessages.length === 0 ? (
                       <div
-                        className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                        className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
                       >
                         In-meeting Zoom chat messages will appear here once Kodi
                         receives or sends them.
@@ -3126,7 +3124,7 @@ export default function MeetingDetailsPage() {
                         {chatMessages.map((message) => (
                           <div
                             key={message.id}
-                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                            className="rounded-xl border border-border bg-secondary p-4"
                           >
                             <div
                               className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
@@ -3152,7 +3150,7 @@ export default function MeetingDetailsPage() {
                   </>
                 ) : (
                   <div
-                    className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                    className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
                   >
                     In-meeting chat activity is available for Zoom sessions
                     right now.
@@ -3161,9 +3159,9 @@ export default function MeetingDetailsPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-brand-line">
+            <Card className="border-border shadow-sm">
               <CardHeader>
-                <CardTitle className="text-xl text-foreground">
+                <CardTitle className="text-lg text-foreground">
                   Follow-up
                 </CardTitle>
                 <CardDescription>
@@ -3183,7 +3181,7 @@ export default function MeetingDetailsPage() {
                         draftActions.map((draft, index) => (
                           <div
                             key={`${draft.title}-${index}`}
-                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                            className="rounded-xl border border-border bg-secondary p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="space-y-2">
@@ -3245,7 +3243,7 @@ export default function MeetingDetailsPage() {
                         ))
                       ) : (
                         <div
-                          className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                          className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
                         >
                           Draft actions will appear here once Kodi can connect
                           meeting follow-up to tools available in the workspace.
@@ -3265,7 +3263,7 @@ export default function MeetingDetailsPage() {
                         candidateActionItems.map((item, index) => (
                           <div
                             key={`${item.title}-${index}`}
-                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                            className="rounded-xl border border-border bg-secondary p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <p className="text-sm font-medium text-foreground">
@@ -3300,7 +3298,7 @@ export default function MeetingDetailsPage() {
                         ))
                       ) : (
                         <div
-                          className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                          className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
                         >
                           Candidate action items will appear here once Kodi can
                           separate concrete next actions from broader meeting
@@ -3321,7 +3319,7 @@ export default function MeetingDetailsPage() {
                         candidateTasks.map((task, index) => (
                           <div
                             key={`${task.title}-${index}`}
-                            className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                            className="rounded-xl border border-border bg-secondary p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <p className="text-sm font-medium text-foreground">
@@ -3356,7 +3354,7 @@ export default function MeetingDetailsPage() {
                         ))
                       ) : (
                         <div
-                          className={`${dashedPanelClass} rounded-[1.4rem] p-4 text-sm ${quietTextClass}`}
+                          className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
                         >
                           Candidate follow-up will appear here when Kodi finds
                           concrete next steps in the conversation.
@@ -3370,7 +3368,7 @@ export default function MeetingDetailsPage() {
                     risks.length > 0) && (
                     <div className="grid gap-3">
                       {decisions.length > 0 && (
-                        <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4">
+                        <div className="rounded-xl border border-border bg-secondary p-4">
                           <p
                             className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
                           >
@@ -3394,7 +3392,7 @@ export default function MeetingDetailsPage() {
                       )}
 
                       {openQuestions.length > 0 && (
-                        <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4">
+                        <div className="rounded-xl border border-border bg-secondary p-4">
                           <p
                             className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
                           >
@@ -3409,7 +3407,7 @@ export default function MeetingDetailsPage() {
                       )}
 
                       {risks.length > 0 && (
-                        <div className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4">
+                        <div className="rounded-xl border border-border bg-secondary p-4">
                           <p
                             className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
                           >
@@ -3428,7 +3426,7 @@ export default function MeetingDetailsPage() {
               </CardContent>
             </Card>
 
-            <details className="group kodi-panel-surface rounded-[1.75rem] border border-brand-line p-5 shadow-brand-panel">
+            <details className="group rounded-2xl border border-border bg-card p-5 shadow-sm">
               <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
                 People, activity, and diagnostics
               </summary>
@@ -3438,7 +3436,7 @@ export default function MeetingDetailsPage() {
               </p>
 
               <div className="mt-4 space-y-3">
-                <div className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-4">
+                <div className="rounded-xl border border-border bg-secondary p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <RefreshCw size={16} className="text-brand-quiet" />
                     Transport health
@@ -3493,7 +3491,7 @@ export default function MeetingDetailsPage() {
                   )}
 
                   {retryHistory.length > 0 && (
-                    <div className="mt-4 border-t border-brand-line pt-4">
+                    <div className="mt-4 border-t border-border pt-4">
                       <p
                         className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
                       >
@@ -3503,7 +3501,7 @@ export default function MeetingDetailsPage() {
                         {retryHistory.map((attempt, index) => (
                           <div
                             key={`${attempt.attempt ?? index}-${attempt.completedAt ?? attempt.startedAt ?? index}`}
-                            className="rounded-[1.2rem] border border-brand-line bg-background p-4"
+                            className="rounded-xl border border-border bg-background p-4"
                           >
                             <div className="flex flex-wrap items-center gap-2 text-xs text-brand-quiet">
                               <span className="font-medium text-foreground">
@@ -3547,7 +3545,7 @@ export default function MeetingDetailsPage() {
                   )}
                 </div>
 
-                <div className="rounded-[1.5rem] border border-brand-line bg-brand-elevated p-4">
+                <div className="rounded-xl border border-border bg-secondary p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <Users size={16} className="text-brand-quiet" />
                     People
@@ -3564,7 +3562,7 @@ export default function MeetingDetailsPage() {
                         return (
                           <div
                             key={participant.id}
-                            className="rounded-[1.2rem] border border-brand-line bg-background p-4"
+                            className="rounded-xl border border-border bg-background p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -3630,7 +3628,7 @@ export default function MeetingDetailsPage() {
 
                 {compactTimelineEvents.length === 0 ? (
                   <div
-                    className={`${dashedPanelClass} rounded-[1.4rem] p-5 text-sm ${quietTextClass}`}
+                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
                   >
                     Kodi will add the important meeting moments here.
                   </div>
@@ -3638,7 +3636,7 @@ export default function MeetingDetailsPage() {
                   compactTimelineEvents.map((event) => (
                     <div
                       key={event.id}
-                      className="rounded-[1.4rem] border border-brand-line bg-brand-elevated p-4"
+                      className="rounded-xl border border-border bg-secondary p-4"
                     >
                       <div
                         className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
@@ -3658,7 +3656,7 @@ export default function MeetingDetailsPage() {
                 )}
               </div>
 
-              <div className="mt-4 rounded-[1.5rem] border border-brand-line bg-brand-elevated px-4 py-3">
+              <div className="mt-4 rounded-xl border border-border bg-secondary px-4 py-3">
                 {technicalDetails.map((detail, index) => (
                   <div key={detail.label}>
                     {index > 0 && <Separator className="bg-border" />}

@@ -45,20 +45,20 @@ function OrgSwitcher() {
 
   if (orgs.length === 1 && activeOrg) {
     return (
-      <div className="border-b border-border px-5 py-4">
-        <p className="mb-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="px-5 py-4">
+        <p className="mb-0.5 text-[11px] uppercase tracking-widest text-muted-foreground">
           Workspace
         </p>
-        <p className="truncate text-sm text-foreground">{activeOrg.orgName}</p>
+        <p className="truncate text-sm font-medium text-foreground">{activeOrg.orgName}</p>
       </div>
     )
   }
 
   return (
-    <div className="border-b border-border px-4 py-4">
+    <div className="px-4 py-3">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex w-full items-center justify-between gap-2 rounded-2xl border border-border bg-secondary px-3 py-3 text-sm transition-colors hover:bg-accent">
+          <button className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent">
             <span className="truncate text-foreground">
               {activeOrg?.orgName ?? 'Select workspace'}
             </span>
@@ -104,10 +104,10 @@ function UserMenu({
     '?'
 
   return (
-    <div className="border-t border-border px-4 py-4">
+    <div className="px-4 py-3">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-sm transition-colors hover:bg-foreground/[0.04]">
+          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-foreground/[0.04]">
             <Avatar className="h-8 w-8">
               <AvatarFallback className="bg-foreground/[0.08] text-xs font-medium text-foreground">
                 {initials}
@@ -158,7 +158,7 @@ export function Sidebar() {
 
   const navContent = (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-5 py-5">
+      <div className="px-5 py-5">
         <BrandLogo size={34} />
       </div>
 
@@ -172,7 +172,7 @@ export function Sidebar() {
               key={href}
               asChild
               variant={active ? 'secondary' : 'ghost'}
-              className={`h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sm ${
+              className={`h-11 w-full justify-start gap-3 rounded-lg px-3 text-sm ${
                 active
                   ? 'bg-foreground/[0.06] text-foreground font-medium'
                   : 'text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground'

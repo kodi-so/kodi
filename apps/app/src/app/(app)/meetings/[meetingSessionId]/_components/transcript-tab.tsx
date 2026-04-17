@@ -66,7 +66,7 @@ export function TranscriptTab({
                 className="max-h-[640px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-border bg-secondary"
               >
                 {speakerGroups.map((group, groupIndex) => {
-                  const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
+                  const color = speakerColorMap.current?.get(group.speaker) ?? SPEAKER_COLORS[0]!
                   const initials = getSpeakerInitials(group.speaker)
                   const isCollapsed = collapsedSpeakers.has(group.groupId)
                   const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)

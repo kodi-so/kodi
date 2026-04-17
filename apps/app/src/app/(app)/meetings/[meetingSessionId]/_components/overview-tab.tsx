@@ -23,7 +23,10 @@ type FollowUpItem = {
   sourceEvidence: string[]
 }
 
-type DraftAction = FollowUpItem & {
+type DraftAction = {
+  title: string
+  confidence: number | null
+  sourceEvidence: string[]
   toolkitSlug: string | null
   toolkitName: string | null
   actionType: string | null

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, Copy, UserRound } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Bot, Check, Copy } from 'lucide-react'
+import { Button, Card } from '@kodi/ui'
 
-export function BotIdentityBar({
+export function BotIdentityButton({
   displayName,
   inviteEmail,
   onError,
@@ -12,14 +13,24 @@ export function BotIdentityBar({
   inviteEmail: string
   onError: (message: string) => void
 }) {
+  const [open, setOpen] = useState(false)
   const [copiedField, setCopiedField] = useState<
     'display-name' | 'invite-email' | null
   >(null)
+  const ref = useRef<HTMLDivElement>(null)
 
-  async function copyIdentityValue(
-    value: string,
-    field: 'display-name' | 'invite-email'
-  ) {
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  async function copy(value: string, field: 'display-name' | 'invite-email') {
     try {
       await navigator.clipboard.writeText(value)
       setCopiedField(field)
@@ -34,64 +45,71 @@ export function BotIdentityBar({
   }
 
   return (
-    <div className="mt-12 rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
-      <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+    <div ref={ref} className="relative">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setOpen((o) => !o)}
+        className="gap-1.5 text-muted-foreground"
+      >
+        <Bot size={14} />
         Bot identity
-      </p>
-      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
-            <UserRound size={15} />
+      </Button>
+
+      {open && (
+        <Card className="absolute right-0 top-full z-50 mt-2 w-80 border-border p-4 shadow-lg">
+          <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+            Bot identity
+          </p>
+          <div className="mt-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted-foreground">
+                  Display name
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  {displayName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void copy(displayName, 'display-name')}
+                className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                title="Copy display name"
+              >
+                {copiedField === 'display-name' ? (
+                  <Check size={13} />
+                ) : (
+                  <Copy size={13} />
+                )}
+              </button>
+            </div>
+            <div className="h-px bg-border" />
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted-foreground">
+                  Invite email
+                </p>
+                <p className="break-all text-sm font-medium text-foreground">
+                  {inviteEmail}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void copy(inviteEmail, 'invite-email')}
+                className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                title="Copy invite email"
+              >
+                {copiedField === 'invite-email' ? (
+                  <Check size={13} />
+                ) : (
+                  <Copy size={13} />
+                )}
+              </button>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground">
-              Display name
-            </p>
-            <p className="text-sm font-medium text-foreground">
-              {displayName}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() =>
-              void copyIdentityValue(displayName, 'display-name')
-            }
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            title="Copy display name"
-          >
-            {copiedField === 'display-name' ? (
-              <Check size={13} />
-            ) : (
-              <Copy size={13} />
-            )}
-          </button>
-        </div>
-        <div className="hidden h-8 w-px bg-border sm:block" />
-        <div className="flex items-center gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground">
-              Invite email
-            </p>
-            <p className="break-all text-sm font-medium text-foreground">
-              {inviteEmail}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() =>
-              void copyIdentityValue(inviteEmail, 'invite-email')
-            }
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            title="Copy invite email"
-          >
-            {copiedField === 'invite-email' ? (
-              <Check size={13} />
-            ) : (
-              <Copy size={13} />
-            )}
-          </button>
-        </div>
-      </div>
+        </Card>
+      )}
     </div>
   )
 }

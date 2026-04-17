@@ -31,7 +31,7 @@ export function IntegrationCard({
     <Link
       href={href}
       className={cn(
-        'group kodi-panel-surface flex min-h-[168px] flex-col justify-between rounded-[1.6rem] border p-5 shadow-brand-panel transition',
+        'group flex min-h-[168px] flex-col justify-between rounded-xl border p-5 shadow-sm transition',
         priority ? 'border-primary/40' : 'border-border',
         'hover:-translate-y-0.5 hover:border-foreground/20'
       )}

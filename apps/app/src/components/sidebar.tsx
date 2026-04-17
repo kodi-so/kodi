@@ -8,196 +8,269 @@ import {
   Link2,
   ShieldCheck,
   Settings,
-  Menu,
-  X,
-  ChevronDown,
   Check,
+  LogOut,
+  ChevronsUpDown,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
-import { BrandLogo, Button, Card } from '@kodi/ui'
+import {
+  Avatar,
+  AvatarFallback,
+  BrandLogo,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarInset,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from '@kodi/ui'
 
 const navItems = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/meetings', label: 'Meetings', icon: Video },
   { href: '/integrations', label: 'Integrations', icon: Link2 },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
-  { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
 function OrgSwitcher() {
   const { orgs, activeOrg, setActiveOrg } = useOrg()
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  // Close on outside click
-  const handleBlur = () => setTimeout(() => setOpen(false), 150)
+  const { isMobile } = useSidebar()
 
   if (orgs.length === 0) return null
 
   if (orgs.length === 1 && activeOrg) {
     return (
-      <div className="border-b border-brand-line px-5 py-4">
-        <p className="mb-1 text-xs uppercase tracking-[0.16em] text-brand-subtle">
-          Workspace
-        </p>
-        <p className="truncate text-sm text-foreground">{activeOrg.orgName}</p>
-      </div>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="cursor-default data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+          >
+            <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <span className="text-xs font-bold">
+                {activeOrg.orgName[0]?.toUpperCase() ?? 'K'}
+              </span>
+            </div>
+            <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+              <span className="truncate font-medium">{activeOrg.orgName}</span>
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
     )
   }
 
   return (
-    <div ref={ref} className="relative border-b border-brand-line px-4 py-4">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        onBlur={handleBlur}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-brand-line bg-brand-elevated px-3 py-3 text-sm shadow-brand-panel transition-colors hover:bg-secondary"
-      >
-        <span className="truncate text-foreground">
-          {activeOrg?.orgName ?? 'Select workspace'}
-        </span>
-        <ChevronDown
-          size={14}
-          className={`flex-shrink-0 text-brand-quiet transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open && (
-        <Card className="absolute left-4 right-4 top-full z-50 mt-2 overflow-hidden border-brand-line">
-          {orgs.map((org) => (
-            <button
-              key={org.orgId}
-              onMouseDown={() => {
-                setActiveOrg(org)
-                setOpen(false)
-              }}
-              className="flex w-full items-center justify-between gap-2 px-3 py-3 text-sm transition-colors hover:bg-secondary"
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="min-w-0 text-left">
-                <p className="truncate text-foreground">{org.orgName}</p>
-                <p className="text-xs capitalize text-brand-quiet">
-                  {org.role}
-                </p>
+              <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <span className="text-xs font-bold">
+                  {activeOrg?.orgName[0]?.toUpperCase() ?? 'K'}
+                </span>
               </div>
-              {org.orgId === activeOrg?.orgId && (
-                <Check size={14} className="flex-shrink-0 text-primary" />
-              )}
-            </button>
-          ))}
-        </Card>
-      )}
-    </div>
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate font-medium">
+                  {activeOrg?.orgName ?? 'Select workspace'}
+                </span>
+              </div>
+              <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            align="start"
+            side="bottom"
+            sideOffset={4}
+          >
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Workspaces
+            </DropdownMenuLabel>
+            {orgs.map((org) => (
+              <DropdownMenuItem
+                key={org.orgId}
+                onClick={() => setActiveOrg(org)}
+                className="gap-2 p-2"
+              >
+                <div className="flex size-6 items-center justify-center rounded-md border">
+                  <span className="text-[10px] font-bold">
+                    {org.orgName[0]?.toUpperCase() ?? '?'}
+                  </span>
+                </div>
+                {org.orgName}
+                {org.orgId === activeOrg?.orgId && (
+                  <Check className="ml-auto h-4 w-4 shrink-0" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   )
 }
 
-export function Sidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
+function UserMenu() {
   const { data: session } = useSession()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const { isMobile } = useSidebar()
+  const router = useRouter()
+
+  const initials =
+    session?.user?.name?.[0]?.toUpperCase() ??
+    session?.user?.email?.[0]?.toUpperCase() ??
+    '?'
 
   async function handleSignOut() {
     await signOut()
     router.push('/login')
   }
 
-  const navContent = (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-brand-line px-5 py-5">
-        <BrandLogo size={34} />
-      </div>
-
-      <OrgSwitcher />
-
-      <nav className="flex-1 space-y-1 px-4 py-5">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Button
-              key={href}
-              asChild
-              variant={active ? 'secondary' : 'ghost'}
-              className={`h-11 w-full justify-start gap-3 rounded-2xl px-3 text-sm font-medium ${
-                active
-                  ? 'border border-brand-line bg-brand-accent-soft text-brand-accent-foreground shadow-brand-panel hover:bg-brand-accent-soft'
-                  : 'text-brand-quiet hover:bg-brand-panel hover:text-foreground'
-              }`}
-            >
-              <Link href={href} onClick={() => setMobileOpen(false)}>
-                <Icon size={18} />
-                {label}
-              </Link>
-            </Button>
-          )
-        })}
-      </nav>
-
-      <div className="border-t border-brand-line px-4 py-4">
-        <div className="mb-3 flex items-center gap-3 rounded-2xl border border-brand-line bg-brand-elevated px-3 py-3 shadow-brand-panel">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-accent-soft text-xs text-brand-accent-foreground">
-            <span>
-              {session?.user?.name?.[0]?.toUpperCase() ??
-                session?.user?.email?.[0]?.toUpperCase() ??
-                '?'}
-            </span>
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm text-foreground">
-              {session?.user?.name ?? 'User'}
-            </p>
-            <p className="truncate text-xs text-brand-quiet">
-              {session?.user?.email}
-            </p>
-          </div>
-        </div>
-        <Button
-          onClick={handleSignOut}
-          variant="ghost"
-          className="w-full justify-center gap-2 rounded-2xl"
-        >
-          Sign out
-        </Button>
-      </div>
-    </div>
-  )
-
   return (
-    <>
-      <aside className="kodi-sidebar-surface sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col border-r border-brand-line md:flex">
-        {navContent}
-      </aside>
-
-      <Button
-        onClick={() => setMobileOpen(true)}
-        variant="outline"
-        size="icon"
-        className="fixed left-4 top-4 z-50 md:hidden"
-        aria-label="Open menu"
-      >
-        <Menu size={20} />
-      </Button>
-
-      {mobileOpen && (
-        <div
-          className="kodi-overlay-scrim fixed inset-0 z-40 backdrop-blur-sm md:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
-      <aside
-        className={`kodi-sidebar-surface fixed inset-y-0 left-0 z-50 w-72 border-r border-brand-line transition-transform duration-200 md:hidden ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <button
-          onClick={() => setMobileOpen(false)}
-          className="absolute right-4 top-4 p-1 text-brand-quiet hover:text-foreground"
-          aria-label="Close menu"
-        >
-          <X size={20} />
-        </button>
-        {navContent}
-      </aside>
-    </>
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <Avatar className="h-8 w-8 shrink-0 rounded-lg">
+                <AvatarFallback className="rounded-lg text-[10px] font-medium">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate font-medium">
+                  {session?.user?.name ?? 'User'}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {session?.user?.email}
+                </span>
+              </div>
+              <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            side="top"
+            align="start"
+            sideOffset={4}
+          >
+            <DropdownMenuLabel className="p-0 font-normal">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                <Avatar className="h-8 w-8 rounded-lg">
+                  <AvatarFallback className="rounded-lg text-[10px] font-medium">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">
+                    {session?.user?.name ?? 'User'}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {session?.user?.email}
+                  </span>
+                </div>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/settings" className="gap-2">
+                <Settings className="size-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void handleSignOut()} className="gap-2">
+              <LogOut className="size-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   )
 }
+
+function AppSidebar() {
+  const pathname = usePathname()
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <Link
+          href="/chat"
+          className="flex h-12 items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-2 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+        >
+          <span className="flex aspect-square size-8 shrink-0 items-center justify-center">
+            <BrandLogo
+              size={28}
+              showWordmark={false}
+              className="size-8"
+              markClassName="size-8"
+            />
+          </span>
+          <span className="group-data-[collapsible=icon]:hidden">Kodi</span>
+        </Link>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <OrgSwitcher />
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navItems.map(({ href, label, icon: Icon }) => {
+                const active =
+                  pathname === href || pathname.startsWith(href + '/')
+                return (
+                  <SidebarMenuItem key={href}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={label}>
+                      <Link href={href}>
+                        <Icon />
+                        <span>{label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        <UserMenu />
+      </SidebarFooter>
+
+      <SidebarRail />
+    </Sidebar>
+  )
+}
+
+export { AppSidebar, SidebarProvider, SidebarInset, SidebarTrigger }

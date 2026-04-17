@@ -111,7 +111,7 @@ export default function MembersPage() {
               void refresh()
             }}
             variant="link"
-            className="mt-3 text-sm text-brand-quiet hover:text-foreground"
+            className="mt-3 text-sm text-muted-foreground hover:text-foreground"
           >
             Retry
           </Button>
@@ -124,9 +124,9 @@ export default function MembersPage() {
     return (
       <SettingsLayout>
         <div className="mx-auto max-w-2xl py-10">
-          <Card className="rounded-2xl border-brand-line">
+          <Card className="rounded-2xl border-border">
             <CardContent className="p-6">
-              <p className="text-sm text-brand-quiet">No organisation found.</p>
+              <p className="text-sm text-muted-foreground">No organisation found.</p>
             </CardContent>
           </Card>
         </div>
@@ -142,14 +142,14 @@ export default function MembersPage() {
       <div className="mx-auto max-w-3xl space-y-8">
         <div>
           <div className="mb-2 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong shadow-brand-panel">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-accent text-primary shadow-sm">
               <Users size={18} />
             </div>
             <h1 className="text-2xl font-medium tracking-tight text-foreground">
               Members
             </h1>
           </div>
-          <p className="ml-[3.25rem] text-sm leading-7 text-brand-quiet">
+          <p className="ml-[3.25rem] text-sm leading-7 text-muted-foreground">
             {members.length} member{members.length !== 1 ? 's' : ''} in{' '}
             {activeOrg.orgName}
           </p>

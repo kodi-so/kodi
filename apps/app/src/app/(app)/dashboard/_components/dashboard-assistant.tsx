@@ -3,8 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Plus, Send } from 'lucide-react'
-import { Button, Textarea, cn } from '@kodi/ui'
+import { Send } from 'lucide-react'
+import { Button, ScrollArea, Textarea, cn } from '@kodi/ui'
 import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
 
@@ -102,7 +102,7 @@ function MessageAvatar({
       className={cn(
         'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold',
         role === 'assistant'
-          ? 'bg-brand-accent-soft text-brand-accent-foreground'
+          ? 'bg-accent text-foreground'
           : 'bg-brand-info-soft text-brand-info'
       )}
     >
@@ -119,7 +119,7 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
   const [loadingConversation, setLoadingConversation] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
   const hasInitialScrollRef = useRef(false)
 
   useEffect(() => {
@@ -166,11 +166,11 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
   }, [orgId])
 
   useLayoutEffect(() => {
-    if (!scrollRef.current) return
     if (loadingConversation) return
+    if (!bottomRef.current) return
 
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollHeight,
+    bottomRef.current.scrollIntoView({
+      block: 'end',
       behavior: hasInitialScrollRef.current ? 'smooth' : 'auto',
     })
     hasInitialScrollRef.current = true
@@ -244,41 +244,42 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
 
   const content = (
     <section className="flex h-full min-h-0 flex-col bg-background">
-      <div className="border-b border-brand-line px-4 py-3 sm:px-6">
+      <div className="shrink-0 border-b border-border bg-background px-4 py-3 sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-brand-accent-soft text-sm font-semibold text-brand-accent-foreground">
+          <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-semibold text-foreground">
             K
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-[18px] font-semibold text-foreground">
+            <h1 className="truncate text-[15px] font-semibold text-foreground">
               Kodi
             </h1>
-            <p className="mt-1 text-sm text-brand-quiet">
-              Private direct message with your workspace agent.
+            <p className="text-[11px] text-muted-foreground">
+              Private direct message with your workspace agent
             </p>
           </div>
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <ScrollArea className="min-h-0 flex-1">
         {loadingConversation ? (
-          <p className="px-4 py-6 text-sm text-brand-quiet sm:px-6">
-            Loading conversation...
+          <p className="px-4 py-6 text-sm text-muted-foreground sm:px-6">
+            Loading conversation…
           </p>
         ) : messages.length === 0 ? (
           <div className="flex h-full min-h-[420px] items-center justify-center px-4 py-10 sm:px-6">
-            <div className="max-w-2xl text-center">
-              <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-accent-soft text-lg font-semibold text-brand-accent-foreground">
+            <div className="max-w-xl text-center">
+              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-base font-semibold text-foreground">
                 K
               </div>
-              <p className="mt-4 text-sm text-brand-quiet">{orgName}</p>
-              <h2 className="mt-3 text-4xl tracking-[-0.05em] text-foreground sm:text-5xl">
+              <p className="mt-4 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                {orgName}
+              </p>
+              <h2 className="mt-2 text-3xl tracking-[-0.03em] text-foreground sm:text-4xl">
                 Ask Kodi anything
               </h2>
-              <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-brand-quiet">
-                Use this direct message for private questions, analysis,
-                follow-ups, and one-off requests grounded in your workspace
-                context.
+              <p className="mx-auto mt-3 max-w-md text-[13px] leading-6 text-muted-foreground">
+                Private direct message for questions, analysis, and follow-ups
+                grounded in your workspace context.
               </p>
             </div>
           </div>
@@ -287,7 +288,7 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
             {messages.map((message) => (
               <div
                 key={message.id}
-                className="px-4 py-3 transition-colors hover:bg-brand-muted/50 sm:px-6"
+                className="px-4 py-3 transition-colors hover:bg-brand-muted/40 sm:px-6"
               >
                 <div className="flex items-start gap-3">
                   <MessageAvatar
@@ -297,17 +298,17 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
-                      <p className="text-[15px] font-semibold text-foreground">
+                      <p className="text-[14px] font-semibold text-foreground">
                         {message.role === 'assistant'
                           ? 'Kodi'
                           : (message.userName ?? 'You')}
                       </p>
-                      <p className="text-xs text-brand-quiet">
+                      <p className="text-[11px] text-muted-foreground">
                         {formatTime(message.createdAt)}
                       </p>
                     </div>
 
-                    <div className="mt-0.5 text-[15px] leading-7 text-foreground">
+                    <div className="mt-0.5 text-[14px] leading-6 text-foreground">
                       <MessageBody content={message.content} />
                     </div>
                   </div>
@@ -319,18 +320,20 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
               <div className="px-4 py-3 sm:px-6">
                 <div className="flex items-start gap-3">
                   <MessageAvatar role="assistant" />
-                  <div className="pt-0.5 text-sm text-brand-quiet">
-                    Kodi is responding...
+                  <div className="pt-1 text-[13px] text-muted-foreground">
+                    Kodi is responding…
                   </div>
                 </div>
               </div>
             ) : null}
+
+            <div ref={bottomRef} className="h-1" />
           </div>
         )}
-      </div>
+      </ScrollArea>
 
-      <div className="sticky bottom-0 z-10 border-t border-brand-line bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
-        <div className="rounded-xl border border-brand-line bg-brand-elevated p-3 shadow-brand-panel">
+      <div className="shrink-0 border-t border-border bg-background px-4 pb-4 pt-3 sm:px-6">
+        <div className="rounded-xl border border-border bg-card focus-within:border-ring focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0">
           <Textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -342,32 +345,24 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
             }}
             placeholder="Message Kodi"
             rows={1}
-            className="min-h-0 resize-none border-0 bg-transparent px-0 py-0 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="min-h-0 resize-none border-0 bg-transparent px-3 pt-3 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
 
-          <div className="mt-3 flex items-center justify-between border-t border-brand-line pt-3">
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-brand-quiet transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="Add item"
-            >
-              <Plus size={16} />
-            </button>
-
+          <div className="flex items-center justify-end px-2 pb-2">
             <Button
               size="icon"
-              className="h-9 w-9 rounded-md"
+              className="h-8 w-8 rounded-md"
               disabled={!draft.trim() || sending}
               onClick={() => void sendMessage()}
               aria-label="Send message"
             >
-              <Send size={15} />
+              <Send size={14} />
             </Button>
           </div>
         </div>
 
         {error ? (
-          <p className="mt-2 text-sm text-brand-danger">{error}</p>
+          <p className="mt-2 text-[13px] text-brand-danger">{error}</p>
         ) : null}
       </div>
     </section>
@@ -377,11 +372,5 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
     return content
   }
 
-  return (
-    <div className="h-[calc(100vh-2rem)] px-4 py-4 sm:px-6 lg:px-8">
-      <div className="h-full overflow-hidden rounded-[1.2rem] border border-brand-line bg-background shadow-brand-panel">
-        {content}
-      </div>
-    </div>
-  )
+  return <div className="h-full w-full bg-background">{content}</div>
 }

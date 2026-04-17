@@ -23,7 +23,7 @@ export function ToolkitLogo({
   return (
     <div
       className={cn(
-        'flex items-center justify-center overflow-hidden rounded-[1.2rem] border border-border bg-secondary',
+        'flex items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary',
         className
       )}
     >

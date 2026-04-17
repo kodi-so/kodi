@@ -131,9 +131,9 @@ export function ProvisionStatus({
   // ── No instance yet ─────────────────────────────────────────────────────
   if (status === 'none') {
     return (
-      <Card className="mx-auto max-w-lg border-brand-line text-center">
+      <Card className="mx-auto max-w-lg border-border text-center">
         <CardHeader>
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-accent text-primary">
             <svg
               className="h-7 w-7"
               fill="none"
@@ -153,7 +153,7 @@ export function ProvisionStatus({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="mb-6 text-sm text-brand-quiet">
+          <p className="mb-6 text-sm text-muted-foreground">
             Provision a dedicated OpenClaw instance for your organization. This
             sets up a cloud server with your own AI agent.
           </p>
@@ -184,9 +184,9 @@ export function ProvisionStatus({
   // ── Pending / Installing ───────────────────────────────────────────────
   if (status === 'pending' || status === 'installing') {
     return (
-      <Card className="mx-auto max-w-lg border-brand-line text-center">
+      <Card className="mx-auto max-w-lg border-border text-center">
         <CardContent className="pt-6">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-accent text-primary">
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-current border-t-transparent" />
           </div>
           <h1 className="mb-2 text-2xl font-bold text-foreground">
@@ -194,13 +194,13 @@ export function ProvisionStatus({
               ? 'Setting up your AI agent...'
               : 'Installing OpenClaw...'}
           </h1>
-          <p className="text-sm text-brand-quiet">
+          <p className="text-sm text-muted-foreground">
             {status === 'pending'
               ? 'Reserving cloud resources. This will take a moment.'
               : 'Your agent is being configured. Usually takes 1–3 minutes.'}
           </p>
           {status === 'installing' && (
-            <p className="mt-2 text-xs text-brand-subtle" aria-live="polite">
+            <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
               Checking every 15 seconds...
             </p>
           )}
@@ -212,7 +212,7 @@ export function ProvisionStatus({
   // ── Running ───────────────────────────────────────────────────────────────
   if (status === 'running') {
     return (
-      <Card className="mx-auto max-w-lg border-brand-line text-center">
+      <Card className="mx-auto max-w-lg border-border text-center">
         <CardContent className="pt-6">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-success/20 bg-brand-success-soft">
             <span className="relative flex h-3 w-3">
@@ -223,7 +223,7 @@ export function ProvisionStatus({
           <h1 className="mb-2 text-2xl font-bold text-foreground">
             Your agent is live
           </h1>
-          <p className="mb-6 text-sm text-brand-quiet">
+          <p className="mb-6 text-sm text-muted-foreground">
             Your AI agent is running and ready to chat.
           </p>
           <Button asChild className="gap-2 px-5">
@@ -237,7 +237,7 @@ export function ProvisionStatus({
   // ── Error ─────────────────────────────────────────────────────────────────
   if (status === 'error') {
     return (
-      <Card className="mx-auto max-w-lg border-brand-line text-center">
+      <Card className="mx-auto max-w-lg border-border text-center">
         <CardContent className="pt-6">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-danger/20 bg-brand-danger-soft text-brand-danger">
             <span className="text-2xl">✕</span>
@@ -250,7 +250,7 @@ export function ProvisionStatus({
               <AlertDescription>{errorMessage}</AlertDescription>
             </Alert>
           )}
-          <p className="mb-6 text-sm text-brand-quiet">
+          <p className="mb-6 text-sm text-muted-foreground">
             If this keeps happening,{' '}
             <a
               href="mailto:support@kodi.so"
@@ -283,7 +283,7 @@ export function ProvisionStatus({
   // ── Suspended ─────────────────────────────────────────────────────────────
   if (status === 'suspended') {
     return (
-      <Card className="mx-auto max-w-lg border-brand-line text-center">
+      <Card className="mx-auto max-w-lg border-border text-center">
         <CardContent className="pt-6">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-brand-warning/20 bg-brand-warning-soft text-brand-warning">
             <span className="text-2xl">⏸</span>
@@ -291,7 +291,7 @@ export function ProvisionStatus({
           <h1 className="mb-2 text-2xl font-bold text-foreground">
             Agent suspended
           </h1>
-          <p className="text-sm text-brand-quiet">
+          <p className="text-sm text-muted-foreground">
             Your agent has been suspended. Please{' '}
             <a
               href="mailto:support@kodi.so"

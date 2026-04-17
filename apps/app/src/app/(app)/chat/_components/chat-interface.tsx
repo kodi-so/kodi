@@ -75,6 +75,9 @@ export function ChatInterface({
               repliesByThread={chat.repliesByThread}
               respondingRootIds={chat.respondingRootIds}
               loadingMessages={chat.loadingMessages}
+              loadingOlder={chat.loadingOlder}
+              hasMoreOlder={chat.hasMoreOlder}
+              onLoadOlder={() => void chat.loadOlderMessages()}
               draft={chat.messageDraft}
               onDraftChange={chat.setMessageDraft}
               onSend={() => void chat.sendMessage({ message: chat.messageDraft })}

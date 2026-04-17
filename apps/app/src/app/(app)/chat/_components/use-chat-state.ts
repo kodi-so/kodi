@@ -43,6 +43,8 @@ export function useChatState({
   const [threadDraft, setThreadDraft] = useState('')
   const [loadingChannels, setLoadingChannels] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [creatingChannel, setCreatingChannel] = useState(false)
   const [sendingMain, setSendingMain] = useState(false)
   const [sendingThread, setSendingThread] = useState(false)
@@ -121,6 +123,7 @@ export function useChatState({
   useEffect(() => {
     if (selectedDirectId || !selectedChannelId) {
       setMessages([])
+      setNextCursor(null)
       return
     }
 
@@ -128,14 +131,19 @@ export function useChatState({
     const channelId = selectedChannelId
     setLoadingMessages(true)
     setError(null)
+    setNextCursor(null)
 
     async function loadMessages() {
       try {
-        const rows = await trpc.chat.getChannelMessages.query({
+        const result = (await trpc.chat.getChannelMessages.query({
           orgId,
           channelId,
-        })
-        if (!cancelled) setMessages(rows as Message[])
+        })) as { messages: Message[]; nextCursor: string | null }
+
+        if (!cancelled) {
+          setMessages(result.messages)
+          setNextCursor(result.nextCursor)
+        }
       } catch (loadError) {
         if (!cancelled) {
           setError(
@@ -154,6 +162,32 @@ export function useChatState({
       cancelled = true
     }
   }, [orgId, selectedChannelId, selectedDirectId])
+
+  async function loadOlderMessages() {
+    if (!selectedChannelId || !nextCursor || loadingOlder || loadingMessages) {
+      return
+    }
+
+    setLoadingOlder(true)
+    try {
+      const result = (await trpc.chat.getChannelMessages.query({
+        orgId,
+        channelId: selectedChannelId,
+        cursor: nextCursor,
+      })) as { messages: Message[]; nextCursor: string | null }
+
+      setMessages((current) => [...result.messages, ...current])
+      setNextCursor(result.nextCursor)
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Failed to load older messages.'
+      )
+    } finally {
+      setLoadingOlder(false)
+    }
+  }
 
   const { rootMessages, repliesByThread } = useMemo(() => {
     const roots: Message[] = []
@@ -388,6 +422,8 @@ export function useChatState({
     setThreadDraft,
     loadingChannels,
     loadingMessages,
+    loadingOlder,
+    hasMoreOlder: nextCursor !== null,
     creatingChannel,
     createChannelError,
     sendingMain,
@@ -397,6 +433,7 @@ export function useChatState({
     buildChatUrl,
     createChannel,
     sendMessage,
+    loadOlderMessages,
     selectChannel,
     selectDirect,
     openThread,

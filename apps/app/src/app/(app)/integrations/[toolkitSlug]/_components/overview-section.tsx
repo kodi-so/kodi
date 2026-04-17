@@ -34,7 +34,7 @@ export function OverviewSection({
   onDisconnect: (connectedAccountId: string) => void
 }) {
   return (
-    <section className={`${heroPanelClass} rounded-[1.6rem] p-6`}>
+    <section className={`${heroPanelClass} rounded-xl p-6`}>
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-3">
           <p
@@ -90,7 +90,7 @@ export function OverviewSection({
             <Button
               asChild
               variant="ghost"
-              className="gap-2 border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+              className="gap-2 border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               <a
                 href={detail.toolkit.appUrl}

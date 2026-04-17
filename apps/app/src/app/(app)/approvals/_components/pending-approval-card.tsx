@@ -31,8 +31,8 @@ export function PendingApprovalCard({
   return (
     <section
       className={cn(
-        'kodi-panel-surface rounded-[1.6rem] border p-6 shadow-brand-panel',
-        isHighlighted ? 'border-primary/45' : 'border-brand-line'
+        'rounded-xl border p-6 shadow-sm',
+        isHighlighted ? 'border-primary/45' : 'border-border'
       )}
     >
       <div className="flex flex-col gap-4">
@@ -93,25 +93,25 @@ export function PendingApprovalCard({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-          <div className="rounded-[1.2rem] border border-brand-line bg-secondary p-4">
+          <div className="rounded-lg border border-border bg-secondary p-4">
             <p className="text-sm font-medium text-foreground">
               Requested action
             </p>
             <div className="mt-3 space-y-2 text-sm text-foreground">
               <p>
-                <span className="text-brand-subtle">Action:</span>{' '}
+                <span className="text-muted-foreground">Action:</span>{' '}
                 {item.action ?? 'Unknown'}
               </p>
               {targetText && (
                 <p>
-                  <span className="text-brand-subtle">
+                  <span className="text-muted-foreground">
                     Target:
                   </span>{' '}
                   {targetText}
                 </p>
               )}
               <p>
-                <span className="text-brand-subtle">
+                <span className="text-muted-foreground">
                   Requested by:
                 </span>{' '}
                 {item.requestedByUser?.name ??
@@ -119,14 +119,14 @@ export function PendingApprovalCard({
                   'Unknown'}
               </p>
               <p>
-                <span className="text-brand-subtle">
+                <span className="text-muted-foreground">
                   Created:
                 </span>{' '}
                 {formatDate(item.createdAt)}
               </p>
               {item.expiresAt && (
                 <p>
-                  <span className="text-brand-subtle">
+                  <span className="text-muted-foreground">
                     Expires:
                   </span>{' '}
                   {formatDate(item.expiresAt)}
@@ -135,12 +135,12 @@ export function PendingApprovalCard({
             </div>
           </div>
 
-          <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+          <div className="rounded-lg border border-border bg-card p-4">
             <p className="text-sm font-medium text-foreground">
               Payload preview
             </p>
             {fields.length === 0 ? (
-              <p className="mt-3 text-sm leading-7 text-brand-quiet">
+              <p className="mt-3 text-sm leading-7 text-muted-foreground">
                 No structured preview fields were extracted
                 for this action.
               </p>
@@ -148,7 +148,7 @@ export function PendingApprovalCard({
               <div className="mt-3 space-y-3">
                 {fields.map((field) => (
                   <div key={`${item.id}:${field.label}`}>
-                    <p className="text-xs uppercase tracking-[0.16em] text-brand-subtle">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
                       {field.label}
                     </p>
                     <p className="mt-1 text-sm leading-6 text-foreground">

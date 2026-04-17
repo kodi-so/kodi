@@ -43,8 +43,8 @@ export function ParticipationModeSelector({
               }
               className={`rounded-2xl border px-4 py-4 text-left transition ${
                 active
-                  ? 'border-foreground bg-brand-accent-soft text-foreground'
-                  : 'border-brand-line bg-brand-elevated text-brand-quiet hover:border-foreground/20 hover:text-foreground'
+                  ? 'border-foreground bg-accent text-foreground'
+                  : 'border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground'
               }`}
             >
               <p className="text-sm font-medium">

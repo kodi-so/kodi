@@ -22,7 +22,7 @@ export function MeetingRow({
   onDelete: (e: React.MouseEvent, meetingId: string) => void
 }) {
   return (
-    <div className="group flex items-stretch overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:shadow-md hover:border-brand-line-strong">
+    <div className="group flex items-stretch overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all hover:shadow-md hover:border-border-strong">
       {/* Status accent bar */}
       <div
         className={`w-1 shrink-0 ${statusAccentColor(meeting.status)}`}

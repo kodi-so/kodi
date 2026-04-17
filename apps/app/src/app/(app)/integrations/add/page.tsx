@@ -114,7 +114,7 @@ export default function AddIntegrationsPage() {
             <Button
               asChild
               variant="ghost"
-              className="w-fit gap-2 px-0 text-brand-quiet hover:bg-transparent hover:text-foreground"
+              className="w-fit gap-2 px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
             >
               <Link href="/integrations">
                 <ArrowLeft size={16} />
@@ -143,7 +143,7 @@ export default function AddIntegrationsPage() {
           <Button
             asChild
             variant="ghost"
-            className="gap-2 border border-brand-line bg-brand-elevated text-foreground hover:bg-background"
+            className="gap-2 border border-border bg-card text-foreground hover:bg-background"
           >
             <Link href="/integrations">View active integrations</Link>
           </Button>
@@ -161,11 +161,11 @@ export default function AddIntegrationsPage() {
           </Alert>
         )}
 
-        <section className={`${heroPanelClass} rounded-[1.6rem] p-4 sm:p-5`}>
+        <section className={`${heroPanelClass} rounded-xl p-4 sm:p-5`}>
           <div className="relative">
             <Search
               size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-brand-subtle"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
             <Input
               value={search}
@@ -181,9 +181,9 @@ export default function AddIntegrationsPage() {
             {Array.from({ length: 6 }).map((_, index) => (
               <div
                 key={index}
-                className={`${heroPanelClass} rounded-[1.6rem] p-5`}
+                className={`${heroPanelClass} rounded-xl p-5`}
               >
-                <Skeleton className="h-12 w-12 rounded-[1.2rem]" />
+                <Skeleton className="h-12 w-12 rounded-lg" />
                 <Skeleton className="mt-6 h-5 w-28" />
                 <Skeleton className="mt-2 h-4 w-36" />
                 <Skeleton className="mt-8 h-4 w-full" />
@@ -191,7 +191,7 @@ export default function AddIntegrationsPage() {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-[1.6rem] border border-dashed border-brand-line bg-brand-elevated p-8">
+          <div className="rounded-xl border border-dashed border-border bg-card p-8">
             <div className="max-w-xl space-y-3">
               <p className="text-xl font-medium text-foreground">
                 No integrations match that search.
@@ -226,7 +226,7 @@ export default function AddIntegrationsPage() {
 
         {!loading && (
           <div
-            className={`rounded-[1.4rem] border border-brand-line bg-brand-elevated p-5 text-sm leading-7 ${quietTextClass}`}
+            className={`rounded-lg border border-border bg-card p-5 text-sm leading-7 ${quietTextClass}`}
           >
             Connect flows happen on each integration’s detail page so the main
             catalog stays easy to browse instead of turning into a wall of

@@ -197,7 +197,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="kodi-sidebar-surface sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col border-r border-border md:flex">
+      <aside className="bg-card sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col border-r border-border md:flex">
         {navContent}
       </aside>
 
@@ -219,7 +219,7 @@ export function Sidebar() {
       )}
 
       <aside
-        className={`kodi-sidebar-surface fixed inset-y-0 left-0 z-50 w-72 border-r border-border transition-transform duration-200 md:hidden ${
+        className={`bg-card fixed inset-y-0 left-0 z-50 w-72 border-r border-border transition-transform duration-200 md:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

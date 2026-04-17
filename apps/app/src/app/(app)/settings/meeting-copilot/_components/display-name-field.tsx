@@ -39,9 +39,9 @@ export function DisplayNameField({
         }
         disabled={disabled}
         placeholder={placeholder}
-        className="h-12 rounded-xl border-brand-line bg-brand-elevated"
+        className="h-12 rounded-xl border-border bg-card"
       />
-      <p className="text-xs text-brand-subtle">
+      <p className="text-xs text-muted-foreground">
         Leave blank to use the default derived workspace identity.
       </p>
     </div>

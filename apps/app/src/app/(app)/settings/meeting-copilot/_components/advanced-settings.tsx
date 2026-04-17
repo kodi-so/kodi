@@ -24,8 +24,8 @@ export function AdvancedSettings({
   const [open, setOpen] = useState(false)
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-2xl border border-brand-line">
-      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-medium text-brand-quiet hover:text-foreground transition-colors">
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-2xl border border-border">
+      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
         <span>Advanced settings</span>
         <ChevronDown
           size={16}
@@ -33,7 +33,7 @@ export function AdvancedSettings({
         />
       </CollapsibleTrigger>
 
-      <CollapsibleContent className="space-y-6 border-t border-brand-line px-4 pb-4 pt-4">
+      <CollapsibleContent className="space-y-6 border-t border-border px-4 pb-4 pt-4">
         <GuardrailsSection
           form={form}
           disabled={disabled}

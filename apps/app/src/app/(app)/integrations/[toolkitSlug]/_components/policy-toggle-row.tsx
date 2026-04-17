@@ -19,7 +19,7 @@ export function PolicyToggleRow({
   disabled?: boolean
 }) {
   return (
-    <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium text-foreground">{title}</p>
@@ -33,7 +33,7 @@ export function PolicyToggleRow({
             'w-full justify-center border sm:w-auto',
             value
               ? 'border-brand-success/20 bg-brand-success-soft text-brand-success hover:bg-brand-success-soft hover:text-brand-success'
-              : 'border-brand-line bg-background text-brand-quiet hover:bg-secondary hover:text-foreground'
+              : 'border-border bg-background text-muted-foreground hover:bg-secondary hover:text-foreground'
           )}
           disabled={disabled}
           onClick={onToggle}

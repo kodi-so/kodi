@@ -70,19 +70,19 @@ export default function GeneralSettingsPage() {
       <div className="mx-auto max-w-3xl space-y-8">
         <div>
           <div className="mb-2 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong shadow-brand-panel">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-accent text-primary shadow-sm">
               <Building2 size={18} />
             </div>
             <h1 className="text-2xl font-medium tracking-tight text-foreground">
               General
             </h1>
           </div>
-          <p className="ml-[3.25rem] text-sm leading-7 text-brand-quiet">
+          <p className="ml-[3.25rem] text-sm leading-7 text-muted-foreground">
             Workspace settings for {currentOrg.orgName}
           </p>
         </div>
 
-        <Card className="border-brand-line">
+        <Card className="border-border">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold text-foreground">
@@ -90,7 +90,7 @@ export default function GeneralSettingsPage() {
               </CardTitle>
               {!isOwner && <Badge variant="neutral">Read only</Badge>}
             </div>
-            <CardDescription className="text-brand-quiet">
+            <CardDescription className="text-muted-foreground">
               Update how this workspace appears across Kodi.
             </CardDescription>
           </CardHeader>
@@ -105,10 +105,10 @@ export default function GeneralSettingsPage() {
                   disabled={!isOwner || saving}
                   maxLength={80}
                   placeholder="My Workspace"
-                  className="h-12 rounded-xl border-brand-line bg-brand-elevated"
+                  className="h-12 rounded-xl border-border bg-card"
                 />
                 {!isOwner && (
-                  <p className="mt-2 text-xs text-brand-subtle">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Only the workspace owner can change the name.
                   </p>
                 )}

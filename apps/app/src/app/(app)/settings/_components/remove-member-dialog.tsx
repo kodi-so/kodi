@@ -57,13 +57,13 @@ export function RemoveMemberDialog({
         onClick={onClose}
       />
 
-      <Card className="relative z-10 w-full max-w-md rounded-2xl border-brand-line shadow-2xl">
+      <Card className="relative z-10 w-full max-w-md rounded-2xl border-border shadow-2xl">
         <CardHeader className="mb-2 flex-row items-start justify-between space-y-0">
           <div>
             <CardTitle className="text-lg text-foreground">
               Remove member
             </CardTitle>
-            <CardDescription className="mt-1 text-brand-quiet">
+            <CardDescription className="mt-1 text-muted-foreground">
               Remove{' '}
               <span className="font-medium text-foreground">{member.name}</span>{' '}
               from{' '}
@@ -74,7 +74,7 @@ export function RemoveMemberDialog({
             onClick={onClose}
             variant="ghost"
             size="icon"
-            className="-mt-1 h-auto w-auto p-0 text-brand-subtle transition-colors hover:text-foreground hover:bg-transparent"
+            className="-mt-1 h-auto w-auto p-0 text-muted-foreground transition-colors hover:text-foreground hover:bg-transparent"
             aria-label="Close"
           >
             <X size={20} />
@@ -82,7 +82,7 @@ export function RemoveMemberDialog({
         </CardHeader>
 
         <CardContent>
-          <p className="mb-6 text-sm text-brand-quiet">
+          <p className="mb-6 text-sm text-muted-foreground">
             They will lose access immediately. This action cannot be undone.
           </p>
 
@@ -97,7 +97,7 @@ export function RemoveMemberDialog({
               onClick={onClose}
               disabled={loading}
               variant="outline"
-              className="text-brand-quiet"
+              className="text-muted-foreground"
             >
               Cancel
             </Button>

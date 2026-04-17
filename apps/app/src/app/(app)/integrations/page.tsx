@@ -115,7 +115,7 @@ export default function IntegrationsPage() {
   return (
     <div className={pageShellClass}>
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8">
-        <section className={`${heroPanelClass} rounded-[2rem] p-6 lg:p-8`}>
+        <section className={`${heroPanelClass} rounded-xl p-6 lg:p-8`}>
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -217,9 +217,9 @@ export default function IntegrationsPage() {
               {Array.from({ length: 3 }).map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-[1.6rem] border border-border bg-card p-5"
+                  className="rounded-xl border border-border bg-card p-5"
                 >
-                  <Skeleton className="h-12 w-12 rounded-[1.2rem]" />
+                  <Skeleton className="h-12 w-12 rounded-lg" />
                   <Skeleton className="mt-6 h-5 w-28" />
                   <Skeleton className="mt-2 h-4 w-36" />
                   <Skeleton className="mt-8 h-4 w-full" />
@@ -227,7 +227,7 @@ export default function IntegrationsPage() {
               ))}
             </div>
           ) : activeItems.length === 0 ? (
-            <div className="rounded-[1.6rem] border border-dashed border-border bg-card p-8">
+            <div className="rounded-xl border border-dashed border-border bg-card p-8">
               <div className="max-w-xl space-y-3">
                 <p className="text-xl font-medium text-foreground">
                   No active tool integrations yet.

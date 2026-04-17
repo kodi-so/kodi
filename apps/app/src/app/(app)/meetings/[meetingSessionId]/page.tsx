@@ -254,7 +254,7 @@ export default function MeetingDetailsPage() {
                         </div>
                       </div>
                       <div className="flex items-start gap-2.5">
-                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-accent/20 bg-brand-accent-soft text-primary">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-accent text-primary">
                           <Sparkles size={13} />
                         </div>
                         <div className="min-w-0 flex-1 space-y-2">

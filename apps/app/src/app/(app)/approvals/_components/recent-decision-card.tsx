@@ -9,7 +9,7 @@ import {
 
 export function RecentDecisionCard({ item }: { item: ApprovalItem }) {
   return (
-    <div className="rounded-[1.2rem] border border-brand-line bg-brand-elevated p-4">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -30,17 +30,17 @@ export function RecentDecisionCard({ item }: { item: ApprovalItem }) {
           <p className="text-sm font-medium text-foreground">
             {item.action ?? 'External action'}
           </p>
-          <p className="text-sm text-brand-quiet">
+          <p className="text-sm text-muted-foreground">
             {getPreviewSummary(item)}
           </p>
           {item.targetText && (
-            <p className="text-sm text-brand-subtle">
+            <p className="text-sm text-muted-foreground">
               Target: {item.targetText}
             </p>
           )}
           {typeof item.attemptCount === 'number' &&
             item.attemptCount > 0 && (
-              <p className="text-sm text-brand-subtle">
+              <p className="text-sm text-muted-foreground">
                 Attempts: {item.attemptCount}
               </p>
             )}
@@ -51,7 +51,7 @@ export function RecentDecisionCard({ item }: { item: ApprovalItem }) {
           )}
         </div>
 
-        <div className="text-sm text-brand-subtle">
+        <div className="text-sm text-muted-foreground">
           {item.decidedAt
             ? `Decided ${formatDate(item.decidedAt)}`
             : `Created ${formatDate(item.createdAt)}`}

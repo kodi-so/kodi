@@ -15,7 +15,7 @@ import type {
 } from './_components/meeting-utils'
 import { MeetingRow } from './_components/meeting-row'
 import { StartMeetingDialog } from './_components/start-meeting-dialog'
-import { BotIdentityBar } from './_components/bot-identity-bar'
+import { BotIdentityButton } from './_components/bot-identity-bar'
 import { EmptyState } from './_components/empty-state'
 
 export default function MeetingsPage() {
@@ -69,7 +69,7 @@ export default function MeetingsPage() {
     async function load() {
       try {
         const [listResult, nextCopilotConfig] = await Promise.all([
-          trpc.meeting.list.query({ orgId, limit: 20 }),
+          trpc.meeting.list.query({ orgId, limit: 10 }),
           trpc.meeting.getCopilotSettings.query({ orgId }),
         ])
         if (cancelled) return
@@ -226,6 +226,11 @@ export default function MeetingsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <BotIdentityButton
+              displayName={workspaceMeetingBotIdentity.displayName}
+              inviteEmail={workspaceMeetingBotIdentity.inviteEmail}
+              onError={setError}
+            />
             <Button
               onClick={() => void refresh()}
               variant="ghost"
@@ -294,30 +299,28 @@ export default function MeetingsPage() {
             </div>
           )}
 
-          {nextCursor && !loading && (
-            <div className="mt-6 flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void loadMore()}
-                disabled={loadingMore}
-                className="gap-1.5"
-              >
-                {loadingMore && (
-                  <RefreshCcw size={14} className="animate-spin" />
-                )}
-                {loadingMore ? 'Loading...' : 'Load more'}
-              </Button>
+          {!loading && meetings.length > 0 && (
+            <div className="mt-6 flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Showing {meetings.length} meeting{meetings.length !== 1 ? 's' : ''}
+              </p>
+              {nextCursor && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="gap-1.5"
+                >
+                  {loadingMore && (
+                    <RefreshCcw size={14} className="animate-spin" />
+                  )}
+                  {loadingMore ? 'Loading...' : 'Load more'}
+                </Button>
+              )}
             </div>
           )}
         </div>
-
-        {/* Bot identity */}
-        <BotIdentityBar
-          displayName={workspaceMeetingBotIdentity.displayName}
-          inviteEmail={workspaceMeetingBotIdentity.inviteEmail}
-          onError={setError}
-        />
       </div>
     </div>
   )

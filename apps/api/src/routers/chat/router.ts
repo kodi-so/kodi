@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { and, asc, chatChannels, chatMessages, desc, eq, isNull, or, user } from '@kodi/db'
+import { and, asc, chatChannels, chatMessages, desc, eq, inArray, isNull, lt, or, user } from '@kodi/db'
 import { runAssistantTurn } from '../../lib/assistant-chat'
 import { memberProcedure, router } from '../../trpc'
 
@@ -162,14 +162,56 @@ export const chatRouter = router({
     .input(
       z.object({
         channelId: z.string(),
-        limit: z.number().int().min(1).max(500).default(300),
+        limit: z.number().int().min(1).max(100).default(50),
+        cursor: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
       await ensureDefaultChannel(ctx.db, ctx.org.id)
       await getChannelOrThrow(ctx.db, ctx.org.id, input.channelId)
 
-      return ctx.db
+      let cursorCreatedAt: Date | null = null
+      if (input.cursor) {
+        const cursorRow = await ctx.db.query.chatMessages.findFirst({
+          where: and(
+            eq(chatMessages.id, input.cursor),
+            eq(chatMessages.orgId, ctx.org.id)
+          ),
+          columns: { createdAt: true },
+        })
+        if (cursorRow) cursorCreatedAt = cursorRow.createdAt
+      }
+
+      const rootFilters = [
+        eq(chatMessages.orgId, ctx.org.id),
+        eq(chatMessages.channelId, input.channelId),
+        isNull(chatMessages.threadRootMessageId),
+        isNull(chatMessages.deletedAt),
+      ]
+      if (cursorCreatedAt) {
+        rootFilters.push(lt(chatMessages.createdAt, cursorCreatedAt))
+      }
+
+      const rootRows = await ctx.db
+        .select({ id: chatMessages.id })
+        .from(chatMessages)
+        .where(and(...rootFilters))
+        .orderBy(desc(chatMessages.createdAt))
+        .limit(input.limit + 1)
+
+      const hasMore = rootRows.length > input.limit
+      const pageRootIds = (hasMore ? rootRows.slice(0, input.limit) : rootRows).map(
+        (row) => row.id
+      )
+      const nextCursor = hasMore
+        ? (pageRootIds[pageRootIds.length - 1] ?? null)
+        : null
+
+      if (pageRootIds.length === 0) {
+        return { messages: [], nextCursor: null }
+      }
+
+      const messages = await ctx.db
         .select(baseMessageSelect)
         .from(chatMessages)
         .leftJoin(user, eq(chatMessages.userId, user.id))
@@ -177,11 +219,16 @@ export const chatRouter = router({
           and(
             eq(chatMessages.orgId, ctx.org.id),
             eq(chatMessages.channelId, input.channelId),
-            isNull(chatMessages.deletedAt)
+            isNull(chatMessages.deletedAt),
+            or(
+              inArray(chatMessages.id, pageRootIds),
+              inArray(chatMessages.threadRootMessageId, pageRootIds)
+            )
           )
         )
         .orderBy(asc(chatMessages.createdAt))
-        .limit(input.limit)
+
+      return { messages, nextCursor }
     }),
 
   sendMessage: memberProcedure

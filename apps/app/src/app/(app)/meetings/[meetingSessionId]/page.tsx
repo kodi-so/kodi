@@ -299,15 +299,16 @@ export default function MeetingDetailsPage() {
                                   Voice failed
                                 </span>
                               ) : (
-                                <button
-                                  type="button"
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => void m.handleSpeakAnswer(answer.id)}
                                   disabled={!!m.speakingAnswerId}
-                                  className={`flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs transition hover:bg-secondary disabled:opacity-40 ${subtleTextClass}`}
+                                  className={`h-auto gap-1.5 rounded-full px-2.5 py-1 text-xs ${subtleTextClass}`}
                                 >
                                   <Volume2 size={11} />
                                   Speak
-                                </button>
+                                </Button>
                               )}
                             </div>
                           )}

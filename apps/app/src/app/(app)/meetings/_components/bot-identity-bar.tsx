@@ -7,6 +7,9 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@kodi/ui'
 
 export function BotIdentityButton({
@@ -54,13 +57,19 @@ export function BotIdentityButton({
               <p className="text-[11px] text-muted-foreground">Display name</p>
               <p className="text-sm font-medium text-foreground">{displayName}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => void copy(displayName, 'display-name')}
-              className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {copiedField === 'display-name' ? <Check size={13} /> : <Copy size={13} />}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground"
+                  onClick={() => void copy(displayName, 'display-name')}
+                >
+                  {copiedField === 'display-name' ? <Check size={13} /> : <Copy size={13} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy display name</TooltipContent>
+            </Tooltip>
           </div>
           <div className="h-px bg-border" />
           <div className="flex items-center justify-between gap-2">
@@ -68,13 +77,19 @@ export function BotIdentityButton({
               <p className="text-[11px] text-muted-foreground">Invite email</p>
               <p className="break-all text-sm font-medium text-foreground">{inviteEmail}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => void copy(inviteEmail, 'invite-email')}
-              className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {copiedField === 'invite-email' ? <Check size={13} /> : <Copy size={13} />}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-muted-foreground"
+                  onClick={() => void copy(inviteEmail, 'invite-email')}
+                >
+                  {copiedField === 'invite-email' ? <Check size={13} /> : <Copy size={13} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy invite email</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </PopoverContent>

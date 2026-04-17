@@ -223,13 +223,15 @@ export function Sidebar() {
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <button
+        <Button
           onClick={() => setMobileOpen(false)}
+          variant="ghost"
+          size="icon"
           className="absolute right-4 top-4 p-1 text-muted-foreground hover:text-foreground"
           aria-label="Close menu"
         >
           <X size={20} />
-        </button>
+        </Button>
         {navContent}
       </aside>
     </>

@@ -37,7 +37,7 @@ export function CollapsibleSection({
               onClick={onToggle}
               className="group inline-flex items-center gap-3 text-left"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-line bg-brand-elevated text-brand-quiet transition group-hover:border-foreground/15 group-hover:text-foreground">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-brand-elevated text-brand-quiet transition group-hover:border-foreground/15 group-hover:text-foreground">
                 <ChevronDown
                   size={16}
                   className={cn(
@@ -75,7 +75,7 @@ export function CollapsibleSection({
               type="button"
               variant="ghost"
               onClick={onToggle}
-              className="border border-brand-line bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
+              className="border border-border bg-brand-elevated text-brand-quiet hover:bg-secondary hover:text-foreground"
             >
               {expanded ? 'Collapse' : 'Expand'}
             </Button>
@@ -90,7 +90,7 @@ export function CollapsibleSection({
         )}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-brand-line px-6 pb-6 pt-2">
+          <div className="border-t border-border px-6 pb-6 pt-2">
             {children}
           </div>
         </div>

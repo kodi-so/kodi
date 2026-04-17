@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ArrowRight, Trash2 } from 'lucide-react'
-import { Badge, Tooltip, TooltipContent, TooltipTrigger } from '@kodi/ui'
+import { Badge, Button, Tooltip, TooltipContent, TooltipTrigger } from '@kodi/ui'
 import { encodeMeetingId } from '@/lib/meeting-id'
 import {
   formatDate,
@@ -65,14 +65,15 @@ export function MeetingRow({
       <div className="flex w-10 shrink-0 items-center justify-center">
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-transparent transition-colors group-hover:text-muted-foreground hover:!text-destructive hover:!bg-transparent disabled:opacity-50"
               onClick={(e) => void onDelete(e, meeting.id)}
               disabled={deletingId === meeting.id}
-              className="text-transparent transition-colors group-hover:text-muted-foreground hover:!text-destructive disabled:opacity-50"
             >
               <Trash2 size={14} />
-            </button>
+            </Button>
           </TooltipTrigger>
           <TooltipContent>Delete meeting</TooltipContent>
         </Tooltip>

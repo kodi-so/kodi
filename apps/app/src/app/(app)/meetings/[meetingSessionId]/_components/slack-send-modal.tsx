@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Loader2, Send, X } from 'lucide-react'
-import { Button, Input } from '@kodi/ui'
+import {
+  Button,
+  Input,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@kodi/ui'
 import { trpc } from '@/lib/trpc'
 
 export function SlackSendModal({
@@ -163,19 +170,27 @@ export function SlackSendModal({
                   autoComplete="off"
                 />
                 {cleanSelected && (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    title="Clear channel"
-                    className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => {
-                      setSelected('')
-                      setQuery('')
-                      setDropdownOpen(true)
-                    }}
-                  >
-                    <X size={13} />
-                  </button>
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          tabIndex={-1}
+                          className="ml-1 h-auto w-auto shrink-0 p-0 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setSelected('')
+                            setQuery('')
+                            setDropdownOpen(true)
+                          }}
+                        >
+                          <X size={13} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Clear channel</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
 

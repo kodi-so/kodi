@@ -70,13 +70,15 @@ export function RemoveMemberDialog({
               <span className="font-medium text-foreground">{orgName}</span>?
             </CardDescription>
           </div>
-          <button
+          <Button
             onClick={onClose}
-            className="-mt-1 text-brand-subtle transition-colors hover:text-foreground"
+            variant="ghost"
+            size="icon"
+            className="-mt-1 h-auto w-auto p-0 text-brand-subtle transition-colors hover:text-foreground hover:bg-transparent"
             aria-label="Close"
           >
             <X size={20} />
-          </button>
+          </Button>
         </CardHeader>
 
         <CardContent>

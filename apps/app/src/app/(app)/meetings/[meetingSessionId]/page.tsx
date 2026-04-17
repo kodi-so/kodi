@@ -28,6 +28,7 @@ import { SlackSendModal } from './_components/slack-send-modal'
 import { PostMeetingReview } from './_components/post-meeting-review'
 import { OverviewTab } from './_components/overview-tab'
 import { TranscriptTab } from './_components/transcript-tab'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 export default function MeetingDetailsPage() {
   const m = useMeetingDetail()
@@ -139,7 +140,7 @@ export default function MeetingDetailsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void m.handleDeleteMeeting()}
+                  onClick={m.requestDeleteMeeting}
                   disabled={m.deletingMeeting}
                   className="text-muted-foreground hover:bg-transparent hover:text-destructive"
                 >
@@ -396,6 +397,14 @@ export default function MeetingDetailsPage() {
             isEmpty={m.transcriptSpeakerGroups.length === 0}
           />
         </Tabs>
+
+        <ConfirmDialog
+          open={m.deleteConfirmOpen}
+          onOpenChange={m.setDeleteConfirmOpen}
+          title="Delete this meeting?"
+          description="This action cannot be undone. The meeting, its transcript, and all artifacts will be permanently deleted."
+          onConfirm={() => void m.executeDeleteMeeting()}
+        />
       </div>
     </div>
   )

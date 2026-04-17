@@ -49,6 +49,7 @@ export function useMeetingDetail() {
   // --- Core state ---
   const [consoleData, setConsoleData] = useState<MeetingConsole | null>(null)
   const [deletingMeeting, setDeletingMeeting] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
@@ -682,9 +683,13 @@ export function useMeetingDetail() {
     }
   }
 
-  async function handleDeleteMeeting() {
+  function requestDeleteMeeting() {
+    setDeleteConfirmOpen(true)
+  }
+
+  async function executeDeleteMeeting() {
     if (!orgId || !meetingSessionId || deletingMeeting) return
-    if (!confirm('Delete this meeting? This cannot be undone.')) return
+    setDeleteConfirmOpen(false)
     setDeletingMeeting(true)
     try {
       await trpc.meeting.delete.mutate({ orgId, meetingSessionId })
@@ -1042,7 +1047,10 @@ export function useMeetingDetail() {
     updateControls,
 
     // Actions
-    handleDeleteMeeting,
+    deleteConfirmOpen,
+    setDeleteConfirmOpen,
+    requestDeleteMeeting,
+    executeDeleteMeeting,
 
     // Misc derived
     health,

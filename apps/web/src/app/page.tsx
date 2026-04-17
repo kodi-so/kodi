@@ -1,5 +1,7 @@
 import { ArrowRight, Check, Sparkles } from 'lucide-react'
-import { Badge, BrandLogo, Button } from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { BrandLogo } from '@kodi/ui/components/brand-logo'
+import { Button } from '@kodi/ui/components/button'
 
 const proofPoints = [
   'Answers with live company context',

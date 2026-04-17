@@ -1,13 +1,9 @@
+'use client'
+
 import { CheckCircle2, Sparkles } from 'lucide-react'
-import {
-  Badge,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  TabsContent,
-} from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { TabsContent } from '@kodi/ui/components/tabs'
 import { SectionIcon } from '@/components/section-icon'
 import {
   dashedPanelClass,

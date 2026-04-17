@@ -1,5 +1,7 @@
+'use client'
+
 import { Link2 } from 'lucide-react'
-import { Button } from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
 import {
   dashedPanelClass,
   quietTextClass,

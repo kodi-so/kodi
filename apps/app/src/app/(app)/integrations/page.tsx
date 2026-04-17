@@ -3,7 +3,10 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Plus, Video } from 'lucide-react'
-import { Alert, AlertDescription, Badge, Button, Skeleton } from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 import { useOrg } from '@/lib/org-context'
 import {
   pageShellClass,

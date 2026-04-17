@@ -1,18 +1,11 @@
 'use client'
 
 import { getMeetingParticipationModeLabel } from '@kodi/db/client'
-import {
-  Badge,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  Input,
-  Label,
-} from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@kodi/ui/components/dialog'
+import { Input } from '@kodi/ui/components/input'
+import { Label } from '@kodi/ui/components/label'
 import { Plus, Sparkles } from 'lucide-react'
 import type { MeetingCopilotConfig } from './meeting-utils'
 

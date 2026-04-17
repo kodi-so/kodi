@@ -1,4 +1,7 @@
-import { Alert, AlertDescription, Button } from '@kodi/ui'
+'use client'
+
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Button } from '@kodi/ui/components/button'
 
 interface SaveFooterProps {
   error: string | null

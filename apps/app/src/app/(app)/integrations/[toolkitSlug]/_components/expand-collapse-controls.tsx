@@ -1,4 +1,6 @@
-import { Button } from '@kodi/ui'
+'use client'
+
+import { Button } from '@kodi/ui/components/button'
 
 export function ExpandCollapseControls({
   onExpandAll,

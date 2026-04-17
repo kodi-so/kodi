@@ -1,4 +1,7 @@
-import { Button, cn } from '@kodi/ui'
+'use client'
+
+import { Button } from '@kodi/ui/components/button'
+import { cn } from '@kodi/ui/lib/utils'
 import { quietTextClass } from '@/lib/brand-styles'
 
 export function PolicyToggleRow({

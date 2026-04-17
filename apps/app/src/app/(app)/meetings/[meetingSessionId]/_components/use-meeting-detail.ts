@@ -1,3 +1,5 @@
+'use client'
+
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useOrg } from '@/lib/org-context'

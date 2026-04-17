@@ -7,14 +7,10 @@ import { SettingsLayout } from '../_components/settings-layout'
 import { MemberList } from '../_components/member-list'
 import { InviteForm } from '../_components/invite-form'
 import { Users } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Card,
-  CardContent,
-  Skeleton,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent } from '@kodi/ui/components/card'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 
 type Member = {
   id: string

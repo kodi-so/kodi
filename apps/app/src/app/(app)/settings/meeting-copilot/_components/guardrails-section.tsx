@@ -1,5 +1,7 @@
+'use client'
+
 import type { MeetingCopilotSettings } from '@kodi/db/client'
-import { Label } from '@kodi/ui'
+import { Label } from '@kodi/ui/components/label'
 import { GuardrailCheckbox } from './guardrail-checkbox'
 
 interface GuardrailsSectionProps {

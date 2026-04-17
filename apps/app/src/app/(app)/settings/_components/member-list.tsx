@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { RemoveMemberDialog } from './remove-member-dialog'
-import { Badge, Button, Card, CardContent } from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent } from '@kodi/ui/components/card'
 
 type Member = {
   id: string

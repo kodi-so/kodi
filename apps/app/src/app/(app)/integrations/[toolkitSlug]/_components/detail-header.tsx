@@ -1,6 +1,10 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowLeft, RefreshCcw } from 'lucide-react'
-import { Badge, Button, Skeleton } from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 import {
   quietTextClass,
   subtleTextClass,

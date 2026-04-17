@@ -1,4 +1,9 @@
-import { Alert, AlertDescription, Badge, Button, cn } from '@kodi/ui'
+'use client'
+
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { cn } from '@kodi/ui/lib/utils'
 import { subtleTextClass } from '@/lib/brand-styles'
 import {
   formatIntegrationDate,

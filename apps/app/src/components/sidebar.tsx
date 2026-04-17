@@ -14,32 +14,10 @@ import {
 } from 'lucide-react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
-import {
-  Avatar,
-  AvatarFallback,
-  BrandLogo,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarInset,
-  SidebarRail,
-  SidebarTrigger,
-  useSidebar,
-} from '@kodi/ui'
+import { Avatar, AvatarFallback } from '@kodi/ui/components/avatar'
+import { BrandLogo } from '@kodi/ui/components/brand-logo'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@kodi/ui/components/dropdown-menu'
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarInset, SidebarRail, SidebarTrigger, useSidebar } from '@kodi/ui/components/sidebar'
 
 const navItems = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },

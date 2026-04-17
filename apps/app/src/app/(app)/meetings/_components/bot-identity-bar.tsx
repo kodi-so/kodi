@@ -2,15 +2,9 @@
 
 import { useState } from 'react'
 import { Bot, Check, Copy } from 'lucide-react'
-import {
-  Button,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@kodi/ui/components/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@kodi/ui/components/tooltip'
 
 export function BotIdentityButton({
   displayName,

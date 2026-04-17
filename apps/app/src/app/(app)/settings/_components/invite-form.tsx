@@ -4,13 +4,10 @@ import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { Mail } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  Input,
-} from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent } from '@kodi/ui/components/card'
+import { Input } from '@kodi/ui/components/input'
 
 type PendingInvite = {
   id: string

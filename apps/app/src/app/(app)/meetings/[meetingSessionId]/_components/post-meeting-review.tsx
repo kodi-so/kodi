@@ -13,22 +13,13 @@ import {
   Send,
   X,
 } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Skeleton,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { Input } from '@kodi/ui/components/input'
+import { Skeleton } from '@kodi/ui/components/skeleton'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@kodi/ui/components/tooltip'
 import { SectionIcon } from '@/components/section-icon'
 import type { MeetingArtifact, RecapTarget, SyncTarget, WorkItem } from './types'
 

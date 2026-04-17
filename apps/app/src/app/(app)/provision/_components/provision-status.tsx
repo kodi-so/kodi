@@ -3,15 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import Link from 'next/link'
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@kodi/ui/components/card'
 
 type InstanceStatus =
   | 'pending'

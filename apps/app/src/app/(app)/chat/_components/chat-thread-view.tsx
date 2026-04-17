@@ -2,7 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { ChevronLeft } from 'lucide-react'
-import { Button, ScrollArea } from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
+import { ScrollArea } from '@kodi/ui/components/scroll-area'
 import { ChatAvatar } from './chat-avatar'
 import { ChatComposer } from './chat-composer'
 import { MessageBody } from './chat-message-body'

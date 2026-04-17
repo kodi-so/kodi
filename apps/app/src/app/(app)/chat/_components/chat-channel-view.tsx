@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Hash, Loader2 } from 'lucide-react'
-import { ScrollArea } from '@kodi/ui'
+import { ScrollArea } from '@kodi/ui/components/scroll-area'
 import { ChatComposer } from './chat-composer'
 import { MessageRow } from './chat-message-row'
 import type { Channel, Message } from './chat-types'

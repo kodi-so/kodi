@@ -2,7 +2,8 @@
 
 import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, AlertDescription, Skeleton } from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import { pageShellClass } from '@/lib/brand-styles'

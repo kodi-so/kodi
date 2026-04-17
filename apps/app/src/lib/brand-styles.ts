@@ -8,21 +8,18 @@ export type BrandBadgeTone =
 
 export type BrandAlertTone = 'info' | 'success' | 'warning' | 'destructive'
 
-export const pageShellClass = 'kodi-shell-bg min-h-full'
+export const pageShellClass = 'min-h-full bg-background'
 
-export const panelCardClass =
-  'kodi-panel-surface border border-brand-line shadow-brand-panel'
+export const panelCardClass = 'border border-border bg-card shadow-sm'
 
-export const heroPanelClass =
-  'kodi-panel-surface overflow-hidden border border-brand-line shadow-brand-panel'
+export const heroPanelClass = 'overflow-hidden border border-border bg-card shadow-sm'
 
-export const elevatedPanelClass = 'border border-brand-line bg-brand-elevated'
+export const elevatedPanelClass = 'border border-border bg-card'
 
-export const mutedPanelClass = 'border border-brand-line bg-secondary'
+export const mutedPanelClass = 'border border-border bg-secondary'
 
-export const dashedPanelClass =
-  'border border-dashed border-brand-line bg-brand-elevated'
+export const dashedPanelClass = 'border border-dashed border-border bg-secondary'
 
-export const quietTextClass = 'text-brand-quiet'
+export const quietTextClass = 'text-muted-foreground'
 
-export const subtleTextClass = 'text-brand-subtle'
+export const subtleTextClass = 'text-muted-foreground'

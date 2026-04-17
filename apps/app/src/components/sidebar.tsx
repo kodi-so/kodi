@@ -101,7 +101,7 @@ function OrgSwitcher() {
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
             align="start"
-            side={isMobile ? 'bottom' : 'right'}
+            side="bottom"
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-xs text-muted-foreground">
@@ -173,8 +173,8 @@ function UserMenu() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-            side={isMobile ? 'bottom' : 'right'}
-            align="end"
+            side="top"
+            align="start"
             sideOffset={4}
           >
             <DropdownMenuLabel className="p-0 font-normal">
@@ -222,7 +222,7 @@ function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/chat">
-                <BrandLogo size={28} />
+                <BrandLogo size={28} showWordmark={false} />
                 <span className="text-sm font-semibold">Kodi</span>
               </Link>
             </SidebarMenuButton>

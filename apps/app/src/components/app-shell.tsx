@@ -15,7 +15,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
           </header>
-          <main className="min-w-0 flex-1 overflow-auto">{children}</main>
+          <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
         </SidebarInset>
         <Toaster />
       </SidebarProvider>

@@ -7,9 +7,9 @@ import type { ReactNode } from 'react'
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <OrgProvider>
-      <div className="flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
+      <div className="flex h-screen bg-[#0a0a0f] text-white">
         <Sidebar />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
       </div>
     </OrgProvider>
   )

@@ -62,12 +62,12 @@ function OrgSwitcher() {
             size="lg"
             className="cursor-default data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
           >
-            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+            <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
               <span className="text-xs font-bold">
                 {activeOrg.orgName[0]?.toUpperCase() ?? 'K'}
               </span>
             </div>
-            <div className="grid flex-1 text-left text-sm leading-tight">
+            <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate font-medium">{activeOrg.orgName}</span>
             </div>
           </SidebarMenuButton>
@@ -85,17 +85,17 @@ function OrgSwitcher() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                 <span className="text-xs font-bold">
                   {activeOrg?.orgName[0]?.toUpperCase() ?? 'K'}
                 </span>
               </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-medium">
                   {activeOrg?.orgName ?? 'Select workspace'}
                 </span>
               </div>
-              <ChevronsUpDown className="ml-auto" />
+              <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -155,20 +155,20 @@ function UserMenu() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="h-8 w-8 shrink-0 rounded-lg">
                 <AvatarFallback className="rounded-lg text-[10px] font-medium">
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-medium">
                   {session?.user?.name ?? 'User'}
                 </span>
-                <span className="truncate text-xs">
+                <span className="truncate text-xs text-muted-foreground">
                   {session?.user?.email}
                 </span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -188,7 +188,7 @@ function UserMenu() {
                   <span className="truncate font-medium">
                     {session?.user?.name ?? 'User'}
                   </span>
-                  <span className="truncate text-xs">
+                  <span className="truncate text-xs text-muted-foreground">
                     {session?.user?.email}
                   </span>
                 </div>
@@ -196,13 +196,13 @@ function UserMenu() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/settings">
-                <Settings />
+              <Link href="/settings" className="gap-2">
+                <Settings className="size-4" />
                 Settings
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void handleSignOut()}>
-              <LogOut />
+            <DropdownMenuItem onClick={() => void handleSignOut()} className="gap-2">
+              <LogOut className="size-4" />
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -222,8 +222,10 @@ function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/chat">
-                <BrandLogo size={28} showWordmark={false} />
-                <span className="text-sm font-semibold">Kodi</span>
+                <div className="flex aspect-square size-8 shrink-0 items-center justify-center">
+                  <BrandLogo size={28} showWordmark={false} className="size-8" markClassName="size-8" />
+                </div>
+                <span className="text-sm font-semibold group-data-[collapsible=icon]:hidden">Kodi</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

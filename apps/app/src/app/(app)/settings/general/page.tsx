@@ -5,19 +5,12 @@ import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
 import { Building2 } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Skeleton,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { Input } from '@kodi/ui/components/input'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 
 export default function GeneralSettingsPage() {
   const { activeOrg, refreshOrgs } = useOrg()

@@ -2,7 +2,8 @@
 
 import { OrgProvider } from '@/lib/org-context'
 import { AppSidebar, SidebarProvider, SidebarInset, SidebarTrigger } from './sidebar'
-import { Toaster, Separator } from '@kodi/ui'
+import { Toaster } from '@kodi/ui/components/sonner'
+import { Separator } from '@kodi/ui/components/separator'
 import type { ReactNode } from 'react'
 
 export function AppShell({ children }: { children: ReactNode }) {

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { MeetingCopilotSettings } from '@kodi/db/client'
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@kodi/ui'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@kodi/ui/components/collapsible'
 import { GuardrailsSection } from './guardrails-section'
 import { RetentionSettings } from './retention-settings'
 import { DisclosurePreview } from './disclosure-preview'

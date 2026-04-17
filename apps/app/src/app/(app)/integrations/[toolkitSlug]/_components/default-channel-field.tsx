@@ -1,4 +1,7 @@
-import { Button, Input } from '@kodi/ui'
+'use client'
+
+import { Button } from '@kodi/ui/components/button'
+import { Input } from '@kodi/ui/components/input'
 import { quietTextClass } from '@/lib/brand-styles'
 
 export function DefaultChannelField({

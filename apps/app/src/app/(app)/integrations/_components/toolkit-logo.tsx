@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { cn } from '@kodi/ui'
+import { cn } from '@kodi/ui/lib/utils'
 import { getToolkitMonogram } from '../_lib/tool-access-ui'
 
 export function ToolkitLogo({

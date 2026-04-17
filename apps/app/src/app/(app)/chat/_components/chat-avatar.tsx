@@ -1,4 +1,6 @@
-import { cn } from '@kodi/ui'
+'use client'
+
+import { cn } from '@kodi/ui/lib/utils'
 import { initials } from './chat-helpers'
 
 export function ChatAvatar({

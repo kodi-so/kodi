@@ -1,10 +1,12 @@
+'use client'
+
 import {
   getMeetingParticipationModeDescription,
   getMeetingParticipationModeLabel,
   meetingParticipationModeValues,
   type MeetingCopilotSettings,
 } from '@kodi/db/client'
-import { Label } from '@kodi/ui'
+import { Label } from '@kodi/ui/components/label'
 
 interface ParticipationModeSelectorProps {
   activeMode: MeetingCopilotSettings['defaultParticipationMode']

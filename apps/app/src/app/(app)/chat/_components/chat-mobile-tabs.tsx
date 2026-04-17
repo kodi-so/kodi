@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@kodi/ui'
+import { cn } from '@kodi/ui/lib/utils'
 import { KODI_DM_ID, type Channel } from './chat-types'
 
 export function MobileConversationTabs({

@@ -1,5 +1,7 @@
+'use client'
+
 import { ShieldCheck } from 'lucide-react'
-import { Button } from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
 import {
   quietTextClass,
   subtleTextClass,

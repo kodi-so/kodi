@@ -3,14 +3,11 @@
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Input,
-  Label,
-  Separator,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Button } from '@kodi/ui/components/button'
+import { Input } from '@kodi/ui/components/input'
+import { Label } from '@kodi/ui/components/label'
+import { Separator } from '@kodi/ui/components/separator'
 import { signIn } from '@/lib/auth-client'
 import { AuthShell } from '@/components/auth-shell'
 import { GoogleAuthButton } from '@/components/google-auth-button'

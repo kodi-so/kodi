@@ -2,15 +2,9 @@
 
 import type { RefObject } from 'react'
 import { ChevronDown, ChevronRight, Mic2 } from 'lucide-react'
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  TabsContent,
-} from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { TabsContent } from '@kodi/ui/components/tabs'
 import { SectionIcon } from '@/components/section-icon'
 import { dashedPanelClass, quietTextClass, subtleTextClass } from '@/lib/brand-styles'
 import { formatTime } from './utils'

@@ -3,14 +3,11 @@
 import Link from 'next/link'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Plus, Search } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Input,
-  Skeleton,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Input } from '@kodi/ui/components/input'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 import { IntegrationCard } from '../_components/integration-card'

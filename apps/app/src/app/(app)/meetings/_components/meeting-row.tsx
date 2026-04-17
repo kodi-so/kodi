@@ -1,6 +1,10 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowRight, Trash2 } from 'lucide-react'
-import { Badge, Button, Tooltip, TooltipContent, TooltipTrigger } from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@kodi/ui/components/tooltip'
 import { encodeMeetingId } from '@/lib/meeting-id'
 import {
   formatDate,

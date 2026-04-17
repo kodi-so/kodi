@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
-import { Badge, cn } from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { cn } from '@kodi/ui/lib/utils'
 import { getStatusTone } from '../_lib/tool-access-ui'
 import { ToolkitLogo } from './toolkit-logo'
 

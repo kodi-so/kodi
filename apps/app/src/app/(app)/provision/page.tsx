@@ -5,7 +5,7 @@ import { useOrg } from '@/lib/org-context'
 import { pageShellClass } from '@/lib/brand-styles'
 import { trpc } from '@/lib/trpc'
 import { ProvisionStatus } from './_components/provision-status'
-import { Skeleton } from '@kodi/ui'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 
 type StatusData = {
   id: string

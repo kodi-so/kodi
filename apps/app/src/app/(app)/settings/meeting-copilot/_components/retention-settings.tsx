@@ -1,5 +1,8 @@
+'use client'
+
 import { formatRetentionDays, type MeetingCopilotSettings } from '@kodi/db/client'
-import { Input, Label } from '@kodi/ui'
+import { Input } from '@kodi/ui/components/input'
+import { Label } from '@kodi/ui/components/label'
 
 interface RetentionSettingsProps {
   transcriptRetentionDays: number

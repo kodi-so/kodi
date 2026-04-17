@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Bot, Building2, Users } from 'lucide-react'
-import { cn } from '@kodi/ui'
+import { cn } from '@kodi/ui/lib/utils'
 
 const settingsSections = [
   { href: '/settings/general', label: 'General', icon: Building2 },

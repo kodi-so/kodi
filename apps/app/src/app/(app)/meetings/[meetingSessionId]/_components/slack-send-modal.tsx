@@ -2,14 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Loader2, Send, X } from 'lucide-react'
-import {
-  Button,
-  Input,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
+import { Input } from '@kodi/ui/components/input'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@kodi/ui/components/tooltip'
 import { trpc } from '@/lib/trpc'
 
 export function SlackSendModal({

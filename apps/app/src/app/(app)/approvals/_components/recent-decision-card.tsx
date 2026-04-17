@@ -1,4 +1,6 @@
-import { Badge } from '@kodi/ui'
+'use client'
+
+import { Badge } from '@kodi/ui/components/badge'
 import {
   type ApprovalItem,
   formatDate,

@@ -1,6 +1,8 @@
 'use client'
 
-import { Badge, Button, cn } from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { cn } from '@kodi/ui/lib/utils'
 import {
   type ApprovalItem,
   asRecord,

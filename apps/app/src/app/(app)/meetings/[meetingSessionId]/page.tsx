@@ -4,21 +4,13 @@ import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowLeft, MessageSquare, Sparkles, Trash2, Volume2, VolumeX } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  Skeleton,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  Textarea,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@kodi/ui/components/sheet'
+import { Skeleton } from '@kodi/ui/components/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@kodi/ui/components/tabs'
+import { Textarea } from '@kodi/ui/components/textarea'
 import { SectionIcon } from '@/components/section-icon'
 import { SendHorizonal } from 'lucide-react'
 import { dashedPanelClass, pageShellClass, quietTextClass, subtleTextClass } from '@/lib/brand-styles'

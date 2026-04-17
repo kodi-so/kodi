@@ -1,4 +1,6 @@
-import { Skeleton } from '@kodi/ui'
+'use client'
+
+import { Skeleton } from '@kodi/ui/components/skeleton'
 
 export function ApprovalsLoading() {
   return (

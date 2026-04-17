@@ -8,15 +8,9 @@ import {
   deriveMeetingBotIdentity,
   type MeetingCopilotSettings,
 } from '@kodi/db/client'
-import {
-  Badge,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Skeleton,
-} from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 import { PageHeader } from './_components/page-header'
 import { DisplayNameField } from './_components/display-name-field'
 import { BotIdentityPreview } from './_components/bot-identity-preview'

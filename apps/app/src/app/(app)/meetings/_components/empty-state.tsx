@@ -1,5 +1,7 @@
+'use client'
+
 import { Plus, Video } from 'lucide-react'
-import { Button } from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
 
 export function EmptyState({
   onStartMeeting,

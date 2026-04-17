@@ -2,17 +2,11 @@
 
 import { useState } from 'react'
 import { Hash, Plus } from 'lucide-react'
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  Input,
-  ScrollArea,
-  cn,
-} from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@kodi/ui/components/dialog'
+import { Input } from '@kodi/ui/components/input'
+import { ScrollArea } from '@kodi/ui/components/scroll-area'
+import { cn } from '@kodi/ui/lib/utils'
 import { KODI_DM_ID, type Channel } from './chat-types'
 
 export function ChatSidebar({

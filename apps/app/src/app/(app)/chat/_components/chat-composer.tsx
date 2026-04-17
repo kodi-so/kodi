@@ -1,7 +1,8 @@
 'use client'
 
 import { Send } from 'lucide-react'
-import { Button, Textarea } from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
+import { Textarea } from '@kodi/ui/components/textarea'
 
 export function ChatComposer({
   value,

@@ -1,22 +1,22 @@
 :root {
   --font-abeezee:
     'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --kodi-canvas: 42 36% 96%;
-  --kodi-canvas-shade: 40 28% 93%;
-  --kodi-panel: 42 34% 98%;
-  --kodi-panel-elevated: 42 42% 99%;
-  --kodi-panel-muted: 40 28% 93%;
-  --kodi-sidebar: 39 28% 91%;
-  --kodi-sidebar-elevated: 41 32% 95%;
-  --kodi-border: 35 24% 80%;
-  --kodi-border-strong: 33 24% 72%;
-  --kodi-text: 198 24% 18%;
-  --kodi-text-muted: 197 15% 39%;
-  --kodi-text-subtle: 195 12% 50%;
+  --kodi-canvas: 220 14% 96%;
+  --kodi-canvas-shade: 220 10% 93%;
+  --kodi-panel: 220 14% 98%;
+  --kodi-panel-elevated: 220 16% 99%;
+  --kodi-panel-muted: 220 10% 93%;
+  --kodi-sidebar: 220 10% 91%;
+  --kodi-sidebar-elevated: 220 12% 95%;
+  --kodi-border: 220 9% 80%;
+  --kodi-border-strong: 220 8% 72%;
+  --kodi-text: 220 20% 18%;
+  --kodi-text-muted: 220 12% 39%;
+  --kodi-text-subtle: 220 8% 50%;
   --kodi-accent: 39 74% 58%;
   --kodi-accent-soft: 41 74% 91%;
   --kodi-accent-strong: 35 79% 49%;
-  --kodi-accent-foreground: 198 24% 18%;
+  --kodi-accent-foreground: 220 20% 18%;
   --kodi-success: 150 36% 38%;
   --kodi-success-soft: 151 34% 91%;
   --kodi-warning: 37 84% 54%;
@@ -25,8 +25,8 @@
   --kodi-danger-soft: 8 68% 92%;
   --kodi-info: 199 34% 44%;
   --kodi-info-soft: 201 38% 92%;
-  --kodi-overlay: 198 22% 18%;
-  --kodi-shadow: 198 27% 18%;
+  --kodi-overlay: 220 18% 18%;
+  --kodi-shadow: 220 22% 18%;
 
   --background: var(--kodi-canvas);
   --foreground: var(--kodi-text);
@@ -43,7 +43,7 @@
   --accent: var(--kodi-accent-soft);
   --accent-foreground: var(--kodi-accent-foreground);
   --destructive: var(--kodi-danger);
-  --destructive-foreground: 42 33% 99%;
+  --destructive-foreground: 220 14% 99%;
   --border: var(--kodi-border);
   --input: var(--kodi-border);
   --ring: var(--kodi-accent-strong);
@@ -54,7 +54,7 @@
   background:
     radial-gradient(
       circle at top left,
-      hsl(var(--kodi-accent) / 0.16),
+      hsl(var(--kodi-accent) / 0.04),
       transparent 28%
     ),
     radial-gradient(

@@ -14,7 +14,7 @@
     background:
       radial-gradient(
         circle at top,
-        hsl(var(--kodi-accent) / 0.18),
+        hsl(var(--kodi-accent) / 0.04),
         transparent 30%
       ),
       radial-gradient(

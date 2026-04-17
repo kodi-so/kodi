@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowLeft, Clock3, MessageSquare, RefreshCw, Sparkles, Trash2, Volume2, VolumeX } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Sparkles, Trash2, Volume2, VolumeX } from 'lucide-react'
 import {
   Alert,
   AlertDescription,
@@ -121,22 +121,10 @@ export default function MeetingDetailsPage() {
                 </p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-5">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1.5" title="Started">
-                    <Clock3 size={13} />
-                    <span className="whitespace-nowrap tabular-nums">
-                      {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
-                    </span>
-                  </div>
-                  <div className="h-4 w-px bg-border" />
-                  <div className="flex items-center gap-1.5" title="Last activity">
-                    <RefreshCw size={13} />
-                    <span className="whitespace-nowrap tabular-nums">
-                      {formatDate(m.latestActivityAt)}
-                    </span>
-                  </div>
-                </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="whitespace-nowrap text-sm tabular-nums text-muted-foreground">
+                  {formatDate(meeting.actualStartAt ?? meeting.createdAt)}
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"

@@ -346,13 +346,14 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
           />
 
           <div className="mt-3 flex items-center justify-between border-t border-brand-line pt-3">
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-brand-quiet transition-colors hover:bg-secondary hover:text-foreground"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-md text-muted-foreground"
               aria-label="Add item"
             >
               <Plus size={16} />
-            </button>
+            </Button>
 
             <Button
               size="icon"

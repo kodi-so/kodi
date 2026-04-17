@@ -134,8 +134,9 @@ function MobileConversationTabs({
   return (
     <div className="border-b border-brand-line bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
       <div className="flex items-center gap-2 overflow-x-auto">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onSelectDirect(KODI_DM_ID)}
           className={cn(
             'inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
@@ -148,12 +149,13 @@ function MobileConversationTabs({
             K
           </span>
           Kodi
-        </button>
+        </Button>
 
         {channels.map((channel) => (
-          <button
+          <Button
             key={channel.id}
-            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => onSelectChannel(channel.id)}
             className={cn(
               'whitespace-nowrap rounded-full border px-3 py-1.5 text-sm',
@@ -163,7 +165,7 @@ function MobileConversationTabs({
             )}
           >
             #{channel.slug}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -209,8 +211,9 @@ function MessageRow({
       </button>
 
       <div className="pl-12">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onOpenThread}
           className="mt-2 inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-brand-info transition-colors hover:bg-brand-info-soft"
         >
@@ -223,7 +226,7 @@ function MessageRow({
               Last reply {formatDate(replies[replies.length - 1]!.createdAt)}
             </span>
           ) : null}
-        </button>
+        </Button>
 
         {isResponding ? (
           <p className="mt-1 text-sm text-brand-quiet">Kodi is responding...</p>
@@ -266,13 +269,14 @@ function Composer({
         />
 
         <div className="mt-3 flex items-center justify-between border-t border-brand-line pt-3">
-          <button
-            type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-brand-quiet transition-colors hover:bg-secondary hover:text-foreground"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-md text-brand-quiet hover:bg-secondary hover:text-foreground"
             aria-label="Add item"
           >
             <Plus size={16} />
-          </button>
+          </Button>
 
           <Button
             size="icon"
@@ -744,8 +748,8 @@ export function ChatInterface({
         </div>
 
         <div className="px-2 pb-3">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => selectDirect(KODI_DM_ID)}
             className={cn(
               'flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
@@ -761,21 +765,22 @@ export function ChatInterface({
             <span className="text-[11px] uppercase tracking-[0.08em] text-brand-subtle">
               Private
             </span>
-          </button>
+          </Button>
         </div>
 
         <div className="flex items-center justify-between px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-subtle">
             Channels
           </p>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setShowChannelComposer((current) => !current)}
-            className="rounded-md p-1 text-brand-quiet transition-colors hover:bg-brand-elevated hover:text-foreground"
+            className="h-7 w-7 rounded-md p-1 text-brand-quiet hover:bg-brand-elevated hover:text-foreground"
             aria-label="Create channel"
           >
             <Plus size={16} />
-          </button>
+          </Button>
         </div>
 
         {showChannelComposer ? (
@@ -794,8 +799,9 @@ export function ChatInterface({
                 className="w-full rounded-md border border-brand-line bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-brand-subtle"
               />
               <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setShowChannelComposer(false)
                     setChannelDraft('')
@@ -803,15 +809,15 @@ export function ChatInterface({
                   className="text-sm text-brand-quiet hover:text-foreground"
                 >
                   Cancel
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
                   onClick={() => void createChannel()}
                   disabled={!channelDraft.trim() || creatingChannel}
-                  className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                  className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-60"
                 >
                   Create
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -819,9 +825,9 @@ export function ChatInterface({
 
         <div className="flex-1 overflow-y-auto px-2 pb-4">
           {channels.map((channel) => (
-            <button
+            <Button
               key={channel.id}
-              type="button"
+              variant="ghost"
               onClick={() => selectChannel(channel.id)}
               className={cn(
                 'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
@@ -832,7 +838,7 @@ export function ChatInterface({
             >
               <Hash size={15} />
               <span className="truncate">{channel.slug}</span>
-            </button>
+            </Button>
           ))}
         </div>
       </aside>
@@ -938,14 +944,15 @@ export function ChatInterface({
             />
 
             <div className="flex items-center gap-3 border-b border-brand-line bg-background px-4 py-3 sm:px-6">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={closeThread}
-                className="rounded-md p-1 text-brand-quiet transition-colors hover:bg-secondary hover:text-foreground"
+                className="h-8 w-8 rounded-md p-1 text-brand-quiet hover:bg-secondary hover:text-foreground"
                 aria-label="Back to channel"
               >
                 <ChevronLeft size={18} />
-              </button>
+              </Button>
 
               <div>
                 <p className="text-sm font-semibold text-foreground">Thread</p>

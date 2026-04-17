@@ -1,113 +1,52 @@
 import * as React from 'react'
+import * as TabsPrimitive from '@radix-ui/react-tabs'
 import { cn } from '../lib/utils'
 
-type TabsContextValue = {
-  activeTab: string
-  setActiveTab: (id: string) => void
-}
+const Tabs = TabsPrimitive.Root
 
-const TabsContext = React.createContext<TabsContextValue | null>(null)
+const TabsList = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.List
+    ref={ref}
+    className={cn(
+      'inline-flex items-center gap-1 rounded-xl bg-secondary p-1',
+      className
+    )}
+    {...props}
+  />
+))
+TabsList.displayName = TabsPrimitive.List.displayName
 
-function useTabsContext() {
-  const ctx = React.useContext(TabsContext)
-  if (!ctx)
-    throw new Error('Tabs compound components must be used within <Tabs>')
-  return ctx
-}
+const TabsTrigger = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground',
+      className
+    )}
+    {...props}
+  />
+))
+TabsTrigger.displayName = TabsPrimitive.Trigger.displayName
 
-function Tabs({
-  defaultValue,
-  value,
-  onValueChange,
-  className,
-  children,
-  ...props
-}: {
-  defaultValue?: string
-  value?: string
-  onValueChange?: (value: string) => void
-} & React.HTMLAttributes<HTMLDivElement>) {
-  const [internalValue, setInternalValue] = React.useState(defaultValue ?? '')
-  const activeTab = value ?? internalValue
-  const setActiveTab = React.useCallback(
-    (id: string) => {
-      setInternalValue(id)
-      onValueChange?.(id)
-    },
-    [onValueChange]
-  )
-
-  return (
-    <TabsContext.Provider value={{ activeTab, setActiveTab }}>
-      <div className={className} {...props}>
-        {children}
-      </div>
-    </TabsContext.Provider>
-  )
-}
-
-function TabsList({
-  className,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-1 rounded-xl bg-secondary p-1',
-        className
-      )}
-      role="tablist"
-      {...props}
-    >
-      {children}
-    </div>
-  )
-}
-
-function TabsTrigger({
-  value,
-  className,
-  children,
-  ...props
-}: { value: string } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  const { activeTab, setActiveTab } = useTabsContext()
-  const isActive = activeTab === value
-
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={isActive}
-      onClick={() => setActiveTab(value)}
-      className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all',
-        isActive
-          ? 'bg-background text-foreground shadow-sm'
-          : 'text-muted-foreground hover:text-foreground',
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </button>
-  )
-}
-
-function TabsContent({
-  value,
-  className,
-  children,
-  ...props
-}: { value: string } & React.HTMLAttributes<HTMLDivElement>) {
-  const { activeTab } = useTabsContext()
-  if (activeTab !== value) return null
-
-  return (
-    <div role="tabpanel" className={className} {...props}>
-      {children}
-    </div>
-  )
-}
+const TabsContent = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Content
+    ref={ref}
+    className={cn(
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+      className
+    )}
+    {...props}
+  />
+))
+TabsContent.displayName = TabsPrimitive.Content.displayName
 
 export { Tabs, TabsContent, TabsList, TabsTrigger }

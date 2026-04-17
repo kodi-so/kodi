@@ -4,10 +4,19 @@ import { logger } from 'hono/logger'
 import { trpcServer } from '@hono/trpc-server'
 import { appRouter } from './routers'
 import { createContext } from './context'
+import { registerMeetingRoutes } from './routes/meeting'
+import { registerRecallRoutes } from './routes/recall'
+import { registerComposioRoutes } from './routes/composio'
+import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 
 const app = new Hono()
 
+await ensureApiSchemaReadiness()
+
 app.use('*', logger())
+registerMeetingRoutes(app)
+registerRecallRoutes(app)
+registerComposioRoutes(app)
 app.use(
   '/trpc/*',
   cors({

@@ -1,5 +1,22 @@
 import { z } from 'zod'
 
+function envBoolean(name: string) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value === 'boolean') return value
+
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase()
+        if (normalized === 'true') return true
+        if (normalized === 'false') return false
+      }
+
+      return value
+    },
+    z.boolean({ invalid_type_error: `${name} must be "true" or "false".` })
+  )
+}
+
 const envSchema = z.object({
   // ── Required now ──────────────────────────────────────────────────────────
 
@@ -11,7 +28,58 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32),
 
   // Encryption (generate: openssl rand -hex 32)
-  ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
+  ENCRYPTION_KEY: z
+    .string()
+    .length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
+
+  // Feature flags
+  KODI_FEATURE_MEETING_INTELLIGENCE: envBoolean(
+    'KODI_FEATURE_MEETING_INTELLIGENCE'
+  ).default(false),
+  KODI_FEATURE_TOOL_ACCESS: envBoolean('KODI_FEATURE_TOOL_ACCESS').default(
+    false
+  ),
+
+  // ── Required in Phase 1 (meeting intelligence) ───────────────────────────
+
+  // Recall.ai
+  RECALL_API_KEY: z.string().optional(),
+  RECALL_API_REGION: z
+    .enum(['us-east-1', 'us-west-2', 'eu-central-1', 'ap-northeast-1'])
+    .default('us-east-1'),
+  RECALL_API_BASE_URL: z.string().url().optional(),
+  RECALL_REALTIME_WEBHOOK_URL: z.string().url().optional(),
+  RECALL_REALTIME_AUTH_TOKEN: z.string().optional(),
+  RECALL_WEBHOOK_SECRET: z.string().optional(),
+  RECALL_BOT_STATUS_WEBHOOK_SECRET: z.string().optional(),
+
+  MEETING_INTERNAL_TOKEN: z.string().optional(),
+
+  // Composio tool access
+  COMPOSIO_API_KEY: z.string().optional(),
+  COMPOSIO_WEBHOOK_SECRET: z.string().optional(),
+  TOOL_ACCESS_INTERNAL_TOKEN: z.string().optional(),
+  COMPOSIO_BASE_URL: z.string().url().optional(),
+  COMPOSIO_OAUTH_REDIRECT_URL: z.string().url().optional(),
+  COMPOSIO_AUTH_CALLBACK_URL: z.string().url().optional(),
+  COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT: envBoolean(
+    'COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT'
+  ).default(false),
+  COMPOSIO_AUTH_CONFIG_GOOGLE: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_SLACK: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_GITHUB: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_LINEAR: z.string().optional(),
+  COMPOSIO_AUTH_CONFIG_NOTION: z.string().optional(),
+
+  // Optional provider credentials for Kodi-owned OAuth apps used via
+  // Composio custom auth configs. These remain optional until the
+  // corresponding toolkit is enabled in a given environment.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  SLACK_CLIENT_ID: z.string().optional(),
+  SLACK_CLIENT_SECRET: z.string().optional(),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
 
   // ── Required in Phase 1 (provisioning) ────────────────────────────────────
 
@@ -43,6 +111,19 @@ const envSchema = z.object({
   // Base domain for hostnames
   BASE_DOMAIN: z.string().default('agent.kodi.so'),
 
+  // ── Phase 4: Voice Participation ──────────────────────────────────────────
+
+  // OpenAI TTS for voice responses (optional — voice output disabled if absent)
+  TTS_OPENAI_API_KEY: z.string().optional(),
+  TTS_OPENAI_VOICE: z
+    .enum(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'])
+    .default('alloy'),
+  TTS_OPENAI_MODEL: z.enum(['tts-1', 'tts-1-hd']).default('tts-1'),
+
+  // Public base URL of the API server (used to build Recall-accessible voice audio URLs)
+  // e.g. https://api.kodi.so — must be reachable by Recall.ai in production
+  API_BASE_URL: z.string().url().optional(),
+
   // ── Required in Phase 3 (invite flow) ─────────────────────────────────────
 
   // JWT secret for signing invite tokens (generate: openssl rand -hex 32)
@@ -65,14 +146,97 @@ if (!_env.success) {
 
 export const env = _env.data
 
-// ── Typed accessors for optional vars ─────────────────────────────────────
+export function requireRecall() {
+  const {
+    RECALL_API_KEY,
+    RECALL_API_REGION,
+    RECALL_API_BASE_URL,
+    RECALL_REALTIME_WEBHOOK_URL,
+    RECALL_REALTIME_AUTH_TOKEN,
+    RECALL_WEBHOOK_SECRET,
+    RECALL_BOT_STATUS_WEBHOOK_SECRET,
+  } = env
+
+  if (!RECALL_API_KEY) {
+    throw new Error(
+      'Recall environment variables are not configured. Set RECALL_API_KEY.'
+    )
+  }
+
+  return {
+    RECALL_API_KEY,
+    RECALL_API_REGION,
+    RECALL_API_BASE_URL,
+    RECALL_REALTIME_WEBHOOK_URL,
+    RECALL_REALTIME_AUTH_TOKEN,
+    RECALL_WEBHOOK_SECRET,
+    RECALL_BOT_STATUS_WEBHOOK_SECRET,
+  }
+}
+
+export function requireComposio() {
+  const {
+    COMPOSIO_API_KEY,
+    COMPOSIO_WEBHOOK_SECRET,
+    COMPOSIO_BASE_URL,
+    COMPOSIO_OAUTH_REDIRECT_URL,
+    COMPOSIO_AUTH_CALLBACK_URL,
+    COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT,
+    COMPOSIO_AUTH_CONFIG_GOOGLE,
+    COMPOSIO_AUTH_CONFIG_SLACK,
+    COMPOSIO_AUTH_CONFIG_GITHUB,
+    COMPOSIO_AUTH_CONFIG_LINEAR,
+    COMPOSIO_AUTH_CONFIG_NOTION,
+  } = env
+
+  if (!COMPOSIO_API_KEY || !COMPOSIO_WEBHOOK_SECRET) {
+    throw new Error(
+      'Composio environment variables are not configured. Set COMPOSIO_API_KEY and COMPOSIO_WEBHOOK_SECRET.'
+    )
+  }
+
+  return {
+    COMPOSIO_API_KEY,
+    COMPOSIO_WEBHOOK_SECRET,
+    COMPOSIO_BASE_URL,
+    COMPOSIO_OAUTH_REDIRECT_URL,
+    COMPOSIO_AUTH_CALLBACK_URL,
+    COMPOSIO_MANAGE_CONNECTIONS_IN_CHAT,
+    authConfigs: {
+      google: COMPOSIO_AUTH_CONFIG_GOOGLE,
+      slack: COMPOSIO_AUTH_CONFIG_SLACK,
+      github: COMPOSIO_AUTH_CONFIG_GITHUB,
+      linear: COMPOSIO_AUTH_CONFIG_LINEAR,
+      notion: COMPOSIO_AUTH_CONFIG_NOTION,
+    },
+  }
+}
 
 export function requireAws() {
-  const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SECURITY_GROUP_ID, AWS_SUBNET_ID, AWS_AMI_ID } = env
-  if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY || !AWS_SECURITY_GROUP_ID || !AWS_SUBNET_ID || !AWS_AMI_ID) {
+  const {
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_SECURITY_GROUP_ID,
+    AWS_SUBNET_ID,
+    AWS_AMI_ID,
+  } = env
+  if (
+    !AWS_ACCESS_KEY_ID ||
+    !AWS_SECRET_ACCESS_KEY ||
+    !AWS_SECURITY_GROUP_ID ||
+    !AWS_SUBNET_ID ||
+    !AWS_AMI_ID
+  ) {
     throw new Error('AWS environment variables are not configured.')
   }
-  return { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION: env.AWS_REGION, AWS_SECURITY_GROUP_ID, AWS_SUBNET_ID, AWS_AMI_ID }
+  return {
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_REGION: env.AWS_REGION,
+    AWS_SECURITY_GROUP_ID,
+    AWS_SUBNET_ID,
+    AWS_AMI_ID,
+  }
 }
 
 export function requireCloudflare() {
@@ -88,7 +252,10 @@ export function requireSsh() {
   if (!ADMIN_SSH_PRIVATE_KEY) {
     throw new Error('ADMIN_SSH_PRIVATE_KEY is not configured.')
   }
-  return { ADMIN_SSH_PRIVATE_KEY, ADMIN_SSH_PUBLIC_KEY: env.ADMIN_SSH_PUBLIC_KEY }
+  return {
+    ADMIN_SSH_PRIVATE_KEY,
+    ADMIN_SSH_PUBLIC_KEY: env.ADMIN_SSH_PUBLIC_KEY,
+  }
 }
 
 export function requireLiteLLM() {

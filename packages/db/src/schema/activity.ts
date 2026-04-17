@@ -16,7 +16,12 @@ export const activityLog = pgTable(
     metadata: jsonb('metadata'), // action-specific context
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => [index('activity_log_org_created_idx').on(table.orgId, table.createdAt)],
+  (table) => ({
+    orgCreatedIdx: index('activity_log_org_created_idx').on(
+      table.orgId,
+      table.createdAt
+    ),
+  })
 )
 
 export const activityLogRelations = relations(activityLog, ({ one }) => ({

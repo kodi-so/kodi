@@ -2,16 +2,12 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
-import { Mail, X } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  Input,
-} from '@kodi/ui'
+import { Mail } from 'lucide-react'
+import { toast } from 'sonner'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent } from '@kodi/ui/components/card'
+import { Input } from '@kodi/ui/components/input'
 
 type PendingInvite = {
   id: string
@@ -35,8 +31,6 @@ function formatExpiry(date: Date | string): string {
   })
 }
 
-type Toast = { type: 'success' | 'error'; message: string }
-
 export function InviteForm({
   orgId,
   pendingInvites,
@@ -46,12 +40,6 @@ export function InviteForm({
   const [email, setEmail] = useState('')
   const [inviting, setInviting] = useState(false)
   const [revoking, setRevoking] = useState<string | null>(null)
-  const [toast, setToast] = useState<Toast | null>(null)
-
-  function showToast(t: Toast) {
-    setToast(t)
-    setTimeout(() => setToast(null), 4000)
-  }
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
@@ -60,11 +48,11 @@ export function InviteForm({
     try {
       await trpc.invite.send.mutate({ orgId, email: email.trim() })
       setEmail('')
-      showToast({ type: 'success', message: `Invite sent to ${email.trim()}` })
+      toast.success(`Invite sent to ${email.trim()}`)
       onInviteSent()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to send invite'
-      showToast({ type: 'error', message: msg })
+      toast.error(msg)
     } finally {
       setInviting(false)
     }
@@ -74,14 +62,11 @@ export function InviteForm({
     setRevoking(inviteId)
     try {
       await trpc.invite.revoke.mutate({ orgId, inviteId })
-      showToast({
-        type: 'success',
-        message: `Invite for ${inviteEmail} revoked`,
-      })
+      toast.success(`Invite for ${inviteEmail} revoked`)
       onInviteRevoked()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to revoke invite'
-      showToast({ type: 'error', message: msg })
+      toast.error(msg)
     } finally {
       setRevoking(null)
     }
@@ -89,31 +74,12 @@ export function InviteForm({
 
   return (
     <div className="space-y-4">
-      {/* Toast notification */}
-      {toast && (
-        <Alert
-          className={`flex items-center gap-3 px-4 py-3 text-sm ${
-            toast.type === 'success'
-              ? 'border-green-500/20 bg-green-500/10 text-green-400'
-              : 'border-red-500/20 bg-red-500/10 text-red-400'
-          }`}
-        >
-          <span className="flex-1">{toast.message}</span>
-          <button
-            onClick={() => setToast(null)}
-            className="text-current opacity-60 hover:opacity-100"
-          >
-            <X size={16} />
-          </button>
-        </Alert>
-      )}
-
       {/* Invite form */}
       <form onSubmit={handleInvite} className="flex gap-3">
         <div className="relative flex-1">
           <Mail
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           />
           <Input
             type="email"
@@ -121,16 +87,16 @@ export function InviteForm({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="colleague@company.com"
             required
-            className="h-11 border-zinc-700 bg-zinc-900 pl-9 pr-4 text-white placeholder:text-zinc-500 focus-visible:ring-indigo-500"
+            className="h-11 border-border bg-card pl-9 pr-4"
           />
         </div>
         <Button
           type="submit"
           disabled={inviting || !email.trim()}
-          className="h-11 shrink-0 gap-2 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="h-11 shrink-0 gap-2 px-5"
         >
           {inviting && (
-            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />
           )}
           Invite
         </Button>
@@ -139,28 +105,25 @@ export function InviteForm({
       {/* Pending invites */}
       {pendingInvites.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Pending invites
           </p>
-          <Card className="overflow-hidden rounded-xl border-zinc-800 bg-zinc-900">
-            <CardContent className="divide-y divide-zinc-800 p-0">
+          <Card className="overflow-hidden rounded-xl border-border">
+            <CardContent className="divide-y divide-border p-0">
               {pendingInvites.map((invite) => (
                 <div
                   key={invite.id}
-                  className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-zinc-800/50"
+                  className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-brand-muted"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm truncate">
+                    <p className="truncate text-sm text-foreground">
                       {invite.email}
                     </p>
-                    <p className="text-zinc-500 text-xs">
+                    <p className="text-xs text-muted-foreground">
                       Expires {formatExpiry(invite.expiresAt)}
                     </p>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="hidden border-zinc-700 text-zinc-500 sm:inline-flex"
-                  >
+                  <Badge variant="neutral" className="hidden sm:inline-flex">
                     Pending
                   </Badge>
                   <Button
@@ -168,10 +131,10 @@ export function InviteForm({
                     disabled={revoking === invite.id}
                     variant="outline"
                     size="sm"
-                    className="border-zinc-700 text-zinc-400 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                    className="border-border text-muted-foreground hover:border-brand-danger hover:bg-brand-danger-soft hover:text-brand-danger"
                   >
                     {revoking === invite.id && (
-                      <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-current/30 border-t-current" />
                     )}
                     Revoke
                   </Button>

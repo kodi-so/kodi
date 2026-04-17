@@ -1,8 +1,6 @@
-import { activityLog } from '@kodi/db'
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import type * as schema from '@kodi/db/schema'
+import { activityLog, db } from '@kodi/db'
 
-type AnyDb = PostgresJsDatabase<typeof schema>
+type AnyDb = Pick<typeof db, 'insert'>
 
 /**
  * logActivity — append-only activity log helper.

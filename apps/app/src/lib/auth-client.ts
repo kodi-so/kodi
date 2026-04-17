@@ -1,3 +1,5 @@
+'use client'
+
 import { createAuthClient } from 'better-auth/react'
 
 // Use the current origin at runtime so this works in any environment

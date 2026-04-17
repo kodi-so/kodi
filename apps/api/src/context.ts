@@ -1,6 +1,5 @@
 import { db } from '@kodi/db'
 import { orgMembers, organizations } from '@kodi/db'
-import { eq, and } from 'drizzle-orm'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import * as schema from '@kodi/db/schema'
@@ -58,7 +57,8 @@ export async function createContext(opts: { req: Request; resHeaders: Headers })
     if (membershipCache.has(orgId)) return membershipCache.get(orgId) ?? null
 
     const membership = await db.query.orgMembers.findFirst({
-      where: and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, session.user.id)),
+      where: (fields, { and, eq }) =>
+        and(eq(fields.orgId, orgId), eq(fields.userId, session.user.id)),
       with: { org: true },
     })
 

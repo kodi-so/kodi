@@ -3,16 +3,9 @@
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { X } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
 
 type Member = {
   userId: string
@@ -52,52 +45,52 @@ export function RemoveMemberDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="kodi-overlay-scrim absolute inset-0 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Dialog */}
-      <Card className="relative z-10 w-full max-w-md rounded-2xl border-zinc-800 bg-zinc-900 shadow-2xl">
+      <Card className="relative z-10 w-full max-w-md rounded-2xl border-border shadow-2xl">
         <CardHeader className="mb-2 flex-row items-start justify-between space-y-0">
           <div>
-            <CardTitle className="text-lg text-white">Remove member</CardTitle>
-            <CardDescription className="mt-1 text-zinc-400">
+            <CardTitle className="text-lg text-foreground">
+              Remove member
+            </CardTitle>
+            <CardDescription className="mt-1 text-muted-foreground">
               Remove{' '}
-              <span className="text-white font-medium">{member.name}</span> from{' '}
-              <span className="text-white font-medium">{orgName}</span>?
+              <span className="font-medium text-foreground">{member.name}</span>{' '}
+              from{' '}
+              <span className="font-medium text-foreground">{orgName}</span>?
             </CardDescription>
           </div>
-          <button
+          <Button
             onClick={onClose}
-            className="text-zinc-500 hover:text-white transition-colors -mt-1"
+            variant="ghost"
+            size="icon"
+            className="-mt-1 h-auto w-auto p-0 text-muted-foreground transition-colors hover:text-foreground hover:bg-transparent"
             aria-label="Close"
           >
             <X size={20} />
-          </button>
+          </Button>
         </CardHeader>
 
         <CardContent>
-          <p className="mb-6 text-sm text-zinc-500">
+          <p className="mb-6 text-sm text-muted-foreground">
             They will lose access immediately. This action cannot be undone.
           </p>
 
           {error && (
-            <Alert
-              variant="destructive"
-              className="mb-4 border-red-500/20 bg-red-500/10 text-red-400"
-            >
+            <Alert variant="destructive" className="mb-4">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          <div className="flex gap-3 justify-end">
+          <div className="flex justify-end gap-3">
             <Button
               onClick={onClose}
               disabled={loading}
               variant="outline"
-              className="border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              className="text-muted-foreground"
             >
               Cancel
             </Button>
@@ -105,10 +98,10 @@ export function RemoveMemberDialog({
               onClick={handleConfirm}
               disabled={loading}
               variant="destructive"
-              className="gap-2 bg-red-600 text-white hover:bg-red-700"
+              className="gap-2"
             >
               {loading && (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" />
               )}
               Remove member
             </Button>

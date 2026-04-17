@@ -1,293 +1,327 @@
-import { z } from 'zod'
-import { desc, lt, eq, and, isNull } from 'drizzle-orm'
-import { chatMessages, instances, decrypt, user } from '@kodi/db'
-import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
-
-const WELCOME_MESSAGE =
-  "Hey! I'm your Kodi agent. I can join calls, help your team think through plans, answer questions with business context, track next steps, and turn decisions into work across your tools. What are you working on?"
+import { z } from 'zod'
+import { and, asc, chatChannels, chatMessages, desc, eq, inArray, isNull, lt, or, user } from '@kodi/db'
+import { runAssistantTurn } from '../../lib/assistant-chat'
+import { memberProcedure, router } from '../../trpc'
 
 const SYSTEM_PROMPT =
   'You are Kodi, a helpful AI teammate for employees and teams. You help users reason through discussions, answer questions using available business context, capture decisions, clarify next steps, and suggest or execute follow-up work across connected tools. Be concise, practical, and collaborative.'
 
-// ~4 chars per token is a rough but safe estimate for English text
-const CHARS_PER_TOKEN = 4
-// Reserve tokens for the system prompt, the new user message, and the model's reply
-const MAX_HISTORY_TOKENS = 200_000
+const DEFAULT_CHANNEL_NAME = 'general'
 
-/**
- * Builds the messages array for OpenClaw, filling from newest to oldest
- * until we approach the context window budget.
- */
-function buildMessagesWithHistory(
-  history: { role: 'user' | 'assistant'; content: string }[],
-  newUserMessage: string
-): { role: string; content: string }[] {
-  const systemMsg = { role: 'system', content: SYSTEM_PROMPT }
+function normalizeChannelName(name: string) {
+  return name.trim().replace(/\s+/g, ' ')
+}
 
-  // Budget remaining after system prompt + new message
-  let budgetChars =
-    MAX_HISTORY_TOKENS * CHARS_PER_TOKEN -
-    SYSTEM_PROMPT.length -
-    newUserMessage.length
+function slugifyChannelName(name: string) {
+  return normalizeChannelName(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
+}
 
-  // history is already newest-first — walk backwards to fill budget
-  const included: { role: string; content: string }[] = []
-  for (const msg of history) {
-    const cost = msg.content.length
-    if (budgetChars - cost < 0) break
-    budgetChars -= cost
-    included.push({ role: msg.role, content: msg.content })
+async function ensureDefaultChannel(db: any, orgId: string) {
+  const existing = await db.query.chatChannels.findFirst({
+    where: and(
+      eq(chatChannels.orgId, orgId),
+      eq(chatChannels.slug, DEFAULT_CHANNEL_NAME)
+    ),
+  })
+
+  if (existing) return existing
+
+  const [created] = await db
+    .insert(chatChannels)
+    .values({
+      id: `general_${orgId}`,
+      orgId,
+      name: DEFAULT_CHANNEL_NAME,
+      slug: DEFAULT_CHANNEL_NAME,
+    })
+    .onConflictDoNothing()
+    .returning()
+
+  if (created) return created
+
+  const fallback = await db.query.chatChannels.findFirst({
+    where: and(
+      eq(chatChannels.orgId, orgId),
+      eq(chatChannels.slug, DEFAULT_CHANNEL_NAME)
+    ),
+  })
+
+  if (!fallback) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to create the default channel.',
+    })
   }
 
-  // Reverse so oldest is first (chronological order)
-  included.reverse()
+  return fallback
+}
 
-  return [systemMsg, ...included, { role: 'user', content: newUserMessage }]
+async function getChannelOrThrow(db: any, orgId: string, channelId: string) {
+  const channel = await db.query.chatChannels.findFirst({
+    where: and(eq(chatChannels.id, channelId), eq(chatChannels.orgId, orgId)),
+  })
+
+  if (!channel) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Channel not found.',
+    })
+  }
+
+  return channel
+}
+
+async function buildUniqueSlug(db: any, orgId: string, name: string) {
+  const base = slugifyChannelName(name) || 'channel'
+  let slug = base
+  let suffix = 2
+
+  while (true) {
+    const existing = await db.query.chatChannels.findFirst({
+      where: and(eq(chatChannels.orgId, orgId), eq(chatChannels.slug, slug)),
+    })
+
+    if (!existing) return slug
+
+    slug = `${base}-${suffix}`
+    suffix += 1
+  }
+}
+
+const baseMessageSelect = {
+  id: chatMessages.id,
+  orgId: chatMessages.orgId,
+  channelId: chatMessages.channelId,
+  threadRootMessageId: chatMessages.threadRootMessageId,
+  userId: chatMessages.userId,
+  role: chatMessages.role,
+  content: chatMessages.content,
+  status: chatMessages.status,
+  createdAt: chatMessages.createdAt,
+  deletedAt: chatMessages.deletedAt,
+  userName: user.name,
+  userImage: user.image,
 }
 
 export const chatRouter = router({
-  /**
-   * Deletes a message by ID (soft delete via deletedAt timestamp).
-   * Requires caller to be an org member.
-   * Only allows deletion of messages belonging to the org.
-   */
-  deleteMessage: memberProcedure
+  listChannels: memberProcedure.query(async ({ ctx }) => {
+    await ensureDefaultChannel(ctx.db, ctx.org.id)
+
+    return ctx.db
+      .select({
+        id: chatChannels.id,
+        orgId: chatChannels.orgId,
+        name: chatChannels.name,
+        slug: chatChannels.slug,
+        createdBy: chatChannels.createdBy,
+        createdAt: chatChannels.createdAt,
+      })
+      .from(chatChannels)
+      .where(eq(chatChannels.orgId, ctx.org.id))
+      .orderBy(asc(chatChannels.createdAt))
+  }),
+
+  createChannel: memberProcedure
     .input(
       z.object({
-        messageId: z.string(),
+        name: z.string().min(1).max(50),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Find message and verify it belongs to the verified org
-      const message = await ctx.db.query.chatMessages.findFirst({
-        where: eq(chatMessages.id, input.messageId),
-      })
+      await ensureDefaultChannel(ctx.db, ctx.org.id)
 
-      if (!message) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Message not found' })
-      }
-
-      if (message.orgId !== ctx.org.id) {
+      const name = normalizeChannelName(input.name)
+      if (!name) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Message not found',
+          code: 'BAD_REQUEST',
+          message: 'Channel name is required.',
         })
       }
 
-      if (message.deletedAt) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Message already deleted',
-        })
-      }
+      const slug = await buildUniqueSlug(ctx.db, ctx.org.id, name)
 
-      // Soft delete by setting deletedAt timestamp
-      const [deleted] = await ctx.db
-        .update(chatMessages)
-        .set({ deletedAt: new Date() })
-        .where(eq(chatMessages.id, input.messageId))
+      const [channel] = await ctx.db
+        .insert(chatChannels)
+        .values({
+          orgId: ctx.org.id,
+          name,
+          slug,
+          createdBy: ctx.session.user.id,
+        })
         .returning()
 
-      return deleted
+      return channel
     }),
 
-  /**
-   * Returns the last N messages for an org, newest-last (chronological order).
-   * Supports cursor pagination via `before` (a message id).
-   * On first load (no messages), inserts a welcome message and returns it.
-   * Requires caller to be an org member (enforced by memberProcedure).
-   * Excludes soft-deleted messages.
-   */
-  getHistory: memberProcedure
+  getChannelMessages: memberProcedure
     .input(
       z.object({
+        channelId: z.string(),
         limit: z.number().int().min(1).max(100).default(50),
-        before: z.string().optional(), // message id for cursor pagination
+        cursor: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const orgId = ctx.org.id
-      const conditions = [
-        eq(chatMessages.orgId, orgId),
+      await ensureDefaultChannel(ctx.db, ctx.org.id)
+      await getChannelOrThrow(ctx.db, ctx.org.id, input.channelId)
+
+      let cursorCreatedAt: Date | null = null
+      if (input.cursor) {
+        const cursorRow = await ctx.db.query.chatMessages.findFirst({
+          where: and(
+            eq(chatMessages.id, input.cursor),
+            eq(chatMessages.orgId, ctx.org.id)
+          ),
+          columns: { createdAt: true },
+        })
+        if (cursorRow) cursorCreatedAt = cursorRow.createdAt
+      }
+
+      const rootFilters = [
+        eq(chatMessages.orgId, ctx.org.id),
+        eq(chatMessages.channelId, input.channelId),
+        isNull(chatMessages.threadRootMessageId),
         isNull(chatMessages.deletedAt),
       ]
-
-      if (input.before) {
-        const cursor = await ctx.db.query.chatMessages.findFirst({
-          where: eq(chatMessages.id, input.before),
-        })
-        if (cursor) {
-          conditions.push(lt(chatMessages.createdAt, cursor.createdAt))
-        }
+      if (cursorCreatedAt) {
+        rootFilters.push(lt(chatMessages.createdAt, cursorCreatedAt))
       }
 
-      const rows = await ctx.db
-        .select({
-          id: chatMessages.id,
-          orgId: chatMessages.orgId,
-          userId: chatMessages.userId,
-          role: chatMessages.role,
-          content: chatMessages.content,
-          status: chatMessages.status,
-          createdAt: chatMessages.createdAt,
-          deletedAt: chatMessages.deletedAt,
-          userName: user.name,
-          userImage: user.image,
-        })
+      const rootRows = await ctx.db
+        .select({ id: chatMessages.id })
+        .from(chatMessages)
+        .where(and(...rootFilters))
+        .orderBy(desc(chatMessages.createdAt))
+        .limit(input.limit + 1)
+
+      const hasMore = rootRows.length > input.limit
+      const pageRootIds = (hasMore ? rootRows.slice(0, input.limit) : rootRows).map(
+        (row) => row.id
+      )
+      const nextCursor = hasMore
+        ? (pageRootIds[pageRootIds.length - 1] ?? null)
+        : null
+
+      if (pageRootIds.length === 0) {
+        return { messages: [], nextCursor: null }
+      }
+
+      const messages = await ctx.db
+        .select(baseMessageSelect)
         .from(chatMessages)
         .leftJoin(user, eq(chatMessages.userId, user.id))
-        .where(and(...conditions))
-        .orderBy(desc(chatMessages.createdAt))
-        .limit(input.limit)
+        .where(
+          and(
+            eq(chatMessages.orgId, ctx.org.id),
+            eq(chatMessages.channelId, input.channelId),
+            isNull(chatMessages.deletedAt),
+            or(
+              inArray(chatMessages.id, pageRootIds),
+              inArray(chatMessages.threadRootMessageId, pageRootIds)
+            )
+          )
+        )
+        .orderBy(asc(chatMessages.createdAt))
 
-      // On first load with no prior messages, seed the welcome message
-      if (rows.length === 0 && !input.before) {
-        const welcome = await ctx.db
-          .insert(chatMessages)
-          .values({
-            orgId,
-            userId: null,
-            role: 'assistant',
-            content: WELCOME_MESSAGE,
-          })
-          .returning()
-        return welcome.map((w) => ({
-          ...w,
-          userName: null as string | null,
-          userImage: null as string | null,
-        }))
-      }
-
-      // Return in chronological order (oldest first)
-      return rows.reverse()
+      return { messages, nextCursor }
     }),
 
-  /**
-   * Forwards a user message to the org's OpenClaw instance and persists both sides.
-   * Requires caller to be an org member.
-   */
   sendMessage: memberProcedure
     .input(
       z.object({
+        channelId: z.string(),
         message: z.string().min(1),
+        threadRootMessageId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const orgId = ctx.org.id
 
-      // Look up the org's instance
-      const instance = await ctx.db.query.instances.findFirst({
-        where: eq(instances.orgId, orgId),
-      })
-      if (!instance) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'No instance found for this org',
-        })
-      }
-      if (instance.status !== 'running') {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: `Instance is not ready (current status: ${instance.status})`,
-        })
-      }
+      await ensureDefaultChannel(ctx.db, orgId)
+      await getChannelOrThrow(ctx.db, orgId, input.channelId)
 
-      // Resolve instance URL (instanceUrl → hostname fallback → OPENCLAW_DEV_URL env)
-      let instanceUrl: string | undefined
-      if (instance.instanceUrl) {
-        instanceUrl = instance.instanceUrl
-      } else if (instance.hostname) {
-        instanceUrl = `https://${instance.hostname}`
-      } else if (process.env.OPENCLAW_DEV_URL) {
-        instanceUrl = process.env.OPENCLAW_DEV_URL
-      }
-      if (!instanceUrl) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message:
-            'Instance has no reachable URL (instanceUrl, hostname, or OPENCLAW_DEV_URL required)',
-        })
-      }
+      let historyRows: { role: 'user' | 'assistant'; content: string }[] = []
 
-      // Fetch conversation history (newest-first) and persist user message in parallel
-      const [historyRows, userMessageRows] = await Promise.all([
-        ctx.db
-          .select({ role: chatMessages.role, content: chatMessages.content })
+      if (input.threadRootMessageId) {
+        const threadRoot = await ctx.db.query.chatMessages.findFirst({
+          where: and(
+            eq(chatMessages.id, input.threadRootMessageId),
+            eq(chatMessages.orgId, orgId),
+            eq(chatMessages.channelId, input.channelId),
+            isNull(chatMessages.threadRootMessageId),
+            isNull(chatMessages.deletedAt)
+          ),
+        })
+
+        if (!threadRoot) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Thread not found.',
+          })
+        }
+
+        historyRows = await ctx.db
+          .select({
+            role: chatMessages.role,
+            content: chatMessages.content,
+          })
           .from(chatMessages)
           .where(
             and(
               eq(chatMessages.orgId, orgId),
+              eq(chatMessages.channelId, input.channelId),
               eq(chatMessages.status, 'sent'),
-              isNull(chatMessages.deletedAt)
+              isNull(chatMessages.deletedAt),
+              or(
+                eq(chatMessages.id, input.threadRootMessageId),
+                eq(chatMessages.threadRootMessageId, input.threadRootMessageId)
+              )
             )
           )
           .orderBy(desc(chatMessages.createdAt))
-          .limit(200),
-        ctx.db
-          .insert(chatMessages)
-          .values({
-            orgId,
-            userId: ctx.session.user.id,
-            role: 'user',
-            content: input.message,
-            status: 'sent',
-          })
-          .returning(),
-      ])
-      const userMessage = userMessageRows[0]!
-
-      // Build context-aware messages array
-      const messages = buildMessagesWithHistory(historyRows, input.message)
-
-      // Build auth header — decrypt gatewayToken if present
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      }
-      if (instance.gatewayToken) {
-        try {
-          const token = decrypt(instance.gatewayToken)
-          if (token) {
-            headers['Authorization'] = `Bearer ${token}`
-          }
-        } catch {
-          // Decryption failed — attempt request without auth (don't hard-fail)
-        }
+          .limit(200)
       }
 
-      // Forward to OpenClaw via OpenAI-compatible /v1/chat/completions
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60_000)
+      const [userMessage] = await ctx.db
+        .insert(chatMessages)
+        .values({
+          orgId,
+          channelId: input.channelId,
+          threadRootMessageId: input.threadRootMessageId ?? null,
+          userId: ctx.session.user.id,
+          role: 'user',
+          content: input.message,
+          status: 'sent',
+        })
+        .returning()
+
+      if (!userMessage) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to store the user message.',
+        })
+      }
 
       let responseText: string
+
       try {
-        const res = await fetch(`${instanceUrl}/v1/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model: 'openclaw:main',
-            messages,
-          }),
-          signal: controller.signal,
+        const result = await runAssistantTurn({
+          db: ctx.db,
+          orgId,
+          actorUserId: ctx.session.user.id,
+          sourceId: userMessage.id,
+          userMessage: input.message,
+          history: historyRows,
+          systemPrompt: SYSTEM_PROMPT,
         })
-        clearTimeout(timeoutId)
 
-        if (!res.ok) {
-          const body = await res.text().catch(() => '')
-          throw new Error(`Instance responded with HTTP ${res.status}: ${body}`)
-        }
-
-        const data = (await res.json()) as {
-          choices?: { message?: { content?: string } }[]
-        }
-        const content = data.choices?.[0]?.message?.content
-        if (!content) {
-          throw new Error('Empty response from instance')
-        }
-        responseText = content
-      } catch (err) {
-        clearTimeout(timeoutId)
-        // Mark user message as error — do NOT delete it
+        responseText = result.content
+      } catch (error) {
         await ctx.db
           .update(chatMessages)
           .set({ status: 'error' })
@@ -296,15 +330,19 @@ export const chatRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message:
-            err instanceof Error ? err.message : 'Failed to reach instance',
+            error instanceof Error ? error.message : 'Failed to reach instance',
         })
       }
 
-      // Persist assistant message and return both
+      const effectiveThreadRootMessageId =
+        input.threadRootMessageId ?? userMessage.id
+
       const [assistantMessage] = await ctx.db
         .insert(chatMessages)
         .values({
           orgId,
+          channelId: input.channelId,
+          threadRootMessageId: effectiveThreadRootMessageId,
           userId: null,
           role: 'assistant',
           content: responseText,
@@ -312,6 +350,17 @@ export const chatRouter = router({
         })
         .returning()
 
-      return { userMessage, assistantMessage }
+      if (!assistantMessage) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to store the assistant reply.',
+        })
+      }
+
+      return {
+        userMessage,
+        assistantMessage,
+        threadRootMessageId: effectiveThreadRootMessageId,
+      }
     }),
 })

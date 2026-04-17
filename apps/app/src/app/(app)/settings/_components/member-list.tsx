@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { RemoveMemberDialog } from './remove-member-dialog'
-import { Badge, Button, Card, CardContent } from '@kodi/ui'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent } from '@kodi/ui/components/card'
 
 type Member = {
   id: string
@@ -55,8 +57,8 @@ export function MemberList({
 
   return (
     <>
-      <Card className="overflow-hidden rounded-xl border-zinc-800 bg-zinc-900">
-        <CardContent className="divide-y divide-zinc-800 p-0">
+      <Card className="overflow-hidden rounded-xl border-border">
+        <CardContent className="divide-y divide-border p-0">
           {members.map((member) => {
             const isSelf = member.userId === currentUserId
             const canRemove = isOwner && !isSelf && member.role !== 'owner'
@@ -64,50 +66,45 @@ export function MemberList({
             return (
               <div
                 key={member.id}
-                className="flex items-center gap-4 px-5 py-4 bg-zinc-900 hover:bg-zinc-800/50 transition-colors"
+                className="flex items-center gap-4 bg-transparent px-5 py-4 transition-colors hover:bg-brand-muted"
               >
-                {/* Avatar */}
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-xs font-bold">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-border bg-accent">
+                  <span className="text-xs font-bold text-foreground">
                     {getInitials(member.name)}
                   </span>
                 </div>
 
-                {/* Name + email */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium truncate">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">
                     {member.name}
                     {isSelf && (
-                      <span className="text-zinc-500 font-normal ml-1">
+                      <span className="ml-1 font-normal text-muted-foreground">
                         (you)
                       </span>
                     )}
                   </p>
-                  <p className="text-zinc-500 text-xs truncate">
+                  <p className="truncate text-xs text-muted-foreground">
                     {member.email}
                   </p>
                 </div>
 
-                {/* Join date */}
-                <p className="text-zinc-500 text-xs hidden sm:block flex-shrink-0">
+                <p className="hidden flex-shrink-0 text-xs text-muted-foreground sm:block">
                   Joined {formatDate(member.joinedAt)}
                 </p>
 
-                {/* Role badge */}
                 {member.role === 'owner' ? (
-                  <Badge className="flex-shrink-0 border border-indigo-500/20 bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/15">
+                  <Badge
+                    variant="neutral"
+                    className="flex-shrink-0 border-accent bg-accent text-primary hover:bg-accent"
+                  >
                     Owner
                   </Badge>
                 ) : (
-                  <Badge
-                    variant="outline"
-                    className="flex-shrink-0 border-zinc-700 bg-zinc-800 text-zinc-400"
-                  >
+                  <Badge variant="neutral" className="flex-shrink-0">
                     Member
                   </Badge>
                 )}
 
-                {/* Remove button — owner only, not self */}
                 {isOwner && (
                   <Button
                     onClick={() => canRemove && setRemoveTarget(member)}
@@ -123,8 +120,8 @@ export function MemberList({
                     size="sm"
                     className={`flex-shrink-0 text-xs ${
                       canRemove
-                        ? 'border-zinc-700 text-zinc-400 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
-                        : 'border-zinc-800 text-zinc-600'
+                        ? 'border-border text-muted-foreground hover:border-brand-danger hover:bg-brand-danger-soft hover:text-brand-danger'
+                        : 'border-border text-muted-foreground'
                     }`}
                   >
                     Remove
@@ -135,7 +132,7 @@ export function MemberList({
           })}
 
           {members.length === 0 && (
-            <div className="px-5 py-10 text-center text-zinc-500 text-sm bg-zinc-900">
+            <div className="bg-transparent px-5 py-10 text-center text-sm text-muted-foreground">
               No members yet.
             </div>
           )}

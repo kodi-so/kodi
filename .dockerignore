@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+dist
+**/dist
+coverage
+*.tsbuildinfo
+**/*.tsbuildinfo
+.git
+.DS_Store

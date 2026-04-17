@@ -4,7 +4,9 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
+    "./client": "./src/client.ts",
+    "./schema": "./src/schema/index.ts",
+    "./meeting-bot-identity": "./src/lib/meeting-bot-identity.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",

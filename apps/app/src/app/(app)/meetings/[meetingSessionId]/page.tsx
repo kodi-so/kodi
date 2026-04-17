@@ -49,8 +49,13 @@ import {
   SheetTitle,
   SheetTrigger,
   Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
 } from '@kodi/ui'
+import { SectionIcon } from '@/components/section-icon'
 import { useOrg } from '@/lib/org-context'
 import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
@@ -1005,9 +1010,7 @@ function PostMeetingReview({
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
-                <FileText size={18} />
-              </div>
+              <SectionIcon icon={FileText} />
               <div>
                 <CardTitle className="text-lg text-foreground">
                   Meeting recap
@@ -1205,9 +1208,7 @@ function PostMeetingReview({
       <Card className="border-border shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-              <ClipboardList size={18} />
-            </div>
+            <SectionIcon icon={ClipboardList} />
             <div>
               <CardTitle className="text-lg text-foreground">
                 Action items
@@ -2408,7 +2409,7 @@ export default function MeetingDetailsPage() {
 
   if (!activeOrg) {
     return (
-      <div className="flex min-h-full items-center justify-center p-6 text-sm text-brand-subtle">
+      <div className="flex min-h-full items-center justify-center p-6 text-sm text-muted-foreground">
         Select a workspace to view meetings.
       </div>
     )
@@ -2513,7 +2514,7 @@ export default function MeetingDetailsPage() {
                   size="sm"
                   onClick={() => void handleDeleteMeeting()}
                   disabled={deletingMeeting}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:bg-transparent hover:text-destructive"
                 >
                   <Trash2 size={14} />
                 </Button>
@@ -2601,89 +2602,14 @@ export default function MeetingDetailsPage() {
           orgId={orgId}
         />
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
-          <div className="space-y-6">
-            <Card className="border-border shadow-sm">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
-                    <Sparkles size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg text-foreground">
-                      Meeting summary
-                    </CardTitle>
-                    <CardDescription>
-                      The shortest useful version of the meeting so far.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {activeTopics.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {activeTopics.map((topic) => (
-                      <Badge key={topic} variant="neutral">
-                        {topic}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <div className="rounded-xl border border-border bg-secondary p-5">
-                  <p className="text-sm leading-7 text-foreground">
-                    {meeting.liveSummary ??
-                      liveState?.summary ??
-                      'Kodi has not produced a meeting summary yet.'}
-                  </p>
-                </div>
-
-                <details className="group rounded-xl border border-border bg-secondary p-5">
-                  <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
-                    Working notes
-                  </summary>
-                  <p
-                    className={`mt-4 whitespace-pre-wrap text-sm leading-6 ${quietTextClass}`}
-                  >
-                    {rollingNotes ??
-                      'Kodi will keep a tighter running set of notes here as the meeting develops.'}
-                  </p>
-                </details>
-              </CardContent>
-            </Card>
-
-            <Sheet open={askSheetOpen} onOpenChange={setAskSheetOpen}>
-              <SheetTrigger asChild>
-                <Card className="cursor-pointer border-border transition-colors hover:bg-secondary/60">
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-secondary text-muted-foreground ring-1 ring-border">
-                          <MessageSquare size={18} />
-                        </div>
-                        <div>
-                          <CardTitle className="text-lg text-foreground">
-                            Ask Kodi
-                          </CardTitle>
-                          <CardDescription>
-                            {answers.length > 0
-                              ? `${answers.length} question${answers.length === 1 ? '' : 's'} asked`
-                              : 'Ask a question grounded in the live meeting context.'}
-                          </CardDescription>
-                        </div>
-                      </div>
-                      <SendHorizonal size={16} className="text-muted-foreground" />
-                    </div>
-                  </CardHeader>
-                </Card>
-              </SheetTrigger>
+        {/* Ask Kodi sheet — accessible from any tab */}
+        <Sheet open={askSheetOpen} onOpenChange={setAskSheetOpen}>
+          <div /> {/* Empty trigger — opened via button in header */}
 
               <SheetContent className="flex w-full max-w-xl flex-col p-0 sm:max-w-xl">
                 <SheetHeader className="shrink-0">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground ring-1 ring-border">
-                      <MessageSquare size={15} />
-                    </div>
+                    <SectionIcon icon={MessageSquare} />
                     <SheetTitle>Ask Kodi</SheetTitle>
                   </div>
                 </SheetHeader>
@@ -2808,354 +2734,78 @@ export default function MeetingDetailsPage() {
                   </form>
                 </div>
               </SheetContent>
-            </Sheet>
+        </Sheet>
 
-            <Card className="border-border shadow-sm">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-                    <Mic2 size={18} />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg text-foreground">
-                      Transcript
-                    </CardTitle>
-                    <CardDescription>
-                      Raw meeting language, grouped into readable speaker turns.
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {chronologicalTranscript.length === 0 ? (
-                  <div
-                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
-                  >
-                    Transcript lines will appear here once Kodi starts hearing
-                    the call.
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <div
-                      ref={transcriptScrollRef}
-                      onScroll={handleTranscriptScroll}
-                      className="max-h-[540px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-border bg-secondary"
-                    >
-                      {transcriptSpeakerGroups.map((group, groupIndex) => {
-                        const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
-                        const initials = getSpeakerInitials(group.speaker)
-                        const isCollapsed = collapsedSpeakers.has(group.groupId)
-                        const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)
-                        return (
-                          <div
-                            key={group.groupId}
-                            className={groupIndex > 0 ? 'border-t border-border' : ''}
-                          >
-                            {/* Speaker header row */}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCollapsedSpeakers((prev) => {
-                                  const next = new Set(prev)
-                                  if (next.has(group.groupId)) next.delete(group.groupId)
-                                  else next.add(group.groupId)
-                                  return next
-                                })
-                              }
-                              className="flex w-full items-center gap-2.5 px-4 py-3 text-left hover:bg-brand-line/30 transition-colors"
-                            >
-                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${color}`}>
-                                {initials}
-                              </span>
-                              <span className="flex-1 min-w-0">
-                                <span className="text-sm font-medium text-foreground">{group.speaker}</span>
-                                <span className={`ml-2 text-xs ${subtleTextClass}`}>
-                                  {formatTime(group.startsAt)}
-                                </span>
-                              </span>
-                              {isCollapsed && (
-                                <span className={`text-xs ${subtleTextClass}`}>
-                                  {wordCount} words
-                                </span>
-                              )}
-                              {isCollapsed
-                                ? <ChevronRight size={14} className={subtleTextClass} />
-                                : <ChevronDown size={14} className={subtleTextClass} />
-                              }
-                            </button>
-
-                            {/* Turn content */}
-                            {!isCollapsed && (
-                              <div className="space-y-3 pb-4 pl-[3.25rem] pr-4">
-                                {group.turns.map((turn) => (
-                                  <p
-                                    key={turn.id}
-                                    className="whitespace-pre-wrap text-sm leading-6 text-foreground"
-                                  >
-                                    {turn.content}
-                                    {turn.isPartial && (
-                                      <span className={`ml-2 text-xs ${subtleTextClass}`}>
-                                        …
-                                      </span>
-                                    )}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                      <div ref={transcriptBottomRef} />
-                    </div>
-
-                    {/* Jump to latest button */}
-                    {!transcriptAtBottom && (
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          className="rounded-full shadow-md text-xs h-7 px-3 gap-1.5"
-                          onClick={() => {
-                            setTranscriptAtBottom(true)
-                            const el = transcriptScrollRef.current
-                            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-                          }}
-                        >
-                          <ChevronDown size={13} />
-                          Latest
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        {/* Tabbed content */}
+        <Tabs defaultValue="overview">
+          <div className="flex items-center justify-between gap-4">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="transcript">Transcript</TabsTrigger>
+              <TabsTrigger value="details">Details</TabsTrigger>
+            </TabsList>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setAskSheetOpen(true)}
+            >
+              <MessageSquare size={14} />
+              Ask Kodi
+              {answers.length > 0 && (
+                <Badge variant="neutral" className="ml-1 text-[10px]">
+                  {answers.length}
+                </Badge>
+              )}
+            </Button>
           </div>
 
-          <div className="space-y-6">
-            {workspaceSettings && controls && (
-              <Card className="border-border shadow-sm">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-                      <CheckCircle2 size={18} />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg text-foreground">
-                        Live participation controls
-                      </CardTitle>
-                      <CardDescription>
-                        These controls narrow how Kodi can participate in this
-                        meeting without changing the workspace defaults.
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">
-                      {getMeetingParticipationModeLabel(
-                        controls.participationMode
-                      )}
-                    </Badge>
-                    {controls.liveResponsesDisabled ? (
-                      <Badge variant="destructive">Live replies paused</Badge>
-                    ) : (
-                      <Badge variant="success">Live replies allowed</Badge>
-                    )}
-                    {controls.allowHostControls && (
-                      <Badge variant="neutral">Starter controls on</Badge>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3">
-                    {(
-                      ['listen_only', 'chat_enabled', 'voice_enabled'] as const
-                    ).map((mode) => {
-                      const active = controls.participationMode === mode
-
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          disabled={!canManageControls || controlsSaving}
-                          onClick={() =>
-                            void updateControls({
-                              participationMode: mode,
-                            })
-                          }
-                          className={`rounded-xl border px-4 py-4 text-left transition ${
-                            active
-                              ? 'border-foreground bg-brand-accent-soft text-foreground'
-                              : 'border-border bg-secondary text-brand-quiet hover:border-foreground/20 hover:text-foreground'
-                          }`}
-                        >
-                          <p className="text-sm font-medium">
-                            {getMeetingParticipationModeLabel(mode)}
-                          </p>
-                          <p className="mt-2 text-xs leading-5">
-                            {getMeetingParticipationModeDescription(mode)}
-                          </p>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="rounded-xl border border-border bg-secondary p-4">
-                    <p className="text-sm font-medium text-foreground">
-                      Live reply kill switch
-                    </p>
-                    <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
-                      Pause live chat and voice replies immediately without
-                      ending the meeting session. Owners can always do this. If
-                      starter controls are enabled, the meeting starter can too.
-                    </p>
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <Button
-                        type="button"
-                        variant={
-                          controls.liveResponsesDisabled
-                            ? 'outline'
-                            : 'destructive'
-                        }
-                        disabled={!canManageControls || controlsSaving}
-                        onClick={() =>
-                          void updateControls({
-                            liveResponsesDisabled:
-                              !controls.liveResponsesDisabled,
-                            liveResponsesDisabledReason:
-                              controls.liveResponsesDisabled
-                                ? undefined
-                                : 'Paused from the meeting detail page.',
-                          })
-                        }
-                      >
-                        {controlsSaving
-                          ? 'Updating...'
-                          : controls.liveResponsesDisabled
-                            ? 'Resume live replies'
-                            : 'Pause live replies'}
-                      </Button>
-                      {controls.liveResponsesDisabledReason && (
-                        <span className="text-xs text-brand-quiet">
-                          {controls.liveResponsesDisabledReason}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-dashed border-border bg-secondary p-4">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-brand-subtle">
-                      Meeting trust contract
-                    </p>
-                    <div className="mt-3 space-y-2 text-sm leading-6 text-foreground">
-                      {buildMeetingCopilotDisclosure(workspaceSettings).map(
-                        (line) => (
-                          <p key={line}>{line}</p>
-                        )
-                      )}
-                    </div>
-                    <Separator className="my-4" />
-                    <div className="flex flex-wrap gap-3 text-xs text-brand-quiet">
-                      <span>
-                        Transcript retention:{' '}
-                        {formatRetentionDays(
-                          workspaceSettings.transcriptRetentionDays
-                        )}
-                      </span>
-                      <span>
-                        Artifact retention:{' '}
-                        {formatRetentionDays(
-                          workspaceSettings.artifactRetentionDays
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {!canManageControls && (
-                    <Alert>
-                      <AlertDescription>
-                        Only workspace owners and, when enabled, the meeting
-                        starter can change these live controls.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
+          {/* Overview tab — summary, recap, follow-up */}
+          <TabsContent value="overview" className="mt-6 space-y-6">
             <Card className="border-border shadow-sm">
               <CardHeader>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-brand-quiet">
-                    <Users size={18} />
-                  </div>
+                  <SectionIcon icon={Sparkles} />
                   <div>
                     <CardTitle className="text-lg text-foreground">
-                      Meeting chat
+                      Meeting summary
                     </CardTitle>
                     <CardDescription>
-                      Review in-meeting Zoom chat messages that Kodi observed
-                      during the session.
+                      The shortest useful version of the meeting so far.
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {meeting.provider === 'zoom' ? (
-                  <>
-                    <div
-                      className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-                    >
-                      This branch keeps meeting chat as a read-only activity
-                      feed. Sending new in-meeting chat messages is not included
-                      here.
-                    </div>
-
-                    {chatMessages.length === 0 ? (
-                      <div
-                        className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-                      >
-                        In-meeting Zoom chat messages will appear here once Kodi
-                        receives or sends them.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {chatMessages.map((message) => (
-                          <div
-                            key={message.id}
-                            className="rounded-xl border border-border bg-secondary p-4"
-                          >
-                            <div
-                              className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
-                            >
-                              <span className="font-medium text-foreground">
-                                {message.senderName}
-                              </span>
-                              <Badge variant="neutral">
-                                {formatEventLabel(message.eventType)}
-                              </Badge>
-                              <span>{formatDate(message.occurredAt)}</span>
-                              <span>
-                                to {message.recipient.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
-                              {message.content}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div
-                    className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
-                  >
-                    In-meeting chat activity is available for Zoom sessions
-                    right now.
+                {activeTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {activeTopics.map((topic) => (
+                      <Badge key={topic} variant="neutral">
+                        {topic}
+                      </Badge>
+                    ))}
                   </div>
                 )}
+
+                <div className="rounded-xl border border-border bg-secondary p-5">
+                  <p className="text-sm leading-7 text-foreground">
+                    {meeting.liveSummary ??
+                      liveState?.summary ??
+                      'Kodi has not produced a meeting summary yet.'}
+                  </p>
+                </div>
+
+                <details className="group rounded-xl border border-border bg-secondary p-5">
+                  <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
+                    Working notes
+                  </summary>
+                  <p
+                    className={`mt-4 whitespace-pre-wrap text-sm leading-6 ${quietTextClass}`}
+                  >
+                    {rollingNotes ??
+                      'Kodi will keep a tighter running set of notes here as the meeting develops.'}
+                  </p>
+                </details>
               </CardContent>
             </Card>
 
@@ -3425,129 +3075,314 @@ export default function MeetingDetailsPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            <details className="group rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <summary className="cursor-pointer list-none text-sm font-medium text-foreground marker:hidden">
-                People, activity, and diagnostics
-              </summary>
-              <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
-                Keep the meeting page focused by tucking roster, raw lifecycle,
-                and provider details here.
-              </p>
-
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl border border-border bg-secondary p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <RefreshCw size={16} className="text-brand-quiet" />
-                    Transport health
+          {/* Transcript tab — full width for readability */}
+          <TabsContent value="transcript" className="mt-6">
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <SectionIcon icon={Mic2} />
+                  <div>
+                    <CardTitle className="text-lg text-foreground">
+                      Transcript
+                    </CardTitle>
+                    <CardDescription>
+                      Raw meeting language, grouped into readable speaker turns.
+                    </CardDescription>
                   </div>
-
-                  {health ? (
-                    <>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <Badge variant={healthTone(health.status)}>
-                          {formatHealthStatus(health.status)}
-                        </Badge>
-                        {health.lifecycleState && (
-                          <Badge variant="neutral">
-                            {health.lifecycleState.replace(/_/g, ' ')}
-                          </Badge>
-                        )}
-                        {typeof healthMetadata?.recallStatusCode === 'string' && (
-                          <Badge variant="outline">
-                            {healthMetadata.recallStatusCode.replace(/^bot\./, '')}
-                          </Badge>
-                        )}
-                        {typeof healthMetadata?.recallSubCode === 'string' && (
-                          <Badge variant="outline">
-                            {healthMetadata.recallSubCode}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <p className="mt-3 text-sm leading-6 text-foreground">
-                        {typeof health.detail === 'string' && health.detail
-                          ? health.detail
-                          : 'Kodi has a current provider health snapshot, but no extra detail yet.'}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-3 text-xs text-brand-quiet">
-                        <span>Checked {formatDate(health.observedAt)}</span>
-                        {typeof healthMetadata?.transport === 'string' && (
-                          <span>
-                            via {String(healthMetadata.transport).replace(/_/g, ' ')}
-                          </span>
-                        )}
-                        {typeof healthMetadata?.healthProbeError === 'string' && (
-                          <span>{healthMetadata.healthProbeError}</span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <p className={`mt-3 text-sm ${quietTextClass}`}>
-                      Kodi has not recorded a provider health snapshot for this
-                      meeting yet.
-                    </p>
-                  )}
-
-                  {retryHistory.length > 0 && (
-                    <div className="mt-4 border-t border-border pt-4">
-                      <p
-                        className={`text-[11px] uppercase tracking-[0.2em] ${subtleTextClass}`}
-                      >
-                        Join and retry history
-                      </p>
-                      <div className="mt-3 space-y-3">
-                        {retryHistory.map((attempt, index) => (
+                </div>
+              </CardHeader>
+              <CardContent>
+                {chronologicalTranscript.length === 0 ? (
+                  <div
+                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
+                  >
+                    Transcript lines will appear here once Kodi starts hearing
+                    the call.
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div
+                      ref={transcriptScrollRef}
+                      onScroll={handleTranscriptScroll}
+                      className="max-h-[640px] overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-border bg-secondary"
+                    >
+                      {transcriptSpeakerGroups.map((group, groupIndex) => {
+                        const color = speakerColorMap.current.get(group.speaker) ?? SPEAKER_COLORS[0]!
+                        const initials = getSpeakerInitials(group.speaker)
+                        const isCollapsed = collapsedSpeakers.has(group.groupId)
+                        const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)
+                        return (
                           <div
-                            key={`${attempt.attempt ?? index}-${attempt.completedAt ?? attempt.startedAt ?? index}`}
-                            className="rounded-xl border border-border bg-background p-4"
+                            key={group.groupId}
+                            className={groupIndex > 0 ? 'border-t border-border' : ''}
                           >
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-brand-quiet">
-                              <span className="font-medium text-foreground">
-                                Attempt {attempt.attempt ?? index + 1}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCollapsedSpeakers((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(group.groupId)) next.delete(group.groupId)
+                                  else next.add(group.groupId)
+                                  return next
+                                })
+                              }
+                              className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-secondary/80"
+                            >
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${color}`}>
+                                {initials}
                               </span>
-                              {attempt.status && (
-                                <Badge
-                                  variant={
-                                    attempt.status === 'succeeded'
-                                      ? 'success'
-                                      : 'destructive'
-                                  }
-                                >
-                                  {attempt.status}
-                                </Badge>
-                              )}
-                              {attempt.httpStatus != null && (
-                                <span>HTTP {attempt.httpStatus}</span>
-                              )}
-                              {attempt.failureKind && (
-                                <span>{attempt.failureKind.replace(/_/g, ' ')}</span>
-                              )}
-                              {attempt.retryable != null && (
-                                <span>
-                                  {attempt.retryable ? 'retryable' : 'not retryable'}
+                              <span className="min-w-0 flex-1">
+                                <span className="text-sm font-medium text-foreground">{group.speaker}</span>
+                                <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                  {formatTime(group.startsAt)}
+                                </span>
+                              </span>
+                              {isCollapsed && (
+                                <span className={`text-xs ${subtleTextClass}`}>
+                                  {wordCount} words
                                 </span>
                               )}
-                            </div>
-                            {(attempt.message || attempt.completedAt || attempt.startedAt) && (
-                              <p className="mt-2 text-sm leading-6 text-foreground">
-                                {attempt.message ?? 'No provider message captured.'}
-                              </p>
+                              {isCollapsed
+                                ? <ChevronRight size={14} className={subtleTextClass} />
+                                : <ChevronDown size={14} className={subtleTextClass} />
+                              }
+                            </button>
+
+                            {!isCollapsed && (
+                              <div className="space-y-3 pb-4 pl-[3.25rem] pr-4">
+                                {group.turns.map((turn) => (
+                                  <p
+                                    key={turn.id}
+                                    className="whitespace-pre-wrap text-sm leading-6 text-foreground"
+                                  >
+                                    {turn.content}
+                                    {turn.isPartial && (
+                                      <span className={`ml-2 text-xs ${subtleTextClass}`}>
+                                        …
+                                      </span>
+                                    )}
+                                  </p>
+                                ))}
+                              </div>
                             )}
-                            <p className={`mt-2 text-xs ${subtleTextClass}`}>
-                              {formatDate(attempt.completedAt ?? attempt.startedAt)}
-                            </p>
                           </div>
-                        ))}
+                        )
+                      })}
+                      <div ref={transcriptBottomRef} />
+                    </div>
+
+                    {!transcriptAtBottom && (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-7 gap-1.5 rounded-full px-3 text-xs shadow-md"
+                          onClick={() => {
+                            setTranscriptAtBottom(true)
+                            const el = transcriptScrollRef.current
+                            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+                          }}
+                        >
+                          <ChevronDown size={13} />
+                          Latest
+                        </Button>
                       </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Details tab — controls, chat, people, diagnostics */}
+          <TabsContent value="details" className="mt-6 space-y-6">
+            {workspaceSettings && controls && (
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <SectionIcon icon={CheckCircle2} />
+                    <div>
+                      <CardTitle className="text-lg text-foreground">
+                        Live participation controls
+                      </CardTitle>
+                      <CardDescription>
+                        These controls narrow how Kodi can participate in this
+                        meeting without changing the workspace defaults.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {getMeetingParticipationModeLabel(
+                        controls.participationMode
+                      )}
+                    </Badge>
+                    {controls.liveResponsesDisabled ? (
+                      <Badge variant="destructive">Live replies paused</Badge>
+                    ) : (
+                      <Badge variant="success">Live replies allowed</Badge>
+                    )}
+                    {controls.allowHostControls && (
+                      <Badge variant="neutral">Starter controls on</Badge>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {(
+                      ['listen_only', 'chat_enabled', 'voice_enabled'] as const
+                    ).map((mode) => {
+                      const active = controls.participationMode === mode
+
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          disabled={!canManageControls || controlsSaving}
+                          onClick={() =>
+                            void updateControls({
+                              participationMode: mode,
+                            })
+                          }
+                          className={`rounded-xl border px-4 py-4 text-left transition ${
+                            active
+                              ? 'border-foreground bg-brand-accent-soft text-foreground'
+                              : 'border-border bg-secondary text-muted-foreground hover:border-foreground/20 hover:text-foreground'
+                          }`}
+                        >
+                          <p className="text-sm font-medium">
+                            {getMeetingParticipationModeLabel(mode)}
+                          </p>
+                          <p className="mt-2 text-xs leading-5">
+                            {getMeetingParticipationModeDescription(mode)}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-secondary p-4">
+                    <p className="text-sm font-medium text-foreground">
+                      Live reply kill switch
+                    </p>
+                    <p className={`mt-2 text-sm leading-6 ${quietTextClass}`}>
+                      Pause live chat and voice replies immediately without
+                      ending the meeting session.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        variant={
+                          controls.liveResponsesDisabled
+                            ? 'outline'
+                            : 'destructive'
+                        }
+                        disabled={!canManageControls || controlsSaving}
+                        onClick={() =>
+                          void updateControls({
+                            liveResponsesDisabled:
+                              !controls.liveResponsesDisabled,
+                            liveResponsesDisabledReason:
+                              controls.liveResponsesDisabled
+                                ? undefined
+                                : 'Paused from the meeting detail page.',
+                          })
+                        }
+                      >
+                        {controlsSaving
+                          ? 'Updating...'
+                          : controls.liveResponsesDisabled
+                            ? 'Resume live replies'
+                            : 'Pause live replies'}
+                      </Button>
+                      {controls.liveResponsesDisabledReason && (
+                        <span className="text-xs text-muted-foreground">
+                          {controls.liveResponsesDisabledReason}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {!canManageControls && (
+                    <Alert>
+                      <AlertDescription>
+                        Only workspace owners and, when enabled, the meeting
+                        starter can change these live controls.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {meeting.provider === 'zoom' && (
+              <Card className="border-border shadow-sm">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <SectionIcon icon={Users} />
+                    <div>
+                      <CardTitle className="text-lg text-foreground">
+                        Meeting chat
+                      </CardTitle>
+                      <CardDescription>
+                        In-meeting Zoom chat messages observed during the session.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {chatMessages.length === 0 ? (
+                    <div
+                      className={`${dashedPanelClass} rounded-xl p-4 text-sm ${quietTextClass}`}
+                    >
+                      In-meeting Zoom chat messages will appear here once Kodi
+                      receives or sends them.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {chatMessages.map((message) => (
+                        <div
+                          key={message.id}
+                          className="rounded-xl border border-border bg-secondary p-4"
+                        >
+                          <div
+                            className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                          >
+                            <span className="font-medium text-foreground">
+                              {message.senderName}
+                            </span>
+                            <Badge variant="neutral">
+                              {formatEventLabel(message.eventType)}
+                            </Badge>
+                            <span>{formatDate(message.occurredAt)}</span>
+                          </div>
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                            {message.content}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
+                </CardContent>
+              </Card>
+            )}
 
+            <Card className="border-border shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg text-foreground">
+                  People and activity
+                </CardTitle>
+                <CardDescription>
+                  Participants, timeline events, and transport diagnostics.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="rounded-xl border border-border bg-secondary p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Users size={16} className="text-brand-quiet" />
+                    <Users size={14} className="text-muted-foreground" />
                     People
                   </div>
                   {participants.length === 0 ? (
@@ -3558,7 +3393,6 @@ export default function MeetingDetailsPage() {
                     <div className="mt-3 space-y-3">
                       {participants.map((participant) => {
                         const identity = participantIdentitySummary(participant)
-
                         return (
                           <div
                             key={participant.id}
@@ -3571,9 +3405,7 @@ export default function MeetingDetailsPage() {
                                     participant.email ??
                                     'Unknown participant'}
                                 </p>
-                                <p
-                                  className={`mt-1 truncate text-xs ${subtleTextClass}`}
-                                >
+                                <p className={`mt-1 truncate text-xs ${subtleTextClass}`}>
                                   {participant.email ?? 'No email captured'}
                                 </p>
                                 {identity && (
@@ -3583,42 +3415,23 @@ export default function MeetingDetailsPage() {
                                         identity.classification
                                       )}
                                     >
-                                      {participantIdentityLabel(
-                                        identity.classification
-                                      )}
+                                      {participantIdentityLabel(identity.classification)}
                                     </Badge>
                                     {identity.confidence != null && (
                                       <Badge variant="outline">
-                                        {Math.round(identity.confidence * 100)}%
-                                        {' '}confidence
-                                      </Badge>
-                                    )}
-                                    {identity.rejoinCount > 0 && (
-                                      <Badge variant="outline">
-                                        rejoined x{identity.rejoinCount}
+                                        {Math.round(identity.confidence * 100)}% confidence
                                       </Badge>
                                     )}
                                   </div>
                                 )}
                               </div>
-                              <Badge
-                                variant={
-                                  participant.leftAt ? 'neutral' : 'success'
-                                }
-                              >
+                              <Badge variant={participant.leftAt ? 'neutral' : 'success'}>
                                 {participant.leftAt ? 'Left' : 'In call'}
                               </Badge>
                             </div>
                             <p className={`mt-3 text-xs ${subtleTextClass}`}>
                               Joined {formatDate(participant.joinedAt)}
                             </p>
-                            {identity?.matchedBy && (
-                              <p className={`mt-2 text-xs ${subtleTextClass}`}>
-                                Matched by {identity.matchedBy.replace(/_/g, ' ')}
-                                {identity.matchedUserEmail &&
-                                  ` - ${identity.matchedUserEmail}`}
-                              </p>
-                            )}
                           </div>
                         )
                       })}
@@ -3626,56 +3439,48 @@ export default function MeetingDetailsPage() {
                   )}
                 </div>
 
-                {compactTimelineEvents.length === 0 ? (
-                  <div
-                    className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}
-                  >
-                    Kodi will add the important meeting moments here.
-                  </div>
-                ) : (
-                  compactTimelineEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-xl border border-border bg-secondary p-4"
-                    >
+                {compactTimelineEvents.length > 0 && (
+                  <div className="space-y-3">
+                    {compactTimelineEvents.map((event) => (
                       <div
-                        className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}
+                        key={event.id}
+                        className="rounded-xl border border-border bg-secondary p-4"
                       >
-                        <Badge variant="neutral">
-                          {formatEventLabel(event.eventType)}
-                        </Badge>
-                        <span>{formatDate(event.occurredAt)}</span>
+                        <div className={`flex flex-wrap items-center gap-2 text-xs ${subtleTextClass}`}>
+                          <Badge variant="neutral">
+                            {formatEventLabel(event.eventType)}
+                          </Badge>
+                          <span>{formatDate(event.occurredAt)}</span>
+                        </div>
+                        {describeEvent(event, meeting.provider) && (
+                          <p className="mt-3 text-sm leading-6 text-foreground">
+                            {describeEvent(event, meeting.provider)}
+                          </p>
+                        )}
                       </div>
-                      {describeEvent(event, meeting.provider) && (
-                        <p className="mt-3 text-sm leading-6 text-foreground">
-                          {describeEvent(event, meeting.provider)}
-                        </p>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="mt-4 rounded-xl border border-border bg-secondary px-4 py-3">
-                {technicalDetails.map((detail, index) => (
-                  <div key={detail.label}>
-                    {index > 0 && <Separator className="bg-border" />}
-                    <div className="flex items-start justify-between gap-4 py-3">
-                      <p
-                        className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}
-                      >
-                        {detail.label}
-                      </p>
-                      <p className="max-w-[16rem] text-right text-sm text-foreground">
-                        {detail.value}
-                      </p>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </details>
-          </div>
-        </div>
+                )}
+
+                <div className="rounded-xl border border-border bg-secondary px-4 py-3">
+                  {technicalDetails.map((detail, index) => (
+                    <div key={detail.label}>
+                      {index > 0 && <Separator className="bg-border" />}
+                      <div className="flex items-start justify-between gap-4 py-3">
+                        <p className={`text-xs uppercase tracking-[0.18em] ${subtleTextClass}`}>
+                          {detail.label}
+                        </p>
+                        <p className="max-w-[16rem] text-right text-sm text-foreground">
+                          {detail.value}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

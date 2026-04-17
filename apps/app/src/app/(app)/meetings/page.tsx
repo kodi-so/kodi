@@ -545,14 +545,14 @@ export default function MeetingsPage() {
                   </Link>
 
                   {/* Delete action — own space, no overlap */}
-                  <div className="flex shrink-0 items-center border-l border-transparent pr-2 transition-colors group-hover:border-border">
+                  <div className="flex w-9 shrink-0 items-center justify-center">
                     <button
                       type="button"
                       onClick={(e) =>
                         void handleDeleteMeeting(e, meeting.id)
                       }
                       disabled={deletingId === meeting.id}
-                      className="rounded-lg p-2 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                      className="text-muted-foreground/0 transition-colors group-hover:text-muted-foreground hover:text-destructive disabled:opacity-50"
                       title="Delete meeting"
                     >
                       <Trash2 size={14} />

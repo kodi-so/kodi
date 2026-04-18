@@ -26,6 +26,8 @@ The following decisions are part of this plan:
 - memory updates should be autonomous
 - obsolete memory should leave active memory instead of being archived
 - users should correct memory by asking Kodi to update it, not by editing markdown directly
+- `memory.search` should be Postgres full-text search over markdown content, maintained on every file write
+- memory workers should run on a queue, serialized per org, with an idempotency key of `(evidence_source, evidence_id, evidence_version)`
 
 ## System Overview
 

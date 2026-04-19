@@ -1,17 +1,8 @@
-import type { LucideIcon } from 'lucide-react'
-import {
-  Calendar,
-  FileText,
-  Github,
-  Hash,
-  Mail,
-  MessageSquare,
-  Plug,
-  Slack,
-  Users,
-  Zap,
-} from 'lucide-react'
+import { getToolkitMeta, titleCase } from '@/lib/toolkit-meta'
 import { trpc } from '@/lib/trpc'
+
+export { getToolkitMeta } from '@/lib/toolkit-meta'
+export type { ToolkitMeta } from '@/lib/toolkit-meta'
 
 export type ApprovalItem = Awaited<
   ReturnType<typeof trpc.approval.list.query>
@@ -49,55 +40,6 @@ export function formatRelative(value: Date | string | null | undefined) {
 
   if (text === 'just now') return text
   return future ? `in ${text}` : `${text} ago`
-}
-
-type ToolkitMeta = {
-  label: string
-  icon: LucideIcon
-  tint: string
-}
-
-const TOOLKIT_META: Record<string, ToolkitMeta> = {
-  slack: { label: 'Slack', icon: Slack, tint: 'text-[#4A154B]' },
-  linear: { label: 'Linear', icon: Zap, tint: 'text-[#5E6AD2]' },
-  github: { label: 'GitHub', icon: Github, tint: 'text-foreground' },
-  gmail: { label: 'Gmail', icon: Mail, tint: 'text-[#EA4335]' },
-  google_calendar: {
-    label: 'Google Calendar',
-    icon: Calendar,
-    tint: 'text-[#4285F4]',
-  },
-  googlecalendar: {
-    label: 'Google Calendar',
-    icon: Calendar,
-    tint: 'text-[#4285F4]',
-  },
-  notion: { label: 'Notion', icon: FileText, tint: 'text-foreground' },
-  hubspot: { label: 'HubSpot', icon: Users, tint: 'text-[#FF7A59]' },
-}
-
-export function getToolkitMeta(slug: string | null | undefined): ToolkitMeta {
-  if (!slug) {
-    return { label: 'External', icon: Plug, tint: 'text-muted-foreground' }
-  }
-  const normalized = slug.toLowerCase().replace(/[-\s]/g, '_')
-  return (
-    TOOLKIT_META[normalized] ?? {
-      label: titleCase(slug),
-      icon: Plug,
-      tint: 'text-muted-foreground',
-    }
-  )
-}
-
-function titleCase(value: string) {
-  return value
-    .replace(/[_-]+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
 }
 
 const VERB_MAP: Record<string, string> = {

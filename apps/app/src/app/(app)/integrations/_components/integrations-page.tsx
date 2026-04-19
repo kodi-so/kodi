@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Video } from 'lucide-react'
+import { Plus, Search, Video, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Button } from '@kodi/ui/components/button'
+import { Input } from '@kodi/ui/components/input'
 import { Skeleton } from '@kodi/ui/components/skeleton'
 import { Tabs, TabsContent } from '@kodi/ui/components/tabs'
 import { pageShellClass } from '@/lib/brand-styles'
@@ -38,6 +39,15 @@ function sortItems(items: ToolAccessItem[]): ToolAccessItem[] {
   })
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebounced(value), delayMs)
+    return () => window.clearTimeout(handle)
+  }, [value, delayMs])
+  return debounced
+}
+
 export function IntegrationsPage({
   initialToolkitSlug,
 }: {
@@ -56,8 +66,12 @@ export function IntegrationsPage({
 
   const urlTab = searchParams.get('tab')
   const urlToolkit = searchParams.get('toolkit')
+  const urlQuery = searchParams.get('q') ?? ''
   const callbackStatus = searchParams.get('connectionStatus')
   const callbackAppName = searchParams.get('appName')
+
+  const [searchDraft, setSearchDraft] = useState(urlQuery)
+  const debouncedQuery = useDebouncedValue(searchDraft, 200)
 
   const loadCatalog = useCallback(
     async (orgId: string) => {
@@ -113,6 +127,17 @@ export function IntegrationsPage({
   )
   const browseItems = useMemo(() => sortItems(items), [items])
 
+  const normalizedQuery = debouncedQuery.trim().toLowerCase()
+  const filteredBrowseItems = useMemo(() => {
+    if (!normalizedQuery) return browseItems
+    return browseItems.filter((item) => {
+      if (item.name.toLowerCase().includes(normalizedQuery)) return true
+      return item.categories.some((category) =>
+        category.name.toLowerCase().includes(normalizedQuery)
+      )
+    })
+  }, [browseItems, normalizedQuery])
+
   const defaultTab: IntegrationsTab =
     needsAttentionItems.length > 0
       ? 'needs-attention'
@@ -137,7 +162,11 @@ export function IntegrationsPage({
   const setTab = useCallback(
     (next: string) => {
       if (!isIntegrationsTab(next)) return
-      replaceParams((params) => params.set('tab', next))
+      replaceParams((params) => {
+        params.set('tab', next)
+        if (next !== 'browse') params.delete('q')
+      })
+      if (next !== 'browse') setSearchDraft('')
     },
     [replaceParams]
   )
@@ -184,6 +213,17 @@ export function IntegrationsPage({
     },
     [activeOrg, connectingSlug]
   )
+
+  // Sync the debounced Browse search term into ?q= so reloads restore the filter.
+  useEffect(() => {
+    if (activeTab !== 'browse') return
+    if (debouncedQuery === urlQuery) return
+    replaceParams((params) => {
+      const trimmed = debouncedQuery.trim()
+      if (trimmed) params.set('q', trimmed)
+      else params.delete('q')
+    })
+  }, [activeTab, debouncedQuery, urlQuery, replaceParams])
 
   // Seed the URL with ?toolkit= when rendered from the legacy [toolkitSlug] route.
   useEffect(() => {
@@ -300,15 +340,25 @@ export function IntegrationsPage({
               )}
             </TabsContent>
 
-            <TabsContent value="browse" className="mt-0">
+            <TabsContent value="browse" className="mt-0 space-y-3">
+              <BrowseSearch
+                value={searchDraft}
+                onChange={setSearchDraft}
+                onClear={() => setSearchDraft('')}
+              />
               {browseItems.length === 0 ? (
                 <EmptySlot
                   title="Catalog unavailable"
                   body="No toolkits came back from the catalog yet."
                 />
+              ) : filteredBrowseItems.length === 0 ? (
+                <EmptySlot
+                  title={`No toolkits match “${searchDraft.trim()}”`}
+                  body="Try a different name or category."
+                />
               ) : (
                 <RowList>
-                  {browseItems.map((item) => (
+                  {filteredBrowseItems.map((item) => (
                     <IntegrationRow
                       key={item.slug}
                       item={item}
@@ -436,6 +486,49 @@ function SetupAlerts({
 function RowList({ children }: { children: React.ReactNode }) {
   return <div className="space-y-2">{children}</div>
 }
+
+function BrowseSearch({
+  value,
+  onChange,
+  onClear,
+}: {
+  value: string
+  onChange: (next: string) => void
+  onClear: () => void
+}) {
+  return (
+    <div className="flex items-center rounded-lg border border-border bg-secondary px-3 focus-within:ring-2 focus-within:ring-ring/40">
+      <Search
+        aria-hidden
+        size={14}
+        className="mr-2 shrink-0 text-muted-foreground"
+      />
+      <Input
+        type="search"
+        placeholder="Search toolkits by name or category…"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+        autoComplete="off"
+      />
+      {value && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Clear search"
+          className="h-auto w-auto shrink-0 p-0 text-muted-foreground hover:text-foreground"
+          onClick={onClear}
+        >
+          <X size={14} />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+// TODO(v1): category filter chips here — once Product has a stable category
+// taxonomy beyond what Composio returns.
 
 function LoadingRows() {
   return (

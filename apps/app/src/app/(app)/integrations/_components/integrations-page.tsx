@@ -13,12 +13,14 @@ import { Tabs, TabsContent } from '@kodi/ui/components/tabs'
 import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import { EmptyState } from './empty-state'
 import { IntegrationDrawer } from './integration-drawer'
 import { IntegrationRow } from './integration-row'
 import {
   IntegrationsTabsList,
   type IntegrationsTab,
 } from './integrations-tabs'
+import { SetupAlerts, hasSetupIssue } from './setup-alerts'
 import type {
   ToolAccessCatalog,
   ToolAccessItem,
@@ -278,7 +280,7 @@ export function IntegrationsPage({
           onBrowse={() => setTab('browse')}
         />
 
-        <SetupAlerts catalog={catalog} error={error} />
+        <SetupAlerts catalog={catalog} actionError={error} />
 
         {loading ? (
           <LoadingRows />
@@ -295,13 +297,17 @@ export function IntegrationsPage({
 
             <TabsContent value="connected" className="mt-0">
               {connectedItems.length === 0 ? (
-                <EmptySlot
-                  testId="empty-state-slot"
-                  title="No connected integrations yet"
-                  body="Head to Browse to pick the first tool Kodi can act through."
-                  actionLabel="Browse integrations"
-                  onAction={() => setTab('browse')}
-                />
+                hasSetupIssue(catalog) ? null : needsAttentionItems.length >
+                  0 ? (
+                  <EmptySlot
+                    title="No connected integrations right now"
+                    body="Head to Needs attention to reconnect the ones that need fixing."
+                    actionLabel="Open Needs attention"
+                    onAction={() => setTab('needs-attention')}
+                  />
+                ) : (
+                  <EmptyState onBrowse={() => setTab('browse')} />
+                )
               ) : (
                 <RowList>
                   {connectedItems.map((item) => (
@@ -441,45 +447,6 @@ function Header({
         </Button>
       </div>
     </div>
-  )
-}
-
-function SetupAlerts({
-  catalog,
-  error,
-}: {
-  catalog: ToolAccessCatalog | null
-  error: string | null
-}) {
-  return (
-    <>
-      {error && catalog && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {catalog && !catalog.setup.apiConfigured && (
-        <Alert variant="warning">
-          <AlertDescription>
-            Composio is not configured in this environment yet. Add the
-            missing API values to make the tool catalog connectable.
-          </AlertDescription>
-        </Alert>
-      )}
-      {catalog && !catalog.featureFlags.toolAccess && (
-        <Alert variant="warning">
-          <AlertDescription>
-            Tool access is off in this environment right now, so the catalog
-            stays browse-only until the feature flag is enabled.
-          </AlertDescription>
-        </Alert>
-      )}
-      {catalog?.syncError && (
-        <Alert variant="warning">
-          <AlertDescription>{catalog.syncError}</AlertDescription>
-        </Alert>
-      )}
-    </>
   )
 }
 

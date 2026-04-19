@@ -23,10 +23,10 @@ import {
 import { cn } from '@kodi/ui/lib/utils'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { trpc } from '@/lib/trpc'
+import { statusFor, toneDotClass, toneTextClass } from '../connection-status'
 import type { ToolAccessToolkitDetail } from '../../_lib/tool-access-ui'
 
 type Connection = ToolAccessToolkitDetail['connections'][number]
-type Tone = 'success' | 'danger' | 'info' | 'neutral'
 
 export function IdentitiesBlock({
   orgId,
@@ -206,7 +206,7 @@ function PrimaryRow({
   onRevalidate: () => void
   onDisconnectRequest: () => void
 }) {
-  const status = deriveStatus(connection.status)
+  const status = statusFor(connection.status)
   const needsReconnect =
     connection.status === 'FAILED' || connection.status === 'EXPIRED'
 
@@ -221,12 +221,12 @@ function PrimaryRow({
           <p
             className={cn(
               'flex items-center gap-2 text-xs',
-              toneText(status.tone)
+              toneTextClass(status.tone)
             )}
           >
             <span
               aria-hidden
-              className={cn('h-1.5 w-1.5 rounded-full', toneDot(status.tone))}
+              className={cn('h-1.5 w-1.5 rounded-full', toneDotClass(status.tone))}
             />
             {status.label}
             <span className="text-muted-foreground">· Primary</span>
@@ -291,7 +291,7 @@ function OtherRow({
   onMakePrimary: () => void
   onDisconnectRequest: () => void
 }) {
-  const status = deriveStatus(connection.status)
+  const status = statusFor(connection.status)
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
@@ -303,12 +303,12 @@ function OtherRow({
         <p
           className={cn(
             'flex items-center gap-2 text-xs',
-            toneText(status.tone)
+            toneTextClass(status.tone)
           )}
         >
           <span
             aria-hidden
-            className={cn('h-1.5 w-1.5 rounded-full', toneDot(status.tone))}
+            className={cn('h-1.5 w-1.5 rounded-full', toneDotClass(status.tone))}
           />
           {status.label}
         </p>
@@ -422,48 +422,3 @@ function labelOf(connection: Connection): string {
   )
 }
 
-// TODO(KOD-349): replace with typed statusFor() from connection-status.ts.
-function deriveStatus(rawStatus: string | null): { tone: Tone; label: string } {
-  if (!rawStatus) return { tone: 'neutral', label: 'Not connected' }
-  switch (rawStatus) {
-    case 'ACTIVE':
-      return { tone: 'success', label: 'Connected' }
-    case 'FAILED':
-      return { tone: 'danger', label: 'Reconnect required' }
-    case 'EXPIRED':
-      return { tone: 'danger', label: 'Expired' }
-    case 'INACTIVE':
-      return { tone: 'neutral', label: 'Disabled' }
-    case 'INITIATED':
-    case 'INITIALIZING':
-      return { tone: 'info', label: 'Connecting…' }
-    default:
-      return { tone: 'neutral', label: rawStatus }
-  }
-}
-
-function toneText(tone: Tone) {
-  switch (tone) {
-    case 'success':
-      return 'text-brand-success'
-    case 'danger':
-      return 'text-brand-danger'
-    case 'info':
-      return 'text-brand-info'
-    default:
-      return 'text-muted-foreground'
-  }
-}
-
-function toneDot(tone: Tone) {
-  switch (tone) {
-    case 'success':
-      return 'bg-brand-success'
-    case 'danger':
-      return 'bg-brand-danger'
-    case 'info':
-      return 'bg-brand-info'
-    default:
-      return 'bg-muted-foreground/40'
-  }
-}

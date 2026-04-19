@@ -12,8 +12,11 @@ import {
 } from '@kodi/ui/components/sheet'
 import { Skeleton } from '@kodi/ui/components/skeleton'
 import { trpc } from '@/lib/trpc'
+import { Separator } from '@kodi/ui/components/separator'
 import { DrawerHeader } from './drawer/drawer-header'
 import { IdentitiesBlock } from './drawer/identities-block'
+import { PolicyBlock } from './drawer/policy-block'
+import { SlackSettingsBlock } from './drawer/slack-settings-block'
 import type { ToolAccessToolkitDetail } from '../_lib/tool-access-ui'
 
 type LoadState =
@@ -121,7 +124,22 @@ export function IntegrationDrawer({
                   onConnect={onConnect}
                   onRefresh={onRefresh}
                 />
-                <PlaceholderContent />
+                <Separator />
+                <PolicyBlock
+                  orgId={orgId}
+                  toolkitSlug={state.detail.toolkit.slug}
+                  policy={state.detail.policy}
+                  onRefresh={onRefresh}
+                />
+                {state.detail.toolkit.slug === 'slack' && (
+                  <>
+                    <Separator />
+                    <SlackSettingsBlock
+                      orgId={orgId}
+                      onRefresh={onRefresh}
+                    />
+                  </>
+                )}
               </div>
             </>
           )}
@@ -187,10 +205,3 @@ function NotFoundOrError({
   )
 }
 
-function PlaceholderContent() {
-  return (
-    <p className="text-sm text-muted-foreground">
-      Policy and Slack settings ship in KOD-348.
-    </p>
-  )
-}

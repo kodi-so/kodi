@@ -1,3 +1,16 @@
+import type { LucideIcon } from 'lucide-react'
+import {
+  Calendar,
+  FileText,
+  Github,
+  Hash,
+  Mail,
+  MessageSquare,
+  Plug,
+  Slack,
+  Users,
+  Zap,
+} from 'lucide-react'
 import { trpc } from '@/lib/trpc'
 
 export type ApprovalItem = Awaited<
@@ -16,42 +29,142 @@ export function formatDate(value: Date | string | null | undefined) {
   })
 }
 
-export function getStatusTone(status: ApprovalItem['status']) {
-  switch (status) {
-    case 'pending':
-      return 'warning' as const
-    case 'approved':
-      return 'success' as const
-    case 'rejected':
-      return 'destructive' as const
-    case 'expired':
-      return 'neutral' as const
-    default:
-      return 'neutral' as const
-  }
+export function formatRelative(value: Date | string | null | undefined) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  const diffMs = Date.now() - parsed.getTime()
+  const abs = Math.abs(diffMs)
+  const future = diffMs < 0
+  const minute = 60_000
+  const hour = 60 * minute
+  const day = 24 * hour
+
+  let text: string
+  if (abs < minute) text = 'just now'
+  else if (abs < hour) text = `${Math.round(abs / minute)}m`
+  else if (abs < day) text = `${Math.round(abs / hour)}h`
+  else if (abs < 30 * day) text = `${Math.round(abs / day)}d`
+  else return formatDate(parsed)
+
+  if (text === 'just now') return text
+  return future ? `in ${text}` : `${text} ago`
 }
 
-export function getExecutionTone(status: ApprovalItem['executionStatus']) {
-  switch (status) {
-    case 'succeeded':
-      return 'success' as const
-    case 'failed':
-      return 'destructive' as const
-    case 'running':
-      return 'info' as const
-    case 'cancelled':
-      return 'neutral' as const
-    case 'pending':
-      return 'warning' as const
-    default:
-      return 'outline' as const
+type ToolkitMeta = {
+  label: string
+  icon: LucideIcon
+  tint: string
+}
+
+const TOOLKIT_META: Record<string, ToolkitMeta> = {
+  slack: { label: 'Slack', icon: Slack, tint: 'text-[#4A154B]' },
+  linear: { label: 'Linear', icon: Zap, tint: 'text-[#5E6AD2]' },
+  github: { label: 'GitHub', icon: Github, tint: 'text-foreground' },
+  gmail: { label: 'Gmail', icon: Mail, tint: 'text-[#EA4335]' },
+  google_calendar: {
+    label: 'Google Calendar',
+    icon: Calendar,
+    tint: 'text-[#4285F4]',
+  },
+  googlecalendar: {
+    label: 'Google Calendar',
+    icon: Calendar,
+    tint: 'text-[#4285F4]',
+  },
+  notion: { label: 'Notion', icon: FileText, tint: 'text-foreground' },
+  hubspot: { label: 'HubSpot', icon: Users, tint: 'text-[#FF7A59]' },
+}
+
+export function getToolkitMeta(slug: string | null | undefined): ToolkitMeta {
+  if (!slug) {
+    return { label: 'External', icon: Plug, tint: 'text-muted-foreground' }
   }
+  const normalized = slug.toLowerCase().replace(/[-\s]/g, '_')
+  return (
+    TOOLKIT_META[normalized] ?? {
+      label: titleCase(slug),
+      icon: Plug,
+      tint: 'text-muted-foreground',
+    }
+  )
+}
+
+function titleCase(value: string) {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+const VERB_MAP: Record<string, string> = {
+  send: 'Send',
+  post: 'Post',
+  create: 'Create',
+  update: 'Update',
+  delete: 'Delete',
+  remove: 'Remove',
+  add: 'Add',
+  invite: 'Invite',
+  schedule: 'Schedule',
+  cancel: 'Cancel',
+  archive: 'Archive',
+  move: 'Move',
+  assign: 'Assign',
+  comment: 'Comment on',
+  reply: 'Reply to',
+  share: 'Share',
+  upload: 'Upload',
+  merge: 'Merge',
+  close: 'Close',
+  open: 'Open',
+  approve: 'Approve',
+  reject: 'Reject',
+}
+
+export function humanizeAction(
+  action: string | null | undefined,
+  toolkitSlug: string | null | undefined
+): string {
+  if (!action) return 'External action'
+  const toolkit = getToolkitMeta(toolkitSlug)
+
+  // Strip a leading toolkit prefix if the action is "slack_send_message".
+  const normalizedSlug = toolkitSlug?.toLowerCase().replace(/[-\s]/g, '_')
+  let remainder = action.toLowerCase()
+  if (normalizedSlug && remainder.startsWith(`${normalizedSlug}_`)) {
+    remainder = remainder.slice(normalizedSlug.length + 1)
+  }
+
+  const parts = remainder.split(/[_\s-]+/).filter(Boolean)
+  if (parts.length === 0) return titleCase(action)
+
+  const [first, ...rest] = parts
+  const verb = first ? VERB_MAP[first] : undefined
+  if (verb) {
+    const object = rest.join(' ').trim()
+    if (!object) return `${verb} in ${toolkit.label}`
+    return `${verb} ${toolkit.label} ${object}`.trim()
+  }
+
+  return titleCase(remainder.replace(/_/g, ' '))
 }
 
 export function asRecord(value: unknown) {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+export function getPreviewTitle(item: ApprovalItem) {
+  const preview = asRecord(item.previewPayload)
+  if (preview && typeof preview.title === 'string' && preview.title.trim()) {
+    return preview.title
+  }
+  return humanizeAction(item.action, item.toolkitSlug)
 }
 
 export function getPreviewSummary(item: ApprovalItem) {
@@ -73,7 +186,9 @@ export function getPreviewFields(item: ApprovalItem) {
     .map((entry) => {
       const record = asRecord(entry)
       if (!record) return null
-      const label = typeof record.label === 'string' ? record.label : 'Field'
+      const rawLabel =
+        typeof record.label === 'string' ? record.label : 'Field'
+      const label = titleCase(rawLabel)
       const value =
         typeof record.value === 'string'
           ? record.value
@@ -83,4 +198,48 @@ export function getPreviewFields(item: ApprovalItem) {
     .filter(
       (entry): entry is { label: string; value: string } => entry !== null
     )
+}
+
+export type HistoryStatusTone = 'success' | 'danger' | 'info' | 'neutral'
+
+export function getHistoryTone(item: ApprovalItem): HistoryStatusTone {
+  if (item.status === 'rejected') return 'danger'
+  if (item.status === 'expired') return 'neutral'
+  if (item.status === 'approved') {
+    switch (item.executionStatus) {
+      case 'failed':
+        return 'danger'
+      case 'running':
+      case 'pending':
+        return 'info'
+      case 'cancelled':
+        return 'neutral'
+      case 'succeeded':
+      default:
+        return 'success'
+    }
+  }
+  return 'neutral'
+}
+
+export function describeHistoryStatus(item: ApprovalItem): string {
+  if (item.status === 'rejected') return 'Rejected'
+  if (item.status === 'expired') return 'Expired'
+  if (item.status === 'approved') {
+    switch (item.executionStatus) {
+      case 'failed':
+        return 'Failed'
+      case 'running':
+        return 'Running'
+      case 'pending':
+        return 'Queued'
+      case 'cancelled':
+        return 'Cancelled'
+      case 'succeeded':
+        return 'Ran'
+      default:
+        return 'Approved'
+    }
+  }
+  return titleCase(item.status)
 }

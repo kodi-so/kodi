@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Skeleton } from '@kodi/ui/components/skeleton'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@kodi/ui/components/tabs'
 import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
@@ -22,6 +28,7 @@ export default function ApprovalsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [items, setItems] = useState<ApprovalItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'pending' | 'history'>('pending')
 
   async function loadApprovals(orgId: string) {
     const result = await trpc.approval.list.query({
@@ -69,6 +76,12 @@ export default function ApprovalsPage() {
     [items]
   )
 
+  useEffect(() => {
+    if (!highlightedApprovalId) return
+    const target = items.find((item) => item.id === highlightedApprovalId)
+    if (target && target.status !== 'pending') setTab('history')
+  }, [highlightedApprovalId, items])
+
   async function decideApproval(
     approvalRequestId: string,
     decision: 'approved' | 'rejected'
@@ -107,7 +120,7 @@ export default function ApprovalsPage() {
 
   return (
     <div className={pageShellClass}>
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
         <ApprovalsHeader />
 
         {error && (
@@ -125,15 +138,35 @@ export default function ApprovalsPage() {
         {loading ? (
           <ApprovalsLoading />
         ) : (
-          <>
-            <PendingApprovalsSection
-              items={pendingItems}
-              highlightedApprovalId={highlightedApprovalId}
-              actionKey={actionKey}
-              onDecide={decideApproval}
-            />
-            <RecentDecisionsSection items={recentItems} />
-          </>
+          <Tabs
+            value={tab}
+            onValueChange={(value) => setTab(value as 'pending' | 'history')}
+            className="flex flex-col gap-4"
+          >
+            <TabsList className="self-start">
+              <TabsTrigger value="pending" className="gap-2">
+                Pending
+                {pendingItems.length > 0 && (
+                  <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
+                    {pendingItems.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pending" className="mt-0">
+              <PendingApprovalsSection
+                items={pendingItems}
+                highlightedApprovalId={highlightedApprovalId}
+                actionKey={actionKey}
+                onDecide={decideApproval}
+              />
+            </TabsContent>
+            <TabsContent value="history" className="mt-0">
+              <RecentDecisionsSection items={recentItems} />
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </div>

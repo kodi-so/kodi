@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Video } from 'lucide-react'
+import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Button } from '@kodi/ui/components/button'
 import { Skeleton } from '@kodi/ui/components/skeleton'
@@ -11,6 +12,7 @@ import { Tabs, TabsContent } from '@kodi/ui/components/tabs'
 import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import { IntegrationDrawer } from './integration-drawer'
 import { IntegrationRow } from './integration-row'
 import {
   IntegrationsTabsList,
@@ -36,7 +38,11 @@ function sortItems(items: ToolAccessItem[]): ToolAccessItem[] {
   })
 }
 
-export function IntegrationsPage() {
+export function IntegrationsPage({
+  initialToolkitSlug,
+}: {
+  initialToolkitSlug?: string
+} = {}) {
   const { activeOrg } = useOrg()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -44,8 +50,14 @@ export function IntegrationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [connectingSlug, setConnectingSlug] = useState<string | null>(null)
+  const [detailReloadKey, setDetailReloadKey] = useState(0)
+  const callbackHandledRef = useRef(false)
+  const initialSeededRef = useRef(false)
 
   const urlTab = searchParams.get('tab')
+  const urlToolkit = searchParams.get('toolkit')
+  const callbackStatus = searchParams.get('connectionStatus')
+  const callbackAppName = searchParams.get('appName')
 
   const loadCatalog = useCallback(
     async (orgId: string) => {
@@ -112,21 +124,34 @@ export function IntegrationsPage() {
     ? urlTab
     : defaultTab
 
-  const setTab = useCallback(
-    (next: string) => {
-      if (!isIntegrationsTab(next)) return
+  const replaceParams = useCallback(
+    (mutate: (params: URLSearchParams) => void) => {
       const params = new URLSearchParams(searchParams.toString())
-      params.set('tab', next)
-      router.replace(`/integrations?${params.toString()}`, { scroll: false })
+      mutate(params)
+      const qs = params.toString()
+      router.replace(`/integrations${qs ? `?${qs}` : ''}`, { scroll: false })
     },
     [router, searchParams]
   )
 
-  const openDrawer = useCallback((slug: string) => {
-    // Drawer wires up in KOD-345 (T4). For now just log so rows feel responsive
-    // to click while the shell ships independently.
-    console.debug('[integrations] open drawer for', slug)
-  }, [])
+  const setTab = useCallback(
+    (next: string) => {
+      if (!isIntegrationsTab(next)) return
+      replaceParams((params) => params.set('tab', next))
+    },
+    [replaceParams]
+  )
+
+  const openDrawer = useCallback(
+    (slug: string) => {
+      replaceParams((params) => params.set('toolkit', slug))
+    },
+    [replaceParams]
+  )
+
+  const closeDrawer = useCallback(() => {
+    replaceParams((params) => params.delete('toolkit'))
+  }, [replaceParams])
 
   const connect = useCallback(
     async (slug: string) => {
@@ -154,6 +179,43 @@ export function IntegrationsPage() {
     },
     [activeOrg, connectingSlug]
   )
+
+  // Seed the URL with ?toolkit= when rendered from the legacy [toolkitSlug] route.
+  useEffect(() => {
+    if (!initialToolkitSlug) return
+    if (initialSeededRef.current) return
+    initialSeededRef.current = true
+    if (urlToolkit === initialToolkitSlug) return
+    replaceParams((params) => params.set('toolkit', initialToolkitSlug))
+  }, [initialToolkitSlug, urlToolkit, replaceParams])
+
+  // OAuth callback toast + refetch + URL scrub.
+  useEffect(() => {
+    if (!callbackStatus) return
+    if (callbackHandledRef.current) return
+    callbackHandledRef.current = true
+
+    const appLabel = callbackAppName ?? 'This account'
+    const normalized = callbackStatus.toLowerCase()
+
+    if (normalized === 'active' || normalized === 'connected') {
+      toast.success(`${appLabel} is connected and ready to use.`)
+    } else if (normalized === 'initiated' || normalized === 'initializing') {
+      toast.message(`${appLabel} is still finishing setup in Composio.`)
+    } else {
+      toast.error(
+        `${appLabel} did not finish connecting. Try again from this page.`
+      )
+    }
+
+    replaceParams((params) => {
+      params.delete('connectionStatus')
+      params.delete('appName')
+    })
+
+    if (activeOrg) void loadCatalog(activeOrg.orgId)
+    setDetailReloadKey((key) => key + 1)
+  }, [callbackStatus, callbackAppName, activeOrg, loadCatalog, replaceParams])
 
   if (!activeOrg) {
     return (
@@ -271,6 +333,15 @@ export function IntegrationsPage() {
           </Alert>
         )}
       </div>
+
+      <IntegrationDrawer
+        orgId={activeOrg.orgId}
+        toolkitSlug={urlToolkit}
+        onClose={closeDrawer}
+        onConnect={connect}
+        connectingSlug={connectingSlug}
+        reloadKey={detailReloadKey}
+      />
     </div>
   )
 }

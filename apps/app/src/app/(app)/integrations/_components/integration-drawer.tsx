@@ -13,6 +13,7 @@ import {
 import { Skeleton } from '@kodi/ui/components/skeleton'
 import { trpc } from '@/lib/trpc'
 import { DrawerHeader } from './drawer/drawer-header'
+import { IdentitiesBlock } from './drawer/identities-block'
 import type { ToolAccessToolkitDetail } from '../_lib/tool-access-ui'
 
 type LoadState =
@@ -28,6 +29,7 @@ export function IntegrationDrawer({
   onConnect,
   connectingSlug,
   reloadKey,
+  onRefresh,
 }: {
   orgId: string
   toolkitSlug: string | null
@@ -35,6 +37,7 @@ export function IntegrationDrawer({
   onConnect: (slug: string) => void
   connectingSlug: string | null
   reloadKey: number
+  onRefresh: () => void
 }) {
   const [state, setState] = useState<LoadState>({ kind: 'idle' })
   const open = toolkitSlug !== null
@@ -109,7 +112,15 @@ export function IntegrationDrawer({
                   isBusy={connectingSlug !== null}
                 />
               </div>
-              <div className="flex-1 overflow-y-auto px-6 py-5">
+              <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
+                <IdentitiesBlock
+                  orgId={orgId}
+                  toolkitSlug={state.detail.toolkit.slug}
+                  connections={state.detail.connections}
+                  connectingSlug={connectingSlug}
+                  onConnect={onConnect}
+                  onRefresh={onRefresh}
+                />
                 <PlaceholderContent />
               </div>
             </>
@@ -179,7 +190,7 @@ function NotFoundOrError({
 function PlaceholderContent() {
   return (
     <p className="text-sm text-muted-foreground">
-      Identities, policy, and Slack settings ship in KOD-347 / KOD-348.
+      Policy and Slack settings ship in KOD-348.
     </p>
   )
 }

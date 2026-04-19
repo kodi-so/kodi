@@ -153,6 +153,11 @@ export function IntegrationsPage({
     replaceParams((params) => params.delete('toolkit'))
   }, [replaceParams])
 
+  const refreshAll = useCallback(() => {
+    if (activeOrg) void loadCatalog(activeOrg.orgId)
+    setDetailReloadKey((key) => key + 1)
+  }, [activeOrg, loadCatalog])
+
   const connect = useCallback(
     async (slug: string) => {
       if (!activeOrg || connectingSlug) return
@@ -341,6 +346,7 @@ export function IntegrationsPage({
         onConnect={connect}
         connectingSlug={connectingSlug}
         reloadKey={detailReloadKey}
+        onRefresh={refreshAll}
       />
     </div>
   )

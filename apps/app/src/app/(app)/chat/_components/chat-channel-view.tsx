@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Hash, Loader2 } from 'lucide-react'
 import { ScrollArea } from '@kodi/ui/components/scroll-area'
 import { ChatComposer } from './chat-composer'
+import { getDayKey, getMessageDayLabel } from './chat-helpers'
 import { MessageRow } from './chat-message-row'
 import type { Channel, Message } from './chat-types'
 
@@ -176,16 +177,26 @@ export function ChatChannelView({
               </button>
             ) : null}
 
-            {rootMessages.map((message) => (
-              <div key={message.id} data-message-id={message.id}>
-                <MessageRow
-                  message={message}
-                  replies={repliesByThread[message.id] ?? []}
-                  isResponding={respondingRootIds.includes(message.id)}
-                  onOpenThread={() => onOpenThread(message.id)}
-                />
-              </div>
-            ))}
+            {rootMessages.map((message, index) => {
+              const previous = index > 0 ? rootMessages[index - 1] : null
+              const showDayDivider =
+                !previous ||
+                getDayKey(message.createdAt) !== getDayKey(previous.createdAt)
+
+              return (
+                <div key={message.id} data-message-id={message.id}>
+                  {showDayDivider ? (
+                    <DayDivider label={getMessageDayLabel(message.createdAt)} />
+                  ) : null}
+                  <MessageRow
+                    message={message}
+                    replies={repliesByThread[message.id] ?? []}
+                    isResponding={respondingRootIds.includes(message.id)}
+                    onOpenThread={() => onOpenThread(message.id)}
+                  />
+                </div>
+              )
+            })}
             <div ref={bottomRef} className="h-1" />
           </div>
         )}
@@ -205,6 +216,22 @@ export function ChatChannelView({
           {error}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+function DayDivider({ label }: { label: string }) {
+  return (
+    <div
+      role="separator"
+      aria-label={label}
+      className="relative my-3 flex items-center px-4 sm:px-6"
+    >
+      <span aria-hidden className="flex-1 border-t border-border" />
+      <span className="mx-3 rounded-full border border-border bg-background px-3 py-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <span aria-hidden className="flex-1 border-t border-border" />
     </div>
   )
 }

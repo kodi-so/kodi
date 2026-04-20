@@ -108,7 +108,7 @@ export function IntegrationDrawer({
 
           {state.kind === 'ready' && (
             <>
-              <div className="border-b border-border px-6 py-5">
+              <div className="border-b border-border py-5 pl-6 pr-14">
                 <DrawerHeader
                   detail={state.detail}
                   onConnect={() => onConnect(state.detail.toolkit.slug)}

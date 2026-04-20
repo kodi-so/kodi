@@ -464,18 +464,18 @@ function BrowseSearch({
   onClear: () => void
 }) {
   return (
-    <div className="flex items-center rounded-lg border border-border bg-secondary px-3 focus-within:ring-2 focus-within:ring-ring/40">
+    <div className="flex h-10 items-center rounded-lg border border-border bg-secondary px-3 transition-colors focus-within:border-ring/60 focus-within:ring-2 focus-within:ring-ring/30">
       <Search
         aria-hidden
         size={14}
         className="mr-2 shrink-0 text-muted-foreground"
       />
       <Input
-        type="search"
+        type="text"
         placeholder="Search toolkits by name or category…"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+        className="h-full flex-1 rounded-none border-0 bg-transparent px-0 text-sm shadow-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
         autoComplete="off"
       />
       {value && (
@@ -484,7 +484,7 @@ function BrowseSearch({
           variant="ghost"
           size="icon"
           aria-label="Clear search"
-          className="h-auto w-auto shrink-0 p-0 text-muted-foreground hover:text-foreground"
+          className="ml-1 h-6 w-6 shrink-0 rounded-md text-muted-foreground hover:bg-transparent hover:text-foreground"
           onClick={onClear}
         >
           <X size={14} />

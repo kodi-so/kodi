@@ -108,7 +108,7 @@ export function SlackSettingsBlock({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-1 items-center rounded-lg border border-border bg-secondary px-3 focus-within:ring-2 focus-within:ring-ring/40">
+          <div className="flex h-9 flex-1 items-center rounded-lg border border-border bg-secondary px-3 transition-colors focus-within:border-ring/60 focus-within:ring-2 focus-within:ring-ring/30">
             <span
               aria-hidden
               className="mr-1 select-none text-sm text-muted-foreground"
@@ -117,7 +117,7 @@ export function SlackSettingsBlock({
             </span>
             <Input
               id="slack-default-channel"
-              className="h-8 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+              className="h-full flex-1 rounded-none border-0 bg-transparent px-0 text-sm shadow-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
               placeholder="general"
               value={draft}
               onChange={(event) =>

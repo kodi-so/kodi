@@ -33,7 +33,7 @@ export function useChatState({
       : null
   )
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(
-    initialChannelId ?? null
+    null
   )
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
     initialDirectId === KODI_DM_ID ? null : (initialThreadId ?? null)
@@ -65,7 +65,8 @@ export function useChatState({
       if (options.directId) {
         params.set('dm', options.directId)
       } else if (options.channelId) {
-        params.set('channel', options.channelId)
+        const channel = channels.find((c) => c.id === options.channelId)
+        params.set('channel', channel?.slug ?? options.channelId)
       }
       if (options.threadId) {
         params.set('thread', options.threadId)
@@ -73,7 +74,7 @@ export function useChatState({
       const query = params.toString()
       return query ? `${pathname}?${query}` : pathname
     },
-    [pathname]
+    [channels, pathname]
   )
 
   useEffect(() => {
@@ -81,8 +82,20 @@ export function useChatState({
       initialDirectId === KODI_DM_ID || (!initialChannelId && !initialPrompt)
     setSelectedDirectId(shouldShowDirect ? KODI_DM_ID : null)
     setSelectedThreadId(shouldShowDirect ? null : (initialThreadId ?? null))
-    if (initialChannelId) setSelectedChannelId(initialChannelId)
-  }, [initialChannelId, initialDirectId, initialPrompt, initialThreadId])
+    if (initialChannelId) {
+      const resolved = channels.find(
+        (channel) =>
+          channel.slug === initialChannelId || channel.id === initialChannelId
+      )
+      if (resolved) setSelectedChannelId(resolved.id)
+    }
+  }, [
+    channels,
+    initialChannelId,
+    initialDirectId,
+    initialPrompt,
+    initialThreadId,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -96,10 +109,14 @@ export function useChatState({
         const next = rows as Channel[]
         setChannels(next)
 
-        const initial =
-          next.find((channel) => channel.id === initialChannelId) ??
-          next[0] ??
-          null
+        const fromUrl = initialChannelId
+          ? (next.find(
+              (channel) =>
+                channel.slug === initialChannelId ||
+                channel.id === initialChannelId
+            ) ?? null)
+          : null
+        const initial = fromUrl ?? next[0] ?? null
         setSelectedChannelId((current) => current ?? initial?.id ?? null)
       } catch (loadError) {
         if (!cancelled) {

@@ -238,12 +238,32 @@ Required agents:
 - org agent for shared org-level work
 - member agent for each org member
 
+### Routing model
+
+Kodi should keep four concepts separate:
+
+- actor identity: who initiated the interaction
+- conversation visibility: who can see the response
+- agent scope: org agent or member agent
+- memory scope: org memory, member memory, or both
+
 Default routing:
 
-- web app chat from a user routes to that user's member agent
-- Slack messages from a known user route to that user's member agent
+- private web app chat routes to the actor's member agent
+- Slack DMs route to the actor's member agent
+- private user-scoped threads route to the actor's member agent
+- public Slack channels route to the org agent
+- shared web app chats or shared project threads route to the org agent
 - org-level background jobs route to the org agent
-- meetings route to the org agent unless Kodi has a clear acting member for the task
+- meetings route to the org agent unless Kodi has a clearly private member-scoped follow-up
+
+Default memory access:
+
+- member agent can access that member's memory and org memory
+- org agent can access org memory
+- org agent should not use member memory in shared responses
+
+Kodi may keep actor identity on org-agent requests for audit, permissions, attribution, and update proposals.
 
 Kodi should call OpenClaw with the target agent id for the current actor and workflow.
 

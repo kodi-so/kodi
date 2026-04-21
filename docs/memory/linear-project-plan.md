@@ -21,7 +21,9 @@ Build scoped durable memory for Kodi as shared org vaults, per-member vaults, an
 
 Kodi should maintain durable markdown memory for both organizations and the members inside them. Each org gets a shared org memory vault. Each org member gets a member memory vault inside that org. Each org's OpenClaw deployment contains one org agent and one member agent per org member.
 
-When a user talks to Kodi in the web app, Slack, or another channel, they are talking to their OpenClaw member agent. That agent should always have access to OpenClaw internal memory, the user's Kodi member memory, and the shared Kodi org memory.
+When a user talks to Kodi in a private surface, such as web app DM or Slack DM, they are talking to their OpenClaw member agent. That agent can use OpenClaw internal memory, the user's Kodi member memory, and the shared Kodi org memory.
+
+When a user talks to Kodi in a shared surface, such as a public Slack channel or shared project thread, Kodi should route to the org agent by default. The org agent can use org memory and current request context. Kodi may track the actor for audit and attribution, but shared responses should not use private member memory by default.
 
 This project delivers the first complete version of scoped memory:
 
@@ -32,19 +34,19 @@ This project delivers the first complete version of scoped memory:
 - event-driven memory maintenance
 - safe structural maintenance
 - native Memory UI with chat-based correction
-- runtime retrieval that uses org and member memory together
+- runtime retrieval that respects actor identity and conversation visibility
 
 ### Project Success Criteria
 
 - every org has a shared org memory vault
 - every org member has a member memory vault for that org
 - Kodi can create and maintain `MEMORY.md` and directory indexes for each vault
-- Kodi can route users to their OpenClaw member agents
+- Kodi can route private conversations to member agents and shared conversations to the org agent
 - OpenClaw agents can persistently access allowed Kodi memory scopes
 - Kodi can update org and member memory from real evidence
 - Kodi can reorganize vaults safely when structure stops fitting
 - users can browse org memory and their member memory in the app
-- runtime answers can retrieve from OpenClaw internal memory, Kodi member memory, and Kodi org memory
+- runtime answers retrieve from memory scopes allowed by the selected agent and conversation visibility
 
 ## Milestones
 
@@ -281,13 +283,13 @@ Dependencies:
 
 ### Issue 11
 
-Title: Route OpenClaw runtime calls by actor
+Title: Route OpenClaw runtime calls by actor and visibility
 
 Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Update the OpenClaw client and runtime call sites so web app chat, Slack, and background jobs call the correct OpenClaw agent for the current actor and workflow.
+Update the OpenClaw client and runtime call sites so web app chat, Slack, and background jobs call the correct OpenClaw agent for the current actor, workflow, and conversation visibility. Private surfaces should route to member agents. Shared surfaces should route to the org agent by default.
 
 Dependencies:
 
@@ -372,7 +374,7 @@ Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Create coverage proving org agents can access org memory, member agents can access their member memory plus org memory, and agents cannot access unrelated member memory. Include fail-closed tests for missing trusted identity context.
+Create coverage proving org agents can access org memory, member agents can access their member memory plus org memory, and agents cannot access unrelated member memory. Include shared-surface tests proving public Slack channels and shared threads route to the org agent and do not use private member memory. Include fail-closed tests for missing trusted identity context.
 
 Dependencies:
 
@@ -517,7 +519,7 @@ Milestone: Event-Driven Memory Updates
 
 Description:
 
-Create scenario coverage that proves Kodi can process meetings, app chat, dashboard assistant activity, Slack evidence, correction requests, and OpenClaw proposals into org and member vault updates.
+Create scenario coverage that proves Kodi can process meetings, app chat, dashboard assistant activity, Slack evidence, correction requests, and OpenClaw proposals into org and member vault updates. Include private and shared conversation surfaces so scope resolution does not leak member memory into shared responses.
 
 Dependencies:
 
@@ -758,7 +760,7 @@ Milestone: Runtime Integration And Scheduled Upkeep
 
 Description:
 
-Create end-to-end scenarios that prove the full memory system works across multiple org shapes, multiple members, `kodi-memory` plugin access, runtime interactions, and scheduled upkeep.
+Create end-to-end scenarios that prove the full memory system works across multiple org shapes, multiple members, private and shared surfaces, `kodi-memory` plugin access, runtime interactions, and scheduled upkeep.
 
 Dependencies:
 

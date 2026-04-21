@@ -41,12 +41,18 @@ Inside that deployment, Kodi should maintain multiple OpenClaw agents:
 - one shared org agent
 - one member agent for each org member
 
-When a user talks to Kodi in the web app, Slack, or another channel, Kodi should route the conversation to that user's member agent. That agent should have access to:
+Kodi should route each interaction based on both the actor and the visibility of the conversation.
+
+The actor is the user or system that initiated the interaction. Conversation visibility determines who can see the response.
+
+Private conversations should route to the actor's member agent. A member agent can use:
 
 - OpenClaw internal memory
-- the user's Kodi member memory vault for the current org
+- that member's Kodi member memory vault for the current org
 - the shared Kodi org memory vault
 - the current request context, such as the active chat thread, Slack thread, meeting, or work item
+
+Shared conversations should route to the org agent by default. The org agent can use org memory and current request context. Kodi may keep the actor identity for audit, permissions, and attribution, but the org agent should not use a member's private memory in a shared response.
 
 Kodi owns the durable memory vaults. OpenClaw reasons with them through memory tools.
 
@@ -55,6 +61,8 @@ Kodi owns the durable memory vaults. OpenClaw reasons with them through memory t
 ### Scoped by default
 
 Memory should always have an explicit scope. Shared organizational facts belong in org memory. User-specific facts belong in member memory.
+
+Agent routing should also have an explicit scope. Private surfaces use member agents. Shared surfaces use the org agent unless a product flow explicitly narrows visibility to one member.
 
 ### Vault-first
 

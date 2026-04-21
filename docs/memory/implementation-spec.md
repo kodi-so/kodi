@@ -1,43 +1,50 @@
-# Org Memory Implementation Spec
+# Kodi Memory Implementation Spec
 
 This document translates [architecture-plan.md](./architecture-plan.md) into a build plan.
 
 ## Purpose
 
-Kodi should maintain a per-org markdown vault that acts as its long-term organizational memory.
+Kodi should maintain scoped markdown vaults that act as durable memory for organizations and org members.
 
 When this work is complete, Kodi should be able to:
 
-- maintain a memory vault for each org
+- maintain shared org memory for each org
+- maintain member memory for each org member
+- route each user to their own OpenClaw agent inside the org's OpenClaw deployment
+- give every OpenClaw agent persistent access to the Kodi memory scopes it is allowed to use
 - decide what deserves durable memory
-- organize memory into a useful directory structure for that org
+- organize memory into useful directory structures
 - update, rename, move, split, merge, and delete memory as needed
-- keep memory concise and current
-- answer questions by navigating the vault instead of re-reading all raw evidence
+- answer questions by retrieving from memory instead of re-reading all raw evidence
 - expose memory natively inside the app
 
 ## Implementation Decisions
 
 The following decisions are part of this plan:
 
-- production vault files should live in S3-compatible object storage
-- local development should use the same storage interface backed by local disk
+- vault files should live in S3-compatible object storage across all Railway environments
+- development, staging, and production should use separate buckets or prefixes while sharing the same storage behavior
 - vault metadata should live in Postgres
+- memory is scoped as `org` or `member`
+- member memory is scoped to one org member, not to a global user identity
+- OpenClaw should run one deployment per org with multiple agents inside that deployment
+- memory tools should be persistently available through a required native OpenClaw plugin named `kodi-memory`
 - memory updates should be autonomous
 - obsolete memory should leave active memory instead of being archived
 - users should correct memory by asking Kodi to update it, not by editing markdown directly
-- `memory.search` should be Postgres full-text search over markdown content, maintained on every file write
-- memory workers should run on a queue, serialized per org, with an idempotency key of `(evidence_source, evidence_id, evidence_version)`
+- `memory.search` should use Postgres full-text search over markdown content, maintained on every file write
+- memory workers should run on a queue, serialized per memory scope, with an idempotency key of `(evidence_source, evidence_id, evidence_version, scope_type, scope_id)`
 
 ## System Overview
 
-The implementation has five parts:
+The implementation has six parts:
 
 1. Raw evidence inputs
-2. Vault storage and metadata
-3. Memory maintenance engine
-4. Retrieval and runtime tools
-5. Native Memory UI
+2. Scoped vault storage and metadata
+3. OpenClaw agent registry
+4. Memory maintenance engine
+5. Persistent retrieval and runtime tools
+6. Native Memory UI
 
 ## 1. Raw Evidence Inputs
 
@@ -50,18 +57,22 @@ Memory should be updated from durable product signals, including:
 - Slack conversations and threads from connected integrations
 - activity and integration state
 - explicit user requests to update memory
+- OpenClaw memory update proposals
 
 This layer remains the source material for memory updates. It is not memory itself.
 
-## 2. Vault Storage And Metadata
+## 2. Scoped Vault Storage And Metadata
 
 ### Storage model
 
-Each org should have a dedicated vault root.
+Each org should have one org vault and one member vault per org member.
 
-Recommended logical path:
+Recommended logical paths:
 
-- `memory/<orgId>/`
+- `memory/<orgId>/org/`
+- `memory/<orgId>/members/<orgMemberId>/`
+
+All Kodi environments run on Railway and should use the same S3-compatible storage model, isolated by environment-specific buckets or prefixes.
 
 The storage abstraction should support:
 
@@ -76,25 +87,39 @@ The storage abstraction should support:
 
 ### Metadata tables
 
-Markdown is the memory surface. Postgres metadata exists only to make the vault manageable.
+Markdown is the memory surface. Postgres metadata exists to make scoped vaults, path navigation, search, and runtime access manageable.
+
+#### `memory_scope_type`
+
+Enum values:
+
+- `org`
+- `member`
 
 #### `memory_vaults`
 
-One row per org vault.
+One row per memory scope.
 
 Suggested fields:
 
 - `id`
 - `org_id`
+- `scope_type` (`org` or `member`)
+- `org_member_id` nullable for org vaults, required for member vaults
 - `root_path`
 - `manifest_path`
 - `storage_backend`
 - `created_at`
 - `updated_at`
 
+Suggested constraints:
+
+- unique org vault per `org_id`
+- unique member vault per `(org_id, org_member_id)`
+
 #### `memory_paths`
 
-Tracks files and directories currently present in the vault.
+Tracks files and directories currently present in a vault.
 
 Suggested fields:
 
@@ -106,11 +131,36 @@ Suggested fields:
 - `title`
 - `is_manifest`
 - `is_index`
+- `content_search_vector` for markdown files
 - `last_updated_at`
 - `created_at`
 - `updated_at`
 
 `memory_paths` should mirror the current vault structure. When a file or directory is deleted, its row should be removed as part of the same operation.
+
+#### `openclaw_agents`
+
+Maps OpenClaw agent ids to Kodi identity scopes.
+
+Suggested fields:
+
+- `id`
+- `org_id`
+- `org_member_id` nullable for org agents, required for member agents
+- `agent_type` (`org` or `member`)
+- `openclaw_agent_id`
+- `display_name`
+- `status`
+- `created_at`
+- `updated_at`
+
+Suggested constraints:
+
+- one org agent per org
+- one member agent per org member
+- unique `openclaw_agent_id` per org
+
+Kodi should use this table to resolve which memory scopes an OpenClaw agent may access.
 
 ## 3. Vault Conventions
 
@@ -120,15 +170,17 @@ Every vault should include `MEMORY.md`.
 
 It should explain:
 
+- what scope the vault represents
 - how the vault is organized
 - what major directories exist
 - what files are important entry points
 - how Kodi should add, update, move, rename, and delete memory
-- any org-specific vocabulary that matters for path resolution
+- any scope-specific vocabulary that matters for path resolution
 
 Suggested sections:
 
 - `# Kodi Memory`
+- `## Scope`
 - `## How this vault is organized`
 - `## Important entry points`
 - `## Directory guide`
@@ -143,13 +195,16 @@ Important directories should include compact local index files such as:
 - `Customers/CUSTOMERS.md`
 - `Processes/PROCESSES.md`
 - `Current State/CURRENT-STATE.md`
+- `Preferences/PREFERENCES.md`
+- `Responsibilities/RESPONSIBILITIES.md`
+- `Current Work/CURRENT-WORK.md`
 
 Each index should describe:
 
 - what belongs in the directory
 - what files exist there
 - what each file is for
-- any local naming or structural conventions
+- any naming or structural conventions
 
 ### Memory files
 
@@ -163,17 +218,10 @@ File rules:
 - prefer updating an existing file over creating a near-duplicate
 - remove outdated information instead of letting files bloat
 - link related files when that helps navigation
+- keep org-wide facts out of member memory unless they are only relevant to that member
+- keep personal preferences and private working context out of org memory
 
-File structure should fit the purpose of the file.
-
-Kodi should not force one shared template across the whole vault. Different files will need different section layouts. The important rule is that each file should keep a stable shape over time so Kodi can update it cleanly.
-
-Examples:
-
-- a roadmap file may use sections like milestones, active work, upcoming work, and risks
-- a process file may use sections like purpose, current workflow, owners, and exceptions
-- a customer file may use sections like current relationship, active needs, recent changes, and linked work
-- a capability file may use sections like what exists today, limitations, and planned changes
+Kodi should not force one shared template across all vaults. Different files need different section layouts. The important rule is that each file should keep a stable shape over time so Kodi can update it cleanly.
 
 Soft size guidance:
 
@@ -181,7 +229,32 @@ Soft size guidance:
 - split files once they become crowded or multi-purpose
 - keep index files shorter than the directories they summarize
 
-## 4. Evidence-To-Memory Flow
+## 4. OpenClaw Agent Identity
+
+Kodi should provision one OpenClaw deployment per org and register multiple agents inside it.
+
+Required agents:
+
+- org agent for shared org-level work
+- member agent for each org member
+
+Default routing:
+
+- web app chat from a user routes to that user's member agent
+- Slack messages from a known user route to that user's member agent
+- org-level background jobs route to the org agent
+- meetings route to the org agent unless Kodi has a clear acting member for the task
+
+Kodi should call OpenClaw with the target agent id for the current actor and workflow.
+
+Example model values:
+
+- `openclaw/org`
+- `openclaw/member_<orgMemberId>`
+
+The exact agent id format can differ, but it must be stable and resolvable through `openclaw_agents`.
+
+## 5. Evidence-To-Memory Flow
 
 ### Trigger model
 
@@ -197,32 +270,61 @@ Typical triggers:
 - work item changes
 - integration sync events
 - explicit user requests
+- OpenClaw memory update proposals
 
 When an event arrives, Kodi should trigger a worker immediately. The worker then decides whether memory should change.
 
 ### Memory-worthiness evaluation
 
-Before writing to the vault, the worker should decide:
+Before writing to a vault, the worker should decide:
 
 - is this durable or temporary
 - is this likely to matter again
 - does this change current state
 - does this change next steps or ownership
 - does this supersede existing memory
+- does this belong in org memory, member memory, or both
 - is this best represented as an update to an existing file
 
 Possible outcomes:
 
 - ignore
-- update existing memory
-- create new memory
+- update existing org memory
+- update existing member memory
+- create new org memory
+- create new member memory
 - delete obsolete memory
 - trigger structural maintenance
+
+### Scope resolution
+
+Kodi should choose memory scope before choosing a file path.
+
+Use org memory for:
+
+- shared project state
+- customer context
+- company processes
+- decisions that affect the org
+- shared next steps and ownership
+- information other members should rely on
+
+Use member memory for:
+
+- user preferences
+- personal working style
+- private responsibilities
+- individual current work
+- private commitments
+- context that should follow the member across channels inside the org
+
+Use both scopes when a fact has a shared component and a personal component.
 
 ### Path resolution
 
 If memory should change, Kodi should determine:
 
+- which vault owns the update
 - what directory this belongs in
 - whether an existing file already owns the topic
 - whether a directory index should also change
@@ -230,7 +332,7 @@ If memory should change, Kodi should determine:
 
 Path resolution should use:
 
-- `MEMORY.md`
+- the target vault's `MEMORY.md`
 - local index files
 - targeted search
 - `memory_paths`
@@ -239,16 +341,17 @@ Path resolution should use:
 
 For a content update, Kodi should:
 
-1. Load the target file.
-2. Load only the minimum related context needed.
-3. Apply a concise revision.
-4. Preserve useful stable structure.
-5. Update `memory_paths` metadata.
-6. Update indexes or `MEMORY.md` if the change affects navigation.
+1. Load the target vault manifest.
+2. Load the target file.
+3. Load only the minimum related context needed.
+4. Apply a concise revision.
+5. Preserve useful stable structure.
+6. Update `memory_paths` metadata and search vector.
+7. Update indexes or `MEMORY.md` if the change affects navigation.
 
-## 5. Memory Maintenance Engine
+## 6. Memory Maintenance Engine
 
-The maintenance engine keeps the vault useful over time.
+The maintenance engine keeps scoped vaults useful over time.
 
 It should have three flows.
 
@@ -260,6 +363,7 @@ Its job is to:
 
 - inspect new evidence
 - decide whether it changes durable memory
+- choose org scope, member scope, or both
 - update memory only when the change is worth persisting
 
 ### `memory-refresh-currentness`
@@ -270,7 +374,7 @@ Its job is to:
 
 - revisit files that may no longer reflect reality
 - refresh summaries, next steps, or ownership when newer evidence supports it
-- keep important memory current even when no single event forced a rewrite
+- keep important org and member memory current
 
 If Kodi has enough information to correct a file, it should update it instead of merely labeling it.
 
@@ -290,19 +394,15 @@ Its job is to:
 
 Before writing, the worker should build a small in-memory plan describing:
 
+- affected vaults
 - affected paths
 - operation kind
 - required file reads
 - whether manifest or index repair is needed
 
-This plan is:
+This plan is transient, internal to the worker, and not user-facing.
 
-- transient
-- internal to the worker
-- not persisted
-- not user-facing
-
-## 6. Structural Rules
+## 7. Structural Rules
 
 Kodi should be able to:
 
@@ -321,43 +421,112 @@ Structural rules:
 
 - repair `MEMORY.md` and any affected indexes as part of the same operation
 - keep `memory_paths` in sync with the actual vault structure
+- keep org and member vaults structurally independent
 - prefer evolving existing structure over creating parallel overlapping areas
 
-## 7. Retrieval And Runtime Tools
+## 8. `kodi-memory` Plugin And Runtime Tools
 
 Kodi and OpenClaw should use explicit memory tools instead of direct filesystem crawling.
 
-Suggested operations:
+Persistent memory access should be implemented as a required native OpenClaw plugin named `kodi-memory`.
 
-- `memory.get_manifest`
-- `memory.get_index`
-- `memory.search`
-- `memory.read_path`
-- `memory.read_related`
-- `memory.get_recent_changes`
-- `memory.update_content`
-- `memory.create_path`
-- `memory.rename_path`
-- `memory.move_path`
-- `memory.delete_path`
-- `memory.rebuild_index`
+The plugin should be installed and enabled in each org's OpenClaw deployment. It should expose agent tools and proactive recall behavior while delegating all durable memory operations to Kodi's service-authenticated Memory API.
 
-Default retrieval flow:
+The plugin must not read or write S3, Postgres, or vault files directly.
 
-1. Read `MEMORY.md`.
-2. Read one or more relevant directory indexes.
-3. Read a small set of target files.
-4. Expand further only if needed.
+### Plugin configuration
 
-The system should avoid reading the whole vault by default.
+The `kodi-memory` plugin should be configured with:
 
-## 8. Native Memory UI
+- Kodi Memory API base URL
+- per-deployment service token
+- fail-closed behavior enabled
+- proactive recall enabled
 
-The Memory UI should be one continuous vault-browser experience.
+The service token identifies the OpenClaw deployment to Kodi. It does not identify the user by itself.
+
+### Trusted identity flow
+
+The plugin should derive trusted identity from OpenClaw runtime context.
+
+For tool calls:
+
+1. Register a `before_tool_call` hook.
+2. When the tool name starts with `kodi_memory_`, capture trusted `agentId`, `sessionKey`, and `toolCallId`.
+3. Store that context in a bounded in-memory map keyed by `toolCallId`.
+4. In the tool `execute(toolCallId, params)` handler, look up the captured context by `toolCallId`.
+5. If no trusted context exists, fail closed.
+6. Send the trusted context to Kodi with the service token.
+7. Kodi resolves `(service token, agentId)` through `openclaw_agents` and exposes only allowed memory scopes.
+
+The model must not be allowed to provide `agentId`, `orgId`, `orgMemberId`, or scope as trusted tool parameters.
+
+For proactive recall, the plugin should use the trusted runtime context available before prompt construction or agent start. If `agentId` or `sessionKey` is unavailable, proactive recall should return no memory context and log the failure.
+
+### Scope access
+
+Default scope access:
+
+- org agent can access org memory
+- member agent can access its member memory and org memory
+
+### Explicit tools
+
+Suggested tools:
+
+- `kodi_memory_get_manifest`
+- `kodi_memory_get_index`
+- `kodi_memory_search`
+- `kodi_memory_read_path`
+- `kodi_memory_read_related`
+- `kodi_memory_get_recent_changes`
+- `kodi_memory_propose_update`
+- `kodi_memory_propose_create_path`
+- `kodi_memory_propose_rename_path`
+- `kodi_memory_propose_move_path`
+- `kodi_memory_propose_delete_path`
+
+OpenClaw should propose durable memory changes. Kodi should execute accepted changes through the memory maintenance engine.
+
+### Proactive recall
+
+Before each reply, the plugin should ask Kodi for a small relevant memory briefing using the current agent identity and request context. Kodi should return concise snippets from the allowed scopes only.
+
+For a member agent, proactive recall may include:
+
+- user-specific context from member memory
+- shared context from org memory
+- citations or path references for debugging and follow-up reads
+
+Proactive recall should be bounded. It should not inject whole vaults or long files into the prompt.
+
+Default retrieval flow for a member agent:
+
+1. Read the member `MEMORY.md`.
+2. Read the org `MEMORY.md`.
+3. Search member memory for user-specific context.
+4. Search org memory for shared context.
+5. Read a small set of target files.
+6. Expand further only if needed.
+
+The system should avoid reading whole vaults by default.
+
+## 9. Native Memory UI
+
+The Memory UI should be one continuous vault-browser experience with scope switching.
+
+### Scope switcher
+
+Users should be able to switch between:
+
+- org memory
+- their member memory
+
+Admins may later inspect member memory according to product policy, but the first build should optimize for the current user's member memory plus shared org memory.
 
 ### Root view
 
-The default Memory Home should show the root of the vault, similar to browsing a repo:
+The default Memory Home should show the root of the selected vault, similar to browsing a repo:
 
 - directories
 - files
@@ -381,7 +550,7 @@ When a user opens a file, the same surface should show:
 
 ### Memory chat panel
 
-The Memory surface should include a chat panel tied to the current context.
+The Memory surface should include a chat panel tied to the current scope and path.
 
 Users should be able to:
 
@@ -390,9 +559,7 @@ Users should be able to:
 - ask Kodi to update a file or directory
 - ask Kodi to reorganize memory when the structure no longer fits
 
-The first implementation should optimize for Kodi-maintained memory plus AI-mediated human correction, not direct manual editing.
-
-## 9. Debugging And Logging
+## 10. Debugging And Logging
 
 Keep this lightweight.
 
@@ -400,12 +567,14 @@ Useful logs:
 
 - failed memory updates
 - failed structural operations
+- failed `kodi-memory` plugin calls
+- agent-to-scope resolution failures
 - worker crashes
-- enough path and operation context to debug what failed
+- enough scope, path, and operation context to debug what failed
 
 This is for debugging, not a full observability program.
 
-## 10. Testing Strategy
+## 11. Testing Strategy
 
 ### Unit tests
 
@@ -413,19 +582,24 @@ Cover:
 
 - manifest parsing
 - index parsing
+- scope resolution
 - path resolution
 - memory-worthiness evaluation
 - content update planning
 - structural operation planning
+- agent-to-scope resolution
 
 ### Integration tests
 
 Cover:
 
-- evidence ingestion into memory updates
+- org vault bootstrap
+- member vault bootstrap
+- evidence ingestion into scoped memory updates
 - multi-file update flows
 - structural reorganization flows
-- retrieval flows through `MEMORY.md`, indexes, and `memory_paths`
+- retrieval through `MEMORY.md`, indexes, and `memory_paths`
+- `kodi-memory` plugin calls
 - UI loading of live vault structure
 
 ### Scenario tests
@@ -436,18 +610,19 @@ Create end-to-end scenarios for several org shapes, such as:
 - client services org
 - operations-heavy org
 
-This matters because the vault structure is supposed to adapt to different businesses.
+Each scenario should include multiple members so member memory and org memory can be tested together.
 
-## 11. Build Plan
+## 12. Build Plan
 
-This work should be built in complete vertical phases, not thin MVP slices.
+This work should be built in complete vertical phases.
 
-### Phase 1: Vault Foundations
+### Phase 1: Scoped Vault Foundations
 
 Build to completion:
 
 - storage abstraction
-- per-org vault creation
+- org vault creation
+- member vault creation
 - `MEMORY.md`
 - directory indexes
 - `memory_vaults`
@@ -458,25 +633,45 @@ Build to completion:
 
 Outcome:
 
-Kodi can host and navigate a real per-org vault.
+Kodi can host and navigate real scoped vaults.
 
-### Phase 2: Event-Driven Memory Updates
+### Phase 2: Agent Identity And Persistent Memory Access
+
+Build to completion:
+
+- OpenClaw agent registry
+- org agent registration
+- member agent registration
+- runtime routing by org member
+- `kodi-memory` OpenClaw plugin
+- `kodi-memory` tool surface
+- proactive memory recall
+- service authentication and agent-to-scope resolution
+- fail-closed identity validation
+
+Outcome:
+
+Every OpenClaw agent can access the Kodi memory scopes it is allowed to use.
+
+### Phase 3: Event-Driven Memory Updates
 
 Build to completion:
 
 - evidence ingestion hooks
 - memory-worthiness evaluation
+- scope resolution
 - path resolution
 - content update execution
 - metadata synchronization
 - chat-driven correction handling
+- OpenClaw memory update proposal handling
 - event-driven worker execution
 
 Outcome:
 
-Kodi can update memory from real org activity and user requests.
+Kodi can update org and member memory from real activity and user requests.
 
-### Phase 3: Structural Maintenance
+### Phase 4: Structural Maintenance
 
 Build to completion:
 
@@ -488,12 +683,13 @@ Build to completion:
 
 Outcome:
 
-Kodi can evolve the shape of the vault safely as the org changes.
+Kodi can evolve the shape of each scoped vault safely.
 
-### Phase 4: Native Memory UI
+### Phase 5: Native Memory UI
 
 Build to completion:
 
+- scope switcher
 - root vault browser
 - directory navigation
 - rendered file view
@@ -502,37 +698,41 @@ Build to completion:
 
 Outcome:
 
-Users can inspect and correct org memory inside Kodi.
+Users can inspect and correct org memory and their member memory inside Kodi.
 
-### Phase 5: Runtime Integration And Scheduled Upkeep
+### Phase 6: Runtime Integration And Scheduled Upkeep
 
 Build to completion:
 
-- OpenClaw memory tool contract
-- retrieval heuristics
+- layered retrieval heuristics
 - memory-backed answering patterns
 - scheduled currentness refresh
 - next-step synthesis across related files
+- final full-system scenarios
 
 Outcome:
 
-Kodi and OpenClaw operate directly against maintained org memory.
+Kodi and OpenClaw operate directly against maintained org and member memory.
 
-## 12. Recommended Codebase Areas
+## 13. Recommended Codebase Areas
 
 ### Database
 
 - add memory schema in `packages/db`
+- add OpenClaw agent registry in `packages/db`
 
 ### API and services
 
 - add vault storage abstraction in `apps/api`
 - add memory services in `apps/api/src/lib/memory`
 - add memory router in `apps/api/src/routers`
+- add service-authenticated memory endpoints for the `kodi-memory` plugin
 
 ### Runtime integration
 
-- extend assistant runtime tooling in `apps/api/src/lib/tool-access-runtime.ts` or adjacent runtime modules
+- extend OpenClaw client and adjacent runtime modules to route by agent id
+- extend assistant runtime tooling to use layered memory retrieval
+- install and configure the `kodi-memory` plugin during OpenClaw provisioning
 
 ### App UI
 
@@ -540,14 +740,18 @@ Kodi and OpenClaw operate directly against maintained org memory.
 
 ## Summary
 
-This implementation should produce a complete org memory system built around:
+This implementation should produce a complete memory system built around:
 
-- a per-org markdown vault
-- `MEMORY.md` and directory indexes for navigation
+- shared org markdown vaults
+- per-member markdown vaults
+- `MEMORY.md` and directory indexes
 - lightweight metadata in `memory_vaults` and `memory_paths`
+- an OpenClaw agent registry
+- the `kodi-memory` OpenClaw plugin
+- `kodi-memory` tools and proactive recall for OpenClaw agents
 - event-driven selective updates
 - structural maintenance
 - a native vault-browser UI
 - runtime integration with Kodi and OpenClaw
 
-The result should be a memory layer that Kodi can maintain as a living organizational wiki for each org.
+The result should be a memory layer that Kodi can maintain as durable context for every org and every member agent.

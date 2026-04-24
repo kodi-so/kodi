@@ -212,29 +212,29 @@ Kodi needs a maintenance system that can:
 - keep manifests and indexes current
 - reorganize vaults when structure stops being useful
 
-### 7. `kodi-memory` OpenClaw plugin
+### 7. `memory` module inside `kodi-bridge`
 
 Kodi and OpenClaw should access memory through explicit tools.
 
-Persistent memory access should be implemented as a required native OpenClaw plugin named `kodi-memory`.
+Persistent memory access should be implemented as a `memory` module inside the required native `kodi-bridge` plugin described in [docs/openclaw-bridge/](../openclaw-bridge/).
 
-The plugin should be installed in each org's OpenClaw deployment and should call Kodi's service-authenticated Memory API. The plugin is a thin runtime bridge. Kodi remains the source of truth for vault storage, scope authorization, retrieval, and writes.
+The bridge-hosted memory module should be available in each org's OpenClaw deployment and should call Kodi's authenticated Memory API through the bridge transport. Kodi remains the source of truth for vault storage, scope authorization, retrieval, and writes.
 
-The plugin should derive trusted agent identity from OpenClaw runtime hook context, not from model-provided tool parameters. For tool calls, it should capture `agentId`, `sessionKey`, and `toolCallId` from trusted runtime context before execution and send that identity context to Kodi with a per-deployment service token. If trusted identity context is missing, the plugin should fail closed.
+The memory module should derive trusted agent identity from OpenClaw runtime hook context, not from model-provided tool parameters. For tool calls, it should capture `agentId`, `sessionKey`, and `toolCallId` from trusted runtime context before execution and send that identity context to Kodi through the bridge's authenticated request path. If trusted identity context is missing, the module should fail closed.
 
-Kodi-triggered calls may add current context and action tools, while durable memory access remains available to the agent across interactions.
+Kodi-triggered calls may add current context and action tools, while durable memory access remains available to the agent across interactions inside the same runtime.
 
-The plugin should provide proactive recall before replies and explicit tools for deeper lookup.
+The memory module should provide explicit tools for lookup and update proposals. Agents should decide what memory to read, start from manifests and indexes when helpful, and iterate if they need more context.
 
 Examples:
 
-- `kodi_memory_get_manifest`
-- `kodi_memory_get_index`
-- `kodi_memory_search`
-- `kodi_memory_read_path`
-- `kodi_memory_read_related`
-- `kodi_memory_get_recent_changes`
-- `kodi_memory_propose_update`
+- get the vault manifest
+- get a directory index
+- search memory
+- read a path
+- read related files
+- get recent changes
+- propose a memory update
 
 Writes should go through Kodi's memory maintenance path. OpenClaw should propose or request durable memory changes; Kodi should apply them through the same workers that handle other evidence.
 
@@ -267,7 +267,7 @@ Typical triggers include:
 - a work item changes
 - an integration sync brings in meaningful new information
 - a user explicitly asks Kodi to change memory
-- OpenClaw proposes a memory update through the `kodi-memory` plugin
+- OpenClaw proposes a memory update through the bridge-hosted `memory` module
 
 When a trigger happens:
 
@@ -332,7 +332,7 @@ Kodi should build memory as scoped markdown vaults with:
 - directory indexes
 - lightweight metadata
 - an OpenClaw agent registry
-- the required `kodi-memory` OpenClaw plugin
+- a bridge-hosted `memory` module inside the required `kodi-bridge` plugin
 - event-driven selective updates
 - structural maintenance
 - a native vault-browser UI

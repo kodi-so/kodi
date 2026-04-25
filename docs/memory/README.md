@@ -2,6 +2,8 @@
 
 This directory contains the planning and implementation docs for Kodi's scoped memory system.
 
+The durable memory model in this directory is paired with the runtime bridge plan in [docs/openclaw-bridge/](../openclaw-bridge/). The memory docs remain the source of truth for vaults, scopes, maintenance, and UI. The bridge docs describe how memory access is hosted inside the shared `kodi-bridge` plugin at runtime.
+
 ## Files
 
 - [architecture-plan.md](./architecture-plan.md)

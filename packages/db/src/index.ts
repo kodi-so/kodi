@@ -27,3 +27,12 @@ export { encrypt, decrypt, encryptJson, decryptJson } from './lib/crypto'
 export { deriveMeetingBotIdentity } from './lib/meeting-bot-identity'
 export * from './lib/meeting-copilot'
 export { ensurePersonalOrganizationForUser } from './lib/personal-org'
+export {
+  PLANS,
+  MARKUP_FACTOR,
+  toRealBudget,
+  toUserVisibleCost,
+  type PlanId,
+  type PlanConfig,
+} from './lib/plans'
+export { createLiteLLMClient } from './lib/litellm'

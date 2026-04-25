@@ -6,6 +6,7 @@ import { trpc } from '@/lib/trpc'
 import { useSession } from '@/lib/auth-client'
 import { makeTempId } from './chat-helpers'
 import { KODI_DM_ID, type Channel, type Message } from './chat-types'
+import { getBudgetErrorMessage } from '@/lib/billing-errors'
 
 type UseChatStateArgs = {
   orgId: string
@@ -355,10 +356,12 @@ export function useChatState({
       setMessages((current) =>
         current.filter((message) => message.id !== optimisticId)
       )
+      const budgetMsg = getBudgetErrorMessage(sendError)
       setError(
-        sendError instanceof Error
-          ? sendError.message
-          : 'Failed to send message.'
+        budgetMsg ??
+          (sendError instanceof Error
+            ? sendError.message
+            : 'Failed to send message.')
       )
       if (isThreadReply) {
         setThreadDraft(content)

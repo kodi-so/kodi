@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Bot, Building2, Users } from 'lucide-react'
+import { Bot, Building2, CreditCard, Users } from 'lucide-react'
 import { cn } from '@kodi/ui/lib/utils'
 
 const settingsSections = [
   { href: '/settings/general', label: 'General', icon: Building2 },
   { href: '/settings/members', label: 'Members', icon: Users },
   { href: '/settings/meeting-copilot', label: 'Meeting copilot', icon: Bot },
+  { href: '/settings/billing', label: 'Billing', icon: CreditCard },
 ]
 
 export function SettingsLayout({ children }: { children: React.ReactNode }) {

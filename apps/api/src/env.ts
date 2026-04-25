@@ -134,6 +134,18 @@ const envSchema = z.object({
 
   // Resend API key for sending invite emails (optional — logs to console in dev)
   RESEND_API_KEY: z.string().optional(),
+
+  // ── Required in Phase 2 (billing) ─────────────────────────────────────────
+
+  // Stripe (for billing router + usage sync)
+  STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
+  STRIPE_PRO_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_BUSINESS_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_USAGE_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_METER_EVENT_NAME: z.string().default('kodi_usage'),
+
+  // Usage sync cron auth
+  USAGE_SYNC_SECRET: z.string().min(32).optional(),
 })
 
 const _env = envSchema.safeParse(process.env)
@@ -264,4 +276,39 @@ export function requireLiteLLM() {
     throw new Error('LiteLLM environment variables are not configured.')
   }
   return { LITELLM_PROXY_URL, LITELLM_MASTER_KEY }
+}
+
+export function requireStripeBilling() {
+  const {
+    STRIPE_SECRET_KEY,
+    STRIPE_PRO_PRICE_ID,
+    STRIPE_BUSINESS_PRICE_ID,
+    STRIPE_USAGE_PRICE_ID,
+    STRIPE_METER_EVENT_NAME,
+  } = env
+  if (
+    !STRIPE_SECRET_KEY ||
+    !STRIPE_PRO_PRICE_ID ||
+    !STRIPE_BUSINESS_PRICE_ID ||
+    !STRIPE_USAGE_PRICE_ID
+  ) {
+    throw new Error(
+      'Stripe billing environment variables are not fully configured.',
+    )
+  }
+  return {
+    STRIPE_SECRET_KEY,
+    STRIPE_PRO_PRICE_ID,
+    STRIPE_BUSINESS_PRICE_ID,
+    STRIPE_USAGE_PRICE_ID,
+    STRIPE_METER_EVENT_NAME,
+  }
+}
+
+export function requireUsageSync() {
+  const { USAGE_SYNC_SECRET } = env
+  if (!USAGE_SYNC_SECRET) {
+    throw new Error('USAGE_SYNC_SECRET is not configured.')
+  }
+  return { USAGE_SYNC_SECRET }
 }

@@ -24,6 +24,7 @@
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "build:watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@kodi/typescript-config": "*",
     "@types/bun": "latest",
+    "esbuild": "^0.24.0",
     "openclaw": "2026.4.23",
     "typescript": "^5.4.5"
   }

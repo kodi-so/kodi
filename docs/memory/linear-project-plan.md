@@ -15,7 +15,7 @@ Kodi Memory
 
 ### Project Summary
 
-Build scoped durable memory for Kodi as shared org vaults, per-member vaults, and a required `kodi-memory` OpenClaw plugin.
+Build scoped durable memory for Kodi as shared org vaults, per-member vaults, and bridge-hosted memory tools inside `kodi-bridge`.
 
 ### Project Description
 
@@ -30,7 +30,7 @@ This project delivers the first complete version of scoped memory:
 - scoped markdown vaults backed by S3-compatible storage
 - lightweight Postgres metadata
 - org and member OpenClaw agent registration
-- a required `kodi-memory` OpenClaw plugin backed by Kodi APIs
+- a bridge-hosted `memory` module inside the required `kodi-bridge` plugin
 - event-driven memory maintenance
 - safe structural maintenance
 - native Memory UI with chat-based correction
@@ -68,7 +68,7 @@ Title: Agent Identity And Persistent Memory Access
 
 Description:
 
-Register org and member OpenClaw agents, route runtime calls to the correct agent, and install the `kodi-memory` plugin backed by Kodi APIs.
+Register org and member OpenClaw agents, route runtime calls to the correct agent, and connect memory to the bridge-hosted runtime module backed by Kodi APIs.
 
 Outcome:
 
@@ -297,13 +297,13 @@ Dependencies:
 
 ### Issue 12
 
-Title: Build `kodi-memory` service authentication
+Title: Build authenticated memory API access for `kodi-bridge`
 
 Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Add a service-authenticated path from the `kodi-memory` OpenClaw plugin to Kodi memory APIs. Requests should authenticate the OpenClaw deployment, include trusted runtime identity from the plugin, identify the calling OpenClaw agent, and resolve allowed memory scopes from `openclaw_agents`.
+Add an authenticated path from the bridge-hosted `memory` module to Kodi memory APIs. Requests should authenticate the OpenClaw deployment through the bridge transport, include trusted runtime identity from the module, identify the calling OpenClaw agent, and resolve allowed memory scopes from `openclaw_agents`.
 
 Dependencies:
 
@@ -312,17 +312,17 @@ Dependencies:
 
 ### Issue 13
 
-Title: Build the `kodi-memory` OpenClaw plugin
+Title: Attach the memory tool surface to `kodi-bridge`
 
 Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Build a required native OpenClaw plugin named `kodi-memory`. The plugin should expose tools for manifests, indexes, search, path reads, related reads, recent changes, and memory update proposals. It should call Kodi's service-authenticated Memory API and should not access S3, Postgres, or vault files directly.
+Attach the memory tool surface to the `memory` module inside `kodi-bridge`. The surface should cover manifests, indexes, search, path reads, related reads, recent changes, and memory update proposals. It should call Kodi's authenticated Memory API and should not access S3, Postgres, or vault files directly.
 
 Dependencies:
 
-- Build `kodi-memory` service authentication
+- Build authenticated memory API access for `kodi-bridge`
 
 ### Issue 14
 
@@ -332,21 +332,21 @@ Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Implement trusted identity capture in the `kodi-memory` plugin. For `kodi_memory_*` tool calls, capture `agentId`, `sessionKey`, and `toolCallId` from OpenClaw runtime hook context before execution, look it up during tool execution, and fail closed when trusted identity context is missing.
+Implement trusted identity capture in the bridge-hosted `memory` module. For memory tool calls, capture `agentId`, `sessionKey`, and `toolCallId` from OpenClaw runtime hook context before execution, look it up during tool execution, and fail closed when trusted identity context is missing.
 
 Dependencies:
 
-- Build the `kodi-memory` OpenClaw plugin
+- Attach the memory tool surface to `kodi-bridge`
 
 ### Issue 15
 
-Title: Add proactive memory recall
+Title: Define and test agent-driven memory retrieval flow
 
 Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Add proactive recall to the `kodi-memory` plugin so each agent turn can receive a small relevant memory briefing from Kodi before the reply. Recall must use trusted runtime identity and return only memory from allowed scopes.
+Document and test the expected retrieval flow for agents using the bridge-hosted memory tools: start from manifests and indexes when useful, run targeted search, read target files, and iterate when more context is needed. The flow should stay agent-driven and scoped.
 
 Dependencies:
 
@@ -354,21 +354,21 @@ Dependencies:
 
 ### Issue 16
 
-Title: Add `kodi-memory` provisioning and smoke tests
+Title: Add bridge memory-module provisioning and smoke tests
 
 Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Install and configure the `kodi-memory` plugin during OpenClaw provisioning. Add a smoke test for the pinned OpenClaw version that verifies `before_tool_call` provides `agentId`, `sessionKey`, and `toolCallId` for `kodi_memory_*` tool calls. Provisioning validation should fail closed if trusted identity is unavailable.
+Validate memory access through provisioned `kodi-bridge` instances. Add a smoke test for the pinned OpenClaw version that verifies the runtime hook provides `agentId`, `sessionKey`, and `toolCallId` for memory tool calls. Provisioning validation should fail closed if trusted identity is unavailable.
 
 Dependencies:
 
-- Add proactive memory recall
+- Define and test agent-driven memory retrieval flow
 
 ### Issue 17
 
-Title: Add `kodi-memory` access coverage
+Title: Add bridge-hosted memory access coverage
 
 Milestone: Agent Identity And Persistent Memory Access
 
@@ -378,7 +378,7 @@ Create coverage proving org agents can access org memory, member agents can acce
 
 Dependencies:
 
-- Add `kodi-memory` provisioning and smoke tests
+- Add bridge memory-module provisioning and smoke tests
 
 ## Milestone 3 Issues
 
@@ -504,11 +504,11 @@ Milestone: Event-Driven Memory Updates
 
 Description:
 
-Accept memory update proposals from the `kodi-memory` plugin and route them through the memory worker so durable memory changes remain governed by Kodi.
+Accept memory update proposals from the bridge-hosted `memory` module and route them through the memory worker so durable memory changes remain governed by Kodi.
 
 Dependencies:
 
-- Build the `kodi-memory` OpenClaw plugin
+- Attach the memory tool surface to `kodi-bridge`
 - Build content update execution and metadata sync
 
 ### Issue 27
@@ -760,12 +760,12 @@ Milestone: Runtime Integration And Scheduled Upkeep
 
 Description:
 
-Create end-to-end scenarios that prove the full memory system works across multiple org shapes, multiple members, private and shared surfaces, `kodi-memory` plugin access, runtime interactions, and scheduled upkeep.
+Create end-to-end scenarios that prove the full memory system works across multiple org shapes, multiple members, private and shared surfaces, bridge-hosted memory access, runtime interactions, and scheduled upkeep.
 
 Dependencies:
 
 - Add scoped vault foundation scenario coverage
-- Add `kodi-memory` access coverage
+- Add bridge-hosted memory access coverage
 - Add end-to-end coverage for scoped memory updates
 - Add structural maintenance scenario coverage
 - Add UI integration and scenario coverage

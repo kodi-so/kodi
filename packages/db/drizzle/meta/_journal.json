@@ -197,6 +197,13 @@
       "when": 1777276900000,
       "tag": "0028_kod_354_openclaw_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1777277100000,
+      "tag": "0030_kod_356_plugin_events_and_versions",
+      "breakpoints": true
     }
   ]
 }

@@ -51,7 +51,7 @@ export default function BillingSettingsPage() {
 
   useEffect(() => {
     if (searchParams.get('success') === 'true') {
-      setSuccessMsg('Subscription activated! Welcome to Kodi.')
+      setSuccessMsg('Subscription activated — your AI agent is being set up and will be ready in a few minutes.')
       window.history.replaceState({}, '', '/settings/billing')
     }
     if (searchParams.get('canceled') === 'true') {

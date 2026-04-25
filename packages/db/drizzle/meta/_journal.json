@@ -78,6 +78,111 @@
       "when": 1774780722345,
       "tag": "0010_groovy_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1774890000000,
+      "tag": "0011_phase_0_zoom_foundations",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1774990800000,
+      "tag": "0012_phase_1_tool_access_foundations",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1775070000000,
+      "tag": "0013_phase_2_tool_access_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1775077200000,
+      "tag": "0014_phase_3_tool_access_runtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1775159360000,
+      "tag": "0015_phase_3_runtime_session_reuse_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1775169600000,
+      "tag": "0017_phase_1_meeting_schema_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1775170200000,
+      "tag": "0018_phase_1_meeting_status_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1775215200000,
+      "tag": "0019_phase_4_tool_access_approvals_reliability",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1775346000000,
+      "tag": "0020_chat_channels_threads",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1775620800000,
+      "tag": "0021_dashboard_assistant_threads",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1775869200000,
+      "tag": "0022_phase_0_meeting_copilot_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1775955600000,
+      "tag": "0023_phase_1_meeting_reliability_diagnostics",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1776042000000,
+      "tag": "0024_phase_3_meeting_answers",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1776128400000,
+      "tag": "0025_phase_4_voice_output",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1776214800000,
+      "tag": "0026_phase_4_durable_voice_media",
+      "breakpoints": true
     }
   ]
 }

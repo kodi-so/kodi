@@ -1,27 +1,21 @@
 'use client'
 
-import { Suspense, useState } from 'react'
-import { signIn, signUp } from '@/lib/auth-client'
 import Link from 'next/link'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Separator,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Button } from '@kodi/ui/components/button'
+import { Input } from '@kodi/ui/components/input'
+import { Label } from '@kodi/ui/components/label'
+import { Separator } from '@kodi/ui/components/separator'
+import { signIn, signUp } from '@/lib/auth-client'
+import { AuthShell } from '@/components/auth-shell'
+import { GoogleAuthButton } from '@/components/google-auth-button'
 
 function SignUpForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectParam = searchParams.get('redirect')
-  // After onboarding creates the personal org, forward any pending redirect
   const onboardingUrl = redirectParam
     ? `/onboarding?redirect=${encodeURIComponent(redirectParam)}`
     : '/onboarding'
@@ -36,18 +30,20 @@ function SignUpForm() {
   async function handleGoogleSignIn() {
     setGoogleLoading(true)
     setError('')
+
     try {
       await signIn.social({ provider: 'google', callbackURL: onboardingUrl })
-    } catch (e) {
-      setError('Failed to sign in with Google. Please try again.')
+    } catch {
+      setError('Google sign-up failed. Try again.')
       setGoogleLoading(false)
     }
   }
 
-  async function handleSignUp(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSignUp(event: React.FormEvent) {
+    event.preventDefault()
     setLoading(true)
     setError('')
+
     try {
       const result = await signUp.email({
         name,
@@ -55,183 +51,117 @@ function SignUpForm() {
         password,
         callbackURL: onboardingUrl,
       })
+
       if (result?.error) {
-        setError(result.error.message ?? 'Failed to create account.')
+        setError(result.error.message ?? 'We could not create your account.')
         setLoading(false)
-      } else {
-        router.push(onboardingUrl)
+        return
       }
-    } catch (e) {
-      setError('Something went wrong. Please try again.')
+
+      router.push(onboardingUrl)
+    } catch {
+      setError('We could not create your account. Try again.')
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4">
-      {/* Background glow */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.12) 0%, transparent 70%)',
-        }}
-      />
-
-      <div className="relative w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <span className="text-white font-bold">K</span>
-          </div>
-          <span className="text-white font-semibold text-xl tracking-tight">
-            Kodi
-          </span>
-        </div>
-
-        <Card className="rounded-2xl border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
-          <CardHeader className="space-y-1 pb-7 text-center">
-            <CardTitle className="text-center text-2xl font-bold text-white">
-              Create your account
-            </CardTitle>
-            <CardDescription className="text-center text-zinc-500">
-              Join thousands of teams on Kodi
-            </CardDescription>
-          </CardHeader>
-
-          {/* Google Sign Up */}
-          <CardContent className="space-y-4">
-            <Button
-              onClick={handleGoogleSignIn}
-              disabled={googleLoading || loading}
-              variant="outline"
-              className="mb-4 h-10 w-full gap-3 border-zinc-700 bg-zinc-800 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-700 hover:text-zinc-100"
-            >
-              {googleLoading ? (
-                <span className="w-4 h-4 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
-              ) : (
-                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                </svg>
-              )}
-              Continue with Google
-            </Button>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3 mb-4">
-              <Separator className="flex-1 bg-zinc-800" />
-              <span className="text-zinc-600 text-xs">or</span>
-              <Separator className="flex-1 bg-zinc-800" />
-            </div>
-
-            {/* Sign Up form */}
-            <form onSubmit={handleSignUp} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                  Full name
-                </label>
-                <Input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Smith"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                  Email
-                </label>
-                <Input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                  Password
-                </label>
-                <Input
-                  type="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min. 8 characters"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
-                />
-              </div>
-
-              {error && (
-                <Alert
-                  variant="destructive"
-                  className="border-red-500/20 bg-red-500/10 text-center text-red-400 [&>div]:pl-0"
-                >
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button
-                type="submit"
-                disabled={loading || googleLoading}
-                className="h-11 w-full rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white hover:opacity-90"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                    Creating account…
-                  </span>
-                ) : (
-                  'Create Account'
-                )}
-              </Button>
-            </form>
-
-            <p className="text-center text-zinc-500 text-sm mt-6">
-              Already have an account?{' '}
-              <Link
-                href="/login"
-                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
-              >
-                Sign in
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
-
-        <p className="text-center text-zinc-700 text-xs mt-6">
-          By creating an account, you agree to our{' '}
-          <Link href="/terms" className="underline hover:text-zinc-500">
+    <AuthShell
+      title="Create account"
+      description="Start with one workspace and add the tools Kodi can use."
+      footer={
+        <>
+          By continuing, you agree to our{' '}
+          <Link href="/terms" className="underline underline-offset-4">
             Terms
           </Link>{' '}
           and{' '}
-          <Link href="/privacy" className="underline hover:text-zinc-500">
+          <Link href="/privacy" className="underline underline-offset-4">
             Privacy Policy
           </Link>
           .
-        </p>
+        </>
+      }
+    >
+      <GoogleAuthButton
+        disabled={googleLoading || loading}
+        loading={googleLoading}
+        onClick={handleGoogleSignIn}
+      >
+        Continue with Google
+      </GoogleAuthButton>
+
+      <div className="flex items-center gap-3">
+        <Separator className="flex-1" />
+        <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+          or
+        </span>
+        <Separator className="flex-1" />
       </div>
-    </div>
+
+      <form onSubmit={handleSignUp} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Full name</Label>
+          <Input
+            id="name"
+            type="text"
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Jane Smith"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="At least 8 characters"
+          />
+        </div>
+
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        <Button
+          type="submit"
+          disabled={loading || googleLoading}
+          className="w-full"
+        >
+          {loading ? 'Creating account...' : 'Create account'}
+        </Button>
+      </form>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Already have an account?{' '}
+        <Link
+          href="/login"
+          className="text-foreground underline underline-offset-4"
+        >
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
   )
 }
 
@@ -239,8 +169,8 @@ export default function SignUpPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex min-h-screen items-center justify-center">
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       }
     >

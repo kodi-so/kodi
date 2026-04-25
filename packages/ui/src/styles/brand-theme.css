@@ -1,0 +1,97 @@
+:root {
+  --font-abeezee:
+    'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --kodi-canvas: 220 14% 96%;
+  --kodi-canvas-shade: 220 10% 94%;
+  --kodi-panel: 0 0% 100%;
+  --kodi-panel-elevated: 0 0% 100%;
+  --kodi-panel-muted: 220 10% 95%;
+  --kodi-sidebar: 220 10% 97%;
+  --kodi-sidebar-elevated: 220 10% 98%;
+  --kodi-border: 220 9% 89%;
+  --kodi-border-strong: 220 8% 78%;
+  --kodi-text: 220 20% 12%;
+  --kodi-text-muted: 220 10% 42%;
+  --kodi-text-subtle: 220 8% 55%;
+  --kodi-accent: 39 74% 58%;
+  --kodi-accent-soft: 39 50% 95%;
+  --kodi-accent-strong: 35 79% 49%;
+  --kodi-accent-foreground: 0 0% 100%;
+  --kodi-success: 150 36% 38%;
+  --kodi-success-soft: 151 34% 93%;
+  --kodi-warning: 37 84% 54%;
+  --kodi-warning-soft: 39 86% 93%;
+  --kodi-danger: 8 62% 54%;
+  --kodi-danger-soft: 8 68% 94%;
+  --kodi-info: 199 34% 44%;
+  --kodi-info-soft: 201 38% 94%;
+  --kodi-overlay: 220 18% 10%;
+  --kodi-shadow: 220 22% 10%;
+
+  --background: var(--kodi-canvas);
+  --foreground: var(--kodi-text);
+  --card: var(--kodi-panel);
+  --card-foreground: var(--kodi-text);
+  --popover: var(--kodi-panel);
+  --popover-foreground: var(--kodi-text);
+  --primary: var(--kodi-accent);
+  --primary-foreground: var(--kodi-accent-foreground);
+  --secondary: var(--kodi-panel-muted);
+  --secondary-foreground: var(--kodi-text);
+  --muted: var(--kodi-panel-muted);
+  --muted-foreground: var(--kodi-text-muted);
+  --accent: 220 10% 95%;
+  --accent-foreground: var(--kodi-text);
+  --destructive: var(--kodi-danger);
+  --destructive-foreground: 0 0% 100%;
+  --border: var(--kodi-border);
+  --input: var(--kodi-border);
+  --ring: 220 14% 50%;
+  --radius: 0.625rem;
+
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 220 20% 12%;
+  --sidebar-primary: 220 20% 12%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 10% 95%;
+  --sidebar-accent-foreground: 220 20% 12%;
+  --sidebar-border: 220 9% 91%;
+  --sidebar-ring: 220 14% 50%;
+}
+
+.kodi-shell-bg {
+  background: hsl(var(--kodi-canvas));
+}
+
+.kodi-app-shell {
+  background: transparent;
+}
+
+.kodi-sidebar-surface {
+  background: hsl(var(--kodi-sidebar));
+}
+
+.kodi-panel-surface {
+  background: hsl(var(--kodi-panel));
+}
+
+.kodi-panel-muted-surface {
+  background: hsl(var(--kodi-panel-muted));
+}
+
+.kodi-surface-elevated {
+  background: hsl(var(--kodi-panel));
+}
+
+.kodi-surface-muted {
+  background: hsl(var(--kodi-panel-muted));
+}
+
+.kodi-overlay-scrim {
+  background: hsl(var(--kodi-overlay) / 0.4);
+}
+
+.shadow-brand-panel {
+  box-shadow: 0 1px 3px 0 hsl(var(--kodi-shadow) / 0.08),
+    0 1px 2px -1px hsl(var(--kodi-shadow) / 0.08);
+}

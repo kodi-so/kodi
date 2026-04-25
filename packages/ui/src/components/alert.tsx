@@ -1,15 +1,23 @@
+'use client'
+
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '../lib/utils'
 
 const alertVariants = cva(
-  'relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4',
+  'relative w-full rounded-2xl border p-4 [&>svg~*]:pl-7 [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4',
   {
     variants: {
       variant: {
-        default: 'bg-background text-foreground',
+        default: 'border-border/80 bg-card text-foreground',
+        success:
+          'border-[hsl(var(--kodi-success)/0.2)] bg-[hsl(var(--kodi-success-soft))] text-foreground [&>svg]:text-brand-success',
+        info:
+          'border-[hsl(var(--kodi-info)/0.2)] bg-[hsl(var(--kodi-info-soft))] text-foreground [&>svg]:text-brand-info',
+        warning:
+          'border-[hsl(var(--kodi-warning)/0.22)] bg-[hsl(var(--kodi-warning-soft))] text-foreground [&>svg]:text-brand-warning',
         destructive:
-          'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
+          'border-[hsl(var(--kodi-danger)/0.2)] bg-[hsl(var(--kodi-danger-soft))] text-foreground [&>svg]:text-brand-danger',
       },
     },
     defaultVariants: {

@@ -90,7 +90,15 @@ Railway supports multiple environments out of the box.
 
 ## Running DB Migrations
 
-After deploying the `api` for the first time (or after schema changes), run migrations via Railway's shell:
+The `api` container is configured to run `cd /app/packages/db && bun run db:migrate`
+automatically on startup before serving traffic.
+
+If a deployment misses a migration for any reason, the API now fails its startup
+schema readiness check loudly instead of serving partially migrated meeting
+voice features.
+
+Manual migration commands remain useful as a fallback or when debugging an
+existing environment:
 
 ```bash
 # In Railway dashboard → api service → Shell tab

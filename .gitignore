@@ -13,3 +13,5 @@ bun.lockb
 .vercel
 .mcp.json
 PR-69-IMPROVEMENTS.md
+*.tsbuildinfo
+.claude

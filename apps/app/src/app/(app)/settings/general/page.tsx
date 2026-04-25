@@ -5,19 +5,12 @@ import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
 import { Building2 } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Skeleton,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { Input } from '@kodi/ui/components/input'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 
 export default function GeneralSettingsPage() {
   const { activeOrg, refreshOrgs } = useOrg()
@@ -34,14 +27,15 @@ export default function GeneralSettingsPage() {
     return (
       <SettingsLayout>
         <div className="flex items-center justify-center py-20">
-          <Skeleton className="h-6 w-6 rounded-full bg-zinc-700" />
+          <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
         </div>
       </SettingsLayout>
     )
   }
 
-  const isOwner = activeOrg.role === 'owner'
-  const isDirty = name.trim() !== activeOrg.orgName && name.trim().length > 0
+  const currentOrg = activeOrg
+  const isOwner = currentOrg.role === 'owner'
+  const isDirty = name.trim() !== currentOrg.orgName && name.trim().length > 0
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -51,7 +45,7 @@ export default function GeneralSettingsPage() {
     setSaved(false)
     try {
       await trpc.org.update.mutate({
-        orgId: activeOrg!.orgId,
+        orgId: currentOrg.orgId,
         name: name.trim(),
       })
       await refreshOrgs()
@@ -66,35 +60,30 @@ export default function GeneralSettingsPage() {
 
   return (
     <SettingsLayout>
-      <div className="max-w-2xl mx-auto space-y-8">
+      <div className="mx-auto max-w-3xl space-y-8">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-              <Building2 size={16} className="text-indigo-400" />
+          <div className="mb-2 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-accent text-primary shadow-sm">
+              <Building2 size={18} />
             </div>
-            <h1 className="text-xl font-semibold text-white">General</h1>
+            <h1 className="text-2xl font-medium tracking-tight text-foreground">
+              General
+            </h1>
           </div>
-          <p className="text-zinc-500 text-sm ml-11">
-            Workspace settings for {activeOrg.orgName}
+          <p className="ml-[3.25rem] text-sm leading-7 text-muted-foreground">
+            Workspace settings for {currentOrg.orgName}
           </p>
         </div>
 
-        <Card className="border-zinc-800 bg-zinc-900/60">
+        <Card className="border-border">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-sm font-semibold text-zinc-300">
+              <CardTitle className="text-base font-semibold text-foreground">
                 Workspace name
               </CardTitle>
-              {!isOwner && (
-                <Badge
-                  variant="outline"
-                  className="border-zinc-700 text-zinc-500"
-                >
-                  Read only
-                </Badge>
-              )}
+              {!isOwner && <Badge variant="neutral">Read only</Badge>}
             </div>
-            <CardDescription className="text-zinc-500">
+            <CardDescription className="text-muted-foreground">
               Update how this workspace appears across Kodi.
             </CardDescription>
           </CardHeader>
@@ -109,35 +98,30 @@ export default function GeneralSettingsPage() {
                   disabled={!isOwner || saving}
                   maxLength={80}
                   placeholder="My Workspace"
-                  className="h-11 rounded-lg border-zinc-700 bg-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                  className="h-12 rounded-xl border-border bg-card"
                 />
                 {!isOwner && (
-                  <p className="text-zinc-600 text-xs mt-1.5">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Only the workspace owner can change the name.
                   </p>
                 )}
               </div>
 
               {error && (
-                <Alert
-                  variant="destructive"
-                  className="border-red-500/20 bg-red-500/10 text-red-400"
-                >
+                <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
 
               {isOwner && (
                 <div className="flex items-center gap-3">
-                  <Button
-                    type="submit"
-                    disabled={!isDirty || saving}
-                    className="bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
-                  >
+                  <Button type="submit" disabled={!isDirty || saving}>
                     {saving ? 'Saving…' : 'Save changes'}
                   </Button>
                   {saved && (
-                    <span className="text-sm text-emerald-400">Saved ✓</span>
+                    <span className="text-sm font-medium text-brand-success">
+                      Saved
+                    </span>
                   )}
                 </div>
               )}

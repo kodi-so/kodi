@@ -1,15 +1,9 @@
 'use client'
 
-import { useEffect, Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
 import { trpc } from '@/lib/trpc'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@kodi/ui'
 
 function OnboardingInner() {
   const router = useRouter()
@@ -19,39 +13,25 @@ function OnboardingInner() {
     trpc.org.ensurePersonal
       .mutate()
       .then(() => {
-        // If the user came from an invite link, send them back to accept it
         const redirect = searchParams.get('redirect')
-        if (redirect) {
-          router.replace(redirect)
-        } else {
-          router.replace('/dashboard')
-        }
+        router.replace(redirect ?? '/chat')
       })
       .catch(() => {
-        // Even on error, push to dashboard — they can retry from there
-        router.replace('/dashboard')
+        router.replace('/chat')
       })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [router, searchParams])
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-      <Card className="w-full max-w-md border-zinc-800 bg-zinc-950/80 text-center">
-        <CardHeader>
-          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl animate-pulse">⚡</span>
-          </div>
-          <CardTitle className="text-2xl text-white">
-            Setting up your workspace…
-          </CardTitle>
-          <CardDescription className="text-zinc-500">
-            Just a moment.
+    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-3xl">Setting up your workspace</CardTitle>
+          <CardDescription className="text-base text-muted-foreground">
+            Kodi is creating the basics now.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="mt-6 flex justify-center">
-            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+        <CardContent className="flex justify-center">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </CardContent>
       </Card>
     </div>
@@ -62,8 +42,8 @@ export default function OnboardingPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="flex min-h-screen items-center justify-center">
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       }
     >

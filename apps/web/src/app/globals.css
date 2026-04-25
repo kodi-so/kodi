@@ -3,45 +3,33 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --radius: 0.5rem;
+  * {
+    @apply border-border;
   }
-}
-
-@layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
-}
-
-@keyframes gradient-shift {
-  0%, 100% {
-    background-position: 0% 50%;
+  html {
+    font-family: var(--font-abeezee), system-ui, sans-serif;
   }
-  50% {
-    background-position: 100% 50%;
+  body {
+    @apply bg-background text-foreground antialiased;
+    background:
+      radial-gradient(
+        circle at top,
+        hsl(var(--kodi-accent) / 0.18),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at right 18%,
+        hsl(var(--kodi-sidebar) / 0.82),
+        transparent 24%
+      ),
+      linear-gradient(
+        180deg,
+        hsl(var(--kodi-canvas)),
+        hsl(var(--kodi-canvas-shade))
+      );
   }
-}
-
-.animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient-shift 4s ease infinite;
+  ::selection {
+    background: hsl(var(--kodi-accent) / 0.28);
+    color: hsl(var(--foreground));
+  }
 }

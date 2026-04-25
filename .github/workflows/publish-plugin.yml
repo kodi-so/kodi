@@ -1,0 +1,197 @@
+# kodi-bridge plugin publish workflow
+#
+# Trigger:
+#   - push to main, when files under packages/openclaw-bridge/ change → publish
+#   - pull_request on packages/openclaw-bridge/                       → dry-run
+#   - workflow_dispatch (manual)                                       → publish
+#
+# Steps (publish run):
+#   1. Checkout
+#   2. Setup Bun (the repo uses Bun, not pnpm — see package.json scripts)
+#   3. bun install
+#   4. Compute version: YYYY-MM-DD-<short-sha>
+#   5. PLUGIN_VERSION=<version> bun run build (baked into the bundle via esbuild define)
+#   6. bun run typecheck across the workspace
+#   7. bun test in @kodi/openclaw-bridge and @kodi/shared
+#   8. tar -czf kodi-bridge.tgz -C packages/openclaw-bridge dist openclaw.plugin.json package.json
+#   9. sha256sum on the archive
+#  10. aws s3 cp to bundles/<version>/kodi-bridge.tgz
+#  11. POST /api/internal/plugin-versions/publish to register the version
+#
+# Dry-run (PR) skips steps 9–11. The workflow exits 0 if build + tests pass.
+#
+# Secrets required (configure in repo settings → Secrets and variables → Actions):
+#   - PLUGIN_BUNDLE_AWS_ROLE_ARN     — IAM role assumed via OIDC (preferred over static keys)
+#   - PLUGIN_BUNDLE_S3_BUCKET        — e.g., kodi-plugin-bundles-prod
+#   - PLUGIN_BUNDLE_S3_REGION        — e.g., us-east-1
+#   - KODI_API_BASE_URL              — e.g., https://api.kodi.so
+#   - PLUGIN_PUBLISH_ADMIN_TOKEN     — admin token verified by KOD-358's endpoint
+#
+# See docs/openclaw-bridge/infra.md for setup instructions.
+
+name: publish-plugin
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/openclaw-bridge/**'
+      - 'packages/shared/**'
+      - '.github/workflows/publish-plugin.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'packages/openclaw-bridge/**'
+      - 'packages/shared/**'
+      - '.github/workflows/publish-plugin.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # required for AWS OIDC auth on the publish run
+
+concurrency:
+  # Per-branch lock so a fast follow-up commit cancels the in-flight build,
+  # but multiple PRs can run their dry-runs in parallel.
+  group: publish-plugin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build${{ github.event_name == 'pull_request' && ' (dry-run)' || ' & publish' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DRY_RUN: ${{ github.event_name == 'pull_request' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Compute plugin version
+        id: version
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          SHA=$(git rev-parse --short=10 "$GITHUB_SHA")
+          VERSION="${DATE}-${SHA}"
+          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Plugin version: ${VERSION}"
+
+      - name: Typecheck
+        run: bun run typecheck
+        working-directory: ./
+
+      - name: Test (shared)
+        run: bun test
+        working-directory: packages/shared
+
+      - name: Test (openclaw-bridge)
+        run: bun test
+        working-directory: packages/openclaw-bridge
+
+      - name: Build plugin bundle
+        env:
+          PLUGIN_VERSION: ${{ steps.version.outputs.value }}
+        run: bun run build
+        working-directory: packages/openclaw-bridge
+
+      - name: Archive bundle
+        id: archive
+        run: |
+          set -euo pipefail
+          ARCHIVE=kodi-bridge.tgz
+          tar -czf "${ARCHIVE}" -C packages/openclaw-bridge dist openclaw.plugin.json package.json
+          SHA256=$(sha256sum "${ARCHIVE}" | awk '{print $1}')
+          BYTES=$(stat -c%s "${ARCHIVE}")
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "bytes=${BYTES}" >> "$GITHUB_OUTPUT"
+          echo "path=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+          echo "Archive sha256: ${SHA256}  size: ${BYTES} bytes"
+
+      - name: Upload archive as artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kodi-bridge-${{ steps.version.outputs.value }}
+          path: ${{ steps.archive.outputs.path }}
+          retention-days: 14
+
+      - name: Skip publish on dry-run
+        if: env.DRY_RUN == 'true'
+        run: |
+          echo "Dry-run mode — skipping S3 upload and Kodi API publish."
+          echo "Bundle artifact retained for reviewer inspection."
+
+      - name: Configure AWS credentials (publish only)
+        if: env.DRY_RUN != 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PLUGIN_BUNDLE_AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.PLUGIN_BUNDLE_S3_REGION }}
+
+      - name: Upload bundle to S3 (publish only)
+        if: env.DRY_RUN != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+          BUCKET: ${{ secrets.PLUGIN_BUNDLE_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          KEY="bundles/${VERSION}/kodi-bridge.tgz"
+          echo "Uploading to s3://${BUCKET}/${KEY}"
+          aws s3 cp "${{ steps.archive.outputs.path }}" "s3://${BUCKET}/${KEY}" \
+            --content-type application/gzip \
+            --metadata "version=${VERSION},sha256=${{ steps.archive.outputs.sha256 }}"
+          echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+
+      - name: Register version with Kodi API (publish only)
+        if: env.DRY_RUN != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+          KODI_API_BASE_URL: ${{ secrets.KODI_API_BASE_URL }}
+          ADMIN_TOKEN: ${{ secrets.PLUGIN_PUBLISH_ADMIN_TOKEN }}
+          SHA256: ${{ steps.archive.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          KEY="bundles/${VERSION}/kodi-bridge.tgz"
+          PAYLOAD=$(jq -nc \
+            --arg version "${VERSION}" \
+            --arg key "${KEY}" \
+            --arg sha "${SHA256}" \
+            --arg notes "ci=${GITHUB_RUN_ID} sha=${GITHUB_SHA}" \
+            '{version: $version, bundle_s3_key: $key, sha256: $sha, notes: $notes}')
+
+          echo "POST ${KODI_API_BASE_URL}/api/internal/plugin-versions/publish"
+          HTTP_CODE=$(curl --silent --show-error \
+            --output /tmp/publish-response.json \
+            --write-out '%{http_code}' \
+            -X POST \
+            -H "x-admin-token: ${ADMIN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "${PAYLOAD}" \
+            "${KODI_API_BASE_URL}/api/internal/plugin-versions/publish")
+
+          echo "Status: ${HTTP_CODE}"
+          cat /tmp/publish-response.json
+          if [ "${HTTP_CODE}" != "201" ]; then
+            echo "publish failed (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Plugin build summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`${{ steps.version.outputs.value }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| sha256 | \`${{ steps.archive.outputs.sha256 }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Size | ${{ steps.archive.outputs.bytes }} bytes |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Mode | ${{ env.DRY_RUN == 'true' && 'dry-run (PR)' || 'publish' }} |" >> "$GITHUB_STEP_SUMMARY"

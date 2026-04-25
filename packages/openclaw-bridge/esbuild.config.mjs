@@ -23,6 +23,11 @@ const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
 // compat field, bump this in lockstep.
 const NODE_TARGET = 'node22'
 
+// CI sets PLUGIN_VERSION (e.g. `2026-04-21-abc1234`) so identity.ts hard-bakes
+// it into the bundle. Local builds fall back to `dev` so `bun run build`
+// keeps working without environment plumbing.
+const PLUGIN_VERSION = process.env.PLUGIN_VERSION ?? 'dev'
+
 // Externals: anything OpenClaw's plugin runtime provides at load time.
 // esbuild's `external` only accepts strings, so we mark `openclaw` and any
 // `openclaw/<subpath>` external via a small onResolve plugin instead.
@@ -62,11 +67,18 @@ const baseOptions = {
   treeShaking: true,
   legalComments: 'inline',
   logLevel: 'info',
+  define: {
+    // Bake the version into the bundle at build time. Reading
+    // `process.env.PLUGIN_VERSION` at runtime in the gateway would be
+    // unreliable (the gateway process doesn't necessarily inherit our env).
+    'process.env.PLUGIN_VERSION': JSON.stringify(PLUGIN_VERSION),
+  },
   banner: {
     js: [
       '/**',
       ` * @kodi/openclaw-bridge plugin bundle`,
       ` * Built ${new Date().toISOString()}`,
+      ` * Plugin version: ${PLUGIN_VERSION}`,
       ` * Plugin SDK compat: ${pkg.openclaw?.compat?.pluginApi ?? 'unknown'}`,
       ` *`,
       ` * Edits to this file will be overwritten on next build.`,

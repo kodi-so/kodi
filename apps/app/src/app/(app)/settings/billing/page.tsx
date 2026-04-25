@@ -236,7 +236,7 @@ function PlanSelectionCards({
                   </p>
                 )}
               </div>
-            ),
+            )
           )}
         </div>
       </CardContent>
@@ -318,7 +318,8 @@ function UsageCard({
     usage.includedCreditsTotalCents > 0
       ? (usage.includedCreditsUsedCents / usage.includedCreditsTotalCents) * 100
       : 0
-  const barColor = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-indigo-500'
+  const barColor =
+    pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-indigo-500'
 
   return (
     <Card className="border-brand-line">
@@ -369,7 +370,7 @@ function SpendingCapEditor({
   isOwner: boolean
 }) {
   const [capDollars, setCapDollars] = useState(
-    (currentCapCents / 100).toFixed(2),
+    (currentCapCents / 100).toFixed(2)
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -440,13 +441,7 @@ function SpendingCapEditor({
   )
 }
 
-function PortalButton({
-  orgId,
-  label,
-}: {
-  orgId: string
-  label: string
-}) {
+function PortalButton({ orgId, label }: { orgId: string; label: string }) {
   const [loading, setLoading] = useState(false)
 
   async function handleClick() {
@@ -467,13 +462,7 @@ function PortalButton({
   )
 }
 
-function UpgradeButton({
-  orgId,
-  planId,
-}: {
-  orgId: string
-  planId: PlanId
-}) {
+function UpgradeButton({ orgId, planId }: { orgId: string; planId: PlanId }) {
   const [loading, setLoading] = useState(false)
   const plan = PLANS[planId]
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
-import { PLANS, type PlanId } from '@kodi/db'
+import { PLANS, type PlanId } from '@kodi/db/plans'
 import { Button, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@kodi/ui'
 import { panelCardClass } from '@/lib/brand-styles'
 import { CreditCard, Sparkles, Check } from 'lucide-react'

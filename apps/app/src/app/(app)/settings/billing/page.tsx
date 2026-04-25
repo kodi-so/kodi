@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
-import { PLANS, type PlanId } from '@kodi/db'
+import { PLANS, type PlanId } from '@kodi/db/plans'
 import { CreditCard, Check, ExternalLink } from 'lucide-react'
 import {
   Alert,

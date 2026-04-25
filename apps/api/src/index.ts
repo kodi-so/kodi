@@ -7,6 +7,7 @@ import { createContext } from './context'
 import { registerMeetingRoutes } from './routes/meeting'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
+import { registerPluginVersionsRoutes } from './routes/plugin-versions'
 import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 
 const app = new Hono()
@@ -17,6 +18,7 @@ app.use('*', logger())
 registerMeetingRoutes(app)
 registerRecallRoutes(app)
 registerComposioRoutes(app)
+registerPluginVersionsRoutes(app)
 app.use(
   '/trpc/*',
   cors({

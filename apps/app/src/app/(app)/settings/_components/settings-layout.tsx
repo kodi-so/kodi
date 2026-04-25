@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Bot, Building2, CreditCard, Users } from 'lucide-react'
-import { Button } from '@kodi/ui'
+import { cn } from '@kodi/ui/lib/utils'
 
 const settingsSections = [
   { href: '/settings/general', label: 'General', icon: Building2 },
@@ -16,36 +16,36 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="kodi-sidebar-surface w-60 flex-shrink-0 border-r border-brand-line p-4">
-        <h2 className="mb-3 px-3 text-xs uppercase tracking-[0.18em] text-brand-subtle">
-          Settings
-        </h2>
-        <nav className="space-y-1">
-          {settingsSections.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + '/')
-            return (
-              <Button
-                key={href}
-                asChild
-                variant={active ? 'secondary' : 'ghost'}
-                className={`w-full justify-start gap-3 rounded-2xl px-3 py-3 text-sm ${
-                  active
-                    ? 'border border-brand-line bg-brand-accent-soft text-brand-accent-foreground shadow-brand-panel hover:bg-brand-accent-soft'
-                    : 'text-brand-quiet hover:bg-brand-panel hover:text-foreground'
-                }`}
-              >
-                <Link href={href}>
-                  <Icon size={16} />
-                  {label}
-                </Link>
-              </Button>
-            )
-          })}
-        </nav>
-      </aside>
+    <div className="mx-auto w-full max-w-4xl px-6 py-8">
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        Settings
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Manage your workspace configuration.
+      </p>
 
-      <div className="flex-1 overflow-auto p-6 sm:p-8">{children}</div>
+      <nav className="mt-6 flex gap-1 border-b border-border">
+        {settingsSections.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href || pathname.startsWith(href + '/')
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+                active
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
+              )}
+            >
+              <Icon size={15} />
+              {label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      <div className="mt-6">{children}</div>
     </div>
   )
 }

@@ -1,5 +1,7 @@
+'use client'
+
 import type { ReactNode } from 'react'
-import { Button } from '@kodi/ui'
+import { Button } from '@kodi/ui/components/button'
 
 type GoogleAuthButtonProps = {
   children: ReactNode

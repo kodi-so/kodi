@@ -5,19 +5,12 @@ import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
 import { Building2 } from 'lucide-react'
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-  Skeleton,
-} from '@kodi/ui'
+import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Badge } from '@kodi/ui/components/badge'
+import { Button } from '@kodi/ui/components/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { Input } from '@kodi/ui/components/input'
+import { Skeleton } from '@kodi/ui/components/skeleton'
 
 export default function GeneralSettingsPage() {
   const { activeOrg, refreshOrgs } = useOrg()
@@ -70,19 +63,19 @@ export default function GeneralSettingsPage() {
       <div className="mx-auto max-w-3xl space-y-8">
         <div>
           <div className="mb-2 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-line bg-brand-accent-soft text-brand-accent-strong shadow-brand-panel">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-accent text-primary shadow-sm">
               <Building2 size={18} />
             </div>
             <h1 className="text-2xl font-medium tracking-tight text-foreground">
               General
             </h1>
           </div>
-          <p className="ml-[3.25rem] text-sm leading-7 text-brand-quiet">
+          <p className="ml-[3.25rem] text-sm leading-7 text-muted-foreground">
             Workspace settings for {currentOrg.orgName}
           </p>
         </div>
 
-        <Card className="border-brand-line">
+        <Card className="border-border">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold text-foreground">
@@ -90,7 +83,7 @@ export default function GeneralSettingsPage() {
               </CardTitle>
               {!isOwner && <Badge variant="neutral">Read only</Badge>}
             </div>
-            <CardDescription className="text-brand-quiet">
+            <CardDescription className="text-muted-foreground">
               Update how this workspace appears across Kodi.
             </CardDescription>
           </CardHeader>
@@ -105,10 +98,10 @@ export default function GeneralSettingsPage() {
                   disabled={!isOwner || saving}
                   maxLength={80}
                   placeholder="My Workspace"
-                  className="h-12 rounded-xl border-brand-line bg-brand-elevated"
+                  className="h-12 rounded-xl border-border bg-card"
                 />
                 {!isOwner && (
-                  <p className="mt-2 text-xs text-brand-subtle">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Only the workspace owner can change the name.
                   </p>
                 )}

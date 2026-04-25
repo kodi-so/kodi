@@ -21,15 +21,13 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <ChatInterface
-        orgId={activeOrg.orgId}
-        orgName={activeOrg.orgName}
-        initialPrompt={initialPrompt}
-        initialDirectId={initialDirectId}
-        initialChannelId={initialChannelId}
-        initialThreadId={initialThreadId}
-      />
-    </div>
+    <ChatInterface
+      orgId={activeOrg.orgId}
+      orgName={activeOrg.orgName}
+      initialPrompt={initialPrompt}
+      initialDirectId={initialDirectId}
+      initialChannelId={initialChannelId}
+      initialThreadId={initialThreadId}
+    />
   )
 }

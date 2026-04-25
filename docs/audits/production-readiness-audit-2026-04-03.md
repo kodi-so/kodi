@@ -32,9 +32,9 @@ The highest-risk issues are:
 
 Evidence:
 
-- `bun run typecheck` fails in [apps/api/src/context.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/api/src/context.ts)
-- `bun run typecheck` fails in [apps/api/src/routers/chat/router.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/api/src/routers/chat/router.ts)
-- `bun run lint` fails from [packages/ui/package.json](/Users/noahmilberger/Documents/kodi/kodi/packages/ui/package.json)
+- `bun run typecheck` fails in [apps/api/src/context.ts](/Users/gabeliss/Desktop/kodi/apps/api/src/context.ts)
+- `bun run typecheck` fails in [apps/api/src/routers/chat/router.ts](/Users/gabeliss/Desktop/kodi/apps/api/src/routers/chat/router.ts)
+- `bun run lint` fails from [packages/ui/package.json](/Users/gabeliss/Desktop/kodi/packages/ui/package.json)
 
 ### P0: Brand tokens are not centralized in code
 
@@ -44,13 +44,13 @@ Evidence:
 
 Evidence:
 
-- Brand palette only documented in [docs/brand/kodi-brandbook.md](/Users/noahmilberger/Documents/kodi/kodi/docs/brand/kodi-brandbook.md)
-- Default theme vars in [apps/app/src/app/globals.css](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/globals.css)
-- Default theme vars in [apps/web/src/app/globals.css](/Users/noahmilberger/Documents/kodi/kodi/apps/web/src/app/globals.css)
-- Hardcoded auth/invite colors in [apps/app/src/app/(auth)/login/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(auth)/login/page.tsx)
-- Hardcoded auth/invite colors in [apps/app/src/app/(auth)/signup/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(auth)/signup/page.tsx)
-- Hardcoded invite/email colors in [apps/app/src/app/invite/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/invite/page.tsx)
-- Hardcoded email colors in [apps/api/src/routers/invite/router.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/api/src/routers/invite/router.ts)
+- Brand palette only documented in [docs/brand/kodi-brandbook.md](/Users/gabeliss/Desktop/kodi/docs/brand/kodi-brandbook.md)
+- Default theme vars in [apps/app/src/app/globals.css](/Users/gabeliss/Desktop/kodi/apps/app/src/app/globals.css)
+- Default theme vars in [apps/web/src/app/globals.css](/Users/gabeliss/Desktop/kodi/apps/web/src/app/globals.css)
+- Hardcoded auth/invite colors in [apps/app/src/app/(auth)/login/page.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(auth)/login/page.tsx)
+- Hardcoded auth/invite colors in [apps/app/src/app/(auth)/signup/page.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(auth)/signup/page.tsx)
+- Hardcoded invite/email colors in [apps/app/src/app/invite/page.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/invite/page.tsx)
+- Hardcoded email colors in [apps/api/src/routers/invite/router.ts](/Users/gabeliss/Desktop/kodi/apps/api/src/routers/invite/router.ts)
 
 ### P0: The frontend is not DRY enough
 
@@ -60,12 +60,12 @@ Evidence:
 
 Evidence:
 
-- Duplicate Tailwind config in [apps/app/tailwind.config.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/app/tailwind.config.ts)
-- Duplicate Tailwind config in [apps/web/tailwind.config.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/web/tailwind.config.ts)
-- Thin UI abstraction in [packages/ui/src/components/button.tsx](/Users/noahmilberger/Documents/kodi/kodi/packages/ui/src/components/button.tsx)
-- Thin UI abstraction in [packages/ui/src/components/card.tsx](/Users/noahmilberger/Documents/kodi/kodi/packages/ui/src/components/card.tsx)
-- Web font setup in [apps/web/src/app/layout.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/web/src/app/layout.tsx)
-- App layout has no shared font or brand setup in [apps/app/src/app/layout.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/layout.tsx)
+- Duplicate Tailwind config in [apps/app/tailwind.config.ts](/Users/gabeliss/Desktop/kodi/apps/app/tailwind.config.ts)
+- Duplicate Tailwind config in [apps/web/tailwind.config.ts](/Users/gabeliss/Desktop/kodi/apps/web/tailwind.config.ts)
+- Thin UI abstraction in [packages/ui/src/components/button.tsx](/Users/gabeliss/Desktop/kodi/packages/ui/src/components/button.tsx)
+- Thin UI abstraction in [packages/ui/src/components/card.tsx](/Users/gabeliss/Desktop/kodi/packages/ui/src/components/card.tsx)
+- Web font setup in [apps/web/src/app/layout.tsx](/Users/gabeliss/Desktop/kodi/apps/web/src/app/layout.tsx)
+- App layout has no shared font or brand setup in [apps/app/src/app/layout.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/layout.tsx)
 
 ### P1: Large route files are carrying too much responsibility
 
@@ -74,13 +74,13 @@ Evidence:
 
 Largest hotspots:
 
-- [apps/api/src/lib/tool-access-runtime.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/api/src/lib/tool-access-runtime.ts)
-- [apps/web/src/app/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/web/src/app/page.tsx)
-- [apps/app/src/app/(app)/chat/_components/chat-interface.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(app)/chat/_components/chat-interface.tsx)
-- [apps/app/src/app/(app)/integrations/[toolkitSlug]/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(app)/integrations/[toolkitSlug]/page.tsx)
-- [apps/app/src/app/(app)/meetings/[meetingSessionId]/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(app)/meetings/[meetingSessionId]/page.tsx)
-- [apps/app/src/app/(app)/meetings/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(app)/meetings/page.tsx)
-- [apps/app/src/app/(app)/approvals/page.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(app)/approvals/page.tsx)
+- [apps/api/src/lib/tool-access-runtime.ts](/Users/gabeliss/Desktop/kodi/apps/api/src/lib/tool-access-runtime.ts)
+- [apps/web/src/app/page.tsx](/Users/gabeliss/Desktop/kodi/apps/web/src/app/page.tsx)
+- [apps/app/src/app/(app)/chat/_components/chat-interface.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(app)/chat/_components/chat-interface.tsx)
+- [apps/app/src/app/(app)/integrations/[toolkitSlug]/page.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(app)/integrations/[toolkitSlug]/page.tsx)
+- [apps/app/src/app/(app)/meetings/[meetingSessionId]/page.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(app)/meetings/[meetingSessionId]/page.tsx)
+- [apps/app/src/app/(app)/meetings/page.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(app)/meetings/page.tsx)
+- [apps/app/src/app/(app)/approvals/page.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(app)/approvals/page.tsx)
 
 ### P1: The repo has almost no automated tests
 
@@ -95,7 +95,7 @@ Largest hotspots:
 
 Evidence:
 
-- Root lockfiles in [bun.lock](/Users/noahmilberger/Documents/kodi/kodi/bun.lock) and [package-lock.json](/Users/noahmilberger/Documents/kodi/kodi/package-lock.json)
+- Root lockfiles in [bun.lock](/Users/gabeliss/Desktop/kodi/bun.lock) and [package-lock.json](/Users/gabeliss/Desktop/kodi/package-lock.json)
 
 ### P1: There is too much route-level client state
 
@@ -104,7 +104,7 @@ Evidence:
 
 Evidence:
 
-- Client-heavy pages under [apps/app/src/app](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app)
+- Client-heavy pages under [apps/app/src/app](/Users/gabeliss/Desktop/kodi/apps/app/src/app)
 
 ### P2: Escape hatches and type looseness are showing up in critical paths
 
@@ -113,8 +113,8 @@ Evidence:
 
 Evidence:
 
-- `any` auth singleton in [apps/api/src/context.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/api/src/context.ts)
-- Chat row casts in [apps/app/src/app/(app)/chat/_components/chat-interface.tsx](/Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(app)/chat/_components/chat-interface.tsx)
+- `any` auth singleton in [apps/api/src/context.ts](/Users/gabeliss/Desktop/kodi/apps/api/src/context.ts)
+- Chat row casts in [apps/app/src/app/(app)/chat/_components/chat-interface.tsx](/Users/gabeliss/Desktop/kodi/apps/app/src/app/(app)/chat/_components/chat-interface.tsx)
 
 ## Recommended Remediation Themes
 

@@ -38,17 +38,17 @@ The important design point is that Composio can expose a very large catalog, but
 
 Kodi already has useful primitives:
 
-- org-scoped integrations surfaces in [apps/app/src/app/(app)/settings/integrations/page.tsx](</Users/noahmilberger/Documents/kodi/kodi/apps/app/src/app/(app)/settings/integrations/page.tsx>)
-- external action tracking in [packages/db/src/schema/tool-connections.ts](/Users/noahmilberger/Documents/kodi/kodi/packages/db/src/schema/tool-connections.ts)
-- approval records in [packages/db/src/schema/approvals.ts](/Users/noahmilberger/Documents/kodi/kodi/packages/db/src/schema/approvals.ts)
-- provider installation records in [packages/db/src/schema/provider-installations.ts](/Users/noahmilberger/Documents/kodi/kodi/packages/db/src/schema/provider-installations.ts)
+- org-scoped integrations surfaces in [apps/app/src/app/(app)/settings/integrations/page.tsx](</Users/gabeliss/Desktop/kodi/apps/app/src/app/(app)/settings/integrations/page.tsx>)
+- external action tracking in [packages/db/src/schema/tool-connections.ts](/Users/gabeliss/Desktop/kodi/packages/db/src/schema/tool-connections.ts)
+- approval records in [packages/db/src/schema/approvals.ts](/Users/gabeliss/Desktop/kodi/packages/db/src/schema/approvals.ts)
+- provider installation records in [packages/db/src/schema/provider-installations.ts](/Users/gabeliss/Desktop/kodi/packages/db/src/schema/provider-installations.ts)
 
 But the current model does not yet fit Composio cleanly:
 
 - `tool_connections` is org-scoped and backed by a fixed enum
 - `provider_installations` assumes Kodi stores provider tokens directly
 - the integrations UI is still hard-coded around Zoom and placeholder entries
-- API env validation in [apps/api/src/env.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/api/src/env.ts) has no Composio contract yet
+- API env validation in [apps/api/src/env.ts](/Users/gabeliss/Desktop/kodi/apps/api/src/env.ts) has no Composio contract yet
 
 ## Exit criteria
 
@@ -277,7 +277,7 @@ This is a better fit for Kodi because it preserves a cleaner product UX and keep
 
 ## Environment contract
 
-Phase 0 should lock the variables Phase 1 will add to [apps/api/src/env.ts](/Users/noahmilberger/Documents/kodi/kodi/apps/api/src/env.ts).
+Phase 0 should lock the variables Phase 1 will add to [apps/api/src/env.ts](/Users/gabeliss/Desktop/kodi/apps/api/src/env.ts).
 
 ### Core Composio variables
 
@@ -481,7 +481,7 @@ Done when:
 
 Deliverables:
 
-- [docs/agent-tool-access-schema-plan.md](/Users/noahmilberger/Documents/kodi/kodi/docs/agent-tool-access-schema-plan.md)
+- [schema-plan.md](./schema-plan.md)
 - target schema concepts and field list
 - migration strategy
 - decision on whether to evolve or replace `tool_connections`
@@ -495,7 +495,7 @@ Done when:
 
 Deliverables:
 
-- [docs/agent-tool-access-auth-contract.md](/Users/noahmilberger/Documents/kodi/kodi/docs/agent-tool-access-auth-contract.md)
+- [auth-contract.md](./auth-contract.md)
 - auth ownership decision per first-wave toolkit
 - env var contract for Composio and custom auth configs
 - redirect and callback strategy

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { cn } from '@kodi/ui'
+import { cn } from '@kodi/ui/lib/utils'
 import { getToolkitMonogram } from '../_lib/tool-access-ui'
 
 export function ToolkitLogo({
@@ -23,7 +23,7 @@ export function ToolkitLogo({
   return (
     <div
       className={cn(
-        'flex items-center justify-center overflow-hidden rounded-[1.2rem] border border-border bg-secondary',
+        'flex items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary',
         className
       )}
     >

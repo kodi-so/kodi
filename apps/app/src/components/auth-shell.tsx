@@ -1,12 +1,8 @@
+'use client'
+
 import type { ReactNode } from 'react'
-import {
-  BrandLogo,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@kodi/ui'
+import { BrandLogo } from '@kodi/ui/components/brand-logo'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
 
 type AuthShellProps = {
   title: string

@@ -142,7 +142,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     })
   }
 
-  // 5. Set LiteLLM budget for the org's instance
+  // 5. Set LiteLLM budget for the org's instance (if already provisioned)
   const inst = await db.query.instances.findFirst({
     where: eq(instances.orgId, orgId),
   })
@@ -157,6 +157,42 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     } catch (e) {
       console.error('[stripe-webhook] Failed to set LiteLLM budget:', e)
     }
+  }
+
+  // 6. Trigger automatic provisioning (fire-and-forget via internal API endpoint).
+  //    The internal endpoint returns 202 immediately; provisioning runs in the background.
+  //    Errors are logged but never re-thrown — they must not fail the Stripe webhook.
+  await triggerProvisioning(orgId)
+}
+
+async function triggerProvisioning(orgId: string): Promise<void> {
+  const secret = process.env.INTERNAL_PROVISION_SECRET
+  const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3002'
+
+  if (!secret) {
+    console.warn('[stripe-webhook] INTERNAL_PROVISION_SECRET not set — skipping auto-provisioning')
+    return
+  }
+
+  try {
+    const res = await fetch(`${apiUrl}/internal/provision`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({ orgId }),
+    })
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      console.error(`[stripe-webhook] Provision trigger returned ${res.status}: ${text}`)
+    } else {
+      const json = await res.json().catch(() => ({}))
+      console.log(`[stripe-webhook] Provision trigger response for org=${orgId}:`, json)
+    }
+  } catch (err) {
+    console.error('[stripe-webhook] Failed to call provision endpoint:', err)
   }
 }
 

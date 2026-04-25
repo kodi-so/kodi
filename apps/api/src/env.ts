@@ -146,6 +146,9 @@ const envSchema = z.object({
 
   // Usage sync cron auth
   USAGE_SYNC_SECRET: z.string().min(32).optional(),
+
+  // Internal service-to-service auth (webhook → API provisioning trigger)
+  INTERNAL_PROVISION_SECRET: z.string().min(32).optional(),
 })
 
 const _env = envSchema.safeParse(process.env)

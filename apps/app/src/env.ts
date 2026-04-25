@@ -43,6 +43,15 @@ const envSchema = z.object({
   STRIPE_PRO_PRICE_ID: z.string().startsWith('price_').optional(),
   STRIPE_BUSINESS_PRICE_ID: z.string().startsWith('price_').optional(),
   STRIPE_USAGE_PRICE_ID: z.string().startsWith('price_').optional(),
+
+  // Internal service-to-service auth (Stripe webhook → API provision trigger)
+  // Must match INTERNAL_PROVISION_SECRET in apps/api
+  INTERNAL_PROVISION_SECRET: z.string().min(32).optional(),
+
+  // Base URL of the API server, used by the webhook to call /internal/provision.
+  // In Railway: set to the API service's private URL (e.g. http://api.railway.internal:3002).
+  // In local dev: defaults to http://localhost:3002.
+  API_INTERNAL_URL: z.string().url().optional(),
 })
 
 const _env = envSchema.safeParse(process.env)

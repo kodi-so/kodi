@@ -134,6 +134,17 @@ const envSchema = z.object({
 
   // Resend API key for sending invite emails (optional — logs to console in dev)
   RESEND_API_KEY: z.string().optional(),
+
+  // ── kodi-bridge plugin bundle system (KOD-360) ────────────────────────────
+  //
+  // The kodi-bridge OpenClaw plugin is built by CI, uploaded to a private S3
+  // bucket, and served to instances via signed URLs minted by the API.
+  // These vars are required in production; in dev they're optional so local
+  // development without bundle infra still boots.
+  PLUGIN_BUNDLE_S3_BUCKET: z.string().optional(),
+  PLUGIN_BUNDLE_S3_REGION: z.string().optional(),
+  PLUGIN_BUNDLE_URL_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  PLUGIN_PUBLISH_ADMIN_TOKEN: z.string().optional(),
 })
 
 const _env = envSchema.safeParse(process.env)

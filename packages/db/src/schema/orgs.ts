@@ -54,6 +54,11 @@ export const instances = pgTable('instances', {
   errorMessage: text('error_message'),         // Last error message if status='error'
   sshUser: text('ssh_user').default('ubuntu'), // SSH username ('ubuntu' for AWS)
   lastHealthCheck: timestamp('last_health_check'), // When we last polled /health
+  // kodi-bridge plugin fields (KOD-353)
+  pluginVersionInstalled: text('plugin_version_installed'),     // Current plugin bundle version on this instance
+  pluginHmacSecretEncrypted: text('plugin_hmac_secret_encrypted'), // AES-256-GCM encrypted — shared HMAC secret for Kodi ↔ plugin signing
+  lastPluginHeartbeatAt: timestamp('last_plugin_heartbeat_at'),  // Last time the plugin sent a heartbeat event
+  bundleVersionTarget: text('bundle_version_target'),           // Pinned target version for canary rollouts (null = follow `latest`)
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 

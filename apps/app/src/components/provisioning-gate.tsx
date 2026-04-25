@@ -196,7 +196,7 @@ function ProvisioningErrorScreen({ errorMessage }: { errorMessage: string | null
           >
             contact support
           </a>{' '}
-          and we'll get this sorted out.
+          and we&apos;ll get this sorted out.
         </p>
       </div>
     </div>

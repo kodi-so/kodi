@@ -94,7 +94,7 @@ export function ProvisioningGate({ children }: { children: ReactNode }) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [instance?.status, fetchStatus, runHealthCheck])
+  }, [instance, fetchStatus, runHealthCheck])
 
   // Settings routes always pass through
   if (isUngated) return <>{children}</>
@@ -146,7 +146,7 @@ function ProvisioningScreen({ status }: { status: 'pending' | 'installing' }) {
           </h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
             {status === 'pending'
-              ? 'We\'re reserving cloud resources for your workspace. This only takes a moment.'
+              ? "We're reserving cloud resources for your workspace. This only takes a moment."
               : 'Your agent is being configured on a dedicated server. This usually takes 1–3 minutes.'}
           </p>
         </div>

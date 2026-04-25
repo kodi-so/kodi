@@ -6,6 +6,7 @@ import { Toaster } from '@kodi/ui/components/sonner'
 import { Separator } from '@kodi/ui/components/separator'
 import { BillingBanner } from './billing-banner'
 import { SubscriptionGate } from './subscription-gate'
+import { ProvisioningGate } from './provisioning-gate'
 import type { ReactNode } from 'react'
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -20,7 +21,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
           <BillingBanner />
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-            <SubscriptionGate>{children}</SubscriptionGate>
+            <SubscriptionGate>
+              <ProvisioningGate>{children}</ProvisioningGate>
+            </SubscriptionGate>
           </main>
         </SidebarInset>
         <Toaster />

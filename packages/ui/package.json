@@ -10,7 +10,6 @@
     "./tailwind-theme": "./src/tailwind-theme.ts"
   },
   "scripts": {
-    "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -13,6 +13,14 @@ type RequiredSchemaObject =
       migration: string
     }
 
+const requiredChatSchema: RequiredSchemaObject[] = [
+  {
+    kind: 'table',
+    tableName: 'chat_channels',
+    migration: '0020_chat_channels_threads.sql',
+  },
+]
+
 const requiredVoiceSchema: RequiredSchemaObject[] = [
   {
     kind: 'column',
@@ -72,7 +80,7 @@ function buildMissingSchemaError(missing: RequiredSchemaObject[]) {
 export async function ensureApiSchemaReadiness() {
   const missing: RequiredSchemaObject[] = []
 
-  for (const item of requiredVoiceSchema) {
+  for (const item of [...requiredChatSchema, ...requiredVoiceSchema]) {
     const exists =
       item.kind === 'table'
         ? await tableExists(item.tableName)

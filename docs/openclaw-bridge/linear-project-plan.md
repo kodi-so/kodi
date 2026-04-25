@@ -2,10 +2,14 @@
 
 This document is the team-review and upload-ready version of the Kodi OpenClaw Bridge plan.
 
+> **Status note (2026-04-24):** Tickets have been uploaded to Linear. Linear is now authoritative for ticket content. M0-T1 and M0-T2 spikes closed: verdicts are YES for both (see [`spike/m0-mcp.md`](./spike/m0-mcp.md) and [`spike/m0-pre-tool-hook.md`](./spike/m0-pre-tool-hook.md)). The composio integration mechanism changed from `openclaw mcp set` → `api.registerTool`; tickets **M4-T3 (KOD-382)** and **M4-T7 (KOD-386)** have been updated in Linear. The sections below still reflect the pre-spike wording for historical context; the final truth is in `architecture-plan.md`, `implementation-spec.md`, and Linear.
+
 Reference docs:
 
 1. [architecture-plan.md](./architecture-plan.md)
 2. [implementation-spec.md](./implementation-spec.md)
+3. [spike/m0-mcp.md](./spike/m0-mcp.md) — M0-T1 findings
+4. [spike/m0-pre-tool-hook.md](./spike/m0-pre-tool-hook.md) — M0-T2 findings
 
 ## Project
 

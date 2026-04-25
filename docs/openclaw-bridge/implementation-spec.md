@@ -24,7 +24,7 @@ The following decisions are locked for this plan:
 - **Injected, not published**: the plugin lives in `packages/openclaw-bridge` in the Kodi monorepo, is bundled by CI into a single-file artifact, uploaded to Kodi's S3 bucket, and pulled onto instances during cloud-init. Never published to ClawHub or npm.
 - **Bundle distribution via S3 signed URLs** minted by a Kodi API endpoint, authenticated with the per-instance gateway token.
 - **Pull-based self-update** via a Kodi bundle endpoint, with atomic symlink swaps and automatic rollback.
-- **Composio Tool Router MCP**, mounted via `openclaw mcp set`, is the primary Composio integration path. Memory tools use `api.registerTool(...)` calling Kodi over HTTP; a Kodi-hosted memory MCP is deferred.
+- **Composio tools are registered via `api.registerTool(...)` from inside the plugin** (see [`spike/m0-mcp.md`](./spike/m0-mcp.md)). Each action exposed by the user's Composio session becomes one registered tool; the `execute` closure holds a reference to the per-user Composio SDK session. `openclaw mcp set` is **not** used — it targets CLI-backend subprocess injection, not the embedded Pi agent that serves `/v1/chat/completions`. Memory tools also use `api.registerTool(...)` calling Kodi over HTTP; a Kodi-hosted memory MCP is deferred.
 - **Autonomy levels** are `strict`, `normal` (default), `lenient`, `yolo`, with optional per-toolkit or per-action overrides. Policies are stored in Kodi and fetched by the plugin.
 - **Protocol** is `kodi-bridge.v1`: typed event kinds, idempotency keys, HMAC-signed in both directions.
 - **Approvals** reuse the existing `approvals` schema and UI surface; the plugin does not introduce a parallel approval model.
@@ -200,8 +200,9 @@ packages/openclaw-bridge/
         reconcile.ts
         registry.ts                # in-memory agent registry
       composio/
-        mount.ts                   # openclaw mcp set for an agent
-        rotate.ts                  # re-mount on credential change
+        register-tools.ts          # api.registerTool per Composio action, per user
+        session.ts                 # per-user Composio SDK session cache
+        rotate.ts                  # refresh session + re-register tools on credential change
       event-bus/
         subscriptions.ts
         emitter.ts                 # signed POST with retry + disk buffer
@@ -279,17 +280,20 @@ Manages OpenClaw agents for the users of this org.
 
 - On `register(api)`, reconciles by calling `GET /api/openclaw/agents?instance_id=<id>` for the authoritative list, then creates missing local agents and marks orphans for deprovision.
 - Provisioning: calls `api.runtime.agent.*` (or Gateway RPC equivalent, pending M0-T3) to create an agent workspace directory, writes `IDENTITY.md` and `HEARTBEAT.md`, records the agent locally, returns the `openclaw_agent_id` to Kodi.
-- Deprovisioning: disables the agent, unmounts its MCP server(s), purges its workspace directory.
+- Deprovisioning: disables the agent, drops its per-user Composio SDK session and unregisters its Composio tools, purges its workspace directory.
 - Keeps an in-memory registry keyed by both `user_id` and `openclaw_agent_id` for fast lookups during tool interception.
 
 #### 2.4.3 `composio`
 
-Mounts Composio per agent.
+Registers Composio actions as plugin tools, scoped per agent.
 
-- Kodi creates the session and sends `{ mcp_url, headers }` in the `/agents/provision` body.
-- Plugin stores in memory and writes an agent-scoped MCP server entry via `openclaw mcp set kodi-composio:<agentId> <json>`.
-- On session rotation (Kodi detects a stale URL and issues a rotate): `composio/rotate.ts` re-runs the mount under the same name.
-- On Composio failure (creation fails, MCP refuses): agent provisioning proceeds without Composio; `composio_status` marked `failed`; `composio.session_failed` event emitted.
+- Kodi creates the Composio SDK session for the user and sends `{ session_id, toolkit_allowlist, user_id }` (opaque to the plugin) in the `/agents/provision` body.
+- Plugin caches the Composio session handle keyed by `openclaw_agent_id`. It reflects on the session to list available actions in the user's allowlist.
+- For each action, the plugin calls `api.registerTool({ name: "composio__<toolkit>__<action>", parameters, execute })`. The `execute` closure captures the agent id, resolves the cached Composio session, and dispatches via `composioClient.tools.execute(action, params, { user_id })`. Tool names are stable and deterministic so the model can discover them reliably.
+- Scoping: if an agent's allowlist changes, the plugin calls `api.unregisterTool` for removed actions and `api.registerTool` for added ones. No subprocess churn, no config file rewrite.
+- On session rotation (Kodi detects a stale session and issues a rotate): `composio/rotate.ts` replaces the cached session handle; no re-registration needed if the action set is unchanged.
+- On Composio failure (session creation fails, Composio API refuses): agent provisioning proceeds without Composio; `composio_status` marked `failed`; `composio.session_failed` event emitted.
+- Autonomy (`before_tool_call` hook) sees these as normal plugin-registered tools — no special case needed in the autonomy module.
 
 #### 2.4.4 `event-bus`
 
@@ -578,7 +582,7 @@ Timeouts per level (configurable): `strict` 10 min, `normal` 2 min, `lenient` 30
 ### 9.4 Smoke Tests Post-Provision
 
 - Provision a test instance; assert `plugin.started` within 60s
-- Provision a test user's agent; assert Composio MCP mounted; call a trivial Composio tool
+- Provision a test user's agent; assert Composio tools registered via `api.registerTool`; call a trivial Composio tool through the agent
 - Send a test inbound `/agents/:id/inject`; assert message appears in the session
 
 ## 10. Codebase Areas Touched
@@ -616,7 +620,7 @@ This work is built in nine milestones. See [linear-project-plan.md](./linear-pro
 
 ### Milestone 0 — Feasibility Spike
 
-Validate OpenClaw's `mcp.servers` consumption, pre-tool-invoke hook availability, and programmatic agent management. No production code; output is a memo.
+Validate OpenClaw's plugin-tool surface for the embedded Pi agent, pre-tool-invoke hook availability, and programmatic agent management. No production code; output is a memo per spike. (M0-T1 and M0-T2 complete — see [`spike/m0-mcp.md`](./spike/m0-mcp.md) and [`spike/m0-pre-tool-hook.md`](./spike/m0-pre-tool-hook.md). M0-T3 pending.)
 
 ### Milestone 1 — Data Model And Kodi API Foundations
 

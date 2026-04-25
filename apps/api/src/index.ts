@@ -8,6 +8,7 @@ import { registerMeetingRoutes } from './routes/meeting'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
 import { registerPluginVersionsRoutes } from './routes/plugin-versions'
+import { registerPluginBundleRoutes } from './routes/plugin-bundle'
 import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 
 const app = new Hono()
@@ -19,6 +20,7 @@ registerMeetingRoutes(app)
 registerRecallRoutes(app)
 registerComposioRoutes(app)
 registerPluginVersionsRoutes(app)
+registerPluginBundleRoutes(app)
 app.use(
   '/trpc/*',
   cors({

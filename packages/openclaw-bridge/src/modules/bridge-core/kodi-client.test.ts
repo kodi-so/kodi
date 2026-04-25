@@ -38,27 +38,27 @@ describe('createKodiClient', () => {
 
     expect(res.status).toBe(200)
     expect(calls).toHaveLength(1)
-    const headers = calls[0].init!.headers as Record<string, string>
+    const headers = calls[0]!.init!.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer gw_token_123')
     expect(headers['x-kb-nonce']).toBe('fixed-nonce')
     expect(headers['x-kb-timestamp']).toBe('1750000000000')
     expect(headers['x-kb-signature']).toMatch(/^[a-f0-9]{64}$/)
     expect(headers['Content-Type']).toBe('application/json')
-    expect(calls[0].init!.body).toBe('{"kind":"plugin.started"}')
+    expect(calls[0]!.init!.body).toBe('{"kind":"plugin.started"}')
   })
 
   test('signs the verbatim string body when caller pre-serializes', async () => {
     const { fetchImpl, calls } = makeFetchMock([new Response('', { status: 200 })])
     const client = createKodiClient({ ...BASE, fetchImpl })
     await client.signedFetch('/x', { method: 'POST', body: '{"already":"json"}' })
-    expect(calls[0].init!.body).toBe('{"already":"json"}')
+    expect(calls[0]!.init!.body).toBe('{"already":"json"}')
   })
 
   test('GET with no body still signs an empty body', async () => {
     const { fetchImpl, calls } = makeFetchMock([new Response('{}', { status: 200 })])
     const client = createKodiClient({ ...BASE, fetchImpl })
     await client.signedFetch('/api/whatever')
-    const headers = calls[0].init!.headers as Record<string, string>
+    const headers = calls[0]!.init!.headers as Record<string, string>
     expect(headers['x-kb-signature']).toBeDefined()
     expect(headers['Content-Type']).toBeUndefined()
   })
@@ -120,13 +120,13 @@ describe('createKodiClient', () => {
       fetchImpl,
     })
     await client.signedFetch('/api/openclaw/events')
-    expect(calls[0].url).toBe('https://api.kodi.so/api/openclaw/events')
+    expect(calls[0]!.url).toBe('https://api.kodi.so/api/openclaw/events')
   })
 
   test('absolute URLs override baseUrl', async () => {
     const { fetchImpl, calls } = makeFetchMock([new Response('{}', { status: 200 })])
     const client = createKodiClient({ ...BASE, fetchImpl })
     await client.signedFetch('https://other.example/x')
-    expect(calls[0].url).toBe('https://other.example/x')
+    expect(calls[0]!.url).toBe('https://other.example/x')
   })
 })

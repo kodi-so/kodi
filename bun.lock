@@ -115,6 +115,15 @@
         "typescript": "^5.4.5",
       },
     },
+    "packages/shared": {
+      "name": "@kodi/shared",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@kodi/typescript-config": "*",
+        "@types/bun": "latest",
+        "typescript": "^5.4.5",
+      },
+    },
     "packages/typescript-config": {
       "name": "@kodi/typescript-config",
       "version": "0.0.0",
@@ -354,6 +363,8 @@
     "@kodi/app": ["@kodi/app@workspace:apps/app"],
 
     "@kodi/db": ["@kodi/db@workspace:packages/db"],
+
+    "@kodi/shared": ["@kodi/shared@workspace:packages/shared"],
 
     "@kodi/typescript-config": ["@kodi/typescript-config@workspace:packages/typescript-config"],
 

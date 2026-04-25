@@ -204,6 +204,13 @@
       "when": 1777277000000,
       "tag": "0029_kod_355_agent_autonomy_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1777277100000,
+      "tag": "0030_kod_356_plugin_events_and_versions",
+      "breakpoints": true
     }
   ]
 }

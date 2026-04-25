@@ -85,7 +85,7 @@ The `kodi-bridge` plugin is a single package. Internally it is composed of modul
 
 - **bridge-core** — identity, config, HMAC, health, shared Kodi HTTP client
 - **agent-manager** — provision and deprovision OpenClaw agents for users, reconcile with Kodi
-- **composio** — create and mount per-agent Composio MCP servers
+- **composio** — create per-user Composio SDK sessions and register Composio actions as agent tools via `api.registerTool` (see M0-T1 memo; MCP-via-`openclaw mcp set` is the wrong surface for this use case)
 - **event-bus** — outbound typed events to Kodi, subscription-based verbosity
 - **inbound-api** — HTTP routes for Kodi to push commands into the instance
 - **autonomy** — per-agent policy evaluation, approval routing
@@ -133,7 +133,7 @@ The Org Memory project (see [docs/memory/](../memory/)) specifies a `kodi-memory
 
 **Plugin owns**
 - Agent lifecycle inside the OpenClaw instance
-- MCP mount points (Composio, later others)
+- Tool registration for external providers (Composio via `api.registerTool`, later others)
 - Hook subscriptions and event emission
 - Inbound HTTP surface from Kodi
 - Autonomy evaluation at tool-invocation time
@@ -164,7 +164,7 @@ This work is built in nine milestones, each shippable and reviewable as a unit:
 2. **Data model and Kodi API foundations** — schema, S3 bucket, bundle endpoint
 3. **Plugin skeleton and bundling pipeline** — minimal plugin loads on a real instance
 4. **Dual communication protocol** — typed outbound events, inbound routes, subscriptions
-5. **Multi-agent management and Composio per user** — agent lifecycle, MCP mounting
+5. **Multi-agent management and Composio per user** — agent lifecycle, per-user Composio SDK sessions, plugin-registered Composio tools
 6. **Autonomy and policy enforcement** — levels, approval routing, audit
 7. **Self-update** — pull loop, atomic swap, rollback
 8. **Memory module foundation** — slot and stub, ready for the memory team
@@ -174,8 +174,8 @@ Milestones 4, 5, 7, and 8 can progress in parallel once 3 is complete. Milestone
 
 ## Risks And Mitigations
 
-- **MCP consumption** — if OpenClaw's main runtime does not consume `mcp.servers` entries from config, the Composio plan needs a fallback to plugin-registered tools. Mitigated by the M0 spike before any production code lands.
-- **Pre-tool-invoke hook availability** — autonomy enforcement depends on being able to intercept a tool call before execution. Mitigated by the M0 spike. If the hook does not exist, the fallback is to re-register Composio tools under wrapped names so the plugin's `execute()` is the sole call path.
+- ~~**MCP consumption**~~ — **Resolved by the M0-T1 spike.** `openclaw mcp set` does not feed the `/v1/chat/completions` path, but `api.registerTool` from the plugin does — and is a better fit than MCP for per-user Composio. See [`spike/m0-mcp.md`](./spike/m0-mcp.md).
+- ~~**Pre-tool-invoke hook availability**~~ — **Resolved by the M0-T2 spike.** `before_tool_call` with `{ block, requireApproval }` is a first-class documented hook. See [`spike/m0-pre-tool-hook.md`](./spike/m0-pre-tool-hook.md).
 - **Composio pricing at persistent-session-per-user scale** — requires a conversation with Composio before M5 lands. Budget for a session-count cap per plan if needed.
 - **Gateway restart during in-flight work** — restarts interrupt active requests. Mitigated by draining before restart where the SDK supports it, running updates at low-traffic windows, and canary-ing new bundles before fleet-wide rollout.
 - **Broken bundle deployed fleet-wide** — the single biggest operational risk. Mitigated by a canary instance that must report `plugin.started` healthy before the fleet is allowed to roll forward, plus automatic rollback on health-check failure post-swap.

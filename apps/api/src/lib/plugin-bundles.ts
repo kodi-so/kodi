@@ -1,4 +1,6 @@
-import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { db, desc, pluginVersions, type PluginVersion } from '@kodi/db'
 import { env } from '../env'
 
 /**
@@ -81,4 +83,41 @@ export async function headPluginBundleObject(
     }
     return { ok: false, code: 'error', error: err }
   }
+}
+
+/**
+ * Returns the most recently released `plugin_versions` row, or null if no
+ * versions have been published yet (fresh installs hit this case).
+ */
+export async function getLatestPluginVersion(): Promise<PluginVersion | null> {
+  const rows = await db
+    .select()
+    .from(pluginVersions)
+    .orderBy(desc(pluginVersions.releasedAt))
+    .limit(1)
+  return rows[0] ?? null
+}
+
+/**
+ * Mints a presigned GetObject URL for an arbitrary bundle key. Used by the
+ * cloud-init builder (KOD-368) to embed a one-shot download link in the
+ * per-instance user-data — the plugin isn't running yet so it can't
+ * authenticate via the gateway-token bundle endpoint, hence the direct
+ * signed URL.
+ *
+ * `ttlSeconds` defaults to {@link requirePluginBundleConfig}'s configured
+ * value; cloud-init callers usually pass a longer window (e.g. 30 min)
+ * because the EC2 instance may take several minutes to boot.
+ */
+export async function signBundleDownloadUrl(
+  key: string,
+  ttlSeconds?: number,
+): Promise<string> {
+  const cfg = requirePluginBundleConfig()
+  const client = getPluginBundleS3Client()
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({ Bucket: cfg.bucket, Key: key }),
+    { expiresIn: ttlSeconds ?? cfg.urlTtlSeconds },
+  )
 }

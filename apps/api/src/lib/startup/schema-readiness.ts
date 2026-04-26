@@ -21,19 +21,11 @@ const requiredChatSchema: RequiredSchemaObject[] = [
   },
 ]
 
-const requiredOrgSchema: RequiredSchemaObject[] = [
-  {
-    kind: 'column',
-    tableName: 'organizations',
-    columnName: 'image',
-    migration: '0028_org_image_and_status.sql',
-  },
-  {
-    kind: 'column',
-    tableName: 'organizations',
-    columnName: 'status',
-    migration: '0028_org_image_and_status.sql',
-  },
+// Idempotent fixups for migrations that may have been recorded in the journal
+// but never actually executed against the database. Safe to run on every boot.
+const idempotentFixups: string[] = [
+  `ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "image" text`,
+  `ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "status" text NOT NULL DEFAULT 'active'`,
 ]
 
 const requiredVoiceSchema: RequiredSchemaObject[] = [
@@ -93,9 +85,14 @@ function buildMissingSchemaError(missing: RequiredSchemaObject[]) {
 }
 
 export async function ensureApiSchemaReadiness() {
+  // Apply idempotent fixups first (handles journal-vs-DB desync)
+  for (const statement of idempotentFixups) {
+    await db.execute(sql.raw(statement))
+  }
+
   const missing: RequiredSchemaObject[] = []
 
-  for (const item of [...requiredChatSchema, ...requiredVoiceSchema, ...requiredOrgSchema]) {
+  for (const item of [...requiredChatSchema, ...requiredVoiceSchema]) {
     const exists =
       item.kind === 'table'
         ? await tableExists(item.tableName)

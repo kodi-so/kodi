@@ -161,7 +161,7 @@ function UserMenu() {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex h-12 w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-[width,height,padding,background-color,color] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+              className="flex h-12 w-full items-center gap-2 rounded-md pr-2 text-left text-sm outline-none transition-[width,height,padding,background-color,color] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
             >
               <Avatar className="h-8 w-8 shrink-0 rounded-lg">
                 <AvatarFallback className="rounded-lg text-[10px] font-medium">
@@ -227,7 +227,7 @@ function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex h-12 w-full items-center gap-2 rounded-md px-2 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0">
+        <div className="flex h-12 w-full items-center gap-2 rounded-md pr-2 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0">
           <span className="flex size-8 shrink-0 items-center justify-center">
             <BrandLogo
               size={28}

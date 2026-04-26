@@ -1,10 +1,15 @@
 import crypto from 'node:crypto'
 import { db, encrypt, eq, instances, type Instance } from '@kodi/db'
 import { env } from '../../env'
-import { generateCloudInit } from './cloud-init'
+import { generateCloudInit, type PluginInstallConfig } from './cloud-init'
 import * as cloudflare from './cloudflare-dns'
 import * as ec2 from './ec2'
 import * as litellm from './litellm'
+import {
+  PluginBundleConfigError,
+  getLatestPluginVersion,
+  signBundleDownloadUrl,
+} from '../../lib/plugin-bundles'
 
 // ── Provision ─────────────────────────────────────────────────────────────────
 
@@ -20,13 +25,31 @@ import * as litellm from './litellm'
  */
 export async function provisionInstance(orgId: string): Promise<Instance> {
   const gatewayToken = crypto.randomBytes(32).toString('hex')
+  const pluginHmacSecret = crypto.randomBytes(32).toString('hex')
   const hostname = `${gatewayToken.slice(0, 12)}.${env.BASE_DOMAIN}`
 
   console.log(`[provision] org=${orgId} hostname=${hostname}`)
 
   const { litellmVirtualKey } = await setupLiteLLM(orgId)
-  const cloudInit = buildCloudInit(gatewayToken, hostname, litellmVirtualKey)
-  const record = await createPendingRecord(orgId, hostname, gatewayToken, litellmVirtualKey)
+
+  // Insert the row first so the plugin install config has a real instance_id
+  // to bake into the cloud-init. The cloud-init is built after, then attached
+  // to the EC2 launch via `withErrorRecovery`.
+  const record = await createPendingRecord(
+    orgId,
+    hostname,
+    gatewayToken,
+    pluginHmacSecret,
+    litellmVirtualKey,
+  )
+
+  const pluginInstall = await resolvePluginInstall({
+    instanceId: record.id,
+    orgId,
+    pluginHmacSecret,
+  })
+
+  const cloudInit = buildCloudInit(gatewayToken, hostname, litellmVirtualKey, pluginInstall)
 
   return withErrorRecovery(record.id, () => launch(record.id, orgId, hostname, cloudInit))
 }
@@ -68,21 +91,94 @@ async function setupLiteLLM(orgId: string) {
   return { litellmVirtualKey }
 }
 
-function buildCloudInit(gatewayToken: string, hostname: string, litellmVirtualKey: string) {
+function buildCloudInit(
+  gatewayToken: string,
+  hostname: string,
+  litellmVirtualKey: string,
+  pluginInstall?: PluginInstallConfig,
+) {
   if (!env.ADMIN_SSH_PUBLIC_KEY) {
     console.warn('[provision] ADMIN_SSH_PUBLIC_KEY not set — instance will have no admin SSH access')
   }
-  return generateCloudInit(gatewayToken, env.ADMIN_SSH_PUBLIC_KEY, {
-    litellmVirtualKey,
-    litellmProxyUrl: env.LITELLM_PROXY_URL ?? '',
-    hostname,
-  })
+  return generateCloudInit(
+    gatewayToken,
+    env.ADMIN_SSH_PUBLIC_KEY,
+    {
+      litellmVirtualKey,
+      litellmProxyUrl: env.LITELLM_PROXY_URL ?? '',
+      hostname,
+    },
+    pluginInstall,
+  )
+}
+
+// Cloud-init can take several minutes to fetch the bundle (slow EC2 boot,
+// apt updates first). 30 minutes is generous and still well within S3
+// presign limits.
+const PLUGIN_BUNDLE_CLOUD_INIT_TTL_SECONDS = 30 * 60
+
+/**
+ * Resolves the plugin install payload to embed in cloud-init. Returns
+ * `undefined` (and logs a warning) when:
+ *   - no plugin version has been published yet (fresh DB), or
+ *   - the plugin bundle S3 config is incomplete (dev environments).
+ *
+ * The instance still provisions; Kodi can push an install later via the
+ * M6 admin update path once a version is available.
+ */
+async function resolvePluginInstall(params: {
+  instanceId: string
+  orgId: string
+  pluginHmacSecret: string
+}): Promise<PluginInstallConfig | undefined> {
+  const apiBaseUrl = env.API_BASE_URL
+  if (!apiBaseUrl) {
+    console.warn('[provision] API_BASE_URL not set — skipping plugin install in cloud-init')
+    return undefined
+  }
+
+  let latest
+  try {
+    latest = await getLatestPluginVersion()
+  } catch (err) {
+    console.warn('[provision] plugin_versions lookup failed — skipping plugin install:', err)
+    return undefined
+  }
+  if (!latest) {
+    console.warn('[provision] no plugin_versions rows yet — skipping plugin install')
+    return undefined
+  }
+
+  let bundleUrl: string
+  try {
+    bundleUrl = await signBundleDownloadUrl(
+      latest.bundleS3Key,
+      PLUGIN_BUNDLE_CLOUD_INIT_TTL_SECONDS,
+    )
+  } catch (err) {
+    if (err instanceof PluginBundleConfigError) {
+      console.warn(`[provision] ${err.message} — skipping plugin install`)
+      return undefined
+    }
+    throw err
+  }
+
+  return {
+    version: latest.version,
+    bundleUrl,
+    sha256: latest.sha256,
+    hmacSecret: params.pluginHmacSecret,
+    instanceId: params.instanceId,
+    orgId: params.orgId,
+    kodiApiBaseUrl: apiBaseUrl,
+  }
 }
 
 async function createPendingRecord(
   orgId: string,
   hostname: string,
   gatewayToken: string,
+  pluginHmacSecret: string,
   litellmVirtualKey: string,
 ): Promise<Instance> {
   const [record] = await db
@@ -94,6 +190,7 @@ async function createPendingRecord(
       litellmCustomerId: orgId,
       litellmVirtualKey: encrypt(litellmVirtualKey),
       gatewayToken: encrypt(gatewayToken),
+      pluginHmacSecretEncrypted: encrypt(pluginHmacSecret),
       sshUser: 'ubuntu',
     })
     .returning()

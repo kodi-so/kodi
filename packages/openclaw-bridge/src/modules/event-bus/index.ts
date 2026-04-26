@@ -9,6 +9,7 @@ import {
 } from './emitter'
 import { registerHookBindings } from './hook-bindings'
 import { createDiskOutbox, type DiskOutbox } from './outbox'
+import { createHeartbeat, type Heartbeat } from './heartbeat'
 
 /**
  * `event-bus` — outbound typed events to Kodi (signed POSTs to
@@ -36,11 +37,12 @@ const DEFAULT_OUTBOX_PATH = '/var/lib/kodi-bridge/outbox'
 export type EventBus = {
   emitter: Emitter
   outbox: DiskOutbox
+  heartbeat: Heartbeat
   /** Mutable holder so KOD-375 can swap subscriptions in place. */
   setSubscriptions: (next: Subscriptions) => void
   /** Currently-active subscription map, for diagnostics. */
   getSubscriptions: () => Subscriptions
-  /** Cancel the outbox timer on shutdown. */
+  /** Cancel the outbox + heartbeat timers on shutdown. */
   shutdown: () => void
 }
 
@@ -81,14 +83,29 @@ export const eventBusModule: KodiBridgeModule = {
     // inside `outbox.start()`; we don't block plugin load on them.
     void outbox.start()
 
+    // Heartbeat: starts immediately so Kodi sees liveness within the first
+    // tick. Subscription gating happens inside emitter.emit, so toggling
+    // `heartbeat` in subscriptions silences output on the next tick.
+    const heartbeat = createHeartbeat({
+      emitter,
+      intervalSeconds: ctx.config.heartbeat_interval_seconds,
+      // M4 wires this to ctx.agentManager.count(); for now we report 0.
+      getAgentCount: () => 0,
+    })
+    heartbeat.start()
+
     const eventBus: EventBus = {
       emitter,
       outbox,
+      heartbeat,
       setSubscriptions: (next) => {
         subscriptions = next
       },
       getSubscriptions: () => subscriptions,
-      shutdown: () => outbox.stop(),
+      shutdown: () => {
+        heartbeat.stop()
+        outbox.stop()
+      },
     }
     ctx.eventBus = eventBus
 
@@ -128,3 +145,4 @@ export {
   type DiskOutboxDeps,
   type FlushResult,
 } from './outbox'
+export { createHeartbeat, type Heartbeat, type HeartbeatDeps } from './heartbeat'

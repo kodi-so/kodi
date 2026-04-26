@@ -1,5 +1,7 @@
 import type { KodiBridgeContext, KodiBridgeModule } from '../../types/module'
 import type { BridgeCore } from '../bridge-core'
+import type { EventBus } from '../event-bus'
+import { parseSubscriptionsBody } from '../event-bus/subscription-loader'
 import { createNonceDedupe, type NonceDedupe } from './dedupe'
 import {
   createInboundRouter,
@@ -13,12 +15,15 @@ import {
  *
  * The module registers a single OpenClaw HTTP route at the
  * `/plugins/kodi-bridge/` prefix and runs in-house dispatch + HMAC
- * verification. Sibling modules add reload callbacks via
- * `ctx.inboundApi.onReload(fn)` from their own `register()`; KOD-375's
- * subscription loader is the first real consumer.
+ * verification.
  *
- * Stub routes return 501 with `{ code: 'NOT_IMPLEMENTED' }` until the
- * follow-up tickets in M3, M4, and M5 land their handlers.
+ *   - `/config/subscriptions` is real (KOD-375): wired to
+ *     ctx.eventBus.setSubscriptions, validation lives in the
+ *     subscription-loader module.
+ *   - `/admin/reload` is real (KOD-376): runs every callback registered
+ *     via ctx.inboundApi.onReload(fn).
+ *   - Everything else returns 501 until the follow-up tickets in M3,
+ *     M4, and M5 land their handlers.
  */
 
 export type InboundApi = {
@@ -39,6 +44,7 @@ export const inboundApiModule: KodiBridgeModule = {
     if (!bridgeCore) {
       throw new Error('inbound-api requires bridge-core to register first')
     }
+    const eventBus = ctx.eventBus as EventBus | undefined
 
     const dedupe = createNonceDedupe()
     const reloadCallbacks: ReloadCallback[] = []
@@ -47,6 +53,12 @@ export const inboundApiModule: KodiBridgeModule = {
       getSecret: () => ctx.config.hmac_secret,
       dedupe,
       reloadCallbacks: () => reloadCallbacks,
+      subscriptionsHandler: eventBus
+        ? async (rawBody) => {
+            const subs = parseSubscriptionsBody(rawBody)
+            eventBus.setSubscriptions(subs)
+          }
+        : undefined,
     })
 
     api.registerHttpRoute({
@@ -76,6 +88,7 @@ export {
   isInboundRoute,
   type InboundRouter,
   type ReloadCallback,
+  type SubscriptionsHandler,
 } from './router'
 export { createNonceDedupe, type NonceDedupe } from './dedupe'
 export { verifyInbound, type VerifyInboundInput, type VerifyInboundResult } from './verify'

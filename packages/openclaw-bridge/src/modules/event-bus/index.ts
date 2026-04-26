@@ -10,6 +10,11 @@ import {
 import { registerHookBindings } from './hook-bindings'
 import { createDiskOutbox, type DiskOutbox } from './outbox'
 import { createHeartbeat, type Heartbeat } from './heartbeat'
+import {
+  createSubscriptionLoader,
+  buildDefaultSubscriptions,
+  type SubscriptionLoader,
+} from './subscription-loader'
 
 /**
  * `event-bus` — outbound typed events to Kodi (signed POSTs to
@@ -38,11 +43,13 @@ export type EventBus = {
   emitter: Emitter
   outbox: DiskOutbox
   heartbeat: Heartbeat
-  /** Mutable holder so KOD-375 can swap subscriptions in place. */
+  subscriptionLoader: SubscriptionLoader
+  /** Swap the active subscription map. Called by the loader, by the
+   * /config/subscriptions inbound route, and tests. */
   setSubscriptions: (next: Subscriptions) => void
   /** Currently-active subscription map, for diagnostics. */
   getSubscriptions: () => Subscriptions
-  /** Cancel the outbox + heartbeat timers on shutdown. */
+  /** Cancel every timer (outbox flush, heartbeat, subscription refetch). */
   shutdown: () => void
 }
 
@@ -54,7 +61,11 @@ export const eventBusModule: KodiBridgeModule = {
       throw new Error('event-bus requires bridge-core to register first')
     }
 
-    let subscriptions: Subscriptions = DEFAULT_SUBSCRIPTIONS
+    // Start with the spec § 4.2 default; the loader replaces this on
+    // first successful fetch (or leaves it in place if Kodi can't be
+    // reached at boot, per ticket "subscription fetch fails at startup:
+    // use the default").
+    let subscriptions: Subscriptions = buildDefaultSubscriptions()
     const outboxPath = path.resolve(ctx.config.outbox_path ?? DEFAULT_OUTBOX_PATH)
 
     const outbox = createDiskOutbox({
@@ -94,15 +105,29 @@ export const eventBusModule: KodiBridgeModule = {
     })
     heartbeat.start()
 
+    const setSubscriptions = (next: Subscriptions): void => {
+      subscriptions = next
+    }
+
+    const subscriptionLoader = createSubscriptionLoader({
+      kodiClient: bridgeCore.kodiClient,
+      instanceId: bridgeCore.identity.instance_id,
+      applySubscriptions: setSubscriptions,
+    })
+    // Best-effort startup fetch + 10-minute timer. Errors are logged
+    // inside the loader; we don't block plugin load on a Kodi outage
+    // — the buildDefaultSubscriptions seed is already in place.
+    void subscriptionLoader.start()
+
     const eventBus: EventBus = {
       emitter,
       outbox,
       heartbeat,
-      setSubscriptions: (next) => {
-        subscriptions = next
-      },
+      subscriptionLoader,
+      setSubscriptions,
       getSubscriptions: () => subscriptions,
       shutdown: () => {
+        subscriptionLoader.stop()
         heartbeat.stop()
         outbox.stop()
       },
@@ -146,3 +171,13 @@ export {
   type FlushResult,
 } from './outbox'
 export { createHeartbeat, type Heartbeat, type HeartbeatDeps } from './heartbeat'
+export {
+  createSubscriptionLoader,
+  buildDefaultSubscriptions,
+  parseSubscriptionsBody,
+  SubscriptionsParseError,
+  SUBSCRIPTIONS_API_PATH,
+  DEFAULT_FETCH_INTERVAL_MS,
+  type SubscriptionLoader,
+  type SubscriptionLoaderDeps,
+} from './subscription-loader'

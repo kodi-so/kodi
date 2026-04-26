@@ -10,6 +10,7 @@ import { registerComposioRoutes } from './routes/composio'
 import { registerPluginVersionsRoutes } from './routes/plugin-versions'
 import { registerPluginBundleRoutes } from './routes/plugin-bundle'
 import { registerOpenClawEventsRoutes } from './routes/openclaw-events'
+import { registerOpenClawSubscriptionsRoutes } from './routes/openclaw-subscriptions'
 import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 import { db, instances, eq } from '@kodi/db'
 
@@ -24,6 +25,7 @@ registerComposioRoutes(app)
 registerPluginVersionsRoutes(app)
 registerPluginBundleRoutes(app)
 registerOpenClawEventsRoutes(app)
+registerOpenClawSubscriptionsRoutes(app)
 app.use(
   '/trpc/*',
   cors({

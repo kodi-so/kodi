@@ -35,9 +35,10 @@ const STUB_ROUTES_EXACT = new Set<string>([
   'agents/provision',
   'agents/deprovision',
   'agents/update-policy',
-  'config/subscriptions',
   'admin/update',
 ])
+
+const SUBSCRIPTIONS_ROUTE = 'config/subscriptions'
 
 const STUB_ROUTES_PATTERNED: Array<RegExp> = [
   /^agents\/[^/]+\/inject$/,
@@ -51,12 +52,20 @@ export type InboundLogger = Pick<Console, 'log' | 'warn'>
 
 export type ReloadCallback = () => void | Promise<void>
 
+export type SubscriptionsHandler = (rawBody: unknown) => void | Promise<void>
+
 export type CreateInboundRouterDeps = {
   /** Function returning the current plugin HMAC secret. Called per request so KOD-385's rotation can swap it in place. */
   getSecret: () => string
   dedupe: NonceDedupe
   /** Reload callbacks fired in registration order on POST /admin/reload. */
   reloadCallbacks: () => readonly ReloadCallback[]
+  /**
+   * If set, `POST /plugins/kodi-bridge/config/subscriptions` invokes this
+   * handler with the parsed JSON body. Otherwise the route returns 501.
+   * Validation lives in the handler (event-bus owns the schema).
+   */
+  subscriptionsHandler?: SubscriptionsHandler
   logger?: InboundLogger
   now?: () => number
 }
@@ -104,12 +113,20 @@ function notImplemented(res: ServerResponse, subPath: string): void {
 
 export function isInboundRoute(subPath: string): boolean {
   if (subPath === RELOAD_ROUTE) return true
+  if (subPath === SUBSCRIPTIONS_ROUTE) return true
   if (STUB_ROUTES_EXACT.has(subPath)) return true
   return STUB_ROUTES_PATTERNED.some((pattern) => pattern.test(subPath))
 }
 
 export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRouter {
-  const { getSecret, dedupe, reloadCallbacks, logger = console, now } = deps
+  const {
+    getSecret,
+    dedupe,
+    reloadCallbacks,
+    subscriptionsHandler,
+    logger = console,
+    now,
+  } = deps
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if ((req.method ?? 'GET').toUpperCase() !== 'POST') {
@@ -162,11 +179,34 @@ export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRoute
       return writeJson(res, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' })
     }
 
+    let parsedBody: unknown = undefined
     if (rawBody.length > 0) {
       try {
-        JSON.parse(rawBody)
+        parsedBody = JSON.parse(rawBody)
       } catch {
         return writeJson(res, 400, { error: 'Bad Request', code: 'BODY_NOT_JSON' })
+      }
+    }
+
+    if (subPath === SUBSCRIPTIONS_ROUTE) {
+      if (!subscriptionsHandler) {
+        return notImplemented(res, subPath)
+      }
+      try {
+        await subscriptionsHandler(parsedBody)
+        return writeJson(res, 200, { ok: true })
+      } catch (err) {
+        logger.warn(
+          JSON.stringify({
+            msg: 'inbound subscriptions handler failed',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        )
+        return writeJson(res, 400, {
+          error: 'Bad Request',
+          code: 'INVALID_SUBSCRIPTIONS',
+          message: err instanceof Error ? err.message : 'invalid subscriptions',
+        })
       }
     }
 

@@ -34,6 +34,7 @@
   "devDependencies": {
     "@kodi/typescript-config": "*",
     "@types/bun": "latest",
+    "@types/node": "^20.0.0",
     "esbuild": "^0.24.0",
     "openclaw": "2026.4.23",
     "typescript": "^5.4.5"

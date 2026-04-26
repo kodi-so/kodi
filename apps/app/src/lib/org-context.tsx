@@ -25,6 +25,8 @@ type OrgOption = {
   orgId: string
   orgName: string
   orgSlug: string
+  orgImage?: string | null
+  orgStatus?: string | null
   role: string
 }
 

@@ -19,6 +19,8 @@ export const organizations = pgTable('organizations', {
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   ownerId: text('owner_id').notNull(), // references user.id (Better-Auth)
+  image: text('image'), // workspace logo — data URL or external URL
+  status: text('status').notNull().default('active'), // 'active' | 'pending_billing'
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 

@@ -97,28 +97,209 @@ export const AgentContextSchema = z.object({
 export type AgentContext = z.infer<typeof AgentContextSchema>
 
 /**
- * Per-kind payload schemas. KOD-371 ships placeholders that accept any
- * object so the envelope round-trips end-to-end while we wire up the
- * remaining M3 work. KOD-372 replaces each placeholder with the concrete
- * shape from the catalog.
+ * Per-kind payload schemas, sourced from implementation-spec § 4.1.
+ *
+ * Verbosity coupling (enforced by `EventInnerSchema.superRefine` below):
+ *   - `message.received` / `message.sent`: `content` is required when
+ *     `verbosity === 'full'` and forbidden otherwise.
+ *   - `tool.invoke.before`: `args` is required when `verbosity === 'full'`
+ *     and forbidden otherwise.
+ * Both `content_summary` and `args_summary` are always present so the
+ * dispatcher can emit something useful at summary verbosity.
  */
-const placeholderPayload = z.object({}).passthrough()
 
-export const PayloadByKind: Record<EventKind, z.ZodTypeAny> = EVENT_KINDS.reduce(
-  (acc, kind) => {
-    acc[kind] = placeholderPayload
-    return acc
-  },
-  {} as Record<EventKind, z.ZodTypeAny>,
-)
+const IsoDateTime = z.string().datetime({ offset: true })
 
-export const EventInnerSchema = z.object({
-  kind: EventKindSchema,
-  verbosity: VerbositySchema,
-  occurred_at: z.string().datetime({ offset: true }),
-  idempotency_key: z.string().uuid(),
-  payload: placeholderPayload,
+const VersionString = z.string().min(1)
+
+const PolicyLevelSchema = z.enum(['strict', 'normal', 'lenient', 'yolo'])
+
+const PluginStartedPayload = z.object({
+  pid: z.number().int().nonnegative(),
+  started_at: IsoDateTime,
 })
+
+const PluginDegradedPayload = z.object({
+  reason: z.string().min(1),
+  since: IsoDateTime,
+})
+
+const PluginRecoveredPayload = z.object({
+  since: IsoDateTime,
+})
+
+const PluginUpdateCheckPayload = z.object({
+  current_version: VersionString,
+  latest_version: VersionString,
+})
+
+const PluginUpdateTransitionPayload = z.object({
+  from_version: VersionString,
+  to_version: VersionString,
+})
+
+const PluginUpdateFailedPayload = PluginUpdateTransitionPayload.extend({
+  error: z.string().min(1),
+})
+
+const HeartbeatPayload = z.object({
+  uptime_s: z.number().nonnegative(),
+  agent_count: z.number().int().nonnegative(),
+})
+
+const AgentProvisionedPayload = z.object({
+  user_id: z.string().uuid(),
+  openclaw_agent_id: z.string().min(1),
+  composio_status: z.string().min(1),
+})
+
+const AgentDeprovisionedPayload = z.object({
+  user_id: z.string().uuid(),
+  openclaw_agent_id: z.string().min(1),
+})
+
+const AgentFailedPayload = z.object({
+  user_id: z.string().uuid(),
+  error: z.string().min(1),
+})
+
+const AgentBootstrapPayload = z.object({
+  session_key: z.string().min(1),
+})
+
+const MessagePayload = z.object({
+  session_key: z.string().min(1),
+  content_summary: z.string(),
+  content: z.string().optional(),
+  speaker: z.string().min(1),
+})
+
+const SessionCompactAfterPayload = z.object({
+  session_key: z.string().min(1),
+  before_tokens: z.number().int().nonnegative(),
+  after_tokens: z.number().int().nonnegative(),
+})
+
+const SessionEndedPayload = z.object({
+  session_key: z.string().min(1),
+  duration_s: z.number().nonnegative(),
+})
+
+const ToolInvokeBeforePayload = z.object({
+  tool_name: z.string().min(1),
+  args_summary: z.string(),
+  args: z.unknown().optional(),
+  session_key: z.string().min(1),
+})
+
+const ToolInvokeAfterPayload = z.object({
+  tool_name: z.string().min(1),
+  duration_ms: z.number().nonnegative(),
+  outcome: z.enum(['ok', 'error']),
+  error: z.string().optional(),
+})
+
+const ToolDeniedPayload = z.object({
+  tool_name: z.string().min(1),
+  reason: z.string().min(1),
+  policy_level: PolicyLevelSchema,
+})
+
+const ToolApprovalRequestedPayload = z.object({
+  request_id: z.string().uuid(),
+  tool_name: z.string().min(1),
+  args: z.unknown(),
+  session_key: z.string().min(1),
+  policy_level: PolicyLevelSchema,
+})
+
+const ToolApprovalResolvedPayload = z.object({
+  request_id: z.string().uuid(),
+  approved: z.boolean(),
+  reason: z.string().optional(),
+})
+
+const ComposioSessionFailedPayload = z.object({
+  user_id: z.string().uuid(),
+  error: z.string().min(1),
+})
+
+const ComposioSessionRotatedPayload = z.object({
+  user_id: z.string().uuid(),
+})
+
+export const PayloadByKind: Record<EventKind, z.ZodTypeAny> = {
+  'plugin.started': PluginStartedPayload,
+  'plugin.degraded': PluginDegradedPayload,
+  'plugin.recovered': PluginRecoveredPayload,
+  'plugin.update_check': PluginUpdateCheckPayload,
+  'plugin.update_attempted': PluginUpdateTransitionPayload,
+  'plugin.update_succeeded': PluginUpdateTransitionPayload,
+  'plugin.update_failed': PluginUpdateFailedPayload,
+  'plugin.update_rolled_back': PluginUpdateFailedPayload,
+  heartbeat: HeartbeatPayload,
+  'agent.provisioned': AgentProvisionedPayload,
+  'agent.deprovisioned': AgentDeprovisionedPayload,
+  'agent.failed': AgentFailedPayload,
+  'agent.bootstrap': AgentBootstrapPayload,
+  'message.received': MessagePayload,
+  'message.sent': MessagePayload,
+  'session.compact.after': SessionCompactAfterPayload,
+  'session.ended': SessionEndedPayload,
+  'tool.invoke.before': ToolInvokeBeforePayload,
+  'tool.invoke.after': ToolInvokeAfterPayload,
+  'tool.denied': ToolDeniedPayload,
+  'tool.approval_requested': ToolApprovalRequestedPayload,
+  'tool.approval_resolved': ToolApprovalResolvedPayload,
+  'composio.session_failed': ComposioSessionFailedPayload,
+  'composio.session_rotated': ComposioSessionRotatedPayload,
+}
+
+const VERBOSITY_FULL_FIELD: Partial<Record<EventKind, 'content' | 'args'>> = {
+  'message.received': 'content',
+  'message.sent': 'content',
+  'tool.invoke.before': 'args',
+}
+
+export const EventInnerSchema = z
+  .object({
+    kind: EventKindSchema,
+    verbosity: VerbositySchema,
+    occurred_at: IsoDateTime,
+    idempotency_key: z.string().uuid(),
+    payload: z.unknown(),
+  })
+  .superRefine((event, ctx) => {
+    const payloadSchema = PayloadByKind[event.kind]
+    const parsed = payloadSchema.safeParse(event.payload)
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ ...issue, path: ['payload', ...issue.path] })
+      }
+      return
+    }
+
+    const verbosityField = VERBOSITY_FULL_FIELD[event.kind]
+    if (!verbosityField) return
+
+    const payload = parsed.data as Record<string, unknown>
+    const fieldPresent = verbosityField in payload && payload[verbosityField] !== undefined
+
+    if (event.verbosity === 'full' && !fieldPresent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['payload', verbosityField],
+        message: `${verbosityField} is required when verbosity is "full"`,
+      })
+    }
+    if (event.verbosity === 'summary' && fieldPresent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['payload', verbosityField],
+        message: `${verbosityField} must be omitted when verbosity is "summary"`,
+      })
+    }
+  })
 export type EventInner = z.infer<typeof EventInnerSchema>
 
 export const EventEnvelopeSchema = z.object({

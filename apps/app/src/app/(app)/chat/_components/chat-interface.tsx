@@ -51,8 +51,11 @@ export function ChatInterface({
           channels={chat.channels}
           selectedDirectId={chat.selectedDirectId}
           selectedChannelId={chat.selectedChannelId}
+          creatingChannel={chat.creatingChannel}
+          createChannelError={chat.createChannelError}
           onSelectDirect={chat.selectDirect}
           onSelectChannel={chat.selectChannel}
+          onCreateChannel={chat.createChannel}
         />
 
         <div className="min-h-0 flex-1">

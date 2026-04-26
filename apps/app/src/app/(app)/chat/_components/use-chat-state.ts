@@ -48,7 +48,6 @@ export function useChatState({
   const [creatingChannel, setCreatingChannel] = useState(false)
   const [sendingMain, setSendingMain] = useState(false)
   const [sendingThread, setSendingThread] = useState(false)
-  const [respondingRootIds, setRespondingRootIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [createChannelError, setCreateChannelError] = useState<string | null>(
     null
@@ -180,6 +179,33 @@ export function useChatState({
     }
   }, [orgId, selectedChannelId, selectedDirectId])
 
+  // Poll for updates when there are server-side pending messages (e.g. user
+  // navigated away while Kodi was still generating a response).
+  useEffect(() => {
+    if (selectedDirectId || !selectedChannelId) return
+
+    const hasPending = messages.some(
+      (m) => !m.threadRootMessageId && m.status === 'pending'
+    )
+    if (!hasPending) return
+
+    const channelId = selectedChannelId
+    const id = setInterval(async () => {
+      try {
+        const result = (await trpc.chat.getChannelMessages.query({
+          orgId,
+          channelId,
+        })) as { messages: Message[]; nextCursor: string | null }
+        setMessages(result.messages)
+        setNextCursor(result.nextCursor)
+      } catch {
+        // ignore polling errors silently
+      }
+    }, 3000)
+
+    return () => clearInterval(id)
+  }, [orgId, selectedChannelId, selectedDirectId, messages])
+
   async function loadOlderMessages() {
     if (!selectedChannelId || !nextCursor || loadingOlder || loadingMessages) {
       return
@@ -206,12 +232,16 @@ export function useChatState({
     }
   }
 
-  const { rootMessages, repliesByThread } = useMemo(() => {
+  const { rootMessages, repliesByThread, respondingRootIds } = useMemo(() => {
     const roots: Message[] = []
     const replies: Record<string, Message[]> = {}
+    const responding: string[] = []
     for (const message of messages) {
       if (!message.threadRootMessageId) {
         roots.push(message)
+        if (message.status === 'sending' || message.status === 'pending') {
+          responding.push(message.id)
+        }
       } else {
         if (!replies[message.threadRootMessageId]) {
           replies[message.threadRootMessageId] = []
@@ -219,7 +249,7 @@ export function useChatState({
         replies[message.threadRootMessageId]!.push(message)
       }
     }
-    return { rootMessages: roots, repliesByThread: replies }
+    return { rootMessages: roots, repliesByThread: replies, respondingRootIds: responding }
   }, [messages])
 
   const selectedThreadRoot =
@@ -310,7 +340,6 @@ export function useChatState({
     } else {
       setSendingMain(true)
       setMessageDraft('')
-      setRespondingRootIds((current) => [...current, optimisticId])
     }
     setMessages((current) => [...current, optimistic])
 
@@ -370,9 +399,6 @@ export function useChatState({
         setSendingThread(false)
       } else {
         setSendingMain(false)
-        setRespondingRootIds((current) =>
-          current.filter((id) => id !== optimisticId)
-        )
       }
     }
   }

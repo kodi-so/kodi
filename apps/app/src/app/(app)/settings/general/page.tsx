@@ -101,7 +101,13 @@ export default function GeneralSettingsPage() {
     setUploadingPhoto(true)
     setPhotoError(null)
     try {
-      await trpc.org.update.mutate({ orgId: currentOrg.orgId, image: null })
+      const res = await fetch(`/api/upload/org-image?orgId=${currentOrg.orgId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? 'Failed to remove photo')
+      }
       await refreshOrgs()
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : 'Failed to remove photo')
@@ -190,6 +196,7 @@ export default function GeneralSettingsPage() {
               <input
                 ref={fileInputRef}
                 type="file"
+                title="Upload workspace photo"
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 className="hidden"
                 onChange={(e) => void handlePhotoChange(e)}

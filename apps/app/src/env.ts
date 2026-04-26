@@ -52,6 +52,17 @@ const envSchema = z.object({
   // In Railway: set to the API service's private URL (e.g. http://api.railway.internal:3002).
   // In local dev: defaults to http://localhost:3002.
   API_INTERNAL_URL: z.string().url().optional(),
+
+  // Cloudflare R2 (object storage for workspace photos and other uploads)
+  // Create bucket: Cloudflare dashboard → R2 → Create bucket
+  // Create API token: R2 → Manage API tokens → Create token (Object Read & Write)
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET_NAME: z.string().optional(),
+  // Public base URL for serving R2 objects (custom domain or r2.dev URL)
+  // e.g. https://assets.kodi.so  or  https://pub-<hash>.r2.dev
+  R2_PUBLIC_URL: z.string().url().optional(),
 })
 
 const _env = envSchema.safeParse(process.env)
@@ -98,6 +109,16 @@ export function requireStripe() {
     throw new Error('Stripe environment variables are not configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.')
   }
   return { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET }
+}
+
+export function requireR2() {
+  const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL } = env
+  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME || !R2_PUBLIC_URL) {
+    throw new Error(
+      'R2 environment variables are not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL.'
+    )
+  }
+  return { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL }
 }
 
 export function requireStripeBilling() {

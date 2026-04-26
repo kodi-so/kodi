@@ -228,20 +228,23 @@ function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <Link
-          href="/chat"
-          className="flex h-12 items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-2 group-data-[collapsible=icon]:justify-center"
-        >
-          <span className="flex aspect-square size-8 shrink-0 items-center justify-center">
-            <BrandLogo
-              size={28}
-              showWordmark={false}
-              className="size-8"
-              markClassName="size-8"
-            />
-          </span>
-          <span className="group-data-[collapsible=icon]:hidden">Kodi</span>
-        </Link>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild tooltip="Kodi">
+              <Link href="/chat">
+                <span className="flex aspect-square size-8 shrink-0 items-center justify-center">
+                  <BrandLogo
+                    size={28}
+                    showWordmark={false}
+                    className="size-8"
+                    markClassName="size-8"
+                  />
+                </span>
+                <span className="font-semibold">Kodi</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>

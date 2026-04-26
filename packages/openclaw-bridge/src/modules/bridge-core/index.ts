@@ -3,7 +3,6 @@ import { loadConfig } from './config'
 import { buildIdentity, type Identity } from './identity'
 import { createKodiClient, type KodiClient } from './kodi-client'
 import { createHealthState, registerHealthRoute, type HealthState } from './health'
-import { emitPluginStarted } from './started-event'
 
 export type BridgeCore = {
   identity: Identity
@@ -21,10 +20,9 @@ export type BridgeCore = {
  * here additionally resolves `{ "$secret": "ENV_NAME" }` placeholders.
  * Re-validation is a fast no-op on the already-clean shape.
  *
- * NOTE: gateway token resolution lands in M2-T7 (KOD-368) when cloud-init
- * starts injecting `OPENCLAW_GATEWAY_TOKEN` into the plugin's env. Until
- * then we use a placeholder; the KodiClient won't successfully reach Kodi
- * but every other module that depends on `ctx.bridgeCore` compiles.
+ * `plugin.started` is no longer emitted from here — KOD-373 moved that
+ * emission into the `event-bus` module so the canonical envelope (KOD-371)
+ * and the subscription-based verbosity apply uniformly to every event.
  */
 export const bridgeCoreModule: KodiBridgeModule = {
   id: 'bridge-core',
@@ -47,21 +45,8 @@ export const bridgeCoreModule: KodiBridgeModule = {
 
     const bridgeCore: BridgeCore = { identity, kodiClient, health }
     ctx.bridgeCore = bridgeCore
-
-    // Fire-and-forget the startup beacon. Never throws — a Kodi outage at
-    // boot must not break the plugin load. Delivery is retried inside the
-    // KodiClient (5xx, 3 attempts); the M3 event-bus replaces this stub
-    // with a durable outbox-backed flow.
-    void emitPluginStarted({ kodiClient, identity })
   },
 }
 
 export type { Identity, KodiClient, HealthState }
 export { loadConfig, createKodiClient, buildIdentity, createHealthState, registerHealthRoute }
-export {
-  emitPluginStarted,
-  buildPluginStartedEnvelope,
-  PLUGIN_STARTED_EVENT_KIND,
-  KODI_BRIDGE_PROTOCOL_VERSION,
-  EVENTS_INGEST_PATH,
-} from './started-event'

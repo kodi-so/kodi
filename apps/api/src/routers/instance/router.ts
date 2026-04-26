@@ -1,9 +1,25 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { eq, instances } from '@kodi/db'
+import { eq, instances, subscriptions } from '@kodi/db'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { checkInstanceHealth } from './health'
 import { provisionInstance, deprovisionInstance } from './provisioning'
+
+async function requireActiveSubscription(
+  db: typeof import('@kodi/db').db,
+  orgId: string,
+) {
+  const sub = await db.query.subscriptions.findFirst({
+    where: eq(subscriptions.orgId, orgId),
+  })
+  if (!sub || sub.status !== 'active') {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'An active subscription is required. Please subscribe to a plan first.',
+    })
+  }
+  return sub
+}
 
 export const instanceRouter = router({
   /**
@@ -52,6 +68,8 @@ export const instanceRouter = router({
    */
   provision: ownerProcedure
     .mutation(async ({ ctx }) => {
+      await requireActiveSubscription(ctx.db, ctx.org.id)
+
       // Check if org already has an instance
       const existing = await ctx.db.query.instances.findFirst({
         where: eq(instances.orgId, ctx.org.id),
@@ -81,6 +99,8 @@ export const instanceRouter = router({
   retryProvision: ownerProcedure
     .input(z.object({ instanceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await requireActiveSubscription(ctx.db, ctx.org.id)
+
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })
@@ -113,6 +133,8 @@ export const instanceRouter = router({
   deprovision: ownerProcedure
     .input(z.object({ instanceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await requireActiveSubscription(ctx.db, ctx.org.id)
+
       const inst = await ctx.db.query.instances.findFirst({
         where: eq(instances.id, input.instanceId),
       })

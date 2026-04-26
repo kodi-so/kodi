@@ -187,29 +187,43 @@
     {
       "idx": 26,
       "version": "7",
-      "when": 1777276800000,
-      "tag": "0027_kod_353_plugin_instance_columns",
+      "when": 1776301200000,
+      "tag": "0027_billing_schema",
       "breakpoints": true
     },
     {
       "idx": 27,
       "version": "7",
-      "when": 1777276900000,
-      "tag": "0028_kod_354_openclaw_agents",
+      "when": 1745539200000,
+      "tag": "0028_org_image_and_status",
       "breakpoints": true
     },
     {
       "idx": 28,
       "version": "7",
-      "when": 1777277000000,
-      "tag": "0029_kod_355_agent_autonomy_policies",
+      "when": 1777276800000,
+      "tag": "0029_kod_353_plugin_instance_columns",
       "breakpoints": true
     },
     {
       "idx": 29,
       "version": "7",
+      "when": 1777276900000,
+      "tag": "0030_kod_354_openclaw_agents",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1777277000000,
+      "tag": "0031_kod_355_agent_autonomy_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
       "when": 1777277100000,
-      "tag": "0030_kod_356_plugin_events_and_versions",
+      "tag": "0032_kod_356_plugin_events_and_versions",
       "breakpoints": true
     }
   ]

@@ -38,17 +38,45 @@ const envSchema = z.object({
   // Stripe
   STRIPE_SECRET_KEY: z.string().startsWith('sk_').optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_').optional(),
+
+  // Stripe Prices (billing)
+  STRIPE_PRO_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_BUSINESS_PRICE_ID: z.string().startsWith('price_').optional(),
+  STRIPE_USAGE_PRICE_ID: z.string().startsWith('price_').optional(),
+
+  // Internal service-to-service auth (Stripe webhook → API provision trigger)
+  // Must match INTERNAL_PROVISION_SECRET in apps/api
+  INTERNAL_PROVISION_SECRET: z.string().min(32).optional(),
+
+  // Base URL of the API server, used by the webhook to call /internal/provision.
+  // In Railway: set to the API service's private URL (e.g. http://api.railway.internal:3002).
+  // In local dev: defaults to http://localhost:3002.
+  API_INTERNAL_URL: z.string().url().optional(),
+
+  // Cloudflare R2 (object storage for workspace photos and other uploads)
+  // Create bucket: Cloudflare dashboard → R2 → Create bucket
+  // Create API token: R2 → Manage API tokens → Create token (Object Read & Write)
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET_NAME: z.string().optional(),
+  // Public base URL for serving R2 objects (custom domain or r2.dev URL)
+  // e.g. https://assets.kodi.so  or  https://pub-<hash>.r2.dev
+  R2_PUBLIC_URL: z.string().url().optional(),
 })
 
 const _env = envSchema.safeParse(process.env)
 
-if (!_env.success) {
+// During `next build`, Next.js statically evaluates all route modules but
+// real env vars aren't present. Skip the throw so the build succeeds —
+// missing vars will still blow up at runtime when the route is actually called.
+if (!_env.success && process.env.NEXT_PHASE !== 'phase-production-build') {
   console.error('❌ Invalid environment variables:')
   console.error(_env.error.flatten().fieldErrors)
   throw new Error('Invalid environment variables — see above for details')
 }
 
-export const env = _env.data
+export const env = (_env.data ?? {}) as z.infer<typeof envSchema>
 
 // ── Typed accessors for optional vars ─────────────────────────────────────
 // These throw at call-time (not startup) when a feature tries to use a
@@ -84,4 +112,42 @@ export function requireStripe() {
     throw new Error('Stripe environment variables are not configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.')
   }
   return { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET }
+}
+
+export function requireR2() {
+  const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL } = env
+  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME || !R2_PUBLIC_URL) {
+    throw new Error(
+      'R2 environment variables are not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL.'
+    )
+  }
+  return { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL }
+}
+
+export function requireStripeBilling() {
+  const {
+    STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRO_PRICE_ID,
+    STRIPE_BUSINESS_PRICE_ID,
+    STRIPE_USAGE_PRICE_ID,
+  } = env
+  if (
+    !STRIPE_SECRET_KEY ||
+    !STRIPE_WEBHOOK_SECRET ||
+    !STRIPE_PRO_PRICE_ID ||
+    !STRIPE_BUSINESS_PRICE_ID ||
+    !STRIPE_USAGE_PRICE_ID
+  ) {
+    throw new Error(
+      'Stripe billing environment variables are not fully configured.',
+    )
+  }
+  return {
+    STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    STRIPE_PRO_PRICE_ID,
+    STRIPE_BUSINESS_PRICE_ID,
+    STRIPE_USAGE_PRICE_ID,
+  }
 }

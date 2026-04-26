@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { RemoveMemberDialog } from './remove-member-dialog'
+import { Avatar, AvatarFallback, AvatarImage } from '@kodi/ui/components/avatar'
 import { Badge } from '@kodi/ui/components/badge'
 import { Button } from '@kodi/ui/components/button'
 import { Card, CardContent } from '@kodi/ui/components/card'
@@ -11,6 +12,7 @@ type Member = {
   userId: string
   name: string
   email: string
+  image?: string | null
   role: 'owner' | 'member'
   joinedAt: Date | string
 }
@@ -68,11 +70,18 @@ export function MemberList({
                 key={member.id}
                 className="flex items-center gap-4 bg-transparent px-5 py-4 transition-colors hover:bg-brand-muted"
               >
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-border bg-accent">
-                  <span className="text-xs font-bold text-foreground">
+                <Avatar className="h-9 w-9 flex-shrink-0 border border-border">
+                  {member.image ? (
+                    <AvatarImage
+                      src={member.image}
+                      alt={member.name}
+                      className="object-cover"
+                    />
+                  ) : null}
+                  <AvatarFallback className="text-xs font-bold text-foreground">
                     {getInitials(member.name)}
-                  </span>
-                </div>
+                  </AvatarFallback>
+                </Avatar>
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">

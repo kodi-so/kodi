@@ -85,6 +85,7 @@ export const orgRouter = router({
           joinedAt: orgMembers.createdAt,
           name: user.name,
           email: user.email,
+          image: user.image,
         })
         .from(orgMembers)
         .innerJoin(user, eq(orgMembers.userId, user.id))

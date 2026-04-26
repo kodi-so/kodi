@@ -59,9 +59,9 @@ const integrations = [
 ]
 
 const recapOutcomes = [
-  'API migration remains on Marcus, with engineering review on Thursday.',
-  'Customer rollout stays tied to the April 28 cutover if QA signs off.',
-  'Kodi should handle ticket creation, Slack recap, and owner follow-up immediately.',
+  'Marcus owns the migration',
+  'Apr 28 rollout stays on track',
+  'Kodi queued the follow-through',
 ]
 
 const recapDecisions = [
@@ -114,7 +114,7 @@ export default function HomePage() {
         </nav>
 
         {/* HERO */}
-        <section className="grid flex-1 gap-12 py-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,480px)] lg:items-center lg:py-20">
+        <section className="grid flex-1 gap-10 py-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,430px)] lg:items-center lg:py-20">
           <div className="space-y-8">
             <Badge
               variant="outline"
@@ -166,7 +166,7 @@ export default function HomePage() {
           </div>
 
           {/* DEMO PANEL */}
-          <div className="kodi-panel-surface rounded-[2rem] border border-brand-line p-4 shadow-brand-panel">
+          <div className="kodi-panel-surface rounded-[2rem] border border-brand-line p-4 shadow-brand-panel lg:ml-auto lg:w-full lg:max-w-[430px]">
             <div className="flex items-center justify-between rounded-[1.4rem] border border-brand-line bg-background px-4 py-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-[13px] font-semibold text-foreground">
@@ -210,13 +210,13 @@ export default function HomePage() {
                 </div>
               ) : null}
 
-              <div className="rounded-[1.5rem] border border-brand-line bg-background p-5">
+              <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                       Summary
                     </p>
-                    <p className="mt-2 max-w-md text-sm leading-7 text-foreground">
+                    <p className="mt-2 max-w-md text-sm leading-6 text-foreground">
                       Kodi captured the rollout plan, confirmed ownership, and
                       packaged the next steps while the team was still leaving the call.
                     </p>
@@ -225,19 +225,19 @@ export default function HomePage() {
                     variant="outline"
                     className="border-border/80 bg-card/70 text-xs"
                   >
-                    3 key outcomes
+                    Recap ready
                   </Badge>
                 </div>
 
-                <ul className="mt-4 space-y-2.5">
+                <ul className="mt-3 grid gap-2 sm:grid-cols-3">
                   {recapOutcomes.map((outcome) => (
                     <li
                       key={outcome}
-                      className="flex items-start gap-2.5 rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 text-sm text-foreground"
+                      className="flex items-center gap-2 rounded-2xl border border-border/70 bg-card/70 px-3 py-2 text-xs text-foreground"
                     >
                       <CheckCircle2
-                        size={14}
-                        className="mt-0.5 shrink-0 text-primary"
+                        size={12}
+                        className="shrink-0 text-primary"
                       />
                       <span>{outcome}</span>
                     </li>
@@ -245,8 +245,8 @@ export default function HomePage() {
                 </ul>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-                <div className="rounded-[1.5rem] border border-brand-line bg-background p-5">
+              <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
+                <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
                   <div className="flex items-center gap-2.5">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-card text-muted-foreground">
                       <FileText size={15} />
@@ -259,16 +259,16 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-3 space-y-2.5">
                     {recapDecisions.map((decision) => (
                       <div
                         key={decision.summary}
-                        className="rounded-2xl border border-border/70 bg-card/70 px-4 py-3"
+                        className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3"
                       >
                         <p className="text-sm font-medium text-foreground">
                           {decision.summary}
                         </p>
-                        <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
                           {decision.context}
                         </p>
                       </div>
@@ -276,7 +276,7 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-brand-line bg-background p-5">
+                <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
                   <div className="flex items-center gap-2.5">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-card text-muted-foreground">
                       <ClipboardList size={15} />
@@ -289,11 +289,11 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-3 space-y-2.5">
                     {agentActions.map((action) => (
                       <div
                         key={action.title}
-                        className="rounded-2xl border border-border/70 bg-card/70 px-4 py-3"
+                        className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-2.5"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-medium text-foreground">
@@ -306,7 +306,7 @@ export default function HomePage() {
                             {action.status}
                           </Badge>
                         </div>
-                        <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
                           {action.meta}
                         </p>
                       </div>

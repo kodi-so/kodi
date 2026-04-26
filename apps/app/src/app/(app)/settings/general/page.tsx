@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
+import { ACCEPTED_IMAGE_UPLOAD_TYPES } from '@/lib/image-upload'
 import { SettingsLayout } from '../_components/settings-layout'
 import { Building2, Trash2, Upload } from 'lucide-react'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
@@ -197,7 +198,7 @@ export default function GeneralSettingsPage() {
                 ref={fileInputRef}
                 type="file"
                 title="Upload workspace photo"
-                accept="image/jpeg,image/png,image/webp,image/gif"
+                accept={ACCEPTED_IMAGE_UPLOAD_TYPES}
                 className="hidden"
                 onChange={(e) => void handlePhotoChange(e)}
               />

@@ -23,7 +23,7 @@ function getAuth() {
 }
 
 export type Session = {
-  user: { id: string; email: string; name: string }
+  user: { id: string; email: string; name: string; image?: string | null }
   session: { id: string; userId: string }
 }
 

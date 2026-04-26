@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Bot, Building2, CreditCard, Users } from 'lucide-react'
+import { Bot, Building2, CreditCard, UserRound, Users } from 'lucide-react'
 import { cn } from '@kodi/ui/lib/utils'
 
 const settingsSections = [
+  { href: '/settings/profile', label: 'Profile', icon: UserRound },
   { href: '/settings/general', label: 'General', icon: Building2 },
   { href: '/settings/members', label: 'Members', icon: Users },
   { href: '/settings/meeting-copilot', label: 'Meeting copilot', icon: Bot },
@@ -21,7 +22,7 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
         Settings
       </h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Manage your workspace configuration.
+        Manage your profile and workspace configuration.
       </p>
 
       <nav className="mt-6 flex gap-1 border-b border-border">

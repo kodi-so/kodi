@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
-import { Avatar, AvatarFallback } from '@kodi/ui/components/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@kodi/ui/components/avatar'
 import { BrandLogo } from '@kodi/ui/components/brand-logo'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@kodi/ui/components/dropdown-menu'
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarInset, SidebarRail, useSidebar } from '@kodi/ui/components/sidebar'
@@ -164,6 +164,13 @@ function UserMenu() {
               className="flex h-12 w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-[width,height,padding,background-color,color] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
             >
               <Avatar className="h-8 w-8 shrink-0 rounded-lg">
+                {session?.user?.image ? (
+                  <AvatarImage
+                    src={session.user.image}
+                    alt={session.user.name ?? session.user.email ?? 'User'}
+                    className="rounded-lg object-cover"
+                  />
+                ) : null}
                 <AvatarFallback className="rounded-lg text-[10px] font-medium">
                   {initials}
                 </AvatarFallback>
@@ -188,6 +195,13 @@ function UserMenu() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
+                  {session?.user?.image ? (
+                    <AvatarImage
+                      src={session.user.image}
+                      alt={session.user.name ?? session.user.email ?? 'User'}
+                      className="rounded-lg object-cover"
+                    />
+                  ) : null}
                   <AvatarFallback className="rounded-lg text-[10px] font-medium">
                     {initials}
                   </AvatarFallback>

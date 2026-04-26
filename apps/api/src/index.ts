@@ -7,6 +7,8 @@ import { createContext } from './context'
 import { registerMeetingRoutes } from './routes/meeting'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
+import { registerPluginVersionsRoutes } from './routes/plugin-versions'
+import { registerPluginBundleRoutes } from './routes/plugin-bundle'
 import { registerOpenClawEventsRoutes } from './routes/openclaw-events'
 import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 import { db, instances, eq } from '@kodi/db'
@@ -19,6 +21,8 @@ app.use('*', logger())
 registerMeetingRoutes(app)
 registerRecallRoutes(app)
 registerComposioRoutes(app)
+registerPluginVersionsRoutes(app)
+registerPluginBundleRoutes(app)
 registerOpenClawEventsRoutes(app)
 app.use(
   '/trpc/*',

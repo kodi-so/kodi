@@ -1,0 +1,42 @@
+{
+  "name": "@kodi/openclaw-bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"],
+    "compat": {
+      "pluginApi": ">=2026.4.23",
+      "minGatewayVersion": "2026.4.23"
+    },
+    "build": {
+      "openclawVersion": "2026.4.23",
+      "pluginSdkVersion": "2026.4.23"
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:watch": "node esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kodi/shared": "*",
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "@kodi/typescript-config": "*",
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.24.0",
+    "openclaw": "2026.4.23",
+    "typescript": "^5.4.5"
+  }
+}

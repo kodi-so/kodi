@@ -296,7 +296,7 @@ export const chatRouter = router({
           userId: ctx.session.user.id,
           role: 'user',
           content: input.message,
-          status: 'sent',
+          status: 'pending',
         })
         .returning()
 
@@ -357,8 +357,14 @@ export const chatRouter = router({
         })
       }
 
+      const [sentUserMessage] = await ctx.db
+        .update(chatMessages)
+        .set({ status: 'sent' })
+        .where(eq(chatMessages.id, userMessage.id))
+        .returning()
+
       return {
-        userMessage,
+        userMessage: sentUserMessage ?? { ...userMessage, status: 'sent' },
         assistantMessage,
         threadRootMessageId: effectiveThreadRootMessageId,
       }

@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Sparkles } from 'lucide-react'
+import { ArrowRight, Check, Play, Sparkles } from 'lucide-react'
 import { Badge } from '@kodi/ui/components/badge'
 import { BrandLogo } from '@kodi/ui/components/brand-logo'
 import { Button } from '@kodi/ui/components/button'
@@ -27,7 +27,28 @@ const flow = [
   },
 ]
 
-const tools = ['Zoom', 'Google Meet', 'Slack', 'Linear', 'Notion', 'HubSpot']
+const integrations = [
+  { name: 'Slack', slug: 'slack' },
+  { name: 'Linear', slug: 'linear' },
+  { name: 'Notion', slug: 'notion' },
+  { name: 'Zoom', slug: 'zoom' },
+  { name: 'GitHub', slug: 'github' },
+  { name: 'HubSpot', slug: 'hubspot' },
+  { name: 'Jira', slug: 'jira' },
+  { name: 'Asana', slug: 'asana' },
+  { name: 'Salesforce', slug: 'salesforce' },
+  { name: 'Figma', slug: 'figma' },
+  { name: 'ClickUp', slug: 'clickup' },
+  { name: 'Google Meet', slug: 'googlemeet' },
+  { name: 'Discord', slug: 'discord' },
+  { name: 'Airtable', slug: 'airtable' },
+  { name: 'Confluence', slug: 'confluence' },
+  { name: 'Zendesk', slug: 'zendesk' },
+  { name: 'Drive', slug: 'googledrive' },
+  { name: 'Gmail', slug: 'gmail' },
+  { name: 'Trello', slug: 'trello' },
+  { name: 'Monday', slug: 'mondaydotcom' },
+]
 
 type DemoMessage =
   | { role: 'user'; initials: string; content: string }
@@ -64,6 +85,8 @@ const agentActions = [
 
 export default function HomePage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '#'
+  // Set NEXT_PUBLIC_DEMO_VIDEO_URL to a Loom, YouTube, or Vimeo embed URL to enable the video
+  const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? null
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -147,82 +170,50 @@ export default function HomePage() {
                     Q2 Planning sync
                   </p>
                 </div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  Demo video
+                </p>
               </div>
-              <span className="flex items-center gap-1.5 rounded-full border border-brand-line bg-brand-elevated px-3 py-1 text-xs text-muted-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand-success" />
-                live
-              </span>
-            </div>
-
-            {/* Messages */}
-            <div className="mt-3 rounded-[1.4rem] border border-brand-line bg-background">
-              <div className="px-2 py-2">
-                {demoMessages.map((message, i) => (
-                  <div key={i} className="px-3 py-2.5">
-                    <div className="flex items-start gap-2.5">
-                      <div
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-semibold ${
-                          message.role === 'assistant'
-                            ? 'bg-accent text-foreground'
-                            : 'bg-brand-info-soft text-brand-info'
-                        }`}
-                      >
-                        {message.role === 'assistant' ? 'K' : message.initials}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-foreground">
-                          {message.role === 'assistant' ? 'Kodi' : 'You'}
-                        </p>
-                        <p className="mt-0.5 text-[13px] leading-5 text-foreground">
-                          {message.content}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Agent action receipts */}
-                <div className="mx-3 mb-2 mt-1 space-y-1.5 rounded-xl border border-brand-line bg-brand-elevated p-3">
-                  {agentActions.map((action) => (
-                    <div
-                      key={action}
-                      className="flex items-center gap-2 text-[12px] text-muted-foreground"
-                    >
-                      <Check size={11} className="shrink-0 text-brand-success" />
-                      {action}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Input bar */}
-            <div className="mt-3 flex items-center gap-2 rounded-xl border border-brand-line bg-background px-3 py-2.5">
-              <p className="flex-1 text-[13px] text-muted-foreground">
-                Message Kodi
-              </p>
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary">
-                <ArrowRight size={13} className="text-primary-foreground" />
-              </div>
-            </div>
+            )}
           </div>
         </section>
 
-        {/* INTEGRATION STRIP */}
+        {/* INTEGRATIONS CAROUSEL */}
         <section className="border-t border-border/80 py-10">
           <p className="text-center text-xs uppercase tracking-[0.18em] text-muted-foreground">
             Works with your stack
           </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-            {tools.map((tool) => (
-              <span
-                key={tool}
-                className="rounded-full border border-brand-line bg-card/70 px-4 py-1.5 text-sm text-muted-foreground"
-              >
-                {tool}
-              </span>
-            ))}
+
+          <div className="group relative mt-6 overflow-hidden">
+            {/* Fade edges */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-background to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-background to-transparent" />
+
+            <div className="flex animate-[marquee_40s_linear_infinite] gap-3 group-hover:[animation-play-state:paused]">
+              {[...integrations, ...integrations].map((integration, i) => (
+                <div
+                  key={i}
+                  className="flex shrink-0 items-center gap-2.5 rounded-full border border-brand-line bg-card/80 px-5 py-2.5"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://cdn.simpleicons.org/${integration.slug}`}
+                    alt={integration.name}
+                    width={16}
+                    height={16}
+                    className="h-4 w-4 opacity-60 grayscale"
+                  />
+                  <span className="whitespace-nowrap text-sm text-muted-foreground">
+                    {integration.name}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
+
+          <p className="mt-5 text-center text-xs text-muted-foreground">
+            ...and 200+ more integrations
+          </p>
         </section>
 
         {/* HOW IT WORKS */}
@@ -243,7 +234,9 @@ export default function HomePage() {
             {flow.map((item, index) => (
               <div
                 key={item.label}
-                className="space-y-3 border-t border-border/70 py-6 lg:border-l lg:border-t-0 lg:px-8 lg:py-0 first:lg:border-l-0 first:lg:pl-0"
+                className={`space-y-3 border-t border-border/70 py-6 lg:border-t-0 lg:py-0 ${
+                  index > 0 ? 'lg:border-l lg:pl-8' : 'lg:pr-8'
+                }`}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -288,13 +281,15 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <BrandLogo size={24} />
-              <span className="text-sm text-muted-foreground">© 2025 Kodi</span>
+              <span className="text-sm text-muted-foreground">
+                © {new Date().getFullYear()} Kodi
+              </span>
             </div>
             <div className="flex gap-6 text-sm text-muted-foreground">
-              <a href="#" className="transition-colors hover:text-foreground">
+              <a href="/privacy" className="transition-colors hover:text-foreground">
                 Privacy
               </a>
-              <a href="#" className="transition-colors hover:text-foreground">
+              <a href="/terms" className="transition-colors hover:text-foreground">
                 Terms
               </a>
             </div>

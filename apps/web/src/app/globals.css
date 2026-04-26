@@ -28,3 +28,12 @@
     color: hsl(var(--foreground));
   }
 }
+
+@keyframes marquee {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: -50% 0;
+  }
+}

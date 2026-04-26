@@ -21,6 +21,21 @@ const requiredChatSchema: RequiredSchemaObject[] = [
   },
 ]
 
+const requiredOrgSchema: RequiredSchemaObject[] = [
+  {
+    kind: 'column',
+    tableName: 'organizations',
+    columnName: 'image',
+    migration: '0028_org_image_and_status.sql',
+  },
+  {
+    kind: 'column',
+    tableName: 'organizations',
+    columnName: 'status',
+    migration: '0028_org_image_and_status.sql',
+  },
+]
+
 const requiredVoiceSchema: RequiredSchemaObject[] = [
   {
     kind: 'column',
@@ -80,7 +95,7 @@ function buildMissingSchemaError(missing: RequiredSchemaObject[]) {
 export async function ensureApiSchemaReadiness() {
   const missing: RequiredSchemaObject[] = []
 
-  for (const item of [...requiredChatSchema, ...requiredVoiceSchema]) {
+  for (const item of [...requiredChatSchema, ...requiredVoiceSchema, ...requiredOrgSchema]) {
     const exists =
       item.kind === 'table'
         ? await tableExists(item.tableName)

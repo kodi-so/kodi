@@ -157,7 +157,6 @@ export default function HomePage() {
 
           {/* DEMO PANEL */}
           <div className="kodi-panel-surface rounded-[2rem] border border-brand-line p-4 shadow-brand-panel">
-
             {/* Chat header */}
             <div className="flex items-center justify-between rounded-[1.4rem] border border-brand-line bg-background px-4 py-3">
               <div className="flex items-center gap-2.5">
@@ -174,7 +173,92 @@ export default function HomePage() {
                   Demo video
                 </p>
               </div>
-            )}
+              <div className="rounded-full border border-brand-line px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Live
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {demoVideoUrl ? (
+                <div className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-background">
+                  <div className="flex items-center gap-2 border-b border-brand-line px-4 py-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    <Play size={12} className="text-primary" />
+                    Watch Kodi in action
+                  </div>
+                  <div className="aspect-video bg-card">
+                    <iframe
+                      src={demoVideoUrl}
+                      title="Kodi demo video"
+                      className="h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
+                  <div className="space-y-3">
+                    {demoMessages.map((message, index) => (
+                      <div
+                        key={`${message.role}-${index}`}
+                        className={`flex gap-3 ${
+                          message.role === 'assistant' ? '' : 'justify-end'
+                        }`}
+                      >
+                        {message.role === 'assistant' ? (
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-semibold text-foreground">
+                            K
+                          </div>
+                        ) : null}
+
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${
+                            message.role === 'assistant'
+                              ? 'bg-card text-foreground'
+                              : 'bg-foreground text-background'
+                          }`}
+                        >
+                          {message.role === 'user' ? (
+                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">
+                              {message.initials}
+                            </div>
+                          ) : null}
+                          <p>{message.content}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Agent actions
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">
+                      Kodi keeps execution moving after the meeting.
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-border/80 bg-card/70">
+                    3 completed
+                  </Badge>
+                </div>
+
+                <ul className="mt-4 space-y-2.5">
+                  {agentActions.map((action) => (
+                    <li
+                      key={action}
+                      className="flex items-center gap-2.5 rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 text-sm text-foreground"
+                    >
+                      <Check size={14} className="shrink-0 text-primary" />
+                      <span>{action}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </section>
 

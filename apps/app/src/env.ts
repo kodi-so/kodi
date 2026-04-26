@@ -67,13 +67,16 @@ const envSchema = z.object({
 
 const _env = envSchema.safeParse(process.env)
 
-if (!_env.success) {
+// During `next build`, Next.js statically evaluates all route modules but
+// real env vars aren't present. Skip the throw so the build succeeds —
+// missing vars will still blow up at runtime when the route is actually called.
+if (!_env.success && process.env.NEXT_PHASE !== 'phase-production-build') {
   console.error('❌ Invalid environment variables:')
   console.error(_env.error.flatten().fieldErrors)
   throw new Error('Invalid environment variables — see above for details')
 }
 
-export const env = _env.data
+export const env = (_env.data ?? {}) as z.infer<typeof envSchema>
 
 // ── Typed accessors for optional vars ─────────────────────────────────────
 // These throw at call-time (not startup) when a feature tries to use a

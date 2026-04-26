@@ -11,13 +11,15 @@ import {
   Check,
   LogOut,
   ChevronsUpDown,
+  PanelLeft,
+  Plus,
 } from 'lucide-react'
 import { signOut, useSession } from '@/lib/auth-client'
 import { useOrg } from '@/lib/org-context'
 import { Avatar, AvatarFallback } from '@kodi/ui/components/avatar'
 import { BrandLogo } from '@kodi/ui/components/brand-logo'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@kodi/ui/components/dropdown-menu'
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarInset, SidebarRail, SidebarTrigger, useSidebar } from '@kodi/ui/components/sidebar'
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarInset, SidebarRail, useSidebar } from '@kodi/ui/components/sidebar'
 
 const navItems = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
@@ -26,29 +28,87 @@ const navItems = [
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
 ]
 
+function OrgAvatar({ org, size = 'sm' }: { org: { orgName: string; orgImage?: string | null }; size?: 'sm' | 'md' }) {
+  const initial = org.orgName[0]?.toUpperCase() ?? 'K'
+  const cls = size === 'md'
+    ? 'flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-sidebar-primary text-sidebar-primary-foreground'
+    : 'flex size-6 shrink-0 items-center justify-center rounded-md border overflow-hidden'
+
+  if (org.orgImage) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={org.orgImage} alt={org.orgName} className={cls + ' object-cover'} />
+    )
+  }
+  return (
+    <div className={cls}>
+      <span className={size === 'md' ? 'text-xs font-bold' : 'text-[10px] font-bold'}>{initial}</span>
+    </div>
+  )
+}
+
 function OrgSwitcher() {
   const { orgs, activeOrg, setActiveOrg } = useOrg()
-  const { isMobile } = useSidebar()
+  const router = useRouter()
 
   if (orgs.length === 0) return null
+
+  const OrgDropdownContent = (
+    <DropdownMenuContent
+      className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+      align="start"
+      side="bottom"
+      sideOffset={4}
+    >
+      <DropdownMenuLabel className="text-xs text-muted-foreground">
+        Workspaces
+      </DropdownMenuLabel>
+      {orgs.map((org) => (
+        <DropdownMenuItem
+          key={org.orgId}
+          onClick={() => setActiveOrg(org)}
+          className="gap-2 p-2"
+        >
+          <OrgAvatar org={org} size="sm" />
+          {org.orgName}
+          {org.orgId === activeOrg?.orgId && (
+            <Check className="ml-auto h-4 w-4 shrink-0" />
+          )}
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        className="gap-2 p-2"
+        onClick={() => router.push('/new-workspace')}
+      >
+        <div className="flex size-6 items-center justify-center rounded-md border border-dashed">
+          <Plus className="size-3" />
+        </div>
+        <span>Create workspace</span>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  )
 
   if (orgs.length === 1 && activeOrg) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton
-            size="lg"
-            className="cursor-default data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-          >
-            <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-              <span className="text-xs font-bold">
-                {activeOrg.orgName[0]?.toUpperCase() ?? 'K'}
-              </span>
-            </div>
-            <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="truncate font-medium">{activeOrg.orgName}</span>
-            </div>
-          </SidebarMenuButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuButton
+                size="lg"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                tooltip={activeOrg.orgName}
+              >
+                <OrgAvatar org={activeOrg} size="md" />
+                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                  <span className="truncate font-medium">{activeOrg.orgName}</span>
+                </div>
+                <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+              </SidebarMenuButton>
+            </DropdownMenuTrigger>
+            {OrgDropdownContent}
+          </DropdownMenu>
         </SidebarMenuItem>
       </SidebarMenu>
     )
@@ -62,12 +122,9 @@ function OrgSwitcher() {
             <SidebarMenuButton
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              tooltip={activeOrg?.orgName ?? 'Workspaces'}
             >
-              <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <span className="text-xs font-bold">
-                  {activeOrg?.orgName[0]?.toUpperCase() ?? 'K'}
-                </span>
-              </div>
+              <OrgAvatar org={activeOrg ?? { orgName: 'K' }} size="md" />
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-medium">
                   {activeOrg?.orgName ?? 'Select workspace'}
@@ -76,33 +133,7 @@ function OrgSwitcher() {
               <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-            align="start"
-            side="bottom"
-            sideOffset={4}
-          >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Workspaces
-            </DropdownMenuLabel>
-            {orgs.map((org) => (
-              <DropdownMenuItem
-                key={org.orgId}
-                onClick={() => setActiveOrg(org)}
-                className="gap-2 p-2"
-              >
-                <div className="flex size-6 items-center justify-center rounded-md border">
-                  <span className="text-[10px] font-bold">
-                    {org.orgName[0]?.toUpperCase() ?? '?'}
-                  </span>
-                </div>
-                {org.orgName}
-                {org.orgId === activeOrg?.orgId && (
-                  <Check className="ml-auto h-4 w-4 shrink-0" />
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
+          {OrgDropdownContent}
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
@@ -192,13 +223,14 @@ function UserMenu() {
 
 function AppSidebar() {
   const pathname = usePathname()
+  const { toggleSidebar } = useSidebar()
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <Link
           href="/chat"
-          className="flex h-12 items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-2 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+          className="flex h-12 items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-2 group-data-[collapsible=icon]:justify-center"
         >
           <span className="flex aspect-square size-8 shrink-0 items-center justify-center">
             <BrandLogo
@@ -213,6 +245,19 @@ function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={toggleSidebar} tooltip="Toggle sidebar">
+                  <PanelLeft />
+                  <span>Collapse</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <SidebarGroup>
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -251,4 +296,4 @@ function AppSidebar() {
   )
 }
 
-export { AppSidebar, SidebarProvider, SidebarInset, SidebarTrigger }
+export { AppSidebar, SidebarProvider, SidebarInset }

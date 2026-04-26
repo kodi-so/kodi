@@ -1,16 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { SettingsLayout } from '../_components/settings-layout'
-import { Building2 } from 'lucide-react'
+import { Building2, Trash2, Upload } from 'lucide-react'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
+import { Avatar, AvatarFallback, AvatarImage } from '@kodi/ui/components/avatar'
 import { Badge } from '@kodi/ui/components/badge'
 import { Button } from '@kodi/ui/components/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
 import { Input } from '@kodi/ui/components/input'
 import { Skeleton } from '@kodi/ui/components/skeleton'
+import { DeleteOrgDialog } from './_components/delete-org-dialog'
 
 export default function GeneralSettingsPage() {
   const { activeOrg, refreshOrgs } = useOrg()
@@ -18,6 +20,15 @@ export default function GeneralSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Photo state
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [photoSaved, setPhotoSaved] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   useEffect(() => {
     if (activeOrg) setName(activeOrg.orgName)
@@ -58,6 +69,49 @@ export default function GeneralSettingsPage() {
     }
   }
 
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhoto(true)
+    setPhotoError(null)
+    setPhotoSaved(false)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/upload/org-image?orgId=${currentOrg.orgId}`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? 'Upload failed')
+      }
+      await refreshOrgs()
+      setPhotoSaved(true)
+      setTimeout(() => setPhotoSaved(false), 3000)
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploadingPhoto(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setUploadingPhoto(true)
+    setPhotoError(null)
+    try {
+      await trpc.org.update.mutate({ orgId: currentOrg.orgId, image: null })
+      await refreshOrgs()
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Failed to remove photo')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
+  const orgInitial = currentOrg.orgName[0]?.toUpperCase() ?? 'W'
+
   return (
     <SettingsLayout>
       <div className="mx-auto max-w-3xl space-y-8">
@@ -75,6 +129,82 @@ export default function GeneralSettingsPage() {
           </p>
         </div>
 
+        {/* Workspace photo */}
+        <Card className="border-border">
+          <CardHeader className="space-y-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base font-semibold text-foreground">
+                Workspace photo
+              </CardTitle>
+              {!isOwner && <Badge variant="neutral">Read only</Badge>}
+            </div>
+            <CardDescription className="text-muted-foreground">
+              A logo or photo for this workspace.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16 rounded-xl">
+                {currentOrg.orgImage && (
+                  <AvatarImage src={currentOrg.orgImage} alt={currentOrg.orgName} className="rounded-xl object-cover" />
+                )}
+                <AvatarFallback className="rounded-xl text-lg font-semibold">
+                  {orgInitial}
+                </AvatarFallback>
+              </Avatar>
+
+              {isOwner && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploadingPhoto}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload size={14} className="mr-1.5" />
+                      {uploadingPhoto ? 'Uploading…' : 'Upload photo'}
+                    </Button>
+                    {currentOrg.orgImage && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={uploadingPhoto}
+                        onClick={() => void handleRemovePhoto()}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                    {photoSaved && (
+                      <span className="text-sm font-medium text-brand-success">Saved</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    JPEG, PNG, WebP or GIF · max 2 MB
+                  </p>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => void handlePhotoChange(e)}
+              />
+            </div>
+
+            {photoError && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertDescription>{photoError}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Workspace name */}
         <Card className="border-border">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
@@ -89,7 +219,7 @@ export default function GeneralSettingsPage() {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
               <div>
                 <Input
                   type="text"
@@ -128,6 +258,45 @@ export default function GeneralSettingsPage() {
             </form>
           </CardContent>
         </Card>
+
+        {/* Danger zone */}
+        {isOwner && (
+          <Card className="border-destructive/40">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-base font-semibold text-destructive">
+                Danger zone
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Irreversible actions for this workspace.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Delete workspace</p>
+                  <p className="text-xs text-muted-foreground">
+                    Permanently deletes this workspace, cancels its subscription, and tears down all infrastructure.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 size={14} className="mr-1.5" />
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <DeleteOrgDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          orgName={currentOrg.orgName}
+          orgId={currentOrg.orgId}
+        />
       </div>
     </SettingsLayout>
   )

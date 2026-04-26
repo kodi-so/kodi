@@ -142,7 +142,6 @@ function OrgSwitcher() {
 
 function UserMenu() {
   const { data: session } = useSession()
-  const { isMobile } = useSidebar()
   const router = useRouter()
 
   const initials =
@@ -160,9 +159,9 @@ function UserMenu() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            <button
+              type="button"
+              className="flex h-12 w-full items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 shrink-0 rounded-lg">
                 <AvatarFallback className="rounded-lg text-[10px] font-medium">
@@ -178,7 +177,7 @@ function UserMenu() {
                 </span>
               </div>
               <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
-            </SidebarMenuButton>
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
@@ -228,23 +227,19 @@ function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild tooltip="Kodi">
-              <Link href="/chat">
-                <span className="flex aspect-square size-8 shrink-0 items-center justify-center">
-                  <BrandLogo
-                    size={28}
-                    showWordmark={false}
-                    className="size-8"
-                    markClassName="size-8"
-                  />
-                </span>
-                <span className="font-semibold">Kodi</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <div className="flex h-12 items-center gap-2 rounded-md px-2">
+          <span className="flex size-8 shrink-0 items-center justify-center">
+            <BrandLogo
+              size={28}
+              showWordmark={false}
+              className="size-8"
+              markClassName="size-8"
+            />
+          </span>
+          <span className="truncate text-sm font-semibold group-data-[collapsible=icon]:hidden">
+            Kodi
+          </span>
+        </div>
       </SidebarHeader>
 
       <SidebarContent>

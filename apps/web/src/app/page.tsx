@@ -1,4 +1,12 @@
-import { ArrowRight, Check, Play, Sparkles } from 'lucide-react'
+import {
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  Play,
+  Sparkles,
+} from 'lucide-react'
 import { Badge } from '@kodi/ui/components/badge'
 import { BrandLogo } from '@kodi/ui/components/brand-logo'
 import { Button } from '@kodi/ui/components/button'
@@ -50,37 +58,39 @@ const integrations = [
   { name: 'Monday', slug: 'mondaydotcom' },
 ]
 
-type DemoMessage =
-  | { role: 'user'; initials: string; content: string }
-  | { role: 'assistant'; content: string }
+const recapOutcomes = [
+  'API migration remains on Marcus, with engineering review on Thursday.',
+  'Customer rollout stays tied to the April 28 cutover if QA signs off.',
+  'Kodi should handle ticket creation, Slack recap, and owner follow-up immediately.',
+]
 
-const demoMessages: DemoMessage[] = [
+const recapDecisions = [
   {
-    role: 'user',
-    initials: 'JL',
-    content: 'Who owns the API migration timeline?',
+    summary: 'Ship the migration behind the staged rollout plan.',
+    context: 'Keeps support load contained while QA closes the final edge-case pass.',
   },
   {
-    role: 'assistant',
-    content:
-      "That's Marcus — assigned in the March 14 sync based on the current board. Want me to create a tracking ticket and loop him in?",
-  },
-  {
-    role: 'user',
-    initials: 'JL',
-    content: 'Yes, do it',
-  },
-  {
-    role: 'assistant',
-    content:
-      "Done. Ticket created and assigned to Marcus, recap drafted, and he's been notified.",
+    summary: 'Route ownership through Marcus with PM visibility in Linear.',
+    context: 'Lets engineering move without waiting on a second coordination pass.',
   },
 ]
 
 const agentActions = [
-  'Ticket created and assigned to Marcus',
-  'Recap drafted and ready to send',
-  'Marcus notified',
+  {
+    title: 'Linear issue created',
+    meta: 'Assigned to Marcus • Due Apr 18',
+    status: 'Queued',
+  },
+  {
+    title: 'Slack recap drafted',
+    meta: '#product-eng • Ready to send',
+    status: 'Ready',
+  },
+  {
+    title: 'Owner follow-up sent',
+    meta: 'Marcus notified with next steps',
+    status: 'Delivered',
+  },
 ]
 
 export default function HomePage() {
@@ -157,24 +167,27 @@ export default function HomePage() {
 
           {/* DEMO PANEL */}
           <div className="kodi-panel-surface rounded-[2rem] border border-brand-line p-4 shadow-brand-panel">
-            {/* Chat header */}
             <div className="flex items-center justify-between rounded-[1.4rem] border border-brand-line bg-background px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-semibold text-foreground">
-                  K
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-[13px] font-semibold text-foreground">
+                  <BrandLogo
+                    size={20}
+                    showWordmark={false}
+                    className="size-5"
+                    markClassName="size-5"
+                  />
                 </div>
                 <div>
-                  <p className="text-[14px] font-semibold text-foreground">Kodi</p>
+                  <p className="text-[14px] font-semibold text-foreground">
+                    Meeting recap
+                  </p>
                   <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                    Q2 Planning sync
+                    Q2 planning sync
                   </p>
                 </div>
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  Demo video
-                </p>
               </div>
-              <div className="rounded-full border border-brand-line px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                Live
+              <div className="rounded-full border border-brand-line bg-card/70 px-2.5 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Ready
               </div>
             </div>
 
@@ -183,7 +196,7 @@ export default function HomePage() {
                 <div className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-background">
                   <div className="flex items-center gap-2 border-b border-brand-line px-4 py-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
                     <Play size={12} className="text-primary" />
-                    Watch Kodi in action
+                    Watch the recap flow
                   </div>
                   <div className="aspect-video bg-card">
                     <iframe
@@ -195,68 +208,111 @@ export default function HomePage() {
                     />
                   </div>
                 </div>
-              ) : (
-                <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
-                  <div className="space-y-3">
-                    {demoMessages.map((message, index) => (
-                      <div
-                        key={`${message.role}-${index}`}
-                        className={`flex gap-3 ${
-                          message.role === 'assistant' ? '' : 'justify-end'
-                        }`}
-                      >
-                        {message.role === 'assistant' ? (
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-semibold text-foreground">
-                            K
-                          </div>
-                        ) : null}
+              ) : null}
 
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${
-                            message.role === 'assistant'
-                              ? 'bg-card text-foreground'
-                              : 'bg-foreground text-background'
-                          }`}
-                        >
-                          {message.role === 'user' ? (
-                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">
-                              {message.initials}
-                            </div>
-                          ) : null}
-                          <p>{message.content}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
-                <div className="flex items-center justify-between gap-3">
+              <div className="rounded-[1.5rem] border border-brand-line bg-background p-5">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Agent actions
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Summary
                     </p>
-                    <p className="mt-1 text-sm text-foreground">
-                      Kodi keeps execution moving after the meeting.
+                    <p className="mt-2 max-w-md text-sm leading-7 text-foreground">
+                      Kodi captured the rollout plan, confirmed ownership, and
+                      packaged the next steps while the team was still leaving the call.
                     </p>
                   </div>
-                  <Badge variant="outline" className="border-border/80 bg-card/70">
-                    3 completed
+                  <Badge
+                    variant="outline"
+                    className="border-border/80 bg-card/70 text-xs"
+                  >
+                    3 key outcomes
                   </Badge>
                 </div>
 
                 <ul className="mt-4 space-y-2.5">
-                  {agentActions.map((action) => (
+                  {recapOutcomes.map((outcome) => (
                     <li
-                      key={action}
-                      className="flex items-center gap-2.5 rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 text-sm text-foreground"
+                      key={outcome}
+                      className="flex items-start gap-2.5 rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3 text-sm text-foreground"
                     >
-                      <Check size={14} className="shrink-0 text-primary" />
-                      <span>{action}</span>
+                      <CheckCircle2
+                        size={14}
+                        className="mt-0.5 shrink-0 text-primary"
+                      />
+                      <span>{outcome}</span>
                     </li>
                   ))}
                 </ul>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+                <div className="rounded-[1.5rem] border border-brand-line bg-background p-5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-card text-muted-foreground">
+                      <FileText size={15} />
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                        Decisions
+                      </p>
+                      <p className="text-sm text-foreground">What Kodi locked in</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {recapDecisions.map((decision) => (
+                      <div
+                        key={decision.summary}
+                        className="rounded-2xl border border-border/70 bg-card/70 px-4 py-3"
+                      >
+                        <p className="text-sm font-medium text-foreground">
+                          {decision.summary}
+                        </p>
+                        <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                          {decision.context}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.5rem] border border-brand-line bg-background p-5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-card text-muted-foreground">
+                      <ClipboardList size={15} />
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                        Kodi took on the work
+                      </p>
+                      <p className="text-sm text-foreground">Follow-through in motion</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {agentActions.map((action) => (
+                      <div
+                        key={action.title}
+                        className="rounded-2xl border border-border/70 bg-card/70 px-4 py-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-foreground">
+                            {action.title}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className="border-border/80 bg-background text-[11px]"
+                          >
+                            {action.status}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs leading-6 text-muted-foreground">
+                          {action.meta}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -23,18 +23,15 @@ export function createHealthState(): HealthState {
   }
 }
 
-/**
- * Registers `GET /plugins/kodi-bridge/health`. Real route registration
- * with OpenClaw lands in M2-T5 (KOD-366); this helper is the body-builder
- * that route reuses.
- */
-export function buildHealthBody(state: HealthState, identity: Identity): {
+export type HealthBody = {
   status: HealthState['status']
   plugin_version: string
   uptime_s: number
   agent_count: number
   last_heartbeat_sent_at: number | null
-} {
+}
+
+export function buildHealthBody(state: HealthState, identity: Identity): HealthBody {
   return {
     status: state.status,
     plugin_version: identity.plugin_version,
@@ -45,16 +42,81 @@ export function buildHealthBody(state: HealthState, identity: Identity): {
 }
 
 /**
- * Marker function — KOD-366 fills in the actual `api.registerHttpRoute`
- * call. Kept here so the bridge-core public surface stays cohesive.
+ * Sliding-window rate limiter — 60 req/min by default. Used because the
+ * OpenClaw plugin SDK does not expose a built-in rate-limit option on
+ * registerHttpRoute. Per-IP keys; falls back to a single global bucket
+ * when the source IP can't be determined.
+ */
+export type RateLimiter = {
+  consume: (key: string) => boolean
+}
+
+export function createRateLimiter(limit = 60, windowMs = 60_000): RateLimiter {
+  const buckets = new Map<string, number[]>()
+  return {
+    consume(key: string) {
+      const now = Date.now()
+      const cutoff = now - windowMs
+      const hits = buckets.get(key) ?? []
+      // drop stale hits (cheaper than re-allocating)
+      let i = 0
+      while (i < hits.length && hits[i]! <= cutoff) i += 1
+      const live = i === 0 ? hits : hits.slice(i)
+      if (live.length >= limit) {
+        buckets.set(key, live)
+        return false
+      }
+      live.push(now)
+      buckets.set(key, live)
+      return true
+    },
+  }
+}
+
+/**
+ * Registers `GET /plugins/kodi-bridge/health`.
+ *
+ * No auth on this route — health is meant to be probed by any local
+ * orchestrator (cloud-init, the updater's pre-swap probe, ops scripts).
+ * `auth: 'plugin'` is the SDK enum value that lets us own the gating;
+ * we accept everything and let the rate limiter handle abuse.
  */
 export function registerHealthRoute(
   api: OpenClawPluginApi,
   state: HealthState,
   identity: Identity,
+  limiter: RateLimiter = createRateLimiter(),
 ): void {
-  // KOD-366: api.registerHttpRoute('GET', '/plugins/kodi-bridge/health', () => buildHealthBody(state, identity))
-  void api
-  void state
-  void identity
+  api.registerHttpRoute({
+    path: '/plugins/kodi-bridge/health',
+    auth: 'plugin',
+    handler: (req, res) => {
+      // Method check — registerHttpRoute is path-based; restrict to GET.
+      if (req.method && req.method !== 'GET') {
+        res.statusCode = 405
+        res.setHeader('Allow', 'GET')
+        res.end()
+        return true
+      }
+
+      // Rate-limit per source IP. Express-ish reverse-proxies inject
+      // x-forwarded-for; fall back to the socket's remoteAddress.
+      const forwarded = (req.headers['x-forwarded-for'] as string | undefined) ?? ''
+      const sourceIp =
+        forwarded.split(',')[0]?.trim() ||
+        req.socket.remoteAddress ||
+        'unknown'
+      if (!limiter.consume(sourceIp)) {
+        res.statusCode = 429
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'rate_limited' }))
+        return true
+      }
+
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify(buildHealthBody(state, identity)))
+      return true
+    },
+  })
 }

@@ -3,6 +3,7 @@ import { loadConfig } from './config'
 import { buildIdentity, type Identity } from './identity'
 import { createKodiClient, type KodiClient } from './kodi-client'
 import { createHealthState, registerHealthRoute, type HealthState } from './health'
+import { emitPluginStarted } from './started-event'
 
 export type BridgeCore = {
   identity: Identity
@@ -46,8 +47,21 @@ export const bridgeCoreModule: KodiBridgeModule = {
 
     const bridgeCore: BridgeCore = { identity, kodiClient, health }
     ctx.bridgeCore = bridgeCore
+
+    // Fire-and-forget the startup beacon. Never throws — a Kodi outage at
+    // boot must not break the plugin load. Delivery is retried inside the
+    // KodiClient (5xx, 3 attempts); the M3 event-bus replaces this stub
+    // with a durable outbox-backed flow.
+    void emitPluginStarted({ kodiClient, identity })
   },
 }
 
 export type { Identity, KodiClient, HealthState }
 export { loadConfig, createKodiClient, buildIdentity, createHealthState, registerHealthRoute }
+export {
+  emitPluginStarted,
+  buildPluginStartedEnvelope,
+  PLUGIN_STARTED_EVENT_KIND,
+  KODI_BRIDGE_PROTOCOL_VERSION,
+  EVENTS_INGEST_PATH,
+} from './started-event'

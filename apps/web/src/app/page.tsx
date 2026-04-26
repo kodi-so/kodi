@@ -50,6 +50,39 @@ const integrations = [
   { name: 'Monday', slug: 'mondaydotcom' },
 ]
 
+type DemoMessage =
+  | { role: 'user'; initials: string; content: string }
+  | { role: 'assistant'; content: string }
+
+const demoMessages: DemoMessage[] = [
+  {
+    role: 'user',
+    initials: 'JL',
+    content: 'Who owns the API migration timeline?',
+  },
+  {
+    role: 'assistant',
+    content:
+      "That's Marcus — assigned in the March 14 sync based on the current board. Want me to create a tracking ticket and loop him in?",
+  },
+  {
+    role: 'user',
+    initials: 'JL',
+    content: 'Yes, do it',
+  },
+  {
+    role: 'assistant',
+    content:
+      "Done. Ticket created and assigned to Marcus, recap drafted, and he's been notified.",
+  },
+]
+
+const agentActions = [
+  'Ticket created and assigned to Marcus',
+  'Recap drafted and ready to send',
+  'Marcus notified',
+]
+
 export default function HomePage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '#'
   // Set NEXT_PUBLIC_DEMO_VIDEO_URL to a Loom, YouTube, or Vimeo embed URL to enable the video
@@ -122,32 +155,20 @@ export default function HomePage() {
             </ul>
           </div>
 
-          {/* VIDEO DEMO PANEL */}
-          <div className="kodi-panel-surface overflow-hidden rounded-[2rem] border border-brand-line shadow-brand-panel">
-            {/* Window chrome */}
-            <div className="flex items-center gap-1.5 border-b border-brand-line bg-background px-4 py-3">
-              <span className="h-2.5 w-2.5 rounded-full bg-brand-line" />
-              <span className="h-2.5 w-2.5 rounded-full bg-brand-line" />
-              <span className="h-2.5 w-2.5 rounded-full bg-brand-line" />
-              <p className="mx-auto pr-[3.25rem] text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                Kodi in action
-              </p>
-            </div>
+          {/* DEMO PANEL */}
+          <div className="kodi-panel-surface rounded-[2rem] border border-brand-line p-4 shadow-brand-panel">
 
-            {demoVideoUrl ? (
-              <div className="aspect-video">
-                <iframe
-                  src={demoVideoUrl}
-                  title="Kodi product demo"
-                  className="h-full w-full border-0"
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            ) : (
-              <div className="flex aspect-video flex-col items-center justify-center gap-4 bg-brand-muted">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-brand-line bg-background shadow-soft">
-                  <Play size={20} className="ml-0.5 text-muted-foreground" />
+            {/* Chat header */}
+            <div className="flex items-center justify-between rounded-[1.4rem] border border-brand-line bg-background px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-[13px] font-semibold text-foreground">
+                  K
+                </div>
+                <div>
+                  <p className="text-[14px] font-semibold text-foreground">Kodi</p>
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Q2 Planning sync
+                  </p>
                 </div>
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   Demo video

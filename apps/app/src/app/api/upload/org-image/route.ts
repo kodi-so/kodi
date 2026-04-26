@@ -3,15 +3,11 @@ import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db, eq, orgMembers, organizations } from '@kodi/db'
 import { uploadObject, deleteObject, keyFromUrl } from '@/lib/r2'
-
-const MAX_SIZE_BYTES = 2 * 1024 * 1024 // 2 MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const
-const EXT: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-}
+import {
+  IMAGE_EXTENSION_BY_UPLOAD_TYPE,
+  MAX_IMAGE_UPLOAD_BYTES,
+  isAllowedImageUploadType,
+} from '@/lib/image-upload'
 
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -39,14 +35,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
+  if (!isAllowedImageUploadType(file.type)) {
     return NextResponse.json(
       { error: 'Only JPEG, PNG, WebP, and GIF images are supported' },
       { status: 400 }
     )
   }
 
-  if (file.size > MAX_SIZE_BYTES) {
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
     return NextResponse.json({ error: 'Image must be under 2 MB' }, { status: 400 })
   }
 
@@ -57,7 +53,7 @@ export async function POST(req: NextRequest) {
   })
 
   const body = Buffer.from(await file.arrayBuffer())
-  const ext = EXT[file.type] ?? 'bin'
+  const ext = IMAGE_EXTENSION_BY_UPLOAD_TYPE[file.type]
   const key = `org-images/${orgId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
   const imageUrl = await uploadObject(key, body, file.type)

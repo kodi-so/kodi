@@ -18,6 +18,7 @@
     "@composio/core": "^0.6.8",
     "@hono/trpc-server": "^0.3.2",
     "@kodi/db": "*",
+    "@kodi/shared": "workspace:*",
     "@trpc/server": "^11.0.0",
     "better-auth": "^1.5.6",
     "hono": "^4.3.4",

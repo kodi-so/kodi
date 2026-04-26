@@ -2,31 +2,25 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2 } from 'lucide-react'
+import { Building2, Check, CreditCard, X } from 'lucide-react'
+import { PLANS, type PlanId } from '@kodi/db/plans'
 import { trpc } from '@/lib/trpc'
 import { useOrg } from '@/lib/org-context'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Button } from '@kodi/ui/components/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@kodi/ui/components/card'
 import { Input } from '@kodi/ui/components/input'
 import { Label } from '@kodi/ui/components/label'
+import { panelCardClass } from '@/lib/brand-styles'
 
-/**
- * New workspace creation flow.
- *
- * Step 1 — Name: user enters a workspace name.
- * Step 2 — Billing: user subscribes (Stripe checkout — TODO: wire up when billing is ready).
- *
- * If the user leaves before completing billing, the org is left in 'pending_billing'
- * status and can be cleaned up. On cancel we immediately delete it.
- */
 export default function NewWorkspacePage() {
   const router = useRouter()
-  const { refreshOrgs, setActiveOrg } = useOrg()
+  const { refreshOrgs } = useOrg()
 
   const [step, setStep] = useState<'name' | 'billing'>('name')
   const [name, setName] = useState('')
   const [creating, setCreating] = useState(false)
+  const [subscribing, setSubscribing] = useState<PlanId | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null)
 
@@ -46,77 +40,125 @@ export default function NewWorkspacePage() {
     }
   }
 
-  async function handleCancelBilling() {
-    // Delete the pending org since the user didn't complete billing
+  async function handleCancel() {
     if (pendingOrgId) {
       try {
-        // orgId required by ownerProcedure
         await trpc.org.delete.mutate({ orgId: pendingOrgId })
       } catch {
-        // Best-effort cleanup — ignore errors
+        // best-effort cleanup
       }
       await refreshOrgs()
     }
     router.replace('/chat')
   }
 
-  async function handleSubscribed() {
-    // Called after a successful Stripe checkout (webhook will activate the org).
-    // For now, activate the org and redirect to provision.
+  async function handleSubscribe(planId: PlanId) {
     if (!pendingOrgId) return
-    await refreshOrgs()
-    // Switch to the new org
-    const orgs = await trpc.org.listMine.query()
-    const newOrg = orgs.find((o) => o.orgId === pendingOrgId)
-    if (newOrg) setActiveOrg(newOrg)
-    router.replace('/provision')
+    setSubscribing(planId)
+    setError(null)
+    try {
+      const result = await trpc.billing.createCheckoutSession.mutate({
+        orgId: pendingOrgId,
+        planId,
+        successPath: '/chat',
+      })
+      if (result.type === 'checkout' && result.url) {
+        window.location.href = result.url
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start checkout')
+      setSubscribing(null)
+    }
   }
 
   if (step === 'billing') {
     return (
       <div className="flex min-h-full items-center justify-center px-4 py-16">
-        <div className="w-full max-w-md space-y-6">
-          <div className="space-y-1 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Subscribe to activate</h1>
+        <div className="w-full max-w-2xl space-y-6">
+          <div className="relative space-y-1 text-center">
+            <button
+              type="button"
+              onClick={() => void handleCancel()}
+              className="absolute right-0 top-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
+              aria-label="Cancel and discard workspace"
+            >
+              <X size={18} />
+            </button>
+            <h1 className="text-2xl font-semibold tracking-tight">Choose a plan</h1>
             <p className="text-sm text-muted-foreground">
-              A subscription is required to provision your new workspace.
+              Subscribe to activate <span className="font-medium text-foreground">{name}</span>
             </p>
           </div>
 
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle className="text-base">Workspace: {name}</CardTitle>
-              <CardDescription>
-                Your workspace has been created and is waiting for a subscription before we provision infrastructure.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* TODO: Replace with Stripe Checkout button when billing is wired up.
-                  Create a Stripe Checkout session via /api/stripe/create-checkout
-                  with orgId={pendingOrgId}, then redirect to the Stripe-hosted page.
-                  On success, the webhook will update org.status = 'active' and
-                  trigger provisioning. */}
-              <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Stripe Checkout integration coming soon.
-                </p>
-                <Button
-                  className="mt-3"
-                  onClick={() => void handleSubscribed()}
-                >
-                  Continue (dev mode — skip billing)
-                </Button>
-              </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-              <Button
-                variant="ghost"
-                className="w-full text-muted-foreground"
-                onClick={() => void handleCancelBilling()}
-              >
-                Cancel and discard workspace
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(Object.entries(PLANS) as [PlanId, (typeof PLANS)[PlanId]][]).map(([planId, plan]) => (
+              <Card key={planId} className={panelCardClass}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span>{plan.name}</span>
+                    <span className="text-lg font-semibold">
+                      ${(plan.monthlyPriceCents / 100).toFixed(2)}
+                      <span className="text-xs font-normal text-muted-foreground">/mo</span>
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <ul className="space-y-1.5 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <Check className="h-3.5 w-3.5 text-indigo-400" />
+                      ${(plan.includedCreditsCents / 100).toFixed(2)} included credits
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-3.5 w-3.5 text-indigo-400" />
+                      ${(plan.defaultSpendingCapCents / 100).toFixed(2)} default spending cap
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-3.5 w-3.5 text-indigo-400" />
+                      {plan.maxMembers} team members
+                    </li>
+                    {plan.byokEnabled && (
+                      <li className="flex items-center gap-2">
+                        <Check className="h-3.5 w-3.5 text-indigo-400" />
+                        Bring your own API keys
+                      </li>
+                    )}
+                  </ul>
+                  <Button
+                    className="w-full"
+                    onClick={() => void handleSubscribe(planId)}
+                    disabled={subscribing !== null}
+                  >
+                    {subscribing === planId ? (
+                      <span className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 animate-pulse" />
+                        Redirecting…
+                      </span>
+                    ) : (
+                      `Subscribe to ${plan.name}`
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Changed your mind?{' '}
+            <button
+              type="button"
+              onClick={() => void handleCancel()}
+              className="underline underline-offset-4 hover:text-foreground transition-colors"
+              disabled={subscribing !== null}
+            >
+              Discard this workspace
+            </button>
+          </p>
         </div>
       </div>
     )

@@ -107,6 +107,7 @@ export async function createCheckout(
   orgId: string,
   stripeCustomerId: string,
   planId: PlanId,
+  successPath?: string,
 ) {
   const plan = PLANS[planId]
   const stripe = getStripe()
@@ -158,7 +159,7 @@ export async function createCheckout(
       { price: STRIPE_USAGE_PRICE_ID },
     ],
     metadata: { orgId, planId },
-    success_url: `${env.APP_URL}/settings/billing?success=true`,
+    success_url: `${env.APP_URL}${successPath ?? '/settings/billing?success=true'}`,
     cancel_url: `${env.APP_URL}/settings/billing?canceled=true`,
   })
 

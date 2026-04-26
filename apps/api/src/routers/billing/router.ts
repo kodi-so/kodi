@@ -16,7 +16,7 @@ export const billingRouter = router({
   }),
 
   createCheckoutSession: ownerProcedure
-    .input(z.object({ planId: z.enum(['pro', 'business']) }))
+    .input(z.object({ planId: z.enum(['pro', 'business']), successPath: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const stripeCustomerId = await ensureStripeCustomer(
         ctx.db,
@@ -29,6 +29,7 @@ export const billingRouter = router({
         ctx.org.id,
         stripeCustomerId,
         input.planId,
+        input.successPath,
       )
 
       if (result.type === 'already_on_plan') {

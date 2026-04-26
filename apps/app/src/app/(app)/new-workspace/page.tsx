@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Check, CreditCard, X } from 'lucide-react'
 import { PLANS, type PlanId } from '@kodi/db/plans'
 import { trpc } from '@/lib/trpc'
@@ -14,7 +14,16 @@ import { Label } from '@kodi/ui/components/label'
 import { panelCardClass } from '@/lib/brand-styles'
 
 export default function NewWorkspacePage() {
+  return (
+    <Suspense>
+      <NewWorkspacePageInner />
+    </Suspense>
+  )
+}
+
+function NewWorkspacePageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { refreshOrgs } = useOrg()
 
   const [step, setStep] = useState<'name' | 'billing'>('name')
@@ -23,6 +32,17 @@ export default function NewWorkspacePage() {
   const [subscribing, setSubscribing] = useState<PlanId | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null)
+
+  // Restore billing step after Stripe Checkout abandonment (cancel_url brings user back with ?orgId=&name=)
+  useEffect(() => {
+    const orgId = searchParams.get('orgId')
+    const restoredName = searchParams.get('name')
+    if (orgId) {
+      setPendingOrgId(orgId)
+      if (restoredName) setName(restoredName)
+      setStep('billing')
+    }
+  }, [searchParams])
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -61,6 +81,7 @@ export default function NewWorkspacePage() {
         orgId: pendingOrgId,
         planId,
         successPath: '/chat',
+        cancelPath: `/new-workspace?orgId=${pendingOrgId}&name=${encodeURIComponent(name)}`,
       })
       if (result.type === 'checkout' && result.url) {
         window.location.href = result.url

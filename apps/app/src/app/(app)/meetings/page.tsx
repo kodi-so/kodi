@@ -225,11 +225,11 @@ export default function MeetingsPage() {
 
         {/* Page header */}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Meetings
             </h1>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Summaries, transcripts, and follow-ups from every conversation
               Kodi has joined.
             </p>

@@ -1,5 +1,6 @@
 import { pgTable, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
+import { subscriptions, organizationSettings } from './billing'
 
 export const orgMemberRoleEnum = pgEnum('org_member_role', ['owner', 'member'])
 export const instanceStatusEnum = pgEnum('instance_status', [
@@ -19,6 +20,9 @@ export const organizations = pgTable('organizations', {
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   ownerId: text('owner_id').notNull(), // references user.id (Better-Auth)
+  stripeCustomerId: text('stripe_customer_id'),
+  image: text('image'), // workspace logo — data URL or external URL
+  status: text('status').notNull().default('active'), // 'active' | 'pending_billing'
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
@@ -63,10 +67,15 @@ export const instances = pgTable('instances', {
 })
 
 // Drizzle relations
-export const organizationsRelations = relations(organizations, ({ many }) => ({
-  members: many(orgMembers),
-  instances: many(instances),
-}))
+export const organizationsRelations = relations(
+  organizations,
+  ({ many, one }) => ({
+    members: many(orgMembers),
+    instances: many(instances),
+    subscription: one(subscriptions),
+    settings: one(organizationSettings),
+  }),
+)
 
 export const orgMembersRelations = relations(orgMembers, ({ one }) => ({
   org: one(organizations, {

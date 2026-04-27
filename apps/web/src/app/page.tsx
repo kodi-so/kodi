@@ -2,9 +2,6 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
-  ClipboardList,
-  FileText,
-  Play,
   Sparkles,
 } from 'lucide-react'
 import { Badge } from '@kodi/ui/components/badge'
@@ -58,20 +55,20 @@ const integrations = [
   { name: 'Monday', slug: 'mondaydotcom' },
 ]
 
-const recapOutcomes = [
-  'Marcus owns the migration',
-  'Apr 28 rollout stays on track',
-  'Kodi queued the follow-through',
+const recapSignals = [
+  'Meeting captured',
+  'Recap drafted',
+  'Work queued',
 ]
 
 const recapDecisions = [
   {
-    summary: 'Ship the migration behind the staged rollout plan.',
-    context: 'Keeps support load contained while QA closes the final edge-case pass.',
+    summary: 'Marcus owns the API migration timeline.',
+    context: 'Engineering review stays on Thursday.',
   },
   {
-    summary: 'Route ownership through Marcus with PM visibility in Linear.',
-    context: 'Lets engineering move without waiting on a second coordination pass.',
+    summary: 'The Apr 28 rollout stays on track.',
+    context: 'QA sign-off is the only gating item.',
   },
 ]
 
@@ -95,8 +92,6 @@ const agentActions = [
 
 export default function HomePage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '#'
-  // Set NEXT_PUBLIC_DEMO_VIDEO_URL to a Loom, YouTube, or Vimeo embed URL to enable the video
-  const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? null
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -191,79 +186,34 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="mt-4 space-y-4">
-              {demoVideoUrl ? (
-                <div className="overflow-hidden rounded-[1.5rem] border border-brand-line bg-background">
-                  <div className="flex items-center gap-2 border-b border-brand-line px-4 py-3 text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    <Play size={12} className="text-primary" />
-                    Watch the recap flow
-                  </div>
-                  <div className="aspect-video bg-card">
-                    <iframe
-                      src={demoVideoUrl}
-                      title="Kodi demo video"
-                      className="h-full w-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                </div>
-              ) : null}
-
+            <div className="mt-4 space-y-3">
               <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                      Summary
-                    </p>
-                    <p className="mt-2 max-w-md text-sm leading-6 text-foreground">
-                      Kodi captured the rollout plan, confirmed ownership, and
-                      packaged the next steps while the team was still leaving the call.
-                    </p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="border-border/80 bg-card/70 text-xs"
-                  >
-                    Recap ready
-                  </Badge>
+                <div className="flex flex-wrap gap-2">
+                  {recapSignals.map((signal) => (
+                    <div
+                      key={signal}
+                      className="flex items-center gap-1.5 rounded-full border border-border/70 bg-card/70 px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-muted-foreground"
+                    >
+                      <CheckCircle2 size={11} className="text-primary" />
+                      <span>{signal}</span>
+                    </div>
+                  ))}
                 </div>
 
-                <ul className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {recapOutcomes.map((outcome) => (
-                    <li
-                      key={outcome}
-                      className="flex items-center gap-2 rounded-2xl border border-border/70 bg-card/70 px-3 py-2 text-xs text-foreground"
-                    >
-                      <CheckCircle2
-                        size={12}
-                        className="shrink-0 text-primary"
-                      />
-                      <span>{outcome}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                <div className="mt-4 rounded-[1.25rem] border border-border/70 bg-card/60 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    What Kodi understood
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-foreground">
+                    Kodi turns the meeting into a clear recap, locks in the real decisions,
+                    and starts the follow-through before the team loses momentum.
+                  </p>
 
-              <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
-                <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-card text-muted-foreground">
-                      <FileText size={15} />
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                        Decisions
-                      </p>
-                      <p className="text-sm text-foreground">What Kodi locked in</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-2.5">
+                  <div className="mt-4 space-y-2">
                     {recapDecisions.map((decision) => (
                       <div
                         key={decision.summary}
-                        className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3"
+                        className="rounded-2xl border border-border/70 bg-background px-3.5 py-3"
                       >
                         <p className="text-sm font-medium text-foreground">
                           {decision.summary}
@@ -275,43 +225,48 @@ export default function HomePage() {
                     ))}
                   </div>
                 </div>
+              </div>
 
-                <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-card text-muted-foreground">
-                      <ClipboardList size={15} />
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                        Kodi took on the work
-                      </p>
-                      <p className="text-sm text-foreground">Follow-through in motion</p>
-                    </div>
+              <div className="rounded-[1.5rem] border border-brand-line bg-background p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Kodi took on the work
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">
+                      Follow-through already in motion
+                    </p>
                   </div>
+                  <Badge
+                    variant="outline"
+                    className="border-border/80 bg-card/70 text-[11px]"
+                  >
+                    3 actions
+                  </Badge>
+                </div>
 
-                  <div className="mt-3 space-y-2.5">
-                    {agentActions.map((action) => (
-                      <div
-                        key={action.title}
-                        className="rounded-2xl border border-border/70 bg-card/70 px-3.5 py-2.5"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium text-foreground">
-                            {action.title}
-                          </p>
-                          <Badge
-                            variant="outline"
-                            className="border-border/80 bg-background text-[11px]"
-                          >
-                            {action.status}
-                          </Badge>
-                        </div>
+                <div className="mt-3 space-y-2">
+                  {agentActions.map((action) => (
+                    <div
+                      key={action.title}
+                      className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-card/70 px-3.5 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          {action.title}
+                        </p>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">
                           {action.meta}
                         </p>
                       </div>
-                    ))}
-                  </div>
+                      <Badge
+                        variant="outline"
+                        className="border-border/80 bg-background text-[11px]"
+                      >
+                        {action.status}
+                      </Badge>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

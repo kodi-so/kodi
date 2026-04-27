@@ -1,6 +1,7 @@
 import { pgTable, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { subscriptions, organizationSettings } from './billing'
+import { memoryVaults } from './memory'
 
 export const orgMemberRoleEnum = pgEnum('org_member_role', ['owner', 'member'])
 export const instanceStatusEnum = pgEnum('instance_status', [
@@ -67,16 +68,18 @@ export const organizationsRelations = relations(
   ({ many, one }) => ({
     members: many(orgMembers),
     instances: many(instances),
+    memoryVaults: many(memoryVaults),
     subscription: one(subscriptions),
     settings: one(organizationSettings),
   }),
 )
 
-export const orgMembersRelations = relations(orgMembers, ({ one }) => ({
+export const orgMembersRelations = relations(orgMembers, ({ many, one }) => ({
   org: one(organizations, {
     fields: [orgMembers.orgId],
     references: [organizations.id],
   }),
+  memoryVaults: many(memoryVaults),
 }))
 
 export const instancesRelations = relations(instances, ({ one }) => ({

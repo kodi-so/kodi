@@ -249,6 +249,22 @@ export const toolSessionRunsRelations = relations(
   })
 )
 
+// Captures user requests for integrations not yet in the Composio catalog.
+export const missingIntegrationRequests = pgTable(
+  'missing_integration_requests',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(), // references user.id
+    toolName: text('tool_name').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  }
+)
+
 export type ToolkitConnection = typeof toolkitConnections.$inferSelect
 export type NewToolkitConnection = typeof toolkitConnections.$inferInsert
 export type ToolkitPolicy = typeof toolkitPolicies.$inferSelect
@@ -258,4 +274,6 @@ export type ToolkitAccountPreference =
 export type NewToolkitAccountPreference =
   typeof toolkitAccountPreferences.$inferInsert
 export type ToolSessionRun = typeof toolSessionRuns.$inferSelect
+export type MissingIntegrationRequest =
+  typeof missingIntegrationRequests.$inferSelect
 export type NewToolSessionRun = typeof toolSessionRuns.$inferInsert

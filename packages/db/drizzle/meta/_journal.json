@@ -197,6 +197,13 @@
       "when": 1745539200000,
       "tag": "0028_org_image_and_status",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1777256609227,
+      "tag": "0029_onboarding_experience",
+      "breakpoints": true
     }
   ]
 }

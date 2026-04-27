@@ -17,7 +17,7 @@
   --kodi-accent-soft: 39 50% 95%;
   --kodi-accent-strong: 35 79% 49%;
   --kodi-accent-foreground: 0 0% 100%;
-  --kodi-success: 150 36% 38%;
+  --kodi-success: 154 26% 45%;
   --kodi-success-soft: 151 34% 93%;
   --kodi-warning: 37 84% 54%;
   --kodi-warning-soft: 39 86% 93%;
@@ -27,6 +27,14 @@
   --kodi-info-soft: 201 38% 94%;
   --kodi-overlay: 220 18% 10%;
   --kodi-shadow: 220 22% 10%;
+
+  /* Marketing-specific tokens */
+  --kodi-room-dark: 199 25% 18%;
+  --kodi-room-dark-border: 199 18% 26%;
+  --kodi-room-dark-text: 200 30% 88%;
+  --kodi-room-dark-muted: 199 15% 55%;
+  --kodi-warm-sand: 36 28% 87%;
+  --kodi-hero-glow: 39 74% 58%;
 
   --background: var(--kodi-canvas);
   --foreground: var(--kodi-text);
@@ -94,4 +102,12 @@
 .shadow-brand-panel {
   box-shadow: 0 1px 3px 0 hsl(var(--kodi-shadow) / 0.08),
     0 1px 2px -1px hsl(var(--kodi-shadow) / 0.08);
+}
+
+.kodi-room-dark-surface {
+  background: hsl(var(--kodi-room-dark));
+}
+
+.kodi-warm-sand-surface {
+  background: hsl(var(--kodi-warm-sand));
 }

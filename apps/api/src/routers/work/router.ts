@@ -1,12 +1,36 @@
 import { z } from 'zod'
 import { router, memberProcedure } from '../../trpc'
 import { TRPCError } from '@trpc/server'
-import { eq, workItems, toolActionRuns } from '@kodi/db'
+import { eq, workItems, toolActionRuns, toolkitPolicies } from '@kodi/db'
 import {
   queueWorkItemSync,
   retryWorkItemSync,
   type WorkItemSyncTarget,
 } from '../../lib/meetings/work-item-sync'
+import {
+  approveTask,
+  completeTask,
+  createTask,
+  getTaskDetail,
+  listTaskActivity,
+  listTaskBoard,
+  moveTask,
+  rejectTask,
+  reopenTask,
+  updateTask,
+} from '../../services/tasks'
+
+const boardViewSchema = z.enum([
+  'assigned-to-kodi',
+  'all-open',
+  'completed-by-kodi',
+  'meeting-derived',
+])
+
+const assigneeSchema = z.enum(['kodi', 'me', 'unassigned', 'all'])
+const sourceTypeSchema = z.enum(['meeting', 'manual', 'chat', 'import', 'agent', 'all'])
+const linkedSchema = z.enum(['linked', 'unlinked', 'all'])
+const completionSchema = z.enum(['open', 'completed', 'all'])
 
 export const workRouter = router({
   list: memberProcedure
@@ -53,6 +77,122 @@ export const workRouter = router({
       })
     }),
 
+  board: memberProcedure
+    .input(
+      z.object({
+        view: boardViewSchema.default('assigned-to-kodi'),
+        assignee: assigneeSchema.optional(),
+        sourceType: sourceTypeSchema.optional(),
+        linked: linkedSchema.optional(),
+        completion: completionSchema.optional(),
+        meetingOnly: z.boolean().optional(),
+        search: z.string().trim().max(200).nullable().optional(),
+        limitPerLane: z.number().int().min(5).max(100).optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return listTaskBoard({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        currentUserId: ctx.session.user.id,
+        filters: input,
+      })
+    }),
+
+  detail: memberProcedure
+    .input(
+      z.object({
+        workItemId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const detail = await getTaskDetail({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        workItemId: input.workItemId,
+      })
+
+      if (!detail) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found.' })
+      }
+
+      return detail
+    }),
+
+  activity: memberProcedure
+    .input(
+      z.object({
+        workItemId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return listTaskActivity({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        workItemId: input.workItemId,
+      })
+    }),
+
+  create: memberProcedure
+    .input(
+      z.object({
+        title: z.string().trim().min(1).max(500),
+        description: z.string().trim().max(5000).nullable().optional(),
+        kind: z.enum(['goal', 'outcome', 'task', 'ticket', 'follow_up']).default('task'),
+        priority: z.string().trim().max(50).nullable().optional(),
+        dueAt: z.string().datetime().nullable().optional(),
+        workflowStateId: z.string().nullable().optional(),
+        assigneeType: z.enum(['user', 'kodi', 'agent', 'unassigned']).default('kodi'),
+        assigneeUserId: z.string().nullable().optional(),
+        assigneeAgentId: z.string().nullable().optional(),
+        sourceType: z.enum(['meeting', 'manual', 'chat', 'import', 'agent']).default('manual'),
+        trackInLinear: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const created = await createTask({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        actorUserId: ctx.session.user.id,
+        title: input.title,
+        description: input.description,
+        kind: input.kind,
+        priority: input.priority,
+        dueAt: input.dueAt ? new Date(input.dueAt) : input.dueAt === null ? null : undefined,
+        workflowStateId: input.workflowStateId,
+        assigneeType: input.assigneeType,
+        assigneeUserId: input.assigneeUserId,
+        assigneeAgentId: input.assigneeAgentId,
+        sourceType: input.sourceType,
+      })
+
+      const linearPolicy = await ctx.db.query.toolkitPolicies.findFirst({
+        where: (fields, { and, eq }) =>
+          and(eq(fields.orgId, ctx.org.id), eq(fields.toolkitSlug, 'linear')),
+        columns: { metadata: true },
+      })
+      const linearDefaults =
+        linearPolicy?.metadata &&
+        typeof linearPolicy.metadata['linearTaskDefaults'] === 'object' &&
+        linearPolicy.metadata['linearTaskDefaults'] !== null
+          ? (linearPolicy.metadata['linearTaskDefaults'] as { trackByDefault?: boolean })
+          : null
+      const shouldTrackInLinear =
+        input.trackInLinear ?? linearDefaults?.trackByDefault ?? false
+
+      if (shouldTrackInLinear) {
+        await queueWorkItemSync({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          workItem: created,
+          target: 'linear',
+        })
+      }
+
+      return created
+    }),
+
   update: memberProcedure
     .input(
       z.object({
@@ -78,35 +218,28 @@ export const workRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Work item not found.' })
       }
 
-      // Build metadata patch — preserve existing metadata, update ownerHint if provided
       const metadataPatch: Record<string, unknown> =
         input.ownerHint !== undefined
           ? { ...(item.metadata ?? {}), ownerHint: input.ownerHint }
           : (item.metadata ?? {})
 
-      const [updated] = await ctx.db
-        .update(workItems)
-        .set({
-          title: input.title ?? item.title,
-          description:
-            input.description !== undefined ? input.description : item.description,
-          kind:
-            input.kind !== undefined
-              ? (input.kind as typeof item.kind)
-              : item.kind,
-          priority:
-            input.priority !== undefined ? input.priority : item.priority,
-          dueAt:
-            input.dueAt !== undefined
-              ? input.dueAt !== null
-                ? new Date(input.dueAt)
-                : null
-              : item.dueAt,
-          metadata: metadataPatch,
-          updatedAt: new Date(),
-        })
-        .where(eq(workItems.id as never, input.workItemId as never) as never)
-        .returning()
+      const updated = await updateTask({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        actorUserId: ctx.session.user.id,
+        workItemId: input.workItemId,
+        title: input.title,
+        description: input.description,
+        kind: input.kind,
+        priority: input.priority,
+        dueAt:
+          input.dueAt !== undefined
+            ? input.dueAt !== null
+              ? new Date(input.dueAt)
+              : null
+            : undefined,
+        metadata: metadataPatch,
+      })
 
       if (!updated) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update work item.' })
@@ -135,13 +268,12 @@ export const workRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Work item not found.' })
       }
 
-      const [updated] = await ctx.db
-        .update(workItems)
-        .set({ status: 'approved', updatedAt: new Date() })
-        .where(eq(workItems.id as never, input.workItemId as never) as never)
-        .returning()
-
-      return updated ?? item
+      return approveTask({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        actorUserId: ctx.session.user.id,
+        workItemId: input.workItemId,
+      })
     }),
 
   reject: memberProcedure
@@ -164,13 +296,58 @@ export const workRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Work item not found.' })
       }
 
-      const [updated] = await ctx.db
-        .update(workItems)
-        .set({ status: 'cancelled', updatedAt: new Date() })
-        .where(eq(workItems.id as never, input.workItemId as never) as never)
-        .returning()
+      return rejectTask({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        actorUserId: ctx.session.user.id,
+        workItemId: input.workItemId,
+      })
+    }),
 
-      return updated ?? item
+  move: memberProcedure
+    .input(
+      z.object({
+        workItemId: z.string(),
+        workflowStateId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await moveTask({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          workItemId: input.workItemId,
+          workflowStateId: input.workflowStateId,
+        })
+      } catch (error) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to move task.',
+        })
+      }
+    }),
+
+  complete: memberProcedure
+    .input(z.object({ workItemId: z.string(), actorType: z.enum(['user', 'kodi']).default('user') }))
+    .mutation(async ({ ctx, input }) => {
+      return completeTask({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        actor: { type: input.actorType, userId: input.actorType === 'user' ? ctx.session.user.id : null },
+        workItemId: input.workItemId,
+      })
+    }),
+
+  reopen: memberProcedure
+    .input(z.object({ workItemId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return reopenTask({
+        db: ctx.db,
+        orgId: ctx.org.id,
+        actorUserId: ctx.session.user.id,
+        workItemId: input.workItemId,
+      })
     }),
 
   queueSync: memberProcedure

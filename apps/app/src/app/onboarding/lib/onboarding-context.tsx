@@ -154,7 +154,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
         sessionStorage.removeItem(STORAGE_KEY)
       } catch {}
     }
-    setStoredState(DEFAULT_STORED)
+    // Do NOT reset in-memory state — the done screen needs to keep displaying the
+    // summary values until the user navigates away. The provider unmounts on /chat.
   }, [])
 
   return (

@@ -17,6 +17,7 @@ import { DrawerHeader } from './drawer/drawer-header'
 import { IdentitiesBlock } from './drawer/identities-block'
 import { PolicyBlock } from './drawer/policy-block'
 import { SlackSettingsBlock } from './drawer/slack-settings-block'
+import { LinearSettingsBlock } from './drawer/linear-settings-block'
 import type { ToolAccessToolkitDetail } from '../_lib/tool-access-ui'
 
 type LoadState =
@@ -140,6 +141,18 @@ export function IntegrationDrawer({
                     />
                   </>
                 )}
+                {state.detail.toolkit.slug === 'linear' && (
+                  <>
+                    <Separator />
+                    <LinearSettingsBlock
+                      orgId={orgId}
+                      hasActiveConnection={state.detail.connections.some(
+                        (connection) => connection.status === 'ACTIVE'
+                      )}
+                      onRefresh={onRefresh}
+                    />
+                  </>
+                )}
               </div>
             </>
           )}
@@ -204,4 +217,3 @@ function NotFoundOrError({
     </div>
   )
 }
-

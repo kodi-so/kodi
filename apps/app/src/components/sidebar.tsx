@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   MessageSquare,
   Video,
+  ListTodo,
   Link2,
   ShieldCheck,
   Settings,
@@ -24,6 +25,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupConte
 const navItems = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/meetings', label: 'Meetings', icon: Video },
+  { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/integrations', label: 'Integrations', icon: Link2 },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
 ]

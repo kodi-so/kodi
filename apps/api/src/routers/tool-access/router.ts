@@ -153,6 +153,13 @@ const policyInput = z.object({
   adminActionsEnabled: z.boolean(),
 })
 
+const linearTaskDefaultsInput = z.object({
+  defaultTeam: z.string().trim().max(200).nullable().optional(),
+  defaultProject: z.string().trim().max(200).nullable().optional(),
+  trackByDefault: z.boolean().default(false),
+  stateMapping: z.record(z.string(), z.string()).nullable().optional(),
+})
+
 export const toolAccessRouter = router({
   getStatus: memberProcedure.query(async ({ ctx }) => {
     const result = await loadConnectionsForCurrentUser({
@@ -215,7 +222,17 @@ export const toolAccessRouter = router({
           ? (meta['defaultChannel'] as string).trim()
           : null
 
-      return { defaultChannel }
+      const linearTaskDefaults =
+        meta && typeof meta['linearTaskDefaults'] === 'object' && meta['linearTaskDefaults'] !== null
+          ? (meta['linearTaskDefaults'] as {
+              defaultTeam?: string | null
+              defaultProject?: string | null
+              trackByDefault?: boolean
+              stateMapping?: Record<string, string> | null
+            })
+          : null
+
+      return { defaultChannel, linearTaskDefaults }
     }),
 
   // Saves toolkit-level defaults to policy metadata. Owner only.
@@ -265,6 +282,63 @@ export const toolAccessRouter = router({
       )
 
       return { defaultChannel: channel || null }
+    }),
+
+  setLinearTaskDefaults: ownerProcedure
+    .input(
+      z.object({
+        toolkitSlug: z.literal('linear'),
+        defaults: linearTaskDefaultsInput,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.toolkitPolicies.findFirst({
+        where: (fields, { and, eq }) =>
+          and(
+            eq(fields.orgId, ctx.org.id),
+            eq(fields.toolkitSlug, input.toolkitSlug)
+          ),
+      })
+
+      const defaults = {
+        defaultTeam: input.defaults.defaultTeam?.trim() || null,
+        defaultProject: input.defaults.defaultProject?.trim() || null,
+        trackByDefault: input.defaults.trackByDefault,
+        stateMapping: input.defaults.stateMapping ?? null,
+      }
+      const updatedMetadata = {
+        ...(existing?.metadata ?? {}),
+        linearTaskDefaults: defaults,
+      }
+
+      if (existing) {
+        await ctx.db
+          .update(toolkitPolicies)
+          .set({
+            metadata: updatedMetadata,
+            updatedAt: new Date(),
+            updatedByUserId: ctx.session.user.id,
+          })
+          .where(eq(toolkitPolicies.id, existing.id))
+      } else {
+        await ctx.db.insert(toolkitPolicies).values({
+          orgId: ctx.org.id,
+          toolkitSlug: input.toolkitSlug,
+          metadata: updatedMetadata,
+          createdByUserId: ctx.session.user.id,
+          updatedByUserId: ctx.session.user.id,
+        })
+      }
+
+      await logActivity(
+        ctx.db,
+        ctx.org.id,
+        'tool_access.linear_task_defaults_updated',
+        { toolkitSlug: input.toolkitSlug, defaults },
+        ctx.session.user.id
+      )
+
+      return { linearTaskDefaults: defaults }
     }),
 
   // Executes SLACK_LIST_CHANNELS via a short-lived Composio session and returns

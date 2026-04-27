@@ -12,6 +12,7 @@ import {
   buildMeetingPromptContext,
   loadMeetingAnalysisContext,
 } from './meeting-analysis-context'
+import { emitTaskActivity, ensureTaskBoardFoundation } from '../../services/tasks'
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -258,7 +259,10 @@ async function createDraftWorkItems(input: {
 }) {
   if (input.actionItems.length === 0) return
 
-  await db.insert(workItems).values(
+  const { agent, workflowStates } = await ensureTaskBoardFoundation(db, input.orgId)
+  const needsReview = workflowStates.find((state) => state.slug === 'needs-review')
+
+  const createdItems = await db.insert(workItems).values(
     input.actionItems.map((item) => ({
       orgId: input.orgId,
       meetingSessionId: input.meetingSessionId,
@@ -267,6 +271,14 @@ async function createDraftWorkItems(input: {
       title: item.title,
       description: item.description ?? null,
       status: 'draft' as const,
+      workflowStateId: needsReview?.id ?? null,
+      reviewState: 'needs_review' as const,
+      executionState: 'idle' as const,
+      syncState: 'local' as const,
+      assigneeType: 'kodi' as const,
+      assigneeAgentId: agent?.id ?? null,
+      sourceType: 'meeting' as const,
+      sourceId: input.meetingSessionId,
       metadata: {
         ownerHint: item.ownerHint ?? null,
         dueDateHint: item.dueDateHint ?? null,
@@ -275,6 +287,22 @@ async function createDraftWorkItems(input: {
         sourceEvidence: item.sourceEvidence,
       },
     }))
+  ).returning()
+
+  await Promise.all(
+    createdItems.map((item) =>
+      emitTaskActivity(db, {
+        orgId: input.orgId,
+        workItemId: item.id,
+        eventType: 'created',
+        actorType: 'system',
+        summary: 'Task extracted from meeting.',
+        metadata: {
+          meetingSessionId: input.meetingSessionId,
+          sourceArtifactId: input.artifactId,
+        },
+      })
+    )
   )
 }
 

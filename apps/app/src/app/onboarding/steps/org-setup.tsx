@@ -11,7 +11,7 @@ import { useOnboarding } from '../lib/onboarding-context'
 
 export function OrgSetupStep() {
   const router = useRouter()
-  const { orgId, orgName, botDisplayName, setOrgName, setBotDisplayName, setProvisioningStatus, isReady } =
+  const { orgId, orgName, botDisplayName, setOrgName, setBotDisplayName, isReady } =
     useOnboarding()
 
   const [teamName, setTeamName] = useState('')
@@ -75,26 +75,8 @@ export function OrgSetupStep() {
       setOrgName(trimmedTeam)
       setBotDisplayName(botName.trim() || 'Kodi')
 
-      // Phase 2: fire provisioning non-blocking so the agent spins up while the
-      // user continues through optional steps.
-      // TODO Phase 5: move provisioning trigger to post-billing confirmation.
-      setProvisioningStatus('pending')
-      trpc.instance.provision
-        .mutate({ orgId })
-        .catch((err: { data?: { code?: string } }) => {
-          if (err?.data?.code === 'CONFLICT') {
-            // Already provisioned — treat as running
-            setProvisioningStatus('running')
-          } else if (err?.data?.code === 'FORBIDDEN') {
-            // No active subscription yet (pre-billing) — stay idle, no chip shown
-            setProvisioningStatus('idle')
-          } else {
-            setProvisioningStatus('error')
-          }
-        })
-
-      // 4. Advance to next step
-      router.push('?step=tools-pick')
+      // 4. Advance to billing — provisioning fires after checkout completes
+      router.push('?step=choose-plan')
     } catch {
       toast.error('Something went wrong — please try again.')
     } finally {

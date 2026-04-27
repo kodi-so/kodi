@@ -4,6 +4,7 @@ import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { isValidStepSlug } from './lib/steps'
 import { OrgSetupStep } from './steps/org-setup'
+import { ChoosePlanStep } from './steps/choose-plan'
 import { ToolsPickStep } from './steps/tools-pick'
 import { ToolsConnectStep } from './steps/tools-connect'
 import { InviteTeamStep } from './steps/invite-team'
@@ -32,6 +33,8 @@ function OnboardingInner() {
   switch (step) {
     case 'org-setup':
       return <OrgSetupStep />
+    case 'choose-plan':
+      return <ChoosePlanStep />
     case 'tools-pick':
       return <ToolsPickStep />
     case 'tools-connect':

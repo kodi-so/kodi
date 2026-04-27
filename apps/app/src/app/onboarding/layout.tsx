@@ -17,6 +17,7 @@ function WizardContent({ children }: { children: React.ReactNode }) {
 
   const progressIndex = PROGRESS_STEPS.findIndex((s) => {
     if (currentStep === 'tools-connect') return s.slug === 'tools-pick'
+    if (currentStep === 'billing-return') return s.slug === 'choose-plan'
     return s.slug === currentStep
   })
 

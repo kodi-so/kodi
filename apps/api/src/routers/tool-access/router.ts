@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { eq, toolkitPolicies } from '@kodi/db'
+import { eq, missingIntegrationRequests, toolkitPolicies } from '@kodi/db'
 import { router, memberProcedure, ownerProcedure } from '../../trpc'
 import { getFeatureFlags } from '../../lib/features'
 import {
@@ -770,5 +770,21 @@ export const toolAccessRouter = router({
       return {
         connection: refreshed ? serializeConnection(refreshed, null) : null,
       }
+    }),
+
+  /**
+   * toolAccess.reportMissingIntegration — records a user-submitted request for
+   * an integration that isn't yet in the Composio catalog.
+   * Used by the onboarding wizard's "Don't see a tool you use?" flow.
+   */
+  reportMissingIntegration: memberProcedure
+    .input(z.object({ toolName: z.string().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.insert(missingIntegrationRequests).values({
+        orgId: ctx.org.id,
+        userId: ctx.session.user.id,
+        toolName: input.toolName.trim(),
+      })
+      return { ok: true }
     }),
 })

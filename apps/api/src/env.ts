@@ -91,6 +91,17 @@ const envSchema = z.object({
   AWS_SUBNET_ID: z.string().optional(),
   AWS_AMI_ID: z.string().optional(),
 
+  // Memory storage (S3-compatible object storage for durable memory vaults)
+  MEMORY_STORAGE_BUCKET: z.string().optional(),
+  MEMORY_STORAGE_REGION: z.string().default('us-east-1'),
+  MEMORY_STORAGE_ENDPOINT: z.string().url().optional(),
+  MEMORY_STORAGE_ACCESS_KEY_ID: z.string().optional(),
+  MEMORY_STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
+  MEMORY_STORAGE_PREFIX: z.string().optional(),
+  MEMORY_STORAGE_FORCE_PATH_STYLE: envBoolean(
+    'MEMORY_STORAGE_FORCE_PATH_STYLE'
+  ).default(false),
+
   // Cloudflare
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
@@ -251,6 +262,38 @@ export function requireAws() {
     AWS_SECURITY_GROUP_ID,
     AWS_SUBNET_ID,
     AWS_AMI_ID,
+  }
+}
+
+export function requireMemoryStorage() {
+  const {
+    MEMORY_STORAGE_BUCKET,
+    MEMORY_STORAGE_REGION,
+    MEMORY_STORAGE_ENDPOINT,
+    MEMORY_STORAGE_ACCESS_KEY_ID,
+    MEMORY_STORAGE_SECRET_ACCESS_KEY,
+    MEMORY_STORAGE_PREFIX,
+    MEMORY_STORAGE_FORCE_PATH_STYLE,
+  } = env
+
+  if (
+    !MEMORY_STORAGE_BUCKET ||
+    !MEMORY_STORAGE_ACCESS_KEY_ID ||
+    !MEMORY_STORAGE_SECRET_ACCESS_KEY
+  ) {
+    throw new Error(
+      'Memory storage environment variables are not configured. Set MEMORY_STORAGE_BUCKET, MEMORY_STORAGE_ACCESS_KEY_ID, and MEMORY_STORAGE_SECRET_ACCESS_KEY.'
+    )
+  }
+
+  return {
+    MEMORY_STORAGE_BUCKET,
+    MEMORY_STORAGE_REGION,
+    MEMORY_STORAGE_ENDPOINT,
+    MEMORY_STORAGE_ACCESS_KEY_ID,
+    MEMORY_STORAGE_SECRET_ACCESS_KEY,
+    MEMORY_STORAGE_PREFIX,
+    MEMORY_STORAGE_FORCE_PATH_STYLE,
   }
 }
 

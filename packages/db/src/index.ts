@@ -21,7 +21,19 @@ export const db = new Proxy({} as ReturnType<typeof createDb>, {
   },
 })
 
-export { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm'
+export {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm'
 export * from './schema'
 export { encrypt, decrypt, encryptJson, decryptJson } from './lib/crypto'
 export { deriveMeetingBotIdentity } from './lib/meeting-bot-identity'

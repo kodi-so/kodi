@@ -2,47 +2,52 @@
 
 import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
-import { trpc } from '@/lib/trpc'
+import { isValidStepSlug } from './lib/steps'
+import { OrgSetupStep } from './steps/org-setup'
+import { ToolsPickStep } from './steps/tools-pick'
+import { ToolsConnectStep } from './steps/tools-connect'
+import { InviteTeamStep } from './steps/invite-team'
+import { DoneStep } from './steps/done'
 
 function OnboardingInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const step = searchParams.get('step')
 
+  // Redirect to first step if slug is missing or invalid
   useEffect(() => {
-    trpc.org.ensurePersonal
-      .mutate()
-      .then(() => {
-        const redirect = searchParams.get('redirect')
-        router.replace(redirect ?? '/chat')
-      })
-      .catch(() => {
-        router.replace('/chat')
-      })
-  }, [router, searchParams])
+    if (!isValidStepSlug(step)) {
+      router.replace('?step=org-setup')
+    }
+  }, [step, router])
 
-  return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl">Setting up your workspace</CardTitle>
-          <CardDescription className="text-base text-muted-foreground">
-            Kodi is creating the basics now.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center">
-          <span className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </CardContent>
-      </Card>
-    </div>
-  )
+  if (!isValidStepSlug(step)) {
+    return (
+      <div className="flex justify-center pt-20">
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  switch (step) {
+    case 'org-setup':
+      return <OrgSetupStep />
+    case 'tools-pick':
+      return <ToolsPickStep />
+    case 'tools-connect':
+      return <ToolsConnectStep />
+    case 'invite-team':
+      return <InviteTeamStep />
+    case 'done':
+      return <DoneStep />
+  }
 }
 
 export default function OnboardingPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center">
+        <div className="flex justify-center pt-20">
           <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       }

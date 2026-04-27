@@ -204,6 +204,13 @@
       "when": 1777256156000,
       "tag": "0029_memory_scoped_vaults",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1777258614000,
+      "tag": "0030_memory_path_search_vectors",
+      "breakpoints": true
     }
   ]
 }

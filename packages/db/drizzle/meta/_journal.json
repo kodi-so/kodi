@@ -201,8 +201,15 @@
     {
       "idx": 28,
       "version": "7",
+      "when": 1777256156000,
+      "tag": "0029_memory_scoped_vaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
       "when": 1777256609227,
-      "tag": "0029_onboarding_experience",
+      "tag": "0030_onboarding_experience",
       "breakpoints": true
     }
   ]

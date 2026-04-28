@@ -211,6 +211,13 @@
       "when": 1777258614000,
       "tag": "0030_memory_path_search_vectors",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1777424400000,
+      "tag": "0031_memory_vault_storage_backend_r2",
+      "breakpoints": true
     }
   ]
 }

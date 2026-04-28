@@ -22,7 +22,7 @@ When this work is complete, Kodi should be able to:
 
 The following decisions are part of this plan:
 
-- vault files should live in S3-compatible object storage across all Railway environments
+- vault files should live in Cloudflare R2 across all Railway environments, accessed through its S3-compatible API
 - development, staging, and production should use separate buckets or prefixes while sharing the same storage behavior
 - vault metadata should live in Postgres
 - memory is scoped as `org` or `member`
@@ -72,7 +72,7 @@ Recommended logical paths:
 - `memory/<orgId>/org/`
 - `memory/<orgId>/members/<orgMemberId>/`
 
-All Kodi environments run on Railway and should use the same S3-compatible storage model, isolated by environment-specific buckets or prefixes.
+All Kodi environments run on Railway and should use the same Cloudflare R2 storage model, isolated by environment-specific buckets or prefixes.
 
 The storage abstraction should support:
 
@@ -452,7 +452,7 @@ Persistent memory access should be implemented as a `memory` module inside the r
 
 The memory module should be installed and enabled as part of each org's `kodi-bridge` runtime. It should expose agent tools while delegating all durable memory operations to Kodi's authenticated Memory API.
 
-The bridge-hosted memory module must not read or write S3, Postgres, or vault files directly.
+The bridge-hosted memory module must not read or write R2, Postgres, or vault files directly.
 
 ### Runtime configuration
 

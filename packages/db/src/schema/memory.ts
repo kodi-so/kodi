@@ -43,7 +43,7 @@ export const memoryVaults = pgTable(
     }),
     rootPath: text('root_path').notNull(),
     manifestPath: text('manifest_path').notNull(),
-    storageBackend: text('storage_backend').notNull().default('s3'),
+    storageBackend: text('storage_backend').notNull().default('r2'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

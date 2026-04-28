@@ -9,10 +9,13 @@ import {
   type MeetingParticipationMode,
 } from '@kodi/db'
 import { TRPCError } from '@trpc/server'
+import { appendNormalizedMeetingEvent } from './ingestion'
+import type { MeetingProviderEvent } from './events'
 import {
   appendMeetingAuditEvent,
   ensureMeetingSessionControls,
 } from './copilot-policy'
+import { retryPostMeetingArtifacts } from './post-meeting-service'
 import { featureFlags } from '../features'
 
 type Database = typeof db
@@ -32,6 +35,33 @@ export type LocalTranscriptionState =
   | 'degraded'
   | 'failed'
   | 'ended'
+
+export type LocalSessionBrowserMetadata = {
+  browserFamily?: string | null
+  browserVersion?: string | null
+  platform?: string | null
+}
+
+export type LocalSessionDeviceSelection = {
+  inputDeviceId?: string | null
+  inputDeviceLabel?: string | null
+  outputDeviceId?: string | null
+  outputDeviceLabel?: string | null
+}
+
+export type LocalSessionStartSource =
+  | 'web_app'
+  | 'desktop_app'
+  | 'desktop_tray'
+  | 'scheduled_event'
+
+export function localMeetingsEnabled() {
+  return featureFlags.localMeetings
+}
+
+export function isLocalMeetingProvider(provider: string | null | undefined) {
+  return provider === 'local'
+}
 
 export function hashLocalIngestToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
@@ -56,14 +86,15 @@ export async function startLocalMeetingSession(
     orgName: string
     mode: LocalMeetingMode
     title?: string | null
-    platform?: string | null
-    startedFrom?: 'web_app' | 'desktop_app' | 'desktop_tray' | 'scheduled_event'
+    devices?: LocalSessionDeviceSelection
+    browser?: LocalSessionBrowserMetadata
+    startedFrom?: LocalSessionStartSource
     scheduledCalendarEventId?: string | null
     participationMode?: MeetingParticipationMode
     settings: MeetingCopilotSettings
   }
 ) {
-  if (!featureFlags.localMeetings) {
+  if (!localMeetingsEnabled()) {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
       message: 'Local meetings are not enabled for this environment yet.',
@@ -72,6 +103,7 @@ export async function startLocalMeetingSession(
 
   const ingest = createLocalIngestToken()
   const now = new Date()
+  const startedFrom = input.startedFrom ?? 'web_app'
   const title =
     input.title?.trim() ||
     (input.mode === 'solo'
@@ -83,6 +115,7 @@ export async function startLocalMeetingSession(
     .values({
       orgId: input.orgId,
       provider: 'local',
+      providerInstallationId: null,
       hostUserId: input.actorUserId,
       title,
       status: 'listening',
@@ -92,13 +125,15 @@ export async function startLocalMeetingSession(
       metadata: {
         localMeeting: true,
         localMode: input.mode,
-        startedFrom: input.startedFrom ?? 'desktop_app',
+        startedFrom,
         scheduledCalendarEventId: input.scheduledCalendarEventId ?? null,
       },
     })
     .returning()
 
-  if (!meeting) throw new Error('Failed to create local meeting session.')
+  if (!meeting) {
+    throw new Error('Failed to create local meeting session.')
+  }
 
   const [localSession] = await database
     .insert(localMeetingSessions)
@@ -110,18 +145,28 @@ export async function startLocalMeetingSession(
       permissionState: 'granted',
       captureState: 'capturing',
       transcriptionState: 'connecting',
-      platform: input.platform ?? null,
+      inputDeviceId: input.devices?.inputDeviceId ?? null,
+      inputDeviceLabel: input.devices?.inputDeviceLabel ?? null,
+      outputDeviceId: input.devices?.outputDeviceId ?? null,
+      outputDeviceLabel: input.devices?.outputDeviceLabel ?? null,
+      browserFamily: input.browser?.browserFamily ?? null,
+      browserVersion: input.browser?.browserVersion ?? null,
+      platform: input.browser?.platform ?? null,
       ingestTokenHash: ingest.hash,
       ingestTokenExpiresAt: ingest.expiresAt,
       lastHeartbeatAt: now,
       diagnostics: {
-        ingestProtocol: 'desktop-local-json-v1',
-        requestedParticipationMode: input.participationMode ?? null,
+        ingestProtocol: 'http-chunk-v1',
+        transcriptionProvider: 'browser-speech-recognition',
+        startedFrom,
+        scheduledCalendarEventId: input.scheduledCalendarEventId ?? null,
       },
     })
     .returning()
 
-  if (!localSession) throw new Error('Failed to create local runtime state.')
+  if (!localSession) {
+    throw new Error('Failed to create local meeting runtime state.')
+  }
 
   await database.insert(meetingParticipants).values({
     meetingSessionId: meeting.id,
@@ -135,15 +180,31 @@ export async function startLocalMeetingSession(
     metadata: {
       source: 'local-session-start',
       localMode: input.mode,
+      startedFrom,
     },
   })
 
-  await ensureMeetingSessionControls(database, {
+  const controls = await ensureMeetingSessionControls(database, {
     meetingSessionId: meeting.id,
     orgId: input.orgId,
     settings: input.settings,
     actorUserId: input.actorUserId,
   })
+
+  if (
+    input.participationMode &&
+    input.participationMode !== controls.participationMode
+  ) {
+    await database
+      .update(localMeetingSessions)
+      .set({
+        diagnostics: {
+          ...(localSession.diagnostics ?? {}),
+          requestedParticipationMode: input.participationMode,
+        },
+      })
+      .where(eq(localMeetingSessions.id, localSession.id))
+  }
 
   await appendMeetingAuditEvent(database, {
     meetingSessionId: meeting.id,
@@ -152,7 +213,10 @@ export async function startLocalMeetingSession(
       provider: 'local',
       mode: input.mode,
       actorUserId: input.actorUserId,
-      startedFrom: input.startedFrom ?? 'desktop_app',
+      captureState: 'capturing',
+      transcriptionState: 'connecting',
+      startedFrom,
+      scheduledCalendarEventId: input.scheduledCalendarEventId ?? null,
     },
   })
 
@@ -162,6 +226,24 @@ export async function startLocalMeetingSession(
     ingestToken: ingest.token,
     ingestTokenExpiresAt: ingest.expiresAt,
   }
+}
+
+export async function getLocalMeetingForToken(token: string) {
+  const tokenHash = hashLocalIngestToken(token)
+  const localSession = await db.query.localMeetingSessions.findFirst({
+    where: (fields, { eq }) => eq(fields.ingestTokenHash, tokenHash),
+  })
+
+  if (!localSession) return null
+  if (localSession.ingestTokenRevokedAt) return null
+  if (localSession.ingestTokenExpiresAt.getTime() <= Date.now()) return null
+
+  const meeting = await db.query.meetingSessions.findFirst({
+    where: (fields, { eq }) => eq(fields.id, localSession.meetingSessionId),
+  })
+  if (!meeting || meeting.orgId !== localSession.orgId) return null
+
+  return { localSession, meeting }
 }
 
 export async function updateLocalSessionState(
@@ -191,48 +273,90 @@ export async function updateLocalSessionState(
   }
 
   const now = new Date()
-  const [updated] = await database
+  await database
     .update(localMeetingSessions)
     .set({
       captureState: input.captureState ?? localSession.captureState,
       transcriptionState:
         input.transcriptionState ?? localSession.transcriptionState,
-      failureReason: input.failureReason ?? localSession.failureReason,
+      failureReason:
+        input.failureReason === undefined
+          ? localSession.failureReason
+          : input.failureReason,
       pausedAt: input.captureState === 'paused' ? now : localSession.pausedAt,
       resumedAt:
         input.captureState === 'capturing' ? now : localSession.resumedAt,
       endedAt: input.captureState === 'ended' ? now : localSession.endedAt,
       ingestTokenRevokedAt:
-        input.captureState === 'ended'
+        input.captureState === 'ended' || input.captureState === 'failed'
           ? now
           : localSession.ingestTokenRevokedAt,
       updatedAt: now,
     })
     .where(eq(localMeetingSessions.id, localSession.id))
-    .returning()
 
-  if (input.captureState === 'ended') {
+  if (input.captureState === 'paused') {
+    await appendLocalLifecycleEvent(input.meetingSessionId, 'meeting.paused')
+  } else if (input.captureState === 'capturing') {
+    await appendLocalLifecycleEvent(input.meetingSessionId, 'meeting.resumed')
+  } else if (input.captureState === 'ended') {
+    await appendLocalLifecycleEvent(input.meetingSessionId, 'meeting.ended')
     await database
       .update(meetingSessions)
       .set({ status: 'ended', endedAt: now, updatedAt: now })
       .where(eq(meetingSessions.id, input.meetingSessionId))
+
+    void retryPostMeetingArtifacts(input.meetingSessionId, input.orgId).catch(
+      (error) => {
+        console.warn('[local-meetings] post-meeting artifacts failed', {
+          meetingSessionId: input.meetingSessionId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    )
   }
 
-  return updated ?? localSession
+  await appendMeetingAuditEvent(database, {
+    meetingSessionId: input.meetingSessionId,
+    eventType:
+      input.captureState === 'paused'
+        ? 'meeting.paused'
+        : input.captureState === 'capturing'
+          ? 'meeting.resumed'
+          : input.captureState === 'ended'
+            ? 'meeting.ended'
+            : 'meeting.local_state.updated',
+    payload: {
+      actorUserId: input.actorUserId ?? null,
+      captureState: input.captureState ?? localSession.captureState,
+      transcriptionState:
+        input.transcriptionState ?? localSession.transcriptionState,
+      failureReason: input.failureReason ?? null,
+    },
+  })
+
+  return database.query.localMeetingSessions.findFirst({
+    where: (fields, { eq }) => eq(fields.id, localSession.id),
+  })
 }
 
-export async function getLocalMeetingForToken(token: string) {
-  const localSession = await db.query.localMeetingSessions.findFirst({
-    where: (fields, { eq }) =>
-      eq(fields.ingestTokenHash, hashLocalIngestToken(token)),
-  })
-  if (!localSession) return null
-  if (localSession.ingestTokenRevokedAt) return null
-  if (localSession.ingestTokenExpiresAt.getTime() <= Date.now()) return null
-
-  const meeting = await db.query.meetingSessions.findFirst({
-    where: (fields, { eq }) => eq(fields.id, localSession.meetingSessionId),
-  })
-  if (!meeting || meeting.orgId !== localSession.orgId) return null
-  return { localSession, meeting }
+async function appendLocalLifecycleEvent(
+  meetingSessionId: string,
+  action: 'meeting.paused' | 'meeting.resumed' | 'meeting.ended'
+) {
+  const state = action === 'meeting.ended' ? 'stopped' : 'listening'
+  await appendNormalizedMeetingEvent(
+    meetingSessionId,
+    {
+      kind: 'lifecycle',
+      provider: 'local',
+      action,
+      state,
+      occurredAt: new Date(),
+      session: { internalMeetingSessionId: meetingSessionId },
+      metadata: { localLifecycleAction: action },
+    } satisfies MeetingProviderEvent,
+    'kodi_ui',
+    `local:${action}:${Date.now()}`
+  )
 }

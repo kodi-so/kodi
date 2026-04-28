@@ -56,6 +56,8 @@ export function useMeetingDetail() {
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
   const [controlsSaving, setControlsSaving] = useState(false)
+  const [localCaptureError, setLocalCaptureError] = useState<string | null>(null)
+  const [localCaptureActive, setLocalCaptureActive] = useState(false)
 
   // --- Ask Kodi ---
   const [askQuestion, setAskQuestion] = useState('')
@@ -122,6 +124,7 @@ export function useMeetingDetail() {
   const liveState: MeetingLiveState = consoleData?.liveState ?? null
   const events: MeetingEventFeed = consoleData?.events ?? []
   const health: MeetingHealth = consoleData?.health ?? null
+  const localSession = consoleData?.localSession ?? null
   const workspaceSettings: MeetingWorkspaceSettings =
     consoleData?.workspaceSettings ?? null
   const controls: MeetingControls = consoleData?.controls ?? null
@@ -496,6 +499,10 @@ export function useMeetingDetail() {
     activeOrg?.role === 'owner' ||
     (currentUserId != null && meeting?.hostUserId === currentUserId)
 
+  const localIngestTokenKey = meetingSessionId
+    ? `kodi.localMeeting.${meetingSessionId}.ingestToken`
+    : null
+
   // --- Effects ---
 
   useEffect(() => {
@@ -539,6 +546,160 @@ export function useMeetingDetail() {
       window.clearInterval(interval)
     }
   }, [orgId, meetingSessionId, pollIntervalMs])
+
+  useEffect(() => {
+    if (!meeting || meeting.provider !== 'local' || !localSession) return
+    if (localSession.captureState !== 'capturing') return
+    if (!localIngestTokenKey) return
+
+    const ingestToken = window.sessionStorage.getItem(localIngestTokenKey)
+    if (!ingestToken) return
+    const activeLocalSession = localSession
+
+    let cancelled = false
+    let sequence = localSession.lastSequence ?? 0
+    let mediaRecorder: MediaRecorder | null = null
+    let stream: MediaStream | null = null
+    let recognition: any = null
+    let heartbeat: number | null = null
+
+    const apiBaseUrl =
+      process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002'
+
+    async function sendIngest(message: Record<string, unknown>) {
+      sequence += 1
+      await fetch(`${apiBaseUrl}/meetings/local-ingest`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ingestToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sequence, ...message }),
+      })
+    }
+
+    async function startCapture() {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('This browser does not support microphone capture.')
+        }
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: activeLocalSession.inputDeviceId
+            ? { deviceId: { exact: activeLocalSession.inputDeviceId } }
+            : true,
+        })
+        if (cancelled) return
+
+        setLocalCaptureActive(true)
+        setLocalCaptureError(null)
+        heartbeat = window.setInterval(() => {
+          void sendIngest({
+            type: 'heartbeat',
+            captureState: 'capturing',
+            transcriptionState: 'transcribing',
+          }).catch(() => {})
+        }, 10_000)
+
+        if (typeof MediaRecorder !== 'undefined') {
+          mediaRecorder = new MediaRecorder(stream)
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              void sendIngest({
+                type: 'audio_chunk',
+                byteLength: event.data.size,
+              }).catch(() => {})
+            }
+          }
+          mediaRecorder.start(8_000)
+        }
+
+        const SpeechRecognition =
+          (window as any).SpeechRecognition ||
+          (window as any).webkitSpeechRecognition
+        if (!SpeechRecognition) {
+          setLocalCaptureError(
+            'Live browser transcription is not supported here yet. Try Chrome or Edge for local capture.'
+          )
+          return
+        }
+
+        recognition = new SpeechRecognition()
+        recognition.continuous = true
+        recognition.interimResults = true
+        recognition.lang = 'en-US'
+        recognition.onresult = (event: any) => {
+          for (let i = event.resultIndex; i < event.results.length; i += 1) {
+            const result = event.results[i]
+            const text = result?.[0]?.transcript
+            if (!text) continue
+            void sendIngest({
+              type: 'transcript',
+              transcript: {
+                text,
+                isPartial: !result.isFinal,
+                confidence:
+                  typeof result?.[0]?.confidence === 'number'
+                    ? result[0].confidence
+                    : null,
+              },
+            }).catch(() => {})
+          }
+        }
+        recognition.onerror = (event: any) => {
+          const message = event?.error
+            ? `Local transcription stopped: ${event.error}`
+            : 'Local transcription stopped.'
+          setLocalCaptureError(message)
+          void sendIngest({
+            type: 'failure',
+            failureKind: 'transcription',
+            failureReason: message,
+          }).catch(() => {})
+        }
+        recognition.onend = () => {
+          if (!cancelled && activeLocalSession.captureState === 'capturing') {
+            try {
+              recognition.start()
+            } catch {
+              // Browser may reject immediate restarts; heartbeat keeps session alive.
+            }
+          }
+        }
+        recognition.start()
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'Kodi could not start local microphone capture.'
+        setLocalCaptureError(message)
+        void sendIngest({
+          type: 'failure',
+          failureKind: 'capture',
+          failureReason: message,
+        }).catch(() => {})
+      }
+    }
+
+    void startCapture()
+
+    return () => {
+      cancelled = true
+      setLocalCaptureActive(false)
+      if (heartbeat) window.clearInterval(heartbeat)
+      try {
+        recognition?.stop()
+      } catch {}
+      if (mediaRecorder?.state === 'recording') mediaRecorder.stop()
+      stream?.getTracks().forEach((track) => track.stop())
+    }
+  }, [
+    localIngestTokenKey,
+    localSession?.captureState,
+    localSession?.inputDeviceId,
+    localSession?.lastSequence,
+    meeting?.id,
+    meeting?.provider,
+  ])
 
   useEffect(() => {
     if (!orgId || !meetingSessionId) return
@@ -933,11 +1094,17 @@ export function useMeetingDetail() {
       )
     )
     try {
-      await trpc.meeting.speakAnswer.mutate({
+      const result = await trpc.meeting.speakAnswer.mutate({
         orgId,
         meetingSessionId,
         answerId,
       })
+      if (result.mediaUrl) {
+        const apiBaseUrl =
+          process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002'
+        const audio = new Audio(`${apiBaseUrl}${result.mediaUrl}`)
+        await audio.play()
+      }
       setAnswers((prev) =>
         prev.map((a) =>
           a.id === answerId
@@ -954,6 +1121,29 @@ export function useMeetingDetail() {
     } finally {
       setSpeakingAnswerId(null)
     }
+  }
+
+  async function pauseLocalSession() {
+    if (!orgId || !meetingSessionId) return
+    await trpc.meeting.pauseLocalSession.mutate({ orgId, meetingSessionId })
+  }
+
+  async function resumeLocalSession() {
+    if (!orgId || !meetingSessionId) return
+    await trpc.meeting.resumeLocalSession.mutate({ orgId, meetingSessionId })
+  }
+
+  async function endLocalSession() {
+    if (!orgId || !meetingSessionId) return
+    await trpc.meeting.endLocalSession.mutate({ orgId, meetingSessionId })
+    if (localIngestTokenKey) {
+      window.sessionStorage.removeItem(localIngestTokenKey)
+    }
+  }
+
+  async function stopVoice() {
+    if (!orgId || !meetingSessionId) return
+    await trpc.meeting.stopVoice.mutate({ orgId, meetingSessionId })
   }
 
   return {
@@ -1056,6 +1246,13 @@ export function useMeetingDetail() {
 
     // Misc derived
     health,
+    localSession,
+    localCaptureActive,
+    localCaptureError,
+    pauseLocalSession,
+    resumeLocalSession,
+    endLocalSession,
+    stopVoice,
     participants,
     chatMessages,
     retryHistory,

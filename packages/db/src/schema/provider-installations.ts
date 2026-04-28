@@ -14,7 +14,6 @@ import { organizations } from './orgs'
 export const conferenceProviderEnum = pgEnum('conference_provider', [
   'zoom',
   'google_meet',
-  'local',
   'slack',
 ])
 

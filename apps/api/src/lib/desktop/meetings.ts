@@ -119,11 +119,7 @@ export function serializeUpcoming(row: CalendarCandidate) {
   const isSupported =
     !row.isCanceled &&
     row.isLikelyMeeting &&
-    Boolean(
-      row.joinUrl &&
-      row.conferenceProvider !== 'local' &&
-      row.conferenceProvider
-    )
+    Boolean(row.joinUrl && row.conferenceProvider)
   return {
     id: row.id,
     title: row.title,

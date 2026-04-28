@@ -1,5 +1,3 @@
-ALTER TYPE "conference_provider" ADD VALUE IF NOT EXISTS 'local';
---> statement-breakpoint
 CREATE TYPE "calendar_provider" AS ENUM ('google_calendar', 'outlook_calendar');
 --> statement-breakpoint
 CREATE TYPE "calendar_response_status" AS ENUM ('accepted', 'tentative', 'declined', 'needs_action', 'unknown');
@@ -7,14 +5,6 @@ CREATE TYPE "calendar_response_status" AS ENUM ('accepted', 'tentative', 'declin
 CREATE TYPE "desktop_update_channel" AS ENUM ('internal', 'beta', 'stable');
 --> statement-breakpoint
 CREATE TYPE "desktop_platform" AS ENUM ('darwin', 'win32', 'linux', 'unknown');
---> statement-breakpoint
-CREATE TYPE "local_meeting_mode" AS ENUM ('solo', 'room');
---> statement-breakpoint
-CREATE TYPE "local_meeting_permission_state" AS ENUM ('unknown', 'prompt', 'granted', 'denied');
---> statement-breakpoint
-CREATE TYPE "local_meeting_capture_state" AS ENUM ('ready', 'capturing', 'paused', 'reconnecting', 'failed', 'ended');
---> statement-breakpoint
-CREATE TYPE "local_meeting_transcription_state" AS ENUM ('not_started', 'connecting', 'transcribing', 'degraded', 'failed', 'ended');
 --> statement-breakpoint
 CREATE TABLE "desktop_auth_codes" (
   "id" text PRIMARY KEY NOT NULL,
@@ -101,35 +91,6 @@ CREATE TABLE "calendar_event_candidates" (
   "updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "local_meeting_sessions" (
-  "id" text PRIMARY KEY NOT NULL,
-  "org_id" text NOT NULL,
-  "meeting_session_id" text NOT NULL,
-  "started_by_user_id" text,
-  "mode" "local_meeting_mode" NOT NULL,
-  "permission_state" "local_meeting_permission_state" DEFAULT 'unknown' NOT NULL,
-  "capture_state" "local_meeting_capture_state" DEFAULT 'ready' NOT NULL,
-  "transcription_state" "local_meeting_transcription_state" DEFAULT 'not_started' NOT NULL,
-  "input_device_id" text,
-  "input_device_label" text,
-  "output_device_id" text,
-  "output_device_label" text,
-  "platform" text,
-  "ingest_token_hash" text NOT NULL,
-  "ingest_token_expires_at" timestamp NOT NULL,
-  "ingest_token_revoked_at" timestamp,
-  "last_sequence" integer DEFAULT 0 NOT NULL,
-  "last_heartbeat_at" timestamp,
-  "last_transcript_at" timestamp,
-  "paused_at" timestamp,
-  "resumed_at" timestamp,
-  "ended_at" timestamp,
-  "failure_reason" text,
-  "diagnostics" jsonb,
-  "created_at" timestamp DEFAULT now() NOT NULL,
-  "updated_at" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 ALTER TABLE "desktop_auth_codes" ADD CONSTRAINT "desktop_auth_codes_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "desktop_auth_codes" ADD CONSTRAINT "desktop_auth_codes_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;
@@ -154,12 +115,6 @@ ALTER TABLE "calendar_event_candidates" ADD CONSTRAINT "calendar_event_candidate
 --> statement-breakpoint
 ALTER TABLE "calendar_event_candidates" ADD CONSTRAINT "calendar_event_candidates_meeting_session_id_meeting_sessions_id_fk" FOREIGN KEY ("meeting_session_id") REFERENCES "public"."meeting_sessions"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "local_meeting_sessions" ADD CONSTRAINT "local_meeting_sessions_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "local_meeting_sessions" ADD CONSTRAINT "local_meeting_sessions_meeting_session_id_meeting_sessions_id_fk" FOREIGN KEY ("meeting_session_id") REFERENCES "public"."meeting_sessions"("id") ON DELETE cascade ON UPDATE no action;
---> statement-breakpoint
-ALTER TABLE "local_meeting_sessions" ADD CONSTRAINT "local_meeting_sessions_started_by_user_id_user_id_fk" FOREIGN KEY ("started_by_user_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;
---> statement-breakpoint
 CREATE UNIQUE INDEX "desktop_auth_codes_hash_uidx" ON "desktop_auth_codes" USING btree ("code_hash");
 --> statement-breakpoint
 CREATE INDEX "desktop_auth_codes_org_user_idx" ON "desktop_auth_codes" USING btree ("org_id","user_id");
@@ -183,9 +138,3 @@ CREATE INDEX "calendar_event_candidates_org_user_start_idx" ON "calendar_event_c
 CREATE INDEX "calendar_event_candidates_session_idx" ON "calendar_event_candidates" USING btree ("meeting_session_id");
 --> statement-breakpoint
 CREATE INDEX "calendar_event_candidates_duplicate_idx" ON "calendar_event_candidates" USING btree ("org_id","user_id","duplicate_group_key");
---> statement-breakpoint
-CREATE UNIQUE INDEX "local_meeting_sessions_session_uidx" ON "local_meeting_sessions" USING btree ("meeting_session_id");
---> statement-breakpoint
-CREATE UNIQUE INDEX "local_meeting_sessions_token_hash_uidx" ON "local_meeting_sessions" USING btree ("ingest_token_hash");
---> statement-breakpoint
-CREATE INDEX "local_meeting_sessions_org_capture_idx" ON "local_meeting_sessions" USING btree ("org_id","capture_state");

@@ -32,6 +32,8 @@ export type MeetingLifecycleEventName =
   | 'meeting.joined'
   | 'meeting.admitted'
   | 'meeting.started'
+  | 'meeting.paused'
+  | 'meeting.resumed'
   | 'meeting.ended'
   | 'meeting.stopped'
   | 'meeting.failed'

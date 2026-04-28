@@ -44,6 +44,11 @@ import { acquireVoiceLock, interruptActiveVoice } from '../../lib/meetings/voice
 import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
 import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
 import { sendRecallBotOutputAudio } from '../../lib/providers/recall/client'
+import {
+  startLocalMeetingSession,
+  updateLocalSessionState,
+} from '../../lib/meetings/local-session'
+import { storeVoiceAudio } from '../../lib/meetings/voice-audio-store'
 import { retryPostMeetingArtifacts } from '../../lib/meetings/post-meeting-service'
 import {
   queueMeetingRecap,
@@ -51,6 +56,7 @@ import {
 } from '../../lib/meetings/work-item-sync'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
+const localMeetingModeSchema = z.enum(['solo', 'room'])
 
 const meetingCopilotSettingsInputSchema = z.object({
   botDisplayName: z.string().trim().max(80).nullable(),
@@ -245,8 +251,9 @@ export const meetingRouter = router({
       if (!meeting) return null
 
       const gateway = createDefaultMeetingProviderGateway()
+      const isLocalSession = meeting.provider as string === 'local'
 
-      const [participants, transcript, liveState, events, workspaceConfig, health] =
+      const [participants, transcript, liveState, events, workspaceConfig, health, localSession] =
         await Promise.all([
         ctx.db.query.meetingParticipants.findMany({
           where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
@@ -271,10 +278,18 @@ export const meetingRouter = router({
           name: ctx.org.name,
           slug: ctx.org.slug,
         }),
-        resolveMeetingHealthSnapshot(ctx.db, gateway, {
-          orgId: ctx.org.id,
-          meetingSession: meeting,
-        }),
+        isLocalSession
+          ? Promise.resolve(null)
+          : resolveMeetingHealthSnapshot(ctx.db, gateway, {
+              orgId: ctx.org.id,
+              meetingSession: meeting,
+            }),
+        isLocalSession
+          ? ctx.db.query.localMeetingSessions.findFirst({
+              where: (fields, { eq }) =>
+                eq(fields.meetingSessionId, meeting.id),
+            })
+          : Promise.resolve(null),
         ])
 
       const controls = await resolveMeetingSessionControls(ctx.db, {
@@ -290,6 +305,7 @@ export const meetingRouter = router({
         liveState,
         events,
         health,
+        localSession,
         workspaceSettings: workspaceConfig.settings,
         controls,
       }
@@ -521,6 +537,10 @@ export const meetingRouter = router({
 
       if (!meeting) return null
 
+      if (meeting.provider as string === 'local') {
+        return null
+      }
+
       const gateway = createDefaultMeetingProviderGateway()
       return resolveMeetingHealthSnapshot(ctx.db, gateway, {
         orgId: ctx.org.id,
@@ -599,6 +619,100 @@ export const meetingRouter = router({
         meetingSessionId: result.meetingSession.id,
         status: result.meetingSession.status,
       }
+    }),
+
+  startLocalSession: memberProcedure
+    .input(
+      z.object({
+        title: z.string().trim().max(120).optional(),
+        mode: localMeetingModeSchema,
+        participationMode: meetingParticipationModeSchema.optional(),
+        inputDeviceId: z.string().trim().max(240).nullish(),
+        inputDeviceLabel: z.string().trim().max(240).nullish(),
+        outputDeviceId: z.string().trim().max(240).nullish(),
+        outputDeviceLabel: z.string().trim().max(240).nullish(),
+        browserFamily: z.string().trim().max(80).nullish(),
+        browserVersion: z.string().trim().max(80).nullish(),
+        platform: z.string().trim().max(120).nullish(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const copilotConfig = await getWorkspaceMeetingCopilotConfig(ctx.db, {
+        id: ctx.org.id,
+        name: ctx.org.name,
+        slug: ctx.org.slug,
+      })
+
+      const result = await startLocalMeetingSession(ctx.db, {
+        orgId: ctx.org.id,
+        orgName: ctx.org.name,
+        actorUserId: ctx.session.user.id,
+        actorUserName: ctx.session.user.name,
+        actorUserEmail: ctx.session.user.email,
+        mode: input.mode,
+        title: input.title ?? null,
+        participationMode: input.participationMode,
+        settings: copilotConfig.settings,
+        devices: {
+          inputDeviceId: input.inputDeviceId ?? null,
+          inputDeviceLabel: input.inputDeviceLabel ?? null,
+          outputDeviceId: input.outputDeviceId ?? null,
+          outputDeviceLabel: input.outputDeviceLabel ?? null,
+        },
+        browser: {
+          browserFamily: input.browserFamily ?? null,
+          browserVersion: input.browserVersion ?? null,
+          platform: input.platform ?? null,
+        },
+      })
+
+      return {
+        ok: true,
+        meetingSessionId: result.meetingSession.id,
+        localSessionId: result.localSession.id,
+        ingestToken: result.ingestToken,
+        ingestTokenExpiresAt: result.ingestTokenExpiresAt,
+        status: result.meetingSession.status,
+      }
+    }),
+
+  pauseLocalSession: memberProcedure
+    .input(z.object({ meetingSessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const localSession = await updateLocalSessionState(ctx.db, {
+        orgId: ctx.org.id,
+        meetingSessionId: input.meetingSessionId,
+        actorUserId: ctx.session.user.id,
+        captureState: 'paused',
+        transcriptionState: 'degraded',
+      })
+      return { ok: true, localSession }
+    }),
+
+  resumeLocalSession: memberProcedure
+    .input(z.object({ meetingSessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const localSession = await updateLocalSessionState(ctx.db, {
+        orgId: ctx.org.id,
+        meetingSessionId: input.meetingSessionId,
+        actorUserId: ctx.session.user.id,
+        captureState: 'capturing',
+        transcriptionState: 'transcribing',
+      })
+      return { ok: true, localSession }
+    }),
+
+  endLocalSession: memberProcedure
+    .input(z.object({ meetingSessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const localSession = await updateLocalSessionState(ctx.db, {
+        orgId: ctx.org.id,
+        meetingSessionId: input.meetingSessionId,
+        actorUserId: ctx.session.user.id,
+        captureState: 'ended',
+        transcriptionState: 'ended',
+      })
+      return { ok: true, localSession }
     }),
 
   askKodi: memberProcedure
@@ -812,8 +926,9 @@ export const meetingRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: freshnessCheck.reason })
       }
 
+      const isLocalSession = meeting.provider === 'local'
       const botSessionId = meeting.providerBotSessionId
-      if (!botSessionId) {
+      if (!isLocalSession && !botSessionId) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: 'No active bot session for voice output.',
@@ -846,11 +961,25 @@ export const meetingRouter = router({
           })
         }
 
-        await sendRecallBotOutputAudio(botSessionId, ttsResult.audioBuffer)
+        const mediaToken = await storeVoiceAudio({
+          answerId: answer.id,
+          meetingSessionId: meeting.id,
+          buffer: ttsResult.audioBuffer,
+        })
+
+        if (!isLocalSession) {
+          await sendRecallBotOutputAudio(botSessionId!, ttsResult.audioBuffer)
+        }
 
         await markAnswerDeliveredToVoice(answer.id, meeting.id)
 
-        return { ok: true, answerId: answer.id, status: 'delivered_to_voice' as const }
+        return {
+          ok: true,
+          answerId: answer.id,
+          status: 'delivered_to_voice' as const,
+          deliveryTarget: isLocalSession ? ('local_browser' as const) : ('external_transport' as const),
+          mediaUrl: isLocalSession ? `/voice-audio/${mediaToken}` : null,
+        }
       } catch (err) {
         if (err instanceof TRPCError) throw err
         const message = err instanceof Error ? err.message : String(err)

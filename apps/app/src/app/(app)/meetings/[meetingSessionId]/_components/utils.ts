@@ -128,6 +128,8 @@ export function formatProviderLabel(provider: string) {
       return 'Google Meet'
     case 'zoom':
       return 'Zoom'
+    case 'local':
+      return 'Local'
     default:
       return provider.replace(/_/g, ' ')
   }

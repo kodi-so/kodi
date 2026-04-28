@@ -35,6 +35,32 @@ export const meetingSessionStatusEnum = pgEnum('meeting_session_status', [
   'failed',
 ])
 
+export const meetingSessionProviderEnum = pgEnum('meeting_session_provider', [
+  'zoom',
+  'google_meet',
+  'local',
+])
+
+export const localMeetingModeEnum = pgEnum('local_meeting_mode', [
+  'solo',
+  'room',
+])
+
+export const localMeetingPermissionStateEnum = pgEnum(
+  'local_meeting_permission_state',
+  ['unknown', 'prompt', 'granted', 'denied']
+)
+
+export const localMeetingCaptureStateEnum = pgEnum(
+  'local_meeting_capture_state',
+  ['ready', 'capturing', 'paused', 'reconnecting', 'failed', 'ended']
+)
+
+export const localMeetingTranscriptionStateEnum = pgEnum(
+  'local_meeting_transcription_state',
+  ['not_started', 'connecting', 'transcribing', 'degraded', 'failed', 'ended']
+)
+
 export const meetingEventSourceEnum = pgEnum('meeting_event_source', [
   'zoom_webhook',
   'recall_webhook',
@@ -103,7 +129,7 @@ export const meetingSessions = pgTable(
     orgId: text('org_id')
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
-    provider: conferenceProviderEnum('provider').notNull(),
+    provider: meetingSessionProviderEnum('provider').notNull(),
     providerInstallationId: text('provider_installation_id').references(
       () => providerInstallations.id,
       { onDelete: 'set null' }
@@ -150,6 +176,75 @@ export const meetingSessions = pgTable(
     ).on(table.provider, table.providerMeetingInstanceId),
     providerBotSessionIdx: index('meeting_sessions_provider_bot_session_idx').on(
       table.providerBotSessionId
+    ),
+  })
+)
+
+export const localMeetingSessions = pgTable(
+  'local_meeting_sessions',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    meetingSessionId: text('meeting_session_id')
+      .notNull()
+      .references(() => meetingSessions.id, { onDelete: 'cascade' }),
+    startedByUserId: text('started_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    mode: localMeetingModeEnum('mode').notNull(),
+    permissionState: localMeetingPermissionStateEnum('permission_state')
+      .notNull()
+      .default('unknown'),
+    captureState: localMeetingCaptureStateEnum('capture_state')
+      .notNull()
+      .default('ready'),
+    transcriptionState: localMeetingTranscriptionStateEnum(
+      'transcription_state'
+    )
+      .notNull()
+      .default('not_started'),
+    inputDeviceId: text('input_device_id'),
+    inputDeviceLabel: text('input_device_label'),
+    outputDeviceId: text('output_device_id'),
+    outputDeviceLabel: text('output_device_label'),
+    browserFamily: text('browser_family'),
+    browserVersion: text('browser_version'),
+    platform: text('platform'),
+    ingestTokenHash: text('ingest_token_hash').notNull(),
+    ingestTokenExpiresAt: timestamp('ingest_token_expires_at').notNull(),
+    ingestTokenRevokedAt: timestamp('ingest_token_revoked_at'),
+    lastSequence: integer('last_sequence').notNull().default(0),
+    lastHeartbeatAt: timestamp('last_heartbeat_at'),
+    lastAudioChunkAt: timestamp('last_audio_chunk_at'),
+    lastTranscriptAt: timestamp('last_transcript_at'),
+    pausedAt: timestamp('paused_at'),
+    resumedAt: timestamp('resumed_at'),
+    endedAt: timestamp('ended_at'),
+    failureReason: text('failure_reason'),
+    diagnostics: jsonb('diagnostics').$type<Record<string, unknown> | null>(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => ({
+    meetingSessionUidx: uniqueIndex(
+      'local_meeting_sessions_meeting_session_uidx'
+    ).on(table.meetingSessionId),
+    orgCaptureIdx: index('local_meeting_sessions_org_capture_idx').on(
+      table.orgId,
+      table.captureState
+    ),
+    tokenHashIdx: uniqueIndex('local_meeting_sessions_token_hash_uidx').on(
+      table.ingestTokenHash
+    ),
+    heartbeatIdx: index('local_meeting_sessions_heartbeat_idx').on(
+      table.lastHeartbeatAt
     ),
   })
 )
@@ -444,9 +539,31 @@ export const meetingSessionsRelations = relations(
       fields: [meetingSessions.id],
       references: [meetingSessionHealth.meetingSessionId],
     }),
+    localSession: one(localMeetingSessions, {
+      fields: [meetingSessions.id],
+      references: [localMeetingSessions.meetingSessionId],
+    }),
     controls: one(meetingSessionControls, {
       fields: [meetingSessions.id],
       references: [meetingSessionControls.meetingSessionId],
+    }),
+  })
+)
+
+export const localMeetingSessionsRelations = relations(
+  localMeetingSessions,
+  ({ one }) => ({
+    org: one(organizations, {
+      fields: [localMeetingSessions.orgId],
+      references: [organizations.id],
+    }),
+    meetingSession: one(meetingSessions, {
+      fields: [localMeetingSessions.meetingSessionId],
+      references: [meetingSessions.id],
+    }),
+    startedByUser: one(user, {
+      fields: [localMeetingSessions.startedByUserId],
+      references: [user.id],
     }),
   })
 )
@@ -692,6 +809,8 @@ export const meetingVoiceMediaRelations = relations(
 
 export type MeetingSession = typeof meetingSessions.$inferSelect
 export type NewMeetingSession = typeof meetingSessions.$inferInsert
+export type LocalMeetingSession = typeof localMeetingSessions.$inferSelect
+export type NewLocalMeetingSession = typeof localMeetingSessions.$inferInsert
 export type MeetingCopilotSetting = typeof meetingCopilotSettings.$inferSelect
 export type NewMeetingCopilotSetting = typeof meetingCopilotSettings.$inferInsert
 export type MeetingSessionControl = typeof meetingSessionControls.$inferSelect

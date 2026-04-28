@@ -78,6 +78,44 @@ function baseRuntimeCopy(status: string): RuntimeCopy {
   }
 }
 
+function localRuntimeCopy(status: string, metadata: Record<string, unknown> | null): RuntimeCopy {
+  const mode = metadata?.localMode === 'solo' ? 'solo' : 'room'
+  if (status === 'listening' || status === 'live') {
+    return {
+      snapshot:
+        mode === 'solo'
+          ? 'Kodi is listening while you think out loud.'
+          : 'Kodi is listening to the room.',
+      description:
+        mode === 'solo'
+          ? 'Kodi is capturing your local thinking session and keeping the transcript moving.'
+          : 'Kodi is capturing this in-person conversation from the local microphone.',
+    }
+  }
+
+  if (status === 'ended' || status === 'completed') {
+    return {
+      snapshot: 'Local session ended. Transcript and follow-through stay here.',
+      description:
+        'This local session has ended. Kodi will keep the transcript, summary, and follow-up in this meeting.',
+    }
+  }
+
+  if (status === 'failed') {
+    return {
+      snapshot: 'Local capture needs attention before this session can continue.',
+      description:
+        'The local microphone or transcription path needs attention before Kodi can keep listening.',
+      alertTone: 'warning',
+      alertTitle: 'Local capture interrupted',
+      alertDescription:
+        'Check microphone permission, device selection, and network connection.',
+    }
+  }
+
+  return baseRuntimeCopy(status)
+}
+
 export function getMeetingRuntimeCopy(input: {
   provider: string
   status: string
@@ -87,6 +125,10 @@ export function getMeetingRuntimeCopy(input: {
   const joinState = providerJoinState(metadata)
   const failureKind = providerFailureKind(metadata)
   const message = lifecycleMessage(metadata)
+
+  if (input.provider === 'local') {
+    return localRuntimeCopy(input.status, metadata)
+  }
 
   if (input.provider === 'zoom') {
     switch (joinState) {

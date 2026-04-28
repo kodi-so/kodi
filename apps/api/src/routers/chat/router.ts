@@ -317,6 +317,9 @@ export const chatRouter = router({
           sourceId: userMessage.id,
           userMessage: input.message,
           history: historyRows,
+          visibility: 'shared',
+          sessionKey: `chat-thread:${input.threadRootMessageId ?? userMessage.id}`,
+          messageChannel: 'chat',
           systemPrompt: SYSTEM_PROMPT,
         })
 

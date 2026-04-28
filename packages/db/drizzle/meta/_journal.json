@@ -208,15 +208,36 @@
     {
       "idx": 29,
       "version": "7",
-      "when": 1777258614000,
-      "tag": "0030_memory_path_search_vectors",
+      "when": 1777256609227,
+      "tag": "0030_onboarding_experience",
       "breakpoints": true
     },
     {
       "idx": 30,
       "version": "7",
+      "when": 1777339200000,
+      "tag": "0031_task_board_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1777420800000,
+      "tag": "0032_local_meetings",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1777421400000,
+      "tag": "0033_memory_path_search_vectors",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
       "when": 1777424400000,
-      "tag": "0031_memory_vault_storage_backend_r2",
+      "tag": "0034_memory_vault_storage_backend_r2",
       "breakpoints": true
     }
   ]

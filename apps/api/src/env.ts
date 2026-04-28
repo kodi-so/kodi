@@ -39,6 +39,10 @@ const envSchema = z.object({
   KODI_FEATURE_TOOL_ACCESS: envBoolean('KODI_FEATURE_TOOL_ACCESS').default(
     false
   ),
+  KODI_FEATURE_LOCAL_MEETINGS: envBoolean('KODI_FEATURE_LOCAL_MEETINGS').default(
+    false
+  ),
+  KODI_FEATURE_TASK_BOARD: envBoolean('KODI_FEATURE_TASK_BOARD').default(true),
 
   // ── Required in Phase 1 (meeting intelligence) ───────────────────────────
 

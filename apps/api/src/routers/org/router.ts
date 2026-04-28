@@ -13,6 +13,7 @@ async function listOrganizationsForUser(database: typeof import('@kodi/db').db, 
       orgSlug: organizations.slug,
       orgImage: organizations.image,
       orgStatus: organizations.status,
+      completedOnboardingAt: organizations.completedOnboardingAt,
       role: orgMembers.role,
       joinedAt: orgMembers.createdAt,
     })
@@ -52,6 +53,7 @@ export const orgRouter = router({
         orgSlug: membership.orgSlug,
         orgImage: membership.orgImage,
         orgStatus: membership.orgStatus,
+        completedOnboardingAt: membership.completedOnboardingAt,
         role: membership.role,
       }
     }),
@@ -231,5 +233,19 @@ export const orgRouter = router({
         .where(eq(activityLog.orgId, ctx.org.id))
         .orderBy(desc(activityLog.createdAt))
         .limit(input.limit)
+    }),
+
+  /**
+   * org.completeOnboarding — owner only, idempotent.
+   * Sets completed_onboarding_at = NOW() to mark the wizard as finished.
+   * Called from the done screen; safe to call multiple times.
+   */
+  completeOnboarding: ownerProcedure
+    .mutation(async ({ ctx }) => {
+      await ctx.db
+        .update(organizations)
+        .set({ completedOnboardingAt: new Date() })
+        .where(eq(organizations.id, ctx.org.id))
+      return { ok: true }
     }),
 })

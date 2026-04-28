@@ -8,6 +8,7 @@ export type MeetingTranscript = MeetingConsole['transcript']
 export type MeetingLiveState = MeetingConsole['liveState'] | null
 export type MeetingEventFeed = MeetingConsole['events']
 export type MeetingHealth = MeetingConsole['health'] | null
+export type LocalMeetingSession = MeetingConsole['localSession'] | null
 export type MeetingWorkspaceSettings =
   MeetingConsole['workspaceSettings'] | null
 export type MeetingControls = MeetingConsole['controls'] | null

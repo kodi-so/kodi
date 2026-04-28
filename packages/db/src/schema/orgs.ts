@@ -24,6 +24,7 @@ export const organizations = pgTable('organizations', {
   stripeCustomerId: text('stripe_customer_id'),
   image: text('image'), // workspace logo — data URL or external URL
   status: text('status').notNull().default('active'), // 'active' | 'pending_billing'
+  completedOnboardingAt: timestamp('completed_onboarding_at'), // null = not yet completed
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 

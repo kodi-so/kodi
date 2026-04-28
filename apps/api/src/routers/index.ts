@@ -9,6 +9,7 @@ import { workRouter } from './work/router'
 import { toolAccessRouter } from './tool-access/router'
 import { approvalRouter } from './approval/router'
 import { billingRouter } from './billing/router'
+import { memoryRouter } from './memory/router'
 
 export const appRouter = router({
   instance: instanceRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   work: workRouter,
   toolAccess: toolAccessRouter,
   billing: billingRouter,
+  memory: memoryRouter,
 })
 
 export type AppRouter = typeof appRouter

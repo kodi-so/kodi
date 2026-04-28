@@ -2,6 +2,7 @@ import { pgTable, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { subscriptions, organizationSettings } from './billing'
 import { memoryVaults } from './memory'
+import { openClawAgents } from './work-items'
 
 export const orgMemberRoleEnum = pgEnum('org_member_role', ['owner', 'member'])
 export const instanceStatusEnum = pgEnum('instance_status', [
@@ -70,6 +71,7 @@ export const organizationsRelations = relations(
     members: many(orgMembers),
     instances: many(instances),
     memoryVaults: many(memoryVaults),
+    openClawAgents: many(openClawAgents),
     subscription: one(subscriptions),
     settings: one(organizationSettings),
   }),
@@ -81,6 +83,7 @@ export const orgMembersRelations = relations(orgMembers, ({ many, one }) => ({
     references: [organizations.id],
   }),
   memoryVaults: many(memoryVaults),
+  openClawAgents: many(openClawAgents),
 }))
 
 export const instancesRelations = relations(instances, ({ one }) => ({

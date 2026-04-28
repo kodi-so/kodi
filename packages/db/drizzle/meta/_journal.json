@@ -239,6 +239,13 @@
       "when": 1777424400000,
       "tag": "0034_memory_vault_storage_backend_r2",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1777428000000,
+      "tag": "0035_openclaw_agent_registry_schema",
+      "breakpoints": true
     }
   ]
 }

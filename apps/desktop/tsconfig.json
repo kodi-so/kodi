@@ -1,0 +1,10 @@
+{
+  "extends": "@kodi/typescript-config/react-library.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "baseUrl": "."
+  },
+  "include": ["src/renderer", "src/preload", "src/shared", "vite.config.ts"],
+  "exclude": ["dist", "node_modules"]
+}

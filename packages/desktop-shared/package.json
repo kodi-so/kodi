@@ -1,0 +1,22 @@
+{
+  "name": "@kodi/desktop-shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./trpc": "./src/trpc.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kodi/api": "*",
+    "@trpc/client": "^11.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@kodi/typescript-config": "*",
+    "typescript": "^5.4.5"
+  }
+}

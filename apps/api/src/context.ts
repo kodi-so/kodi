@@ -3,12 +3,13 @@ import { orgMembers, organizations } from '@kodi/db'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import * as schema from '@kodi/db/schema'
+import { resolveDesktopBearerSession } from './lib/desktop/auth'
 
 // Lazy auth instance — shares the same DB as the API
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _auth: any = null
 
-function getAuth() {
+export function getAuth() {
   if (!_auth) {
     _auth = betterAuth({
       baseURL: process.env.BETTER_AUTH_URL!,
@@ -32,14 +33,22 @@ export type OrgMemberWithOrg = typeof orgMembers.$inferSelect & {
   org: typeof organizations.$inferSelect
 }
 
-export async function createContext(opts: { req: Request; resHeaders: Headers }) {
+export async function createContext(opts: {
+  req: Request
+  resHeaders: Headers
+}) {
   // Try to validate the session from the incoming request
   let session: Session | null = null
   try {
-    const auth = getAuth()
-    const result = await auth.api.getSession({ headers: opts.req.headers })
-    if (result) {
-      session = result as Session
+    session = await resolveDesktopBearerSession(
+      opts.req.headers.get('authorization')
+    )
+    if (!session) {
+      const auth = getAuth()
+      const result = await auth.api.getSession({ headers: opts.req.headers })
+      if (result) {
+        session = result as Session
+      }
     }
   } catch {
     // Unauthenticated or session fetch failed — session stays null
@@ -52,7 +61,9 @@ export async function createContext(opts: { req: Request; resHeaders: Headers })
    * Lazy org membership lookup with per-request caching.
    * Returns null if the user is unauthenticated or is not a member of the org.
    */
-  const getOrgMembership = async (orgId: string): Promise<OrgMemberWithOrg | null> => {
+  const getOrgMembership = async (
+    orgId: string
+  ): Promise<OrgMemberWithOrg | null> => {
     if (!session?.user?.id) return null
     if (membershipCache.has(orgId)) return membershipCache.get(orgId) ?? null
 

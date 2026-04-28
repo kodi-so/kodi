@@ -7,6 +7,8 @@ import { createContext } from './context'
 import { registerMeetingRoutes } from './routes/meeting'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
+import { registerDesktopAuthRoutes } from './routes/desktop-auth'
+import { registerLocalMeetingRoutes } from './routes/local-meetings'
 import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 import { db, instances, eq } from '@kodi/db'
 
@@ -18,12 +20,17 @@ app.use('*', logger())
 registerMeetingRoutes(app)
 registerRecallRoutes(app)
 registerComposioRoutes(app)
+registerDesktopAuthRoutes(app)
+registerLocalMeetingRoutes(app)
 app.use(
   '/trpc/*',
   cors({
     origin: [
       process.env.WEB_URL ?? 'http://localhost:3000',
       process.env.APP_URL ?? 'http://localhost:3001',
+      process.env.DESKTOP_DEV_URL ?? 'http://127.0.0.1:5173',
+      'http://localhost:5173',
+      'file://',
     ],
     credentials: true,
   })
@@ -57,7 +64,10 @@ app.post('/internal/provision', async (c) => {
     orgId = body?.orgId
     if (!orgId || typeof orgId !== 'string') throw new Error('missing orgId')
   } catch {
-    return c.json({ error: 'Request body must be JSON with { orgId: string }' }, 400)
+    return c.json(
+      { error: 'Request body must be JSON with { orgId: string }' },
+      400
+    )
   }
 
   // Idempotency: skip if a non-deleted instance already exists
@@ -65,7 +75,9 @@ app.post('/internal/provision', async (c) => {
     where: eq(instances.orgId, orgId),
   })
   if (existing && existing.status !== 'deleted') {
-    console.log(`[internal/provision] org=${orgId} already has instance=${existing.id} status=${existing.status} — skipping`)
+    console.log(
+      `[internal/provision] org=${orgId} already has instance=${existing.id} status=${existing.status} — skipping`
+    )
     return c.json({ skipped: true, reason: 'instance already exists' }, 200)
   }
 

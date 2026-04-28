@@ -39,7 +39,10 @@ const envSchema = z.object({
   KODI_FEATURE_TOOL_ACCESS: envBoolean('KODI_FEATURE_TOOL_ACCESS').default(
     false
   ),
-  KODI_FEATURE_LOCAL_MEETINGS: envBoolean('KODI_FEATURE_LOCAL_MEETINGS').default(
+  KODI_FEATURE_LOCAL_MEETINGS: envBoolean(
+    'KODI_FEATURE_LOCAL_MEETINGS'
+  ).default(false),
+  KODI_FEATURE_DESKTOP_APP: envBoolean('KODI_FEATURE_DESKTOP_APP').default(
     false
   ),
   KODI_FEATURE_TASK_BOARD: envBoolean('KODI_FEATURE_TASK_BOARD').default(true),
@@ -343,7 +346,7 @@ export function requireStripeBilling() {
     !STRIPE_USAGE_PRICE_ID
   ) {
     throw new Error(
-      'Stripe billing environment variables are not fully configured.',
+      'Stripe billing environment variables are not fully configured.'
     )
   }
   return {

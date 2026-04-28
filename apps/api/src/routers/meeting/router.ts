@@ -4,6 +4,7 @@ import { MeetingOrchestrationService } from '../../lib/meetings/orchestration-se
 import { createDefaultMeetingProviderGateway } from '../../lib/meetings/provider-runtime'
 import { TRPCError } from '@trpc/server'
 import {
+  calendarEventCandidates,
   eq,
   meetingAnswers,
   meetingArtifacts,
@@ -40,7 +41,10 @@ import {
   isAnswerSpeakable,
   truncateForVoice,
 } from '../../lib/meetings/voice-policy'
-import { acquireVoiceLock, interruptActiveVoice } from '../../lib/meetings/voice-concurrency'
+import {
+  acquireVoiceLock,
+  interruptActiveVoice,
+} from '../../lib/meetings/voice-concurrency'
 import { generateSpeech, isTtsAvailable } from '../../lib/providers/tts/client'
 import { markdownToMeetingPlainText } from '../../lib/meetings/answer-format'
 import { sendRecallBotOutputAudio } from '../../lib/providers/recall/client'
@@ -49,8 +53,14 @@ import {
   queueMeetingRecap,
   type RecapDeliveryTarget,
 } from '../../lib/meetings/work-item-sync'
+import {
+  startLocalMeetingSession,
+  updateLocalSessionState,
+} from '../../lib/meetings/local-session'
+import { ensureCalendarEventCandidateForLaunch } from '../../lib/desktop/meetings'
 
 const meetingParticipationModeSchema = z.enum(meetingParticipationModeValues)
+const localMeetingModeSchema = z.enum(['solo', 'room'])
 
 const meetingCopilotSettingsInputSchema = z.object({
   botDisplayName: z.string().trim().max(80).nullable(),
@@ -78,7 +88,10 @@ export const meetingRouter = router({
       const rows = await ctx.db.query.meetingSessions.findMany({
         where: (fields, { eq, and, lt }) =>
           input.cursor
-            ? and(eq(fields.orgId, ctx.org.id), lt(fields.createdAt, new Date(input.cursor!)))
+            ? and(
+                eq(fields.orgId, ctx.org.id),
+                lt(fields.createdAt, new Date(input.cursor!))
+              )
             : eq(fields.orgId, ctx.org.id),
         orderBy: (fields, { desc }) => desc(fields.createdAt),
         limit: limit + 1,
@@ -98,7 +111,9 @@ export const meetingRouter = router({
 
       const hasNextPage = rows.length > limit
       const items = hasNextPage ? rows.slice(0, limit) : rows
-      const nextCursor = hasNextPage ? items[items.length - 1]!.createdAt.toISOString() : null
+      const nextCursor = hasNextPage
+        ? items[items.length - 1]!.createdAt.toISOString()
+        : null
 
       return { items, nextCursor }
     }),
@@ -116,7 +131,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting not found.',
+        })
       }
 
       await ctx.db
@@ -143,14 +161,11 @@ export const meetingRouter = router({
     }),
 
   getCopilotSettings: memberProcedure.query(async ({ ctx }) => {
-    const config = await getWorkspaceMeetingCopilotConfig(
-      ctx.db,
-      {
-        id: ctx.org.id,
-        name: ctx.org.name,
-        slug: ctx.org.slug,
-      }
-    )
+    const config = await getWorkspaceMeetingCopilotConfig(ctx.db, {
+      id: ctx.org.id,
+      name: ctx.org.name,
+      slug: ctx.org.slug,
+    })
 
     return {
       settings: config.settings,
@@ -208,14 +223,11 @@ export const meetingRouter = router({
         ctx.session.user.id
       )
 
-      const config = await getWorkspaceMeetingCopilotConfig(
-        ctx.db,
-        {
-          id: ctx.org.id,
-          name: ctx.org.name,
-          slug: ctx.org.slug,
-        }
-      )
+      const config = await getWorkspaceMeetingCopilotConfig(ctx.db, {
+        id: ctx.org.id,
+        name: ctx.org.name,
+        slug: ctx.org.slug,
+      })
 
       return {
         settings: config.settings,
@@ -246,8 +258,14 @@ export const meetingRouter = router({
 
       const gateway = createDefaultMeetingProviderGateway()
 
-      const [participants, transcript, liveState, events, workspaceConfig, health] =
-        await Promise.all([
+      const [
+        participants,
+        transcript,
+        liveState,
+        events,
+        workspaceConfig,
+        health,
+      ] = await Promise.all([
         ctx.db.query.meetingParticipants.findMany({
           where: (fields, { eq }) => eq(fields.meetingSessionId, meeting.id),
           orderBy: (fields, { desc }) => desc(fields.createdAt),
@@ -275,7 +293,7 @@ export const meetingRouter = router({
           orgId: ctx.org.id,
           meetingSession: meeting,
         }),
-        ])
+      ])
 
       const controls = await resolveMeetingSessionControls(ctx.db, {
         meetingSessionId: meeting.id,
@@ -375,17 +393,16 @@ export const meetingRouter = router({
         meetingSessionId: z.string(),
         participationMode: meetingParticipationModeSchema.optional(),
         liveResponsesDisabled: z.boolean().optional(),
-        liveResponsesDisabledReason: z
-          .string()
-          .trim()
-          .max(240)
-          .optional(),
+        liveResponsesDisabledReason: z.string().trim().max(240).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const meeting = await ctx.db.query.meetingSessions.findFirst({
         where: (fields, { and, eq }) =>
-          and(eq(fields.id, input.meetingSessionId), eq(fields.orgId, ctx.org.id)),
+          and(
+            eq(fields.id, input.meetingSessionId),
+            eq(fields.orgId, ctx.org.id)
+          ),
         columns: {
           id: true,
           orgId: true,
@@ -548,14 +565,11 @@ export const meetingRouter = router({
       const orchestration = new MeetingOrchestrationService(
         createDefaultMeetingProviderGateway()
       )
-      const copilotConfig = await getWorkspaceMeetingCopilotConfig(
-        ctx.db,
-        {
-          id: ctx.org.id,
-          name: ctx.org.name,
-          slug: ctx.org.slug,
-        }
-      )
+      const copilotConfig = await getWorkspaceMeetingCopilotConfig(ctx.db, {
+        id: ctx.org.id,
+        name: ctx.org.name,
+        slug: ctx.org.slug,
+      })
 
       const result = await orchestration.requestBotJoin({
         orgId: ctx.org.id,
@@ -581,8 +595,7 @@ export const meetingRouter = router({
             consentNoticeEnabled: copilotConfig.settings.consentNoticeEnabled,
             transcriptRetentionDays:
               copilotConfig.settings.transcriptRetentionDays,
-            artifactRetentionDays:
-              copilotConfig.settings.artifactRetentionDays,
+            artifactRetentionDays: copilotConfig.settings.artifactRetentionDays,
           },
         },
       })
@@ -599,6 +612,187 @@ export const meetingRouter = router({
         meetingSessionId: result.meetingSession.id,
         status: result.meetingSession.status,
       }
+    }),
+
+  startFromScheduledEvent: memberProcedure
+    .input(
+      z.object({
+        calendarEventId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const event = await ensureCalendarEventCandidateForLaunch(ctx.db, {
+        orgId: ctx.org.id,
+        userId: ctx.session.user.id,
+        calendarEventId: input.calendarEventId,
+      })
+
+      if (event.meetingSessionId) {
+        return {
+          ok: true,
+          meetingSessionId: event.meetingSessionId,
+          status: 'existing' as const,
+          joinUrl: event.joinUrl,
+        }
+      }
+
+      if (
+        !event.joinUrl ||
+        (event.conferenceProvider !== 'zoom' &&
+          event.conferenceProvider !== 'google_meet')
+      ) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'This scheduled event does not have a supported meeting link.',
+        })
+      }
+
+      const orchestration = new MeetingOrchestrationService(
+        createDefaultMeetingProviderGateway()
+      )
+      const copilotConfig = await getWorkspaceMeetingCopilotConfig(ctx.db, {
+        id: ctx.org.id,
+        name: ctx.org.name,
+        slug: ctx.org.slug,
+      })
+
+      const result = await orchestration.requestBotJoin({
+        orgId: ctx.org.id,
+        provider: event.conferenceProvider,
+        hostUserId: ctx.session.user.id,
+        meeting: {
+          joinUrl: event.joinUrl,
+          title: event.title,
+        },
+        botIdentity: {
+          displayName: copilotConfig.identity.displayName,
+        },
+        metadata: {
+          scheduledEvent: {
+            calendarEventCandidateId: event.id,
+            externalEventId: event.externalEventId,
+            calendarProvider: event.calendarProvider,
+            startsAt: event.startsAt.toISOString(),
+          },
+          desktopLaunch: true,
+        },
+      })
+
+      await ensureMeetingSessionControls(ctx.db, {
+        meetingSessionId: result.meetingSession.id,
+        orgId: ctx.org.id,
+        settings: copilotConfig.settings,
+        actorUserId: ctx.session.user.id,
+      })
+
+      await ctx.db
+        .update(calendarEventCandidates)
+        .set({
+          meetingSessionId: result.meetingSession.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(calendarEventCandidates.id, event.id))
+
+      return {
+        ok: true,
+        meetingSessionId: result.meetingSession.id,
+        status: result.meetingSession.status,
+        joinUrl: event.joinUrl,
+      }
+    }),
+
+  startLocalSession: memberProcedure
+    .input(
+      z.object({
+        title: z.string().trim().max(120).optional(),
+        mode: localMeetingModeSchema,
+        participationMode: meetingParticipationModeSchema.optional(),
+        platform: z.string().trim().max(120).nullish(),
+        startedFrom: z
+          .enum(['web_app', 'desktop_app', 'desktop_tray', 'scheduled_event'])
+          .default('desktop_app'),
+        scheduledCalendarEventId: z.string().nullable().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const copilotConfig = await getWorkspaceMeetingCopilotConfig(ctx.db, {
+        id: ctx.org.id,
+        name: ctx.org.name,
+        slug: ctx.org.slug,
+      })
+      const result = await startLocalMeetingSession(ctx.db, {
+        orgId: ctx.org.id,
+        orgName: ctx.org.name,
+        actorUserId: ctx.session.user.id,
+        actorUserName: ctx.session.user.name,
+        actorUserEmail: ctx.session.user.email,
+        mode: input.mode,
+        title: input.title ?? null,
+        platform: input.platform ?? null,
+        startedFrom: input.startedFrom,
+        scheduledCalendarEventId: input.scheduledCalendarEventId ?? null,
+        participationMode: input.participationMode,
+        settings: copilotConfig.settings,
+      })
+
+      if (input.scheduledCalendarEventId) {
+        await ctx.db
+          .update(calendarEventCandidates)
+          .set({
+            meetingSessionId: result.meetingSession.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(calendarEventCandidates.id, input.scheduledCalendarEventId))
+      }
+
+      return {
+        ok: true,
+        meetingSessionId: result.meetingSession.id,
+        localSessionId: result.localSession.id,
+        ingestToken: result.ingestToken,
+        ingestTokenExpiresAt: result.ingestTokenExpiresAt,
+        status: result.meetingSession.status,
+      }
+    }),
+
+  pauseLocalSession: memberProcedure
+    .input(z.object({ meetingSessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const localSession = await updateLocalSessionState(ctx.db, {
+        orgId: ctx.org.id,
+        meetingSessionId: input.meetingSessionId,
+        actorUserId: ctx.session.user.id,
+        captureState: 'paused',
+        transcriptionState: 'degraded',
+      })
+      return { ok: true, localSession }
+    }),
+
+  resumeLocalSession: memberProcedure
+    .input(z.object({ meetingSessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const localSession = await updateLocalSessionState(ctx.db, {
+        orgId: ctx.org.id,
+        meetingSessionId: input.meetingSessionId,
+        actorUserId: ctx.session.user.id,
+        captureState: 'capturing',
+        transcriptionState: 'transcribing',
+      })
+      return { ok: true, localSession }
+    }),
+
+  endLocalSession: memberProcedure
+    .input(z.object({ meetingSessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const localSession = await updateLocalSessionState(ctx.db, {
+        orgId: ctx.org.id,
+        meetingSessionId: input.meetingSessionId,
+        actorUserId: ctx.session.user.id,
+        captureState: 'ended',
+        transcriptionState: 'ended',
+      })
+      return { ok: true, localSession }
     }),
 
   askKodi: memberProcedure
@@ -618,7 +812,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
       }
 
       const answer = await createAnswerRequest({
@@ -640,15 +837,34 @@ export const meetingRouter = router({
 
       if (!result.ok) {
         if (result.reason === 'no-context') {
-          await suppressAnswer(answer.id, meeting.id, 'No meeting context available yet.')
-          return { answerId: answer.id, status: 'suppressed' as const, answerText: null, failureReason: null }
+          await suppressAnswer(
+            answer.id,
+            meeting.id,
+            'No meeting context available yet.'
+          )
+          return {
+            answerId: answer.id,
+            status: 'suppressed' as const,
+            answerText: null,
+            failureReason: null,
+          }
         }
 
         await markAnswerFailed(answer.id, meeting.id, result.reason)
-        return { answerId: answer.id, status: 'failed' as const, answerText: null, failureReason: result.reason }
+        return {
+          answerId: answer.id,
+          status: 'failed' as const,
+          answerText: null,
+          failureReason: result.reason,
+        }
       }
 
-      await markAnswerGrounded(answer.id, meeting.id, result.answerText, result.grounding)
+      await markAnswerGrounded(
+        answer.id,
+        meeting.id,
+        result.answerText,
+        result.grounding
+      )
       await markAnswerDeliveredToUi(answer.id, meeting.id)
 
       return {
@@ -699,7 +915,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
       }
 
       const answer = await ctx.db.query.meetingAnswers.findFirst({
@@ -758,7 +977,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
       }
 
       const answer = await ctx.db.query.meetingAnswers.findFirst({
@@ -804,12 +1026,18 @@ export const meetingRouter = router({
       // Eligibility checks
       const speakableCheck = isAnswerSpeakable(answer)
       if (!speakableCheck.eligible) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: speakableCheck.reason })
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: speakableCheck.reason,
+        })
       }
 
       const freshnessCheck = isAnswerFreshForVoice(answer)
       if (!freshnessCheck.eligible) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: freshnessCheck.reason })
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: freshnessCheck.reason,
+        })
       }
 
       const botSessionId = meeting.providerBotSessionId
@@ -822,7 +1050,11 @@ export const meetingRouter = router({
 
       // Acquire per-session voice lock (interrupts any in-flight response)
       const lockResult = acquireVoiceLock(meeting.id, answer.id, () => {
-        void markAnswerFailed(answer.id, meeting.id, 'Interrupted by newer voice request.').catch(() => {})
+        void markAnswerFailed(
+          answer.id,
+          meeting.id,
+          'Interrupted by newer voice request.'
+        ).catch(() => {})
       })
 
       if (!lockResult.acquired) {
@@ -839,7 +1071,11 @@ export const meetingRouter = router({
         const ttsResult = await generateSpeech({ text: voiceText })
 
         if (!ttsResult.ok) {
-          await markAnswerFailed(answer.id, meeting.id, `TTS failed: ${ttsResult.reason}`)
+          await markAnswerFailed(
+            answer.id,
+            meeting.id,
+            `TTS failed: ${ttsResult.reason}`
+          )
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: `TTS generation failed: ${ttsResult.reason}`,
@@ -850,7 +1086,11 @@ export const meetingRouter = router({
 
         await markAnswerDeliveredToVoice(answer.id, meeting.id)
 
-        return { ok: true, answerId: answer.id, status: 'delivered_to_voice' as const }
+        return {
+          ok: true,
+          answerId: answer.id,
+          status: 'delivered_to_voice' as const,
+        }
       } catch (err) {
         if (err instanceof TRPCError) throw err
         const message = err instanceof Error ? err.message : String(err)
@@ -878,7 +1118,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
       }
 
       const interruptedAnswerId = interruptActiveVoice(meeting.id)
@@ -911,7 +1154,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
       }
 
       return ctx.db.query.meetingArtifacts.findMany({
@@ -937,7 +1183,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
       }
 
       void retryPostMeetingArtifacts(meeting.id, ctx.org.id).catch((error) => {
@@ -970,7 +1219,10 @@ export const meetingRouter = router({
       })
 
       if (!meeting) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Meeting session not found.' })
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Meeting session not found.',
+        })
       }
 
       try {

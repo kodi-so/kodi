@@ -1,0 +1,357 @@
+@import '@kodi/ui/styles/brand-theme.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: hsl(var(--foreground));
+  background: #f7f4ee;
+  font-family: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 760px;
+  min-height: 600px;
+  background:
+    linear-gradient(90deg, rgba(20, 39, 32, 0.07) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(20, 39, 32, 0.06) 1px, transparent 1px),
+    #f7f4ee;
+  background-size: 44px 44px;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.loading,
+.login-screen,
+.desktop-shell,
+.settings-shell {
+  min-height: 100vh;
+}
+
+.loading {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  color: #294238;
+}
+
+.login-screen {
+  display: grid;
+  place-items: center;
+  padding: 40px;
+}
+
+.login-panel {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 34px;
+  border: 1px solid rgba(37, 56, 49, 0.16);
+  background: rgba(255, 252, 245, 0.92);
+}
+
+.brand-mark {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: #20382f;
+  color: #f7f4ee;
+  font-weight: 800;
+}
+
+.login-panel h1,
+.topbar h1 {
+  margin: 0;
+  font-size: 38px;
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.login-panel p {
+  margin: 0;
+  color: #5f6f66;
+  line-height: 1.5;
+}
+
+.login-panel label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: #53655c;
+}
+
+.login-panel input,
+.settings-list input[type='number'] {
+  height: 40px;
+  border: 1px solid rgba(32, 56, 47, 0.18);
+  background: #fffdf8;
+  padding: 0 12px;
+  outline-color: #20382f;
+}
+
+.desktop-shell,
+.settings-shell {
+  padding: 28px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 26px;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 8px;
+}
+
+.topbar nav button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(32, 56, 47, 0.16);
+  background: rgba(255, 252, 245, 0.9);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: #7a5d3c;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.focus-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  align-items: start;
+}
+
+.coming-up,
+.quick-panel,
+.settings-list {
+  border: 1px solid rgba(32, 56, 47, 0.14);
+  background: rgba(255, 252, 245, 0.86);
+}
+
+.meeting-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 86px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(32, 56, 47, 0.1);
+}
+
+.meeting-row time {
+  display: grid;
+  gap: 4px;
+}
+
+.meeting-row time strong {
+  color: #20382f;
+  font-size: 18px;
+}
+
+.meeting-row time span,
+.meeting-main p,
+.recent small,
+.settings-list small {
+  color: #64746b;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+}
+
+.meeting-main h3 {
+  margin: 0 0 6px;
+  color: #1d3029;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.meeting-main p {
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.live-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(32, 56, 47, 0.1);
+  background: #edf4e6;
+  color: #20382f;
+}
+
+.live-strip div,
+.recent button span {
+  min-width: 0;
+}
+
+.live-strip strong,
+.recent button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-strip span {
+  display: block;
+  color: #597066;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+}
+
+.quick-panel {
+  display: grid;
+  gap: 22px;
+  padding: 18px;
+}
+
+.quick-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.recent {
+  display: grid;
+  gap: 8px;
+}
+
+.recent h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.recent button {
+  display: grid;
+  gap: 3px;
+  min-height: 54px;
+  border: 0;
+  border-top: 1px solid rgba(32, 56, 47, 0.1);
+  background: transparent;
+  padding: 10px 0;
+  text-align: left;
+  color: #20382f;
+}
+
+.empty-state {
+  display: grid;
+  gap: 10px;
+  padding: 48px;
+  color: #53655c;
+}
+
+.empty-state h2 {
+  margin: 0;
+  color: #20382f;
+  font-size: 22px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.settings-list {
+  display: grid;
+  max-width: 720px;
+}
+
+.settings-list label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 76px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(32, 56, 47, 0.1);
+}
+
+.settings-list strong {
+  display: block;
+  color: #20382f;
+}
+
+.settings-list input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  accent-color: #20382f;
+}
+
+.settings-list input[type='number'] {
+  width: 84px;
+}
+
+.sign-out {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 54px;
+  border: 0;
+  background: transparent;
+  padding: 0 20px;
+  color: #8d3f2d;
+}
+
+.reminder {
+  min-height: 100vh;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 24px;
+  border: 1px solid rgba(32, 56, 47, 0.18);
+  background: #fffaf0;
+}
+
+.reminder h1 {
+  margin: 0;
+  color: #20382f;
+  font-size: 26px;
+  line-height: 1.05;
+}
+
+.reminder p {
+  margin: 0 0 8px;
+  color: #5f6f66;
+}
+
+.reminder div {
+  display: flex;
+  gap: 10px;
+}
+
+@media (max-width: 920px) {
+  body {
+    min-width: 680px;
+  }
+
+  .focus-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+}

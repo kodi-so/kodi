@@ -14,9 +14,12 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
+    "@types/node": "18.19.130",
+    "@types/react": "18.3.2",
+    "@types/react-dom": "18.3.0",
     "prettier": "^3.2.5",
     "turbo": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "5.4.5"
   },
   "packageManager": "bun@1.2.0",
   "overrides": {

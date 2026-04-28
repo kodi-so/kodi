@@ -32,6 +32,32 @@ const sourceTypeSchema = z.enum(['meeting', 'manual', 'chat', 'import', 'agent',
 const linkedSchema = z.enum(['linked', 'unlinked', 'all'])
 const completionSchema = z.enum(['open', 'completed', 'all'])
 
+function isTaskBoardSchemaError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message?: unknown }).message)
+        : ''
+
+  return (
+    message.includes('openclaw_agents') ||
+    message.includes('task_workflow_states') ||
+    message.includes('task_activities') ||
+    message.includes('workflow_state_id') ||
+    message.includes('assignee_type')
+  )
+}
+
+function taskBoardSchemaError(error: unknown) {
+  if (!isTaskBoardSchemaError(error)) return null
+  return new TRPCError({
+    code: 'PRECONDITION_FAILED',
+    message:
+      'Task board database migration has not been applied yet. Run the latest database migrations, then reload Tasks.',
+  })
+}
+
 export const workRouter = router({
   list: memberProcedure
     .input(
@@ -91,12 +117,18 @@ export const workRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return listTaskBoard({
-        db: ctx.db,
-        orgId: ctx.org.id,
-        currentUserId: ctx.session.user.id,
-        filters: input,
-      })
+      try {
+        return await listTaskBoard({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          currentUserId: ctx.session.user.id,
+          filters: input,
+        })
+      } catch (error) {
+        const schemaError = taskBoardSchemaError(error)
+        if (schemaError) throw schemaError
+        throw error
+      }
     }),
 
   detail: memberProcedure
@@ -106,11 +138,18 @@ export const workRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      const detail = await getTaskDetail({
-        db: ctx.db,
-        orgId: ctx.org.id,
-        workItemId: input.workItemId,
-      })
+      let detail: Awaited<ReturnType<typeof getTaskDetail>>
+      try {
+        detail = await getTaskDetail({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          workItemId: input.workItemId,
+        })
+      } catch (error) {
+        const schemaError = taskBoardSchemaError(error)
+        if (schemaError) throw schemaError
+        throw error
+      }
 
       if (!detail) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found.' })
@@ -126,11 +165,17 @@ export const workRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return listTaskActivity({
-        db: ctx.db,
-        orgId: ctx.org.id,
-        workItemId: input.workItemId,
-      })
+      try {
+        return await listTaskActivity({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          workItemId: input.workItemId,
+        })
+      } catch (error) {
+        const schemaError = taskBoardSchemaError(error)
+        if (schemaError) throw schemaError
+        throw error
+      }
     }),
 
   create: memberProcedure
@@ -150,21 +195,28 @@ export const workRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const created = await createTask({
-        db: ctx.db,
-        orgId: ctx.org.id,
-        actorUserId: ctx.session.user.id,
-        title: input.title,
-        description: input.description,
-        kind: input.kind,
-        priority: input.priority,
-        dueAt: input.dueAt ? new Date(input.dueAt) : input.dueAt === null ? null : undefined,
-        workflowStateId: input.workflowStateId,
-        assigneeType: input.assigneeType,
-        assigneeUserId: input.assigneeUserId,
-        assigneeAgentId: input.assigneeAgentId,
-        sourceType: input.sourceType,
-      })
+      let created: Awaited<ReturnType<typeof createTask>>
+      try {
+        created = await createTask({
+          db: ctx.db,
+          orgId: ctx.org.id,
+          actorUserId: ctx.session.user.id,
+          title: input.title,
+          description: input.description,
+          kind: input.kind,
+          priority: input.priority,
+          dueAt: input.dueAt ? new Date(input.dueAt) : input.dueAt === null ? null : undefined,
+          workflowStateId: input.workflowStateId,
+          assigneeType: input.assigneeType,
+          assigneeUserId: input.assigneeUserId,
+          assigneeAgentId: input.assigneeAgentId,
+          sourceType: input.sourceType,
+        })
+      } catch (error) {
+        const schemaError = taskBoardSchemaError(error)
+        if (schemaError) throw schemaError
+        throw error
+      }
 
       const linearPolicy = await ctx.db.query.toolkitPolicies.findFirst({
         where: (fields, { and, eq }) =>

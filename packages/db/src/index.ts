@@ -40,6 +40,13 @@ export { deriveMeetingBotIdentity } from './lib/meeting-bot-identity'
 export * from './lib/meeting-copilot'
 export { ensurePersonalOrganizationForUser } from './lib/personal-org'
 export {
+  buildMemberOpenClawAgentId,
+  buildMemberOpenClawAgentSlug,
+  buildOrgOpenClawAgentId,
+  ensureMemberOpenClawAgent,
+  ensureOrgOpenClawAgent,
+} from './lib/openclaw-agent-registry'
+export {
   PLANS,
   MARKUP_FACTOR,
   toRealBudget,

@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { activityLog, and, asc, desc, ensurePersonalOrganizationForUser, eq, instances, orgMembers, organizations, user } from '@kodi/db'
+import { activityLog, and, asc, desc, ensureMemberOpenClawAgent, ensurePersonalOrganizationForUser, eq, instances, orgMembers, organizations, user } from '@kodi/db'
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
 import { logActivity } from '../../lib/activity'
@@ -138,11 +138,20 @@ export const orgRouter = router({
       if (!org) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create organization' })
 
       // Add creator as owner member
-      await ctx.db.insert(orgMembers).values({
+      const [member] = await ctx.db.insert(orgMembers).values({
         orgId: org.id,
         userId,
         role: 'owner',
-      })
+      }).returning()
+
+      if (member) {
+        await ensureMemberOpenClawAgent(ctx.db, {
+          orgId: org.id,
+          orgMemberId: member.id,
+          displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Owner',
+          metadata: { source: 'org-create', role: 'owner' },
+        })
+      }
 
       return { orgId: org.id, orgSlug: org.slug, orgName: org.name }
     }),

@@ -2,12 +2,16 @@ import {
   and,
   db,
   eq,
-  memoryPaths,
   memoryVaults,
   sql,
   type OrgMember,
   type Organization,
 } from '@kodi/db'
+import {
+  applyMemoryPathSyncRecords,
+  collectMemoryPathSyncRecords,
+  type MemoryPathSyncExecutor,
+} from './paths'
 import type { MemoryStorage, MemoryStoragePathType } from './storage'
 
 type OrgVaultDirectorySeed = {
@@ -422,6 +426,10 @@ export async function ensureOrgMemoryVault(
   }
 
   const seedPlan = buildOrgVaultSeedPlan(org)
+  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
+    rootPath: seedPlan.rootPath,
+    manifestPath: seedPlan.manifestPath,
+  })
 
   for (const directory of seedPlan.directories) {
     await resolvedStorage.createDirectory(`${seedPlan.rootPath}/${directory.path}`)
@@ -465,16 +473,10 @@ export async function ensureOrgMemoryVault(
       throw new Error(`Failed to create org memory vault for org ${org.id}`)
     }
 
-    await tx.insert(memoryPaths).values(
-      seedPlan.pathRecords.map((record) => ({
-        vaultId: vault.id,
-        path: record.path,
-        pathType: record.pathType,
-        parentPath: record.parentPath,
-        title: record.title,
-        isManifest: record.isManifest,
-        isIndex: record.isIndex,
-      }))
+    await applyMemoryPathSyncRecords(
+      tx as MemoryPathSyncExecutor,
+      vault.id,
+      syncRecords
     )
 
     return vault
@@ -502,6 +504,10 @@ export async function ensureMemberMemoryVault(
   }
 
   const seedPlan = buildMemberVaultSeedPlan(identity)
+  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
+    rootPath: seedPlan.rootPath,
+    manifestPath: seedPlan.manifestPath,
+  })
 
   for (const directory of seedPlan.directories) {
     await resolvedStorage.createDirectory(`${seedPlan.rootPath}/${directory.path}`)
@@ -549,16 +555,10 @@ export async function ensureMemberMemoryVault(
       )
     }
 
-    await tx.insert(memoryPaths).values(
-      seedPlan.pathRecords.map((record) => ({
-        vaultId: vault.id,
-        path: record.path,
-        pathType: record.pathType,
-        parentPath: record.parentPath,
-        title: record.title,
-        isManifest: record.isManifest,
-        isIndex: record.isIndex,
-      }))
+    await applyMemoryPathSyncRecords(
+      tx as MemoryPathSyncExecutor,
+      vault.id,
+      syncRecords
     )
 
     return vault

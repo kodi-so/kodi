@@ -112,7 +112,7 @@ async function bodyToBuffer(body: unknown): Promise<Buffer> {
     return Buffer.from(body)
   }
 
-  throw new Error('Unsupported S3 response body type.')
+  throw new Error('Unsupported object storage response body type.')
 }
 
 function buildPreview(content: string, query: string) {
@@ -129,7 +129,7 @@ function buildPreview(content: string, query: string) {
   return content.slice(start, end).trim()
 }
 
-export class S3MemoryStorage implements MemoryStorage {
+export class R2MemoryStorage implements MemoryStorage {
   private readonly bucket: string
   private readonly rootPrefix: string
   private readonly client: S3Client
@@ -493,5 +493,5 @@ export class S3MemoryStorage implements MemoryStorage {
 }
 
 export function createMemoryStorage() {
-  return new S3MemoryStorage()
+  return new R2MemoryStorage()
 }

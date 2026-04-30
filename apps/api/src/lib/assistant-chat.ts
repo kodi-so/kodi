@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { decrypt, instances } from '@kodi/db'
+import { resolveOpenClawConnection, type OpenClawConversationVisibility } from './openclaw/client'
 import { runChatCompletionWithToolAccess } from './tool-access-runtime'
 
 const CHARS_PER_TOKEN = 4
@@ -34,59 +34,29 @@ export function buildMessagesWithHistory(
   return [systemMessage, ...included, { role: 'user', content: newUserMessage }]
 }
 
-export async function getAssistantRuntimeConfig(db: any, orgId: string) {
-  const instance = await db.query.instances.findFirst({
-    where: (table: typeof instances, { eq }: any) => eq(table.orgId, orgId),
+export async function getAssistantRuntimeConfig(params: {
+  db: any
+  orgId: string
+  actorUserId: string
+  visibility: OpenClawConversationVisibility
+  sessionKey?: string
+  messageChannel?: string
+}) {
+  const connection = await resolveOpenClawConnection({
+    orgId: params.orgId,
+    actorUserId: params.actorUserId,
+    visibility: params.visibility,
+    sessionKey: params.sessionKey,
+    messageChannel: params.messageChannel,
   })
 
-  if (!instance) {
+  if (!connection) {
     throw new TRPCError({
       code: 'NOT_FOUND',
-      message: 'No instance found for this org',
+      message: 'No running OpenClaw instance found for this org.',
     })
   }
-
-  if (instance.status !== 'running') {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message: `Instance is not ready (current status: ${instance.status})`,
-    })
-  }
-
-  let instanceUrl: string | undefined
-
-  if (instance.instanceUrl) {
-    instanceUrl = instance.instanceUrl
-  } else if (instance.hostname) {
-    instanceUrl = `https://${instance.hostname}`
-  } else if (process.env.OPENCLAW_DEV_URL) {
-    instanceUrl = process.env.OPENCLAW_DEV_URL
-  }
-
-  if (!instanceUrl) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message:
-        'Instance has no reachable URL (instanceUrl, hostname, or OPENCLAW_DEV_URL required)',
-    })
-  }
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-
-  if (instance.gatewayToken) {
-    try {
-      const token = decrypt(instance.gatewayToken)
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-    } catch {
-      // Best effort only.
-    }
-  }
-
-  return { headers, instanceUrl }
+  return connection
 }
 
 export async function runAssistantTurn(params: {
@@ -96,12 +66,19 @@ export async function runAssistantTurn(params: {
   sourceId: string
   userMessage: string
   history: { role: 'user' | 'assistant'; content: string }[]
+  visibility: OpenClawConversationVisibility
+  sessionKey?: string
+  messageChannel?: string
   systemPrompt?: string
 }) {
-  const { headers, instanceUrl } = await getAssistantRuntimeConfig(
-    params.db,
-    params.orgId
-  )
+  const { headers, instanceUrl, model } = await getAssistantRuntimeConfig({
+    db: params.db,
+    orgId: params.orgId,
+    actorUserId: params.actorUserId,
+    visibility: params.visibility,
+    sessionKey: params.sessionKey,
+    messageChannel: params.messageChannel,
+  })
 
   const messages = buildMessagesWithHistory(
     params.history,
@@ -117,6 +94,7 @@ export async function runAssistantTurn(params: {
     userMessage: params.userMessage,
     instanceUrl,
     headers,
+    model,
     messages,
   })
 }

@@ -238,6 +238,9 @@ export async function processMeetingDraftActions(
 
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:draft-actions`,
+    messageChannel: 'meeting',
     messages: buildDraftActionMessages({
       meetingSession: input.meetingSession,
       analysis,

@@ -1918,6 +1918,7 @@ async function searchScopedSessionTools(
 async function requestOpenClawChatCompletion(params: {
   instanceUrl: string
   headers: Record<string, string>
+  model?: string
   messages: OpenAIMessage[]
   tools?: OpenAIToolDefinition[]
   toolChoice?: OpenAIToolChoice
@@ -1930,7 +1931,7 @@ async function requestOpenClawChatCompletion(params: {
 
   try {
     const body: Record<string, unknown> = {
-      model: 'openclaw:main',
+      model: params.model ?? 'openclaw/default',
       messages: params.messages,
     }
 
@@ -2365,11 +2366,13 @@ async function createScopedToolRuntime(params: {
 async function runPlainChatCompletion(params: {
   instanceUrl: string
   headers: Record<string, string>
+  model?: string
   messages: OpenAIMessage[]
 }) {
   const response = await requestOpenClawChatCompletion({
     instanceUrl: params.instanceUrl,
     headers: params.headers,
+    model: params.model,
     messages: params.messages,
   })
 
@@ -2768,6 +2771,7 @@ async function queueScopedToolApprovalBySlug(params: {
 async function planLinearIssueCreation(params: {
   headers: Record<string, string>
   instanceUrl: string
+  model?: string
   messages: OpenAIMessage[]
   teams: LinearTeamSnapshot[]
   projects: LinearProjectSnapshot[]
@@ -2777,6 +2781,7 @@ async function planLinearIssueCreation(params: {
   const response = await requestOpenClawChatCompletion({
     instanceUrl: params.instanceUrl,
     headers: params.headers,
+    model: params.model,
     messages: [
       {
         role: 'system',
@@ -2799,6 +2804,7 @@ async function maybeHandleLinearIssueCreation(params: {
   db: AnyDb
   headers: Record<string, string>
   instanceUrl: string
+  model?: string
   messages: OpenAIMessage[]
   orgId: string
   runtime: ScopedToolRuntime
@@ -2853,6 +2859,7 @@ async function maybeHandleLinearIssueCreation(params: {
   const plan = await planLinearIssueCreation({
     headers: params.headers,
     instanceUrl: params.instanceUrl,
+    model: params.model,
     messages: params.messages,
     teams,
     projects,
@@ -2966,6 +2973,7 @@ export async function runChatCompletionWithToolAccess(params: {
   userMessage: string
   instanceUrl: string
   headers: Record<string, string>
+  model?: string
   messages: Array<{ role: string; content: string }>
 }) {
   const baseMessages = params.messages.map((message) => ({
@@ -2998,6 +3006,7 @@ export async function runChatCompletionWithToolAccess(params: {
     return runPlainChatCompletion({
       instanceUrl: params.instanceUrl,
       headers: params.headers,
+      model: params.model,
       messages: baseMessages,
     })
   }
@@ -3056,6 +3065,7 @@ export async function runChatCompletionWithToolAccess(params: {
         db: params.db,
         headers: params.headers,
         instanceUrl: params.instanceUrl,
+        model: params.model,
         messages: conversation,
         orgId: params.orgId,
         runtime: scopedRuntime,
@@ -3121,6 +3131,7 @@ export async function runChatCompletionWithToolAccess(params: {
       const response = await requestOpenClawChatCompletion({
         instanceUrl: params.instanceUrl,
         headers: params.headers,
+        model: params.model,
         messages: conversation,
         tools: scopedRuntime?.openAITools,
         toolChoice:

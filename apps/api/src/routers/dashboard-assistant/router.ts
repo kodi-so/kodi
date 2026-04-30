@@ -309,6 +309,9 @@ export const dashboardAssistantRouter = router({
           sourceId: userMessage.id,
           userMessage: content,
           history: historyRows,
+          visibility: 'private',
+          sessionKey: `dashboard-thread:${threadId}`,
+          messageChannel: 'dashboard-private',
           systemPrompt: DASHBOARD_SYSTEM_PROMPT,
         })
 
@@ -448,6 +451,9 @@ export const dashboardAssistantRouter = router({
           sourceId: userMessage.id,
           userMessage: content,
           history: historyRows,
+          visibility: 'private',
+          sessionKey: `dashboard-thread:${activeThread.id}`,
+          messageChannel: 'dashboard-private',
           systemPrompt: DASHBOARD_SYSTEM_PROMPT,
         })
 

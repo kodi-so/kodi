@@ -107,6 +107,9 @@ async function generateFinalSummary(input: {
 > {
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:final-summary`,
+    messageChannel: 'meeting',
     messages: buildFinalSummaryMessages(input),
     timeoutMs: 25_000,
   })
@@ -166,6 +169,9 @@ async function generateDecisionLog(input: {
 > {
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:decision-log`,
+    messageChannel: 'meeting',
     messages: buildDecisionLogMessages(input),
     timeoutMs: 25_000,
   })
@@ -225,6 +231,9 @@ async function generateActionItems(input: {
 > {
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:action-items`,
+    messageChannel: 'meeting',
     messages: buildActionItemsMessages(input),
     timeoutMs: 25_000,
   })

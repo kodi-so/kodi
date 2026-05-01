@@ -4,14 +4,45 @@ import { normalizeMemoryUpdateEvent } from './events'
 import {
   resolveMemoryUpdatePlan,
   type MemoryResolutionAccess,
+  type MemoryResolutionDeps,
   type MemoryResolutionPath,
   type ResolvedMemoryVault,
 } from './resolution'
 
+type MemoryResolutionCompletionFn = NonNullable<
+  MemoryResolutionDeps['completeResolutionChat']
+>
+type MemoryResolutionCompletionResult = Awaited<
+  ReturnType<MemoryResolutionCompletionFn>
+>
+
 type AccessFixture = {
   access: MemoryResolutionAccess
-  orgVault: ResolvedMemoryVault
-  memberVault: ResolvedMemoryVault
+}
+
+function createResolutionCompletion(
+  resolver: (
+    input: Parameters<MemoryResolutionCompletionFn>[0]
+  ) => Record<string, unknown>
+): MemoryResolutionCompletionFn {
+  return async (input) =>
+    ({
+      ok: true as const,
+      content: JSON.stringify(resolver(input)),
+      connection: {
+        instance: {} as never,
+        instanceUrl: 'https://openclaw.test',
+        headers: {},
+        model: 'openclaw/default',
+        routedAgent: {
+          id: 'agent_123',
+          agentType: input.visibility === 'private' ? 'member' : 'org',
+          openclawAgentId: 'agent_123',
+          status: 'active',
+        },
+        fallbackToDefaultAgent: false,
+      },
+    } satisfies Extract<MemoryResolutionCompletionResult, { ok: true }>)
 }
 
 function createAccessFixture(): AccessFixture {
@@ -145,7 +176,10 @@ User-specific preferences, communication patterns, and working style.
         file('Projects/Launch Checklist.md', 'Launch Checklist'),
       ],
     ],
-    ['vault_org:Current State', [indexFile('Current State/CURRENT-STATE.md', 'Current State index')]],
+    [
+      'vault_org:Current State',
+      [indexFile('Current State/CURRENT-STATE.md', 'Current State index')],
+    ],
     [
       'vault_member:',
       [
@@ -155,69 +189,66 @@ User-specific preferences, communication patterns, and working style.
         directory('Relationships'),
       ],
     ],
-    ['vault_member:Preferences', [indexFile('Preferences/PREFERENCES.md', 'Preferences index')]],
+    [
+      'vault_member:Preferences',
+      [indexFile('Preferences/PREFERENCES.md', 'Preferences index')],
+    ],
   ])
 
   const allPaths = new Map<string, MemoryResolutionPath>()
   for (const entries of paths.values()) {
     for (const entry of entries) {
-      allPaths.set(`${entry.parentPath ?? dirname(entry.path)}:${entry.path}`, entry)
       allPaths.set(`path:${entry.path}`, entry)
     }
   }
 
-  const access: MemoryResolutionAccess = {
-    async resolveVault(input) {
-      return input.scope === 'org' ? orgVault : memberVault
-    },
-    async listPaths(input) {
-      const key = `${input.vaultId}:${input.parentPath ?? ''}`
-      return paths.get(key) ?? []
-    },
-    async getPath(input) {
-      return allPaths.get(`path:${input.path}`) ?? null
-    },
-    async searchPaths(input) {
-      const queryWords = normalize(input.query)
-        .split(/\s+/)
-        .filter((word) => word.length >= 3)
+  return {
+    access: {
+      async resolveVault(input) {
+        return input.scope === 'org' ? orgVault : memberVault
+      },
+      async listPaths(input) {
+        return paths.get(`${input.vaultId}:${input.parentPath ?? ''}`) ?? []
+      },
+      async getPath(input) {
+        return allPaths.get(`path:${input.path}`) ?? null
+      },
+      async searchPaths(input) {
+        const queryWords = normalize(input.query)
+          .split(/\s+/)
+          .filter((word) => word.length >= 3)
 
-      const matches = [...files.entries()]
-        .filter(([key]) => key.startsWith(`${input.vaultId}:`))
-        .map(([key, content]) => {
-          const path = key.split(':').slice(1).join(':')
-          const text = normalize(`${path} ${content}`)
-          const rank = queryWords.reduce(
-            (score, word) => score + (text.includes(word) ? 1 : 0),
-            0
-          )
+        return [...files.entries()]
+          .filter(([key]) => key.startsWith(`${input.vaultId}:`))
+          .map(([key, content]) => {
+            const path = key.split(':').slice(1).join(':')
+            const text = normalize(`${path} ${content}`)
+            const rank = queryWords.reduce(
+              (score, word) => score + (text.includes(word) ? 1 : 0),
+              0
+            )
+            const metadata = allPaths.get(`path:${path}`)
+            if (!metadata || rank === 0) return null
 
-          const metadata = allPaths.get(`path:${path}`)
-          if (!metadata || rank === 0) return null
+            return {
+              ...metadata,
+              rank,
+            }
+          })
+          .filter((item): item is NonNullable<typeof item> => Boolean(item))
+          .sort((left, right) => right.rank - left.rank)
+          .slice(0, input.limit)
+      },
+      async readFile(input) {
+        const content = files.get(`${input.vault.id}:${input.path}`)
+        if (!content) {
+          throw new Error(`Missing file fixture for ${input.vault.id}:${input.path}`)
+        }
 
-          return {
-            ...metadata,
-            rank,
-          }
-        })
-        .filter((item): item is NonNullable<typeof item> => Boolean(item))
-        .sort((left, right) => right.rank - left.rank)
-        .slice(0, input.limit)
-
-      return matches
-    },
-    async readFile(input) {
-      const key = `${input.vault.id}:${input.path}`
-      const content = files.get(key)
-      if (!content) {
-        throw new Error(`Missing file fixture for ${key}`)
-      }
-
-      return content
+        return content
+      },
     },
   }
-
-  return { access, orgVault, memberVault }
 }
 
 function directory(path: string): MemoryResolutionPath {
@@ -277,6 +308,9 @@ function baseEvaluation(
     rationale: ['fixture'],
     signalTags: [],
     memoryKind: 'other',
+    topicLabel: null,
+    topicSummary: null,
+    topicKeywords: [],
     guardrailsApplied: [],
     engine: 'openclaw',
     ...overrides,
@@ -284,7 +318,7 @@ function baseEvaluation(
 }
 
 describe('resolveMemoryUpdatePlan', () => {
-  it('uses targeted search to update an existing org project file', async () => {
+  it('uses model-guided targeted search to update an existing org file', async () => {
     const { access } = createAccessFixture()
     const event = normalizeMemoryUpdateEvent({
       orgId: 'org_123',
@@ -310,10 +344,22 @@ describe('resolveMemoryUpdatePlan', () => {
       event,
       baseEvaluation({
         scope: 'org',
-        memoryKind: 'project',
-        signalTags: ['launch_checklist', 'owner_change'],
+        topicLabel: 'Launch checklist ownership',
+        topicKeywords: ['launch checklist', 'owner'],
       }),
-      { access }
+      {
+        access,
+        completeResolutionChat: createResolutionCompletion(() => ({
+          action: 'update_existing',
+          targetDirectoryPath: 'Projects',
+          targetFilePath: 'Projects/Launch Checklist.md',
+          requiredReads: ['Projects/PROJECTS.md', 'Projects/Launch Checklist.md'],
+          requiresIndexRepair: false,
+          requiresManifestRepair: false,
+          confidence: 'high',
+          rationale: ['The existing Launch Checklist file already owns this topic.'],
+        })),
+      }
     )
 
     expect(plan.scopes).toHaveLength(1)
@@ -328,7 +374,7 @@ describe('resolveMemoryUpdatePlan', () => {
     ])
   })
 
-  it('creates a new member preference file when no existing file owns the topic', async () => {
+  it('creates a new member file from a model-proposed path', async () => {
     const { access } = createAccessFixture()
     const event = normalizeMemoryUpdateEvent({
       orgId: 'org_123',
@@ -353,10 +399,22 @@ describe('resolveMemoryUpdatePlan', () => {
       event,
       baseEvaluation({
         scope: 'member',
-        memoryKind: 'preference',
-        signalTags: ['async_recaps'],
+        topicLabel: 'Async recap preference',
+        topicKeywords: ['async recaps'],
       }),
-      { access }
+      {
+        access,
+        completeResolutionChat: createResolutionCompletion(() => ({
+          action: 'create_new',
+          targetDirectoryPath: 'Preferences',
+          targetFilePath: 'Preferences/Async Recaps.md',
+          requiredReads: ['Preferences/PREFERENCES.md'],
+          requiresIndexRepair: true,
+          requiresManifestRepair: false,
+          confidence: 'high',
+          rationale: ['The preference belongs in the Preferences area and no existing file owns it.'],
+        })),
+      }
     )
 
     expect(plan.scopes).toHaveLength(1)
@@ -367,7 +425,7 @@ describe('resolveMemoryUpdatePlan', () => {
     expect(plan.scopes[0]?.requiresIndexRepair).toBe(true)
   })
 
-  it('builds one scope plan per target when evaluation routes to both', async () => {
+  it('builds one scoped plan per target when the evaluator routes to both', async () => {
     const { access } = createAccessFixture()
     const event = normalizeMemoryUpdateEvent({
       orgId: 'org_123',
@@ -393,10 +451,35 @@ describe('resolveMemoryUpdatePlan', () => {
       event,
       baseEvaluation({
         scope: 'both',
-        memoryKind: 'responsibility',
-        signalTags: ['customer_follow_up', 'personal_preference'],
+        topicLabel: 'Customer follow-up and drafting preference',
+        topicKeywords: ['customer recap', 'follow-up', 'drafting'],
       }),
-      { access }
+      {
+        access,
+        completeResolutionChat: createResolutionCompletion((input) =>
+          input.visibility === 'shared'
+            ? {
+                action: 'create_new',
+                targetDirectoryPath: 'Projects',
+                targetFilePath: 'Projects/Customer Recap Follow-up.md',
+                requiredReads: ['Projects/PROJECTS.md'],
+                requiresIndexRepair: true,
+                requiresManifestRepair: false,
+                confidence: 'medium',
+                rationale: ['The org side is a shared follow-up commitment that fits the Projects area.'],
+              }
+            : {
+                action: 'create_new',
+                targetDirectoryPath: 'Responsibilities',
+                targetFilePath: 'Responsibilities/Follow-up Drafting Preference.md',
+                requiredReads: [],
+                requiresIndexRepair: true,
+                requiresManifestRepair: false,
+                confidence: 'medium',
+                rationale: ['The member side is a personal working preference about handling follow-up drafts.'],
+              }
+        ),
+      }
     )
 
     expect(plan.scopes.map((scope) => scope.scope)).toEqual(['org', 'member'])

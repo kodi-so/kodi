@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import type { MemoryEvaluationDeps } from './evaluation'
-import type { MemoryResolutionAccess, MemoryResolutionPath, ResolvedMemoryVault } from './resolution'
+import type {
+  MemoryResolutionAccess,
+  MemoryResolutionDeps,
+  MemoryResolutionPath,
+  ResolvedMemoryVault,
+} from './resolution'
 import {
   createLatestOnlyMemoryUpdateScheduler,
   dispatchOpenClawMemoryProposal,
@@ -10,6 +15,12 @@ import {
 
 type MemoryCompletionFn = NonNullable<MemoryEvaluationDeps['completeChat']>
 type MemoryCompletionResult = Awaited<ReturnType<MemoryCompletionFn>>
+type MemoryResolutionCompletionFn = NonNullable<
+  MemoryResolutionDeps['completeResolutionChat']
+>
+type MemoryResolutionCompletionResult = Awaited<
+  ReturnType<MemoryResolutionCompletionFn>
+>
 
 function createResolutionAccess(): MemoryResolutionAccess {
   const orgVault: ResolvedMemoryVault = {
@@ -153,6 +164,29 @@ function createModelCompletion(
   } satisfies Extract<MemoryCompletionResult, { ok: true }>)
 }
 
+function createResolutionCompletion(
+  payload: Record<string, unknown>
+): MemoryResolutionCompletionFn {
+  return async (input) =>
+    ({
+      ok: true as const,
+      content: JSON.stringify(payload),
+      connection: {
+        instance: {} as never,
+        instanceUrl: 'https://openclaw.test',
+        headers: {},
+        model: 'openclaw/default',
+        routedAgent: {
+          id: 'agent_123',
+          agentType: input.visibility === 'private' ? 'member' : 'org',
+          openclawAgentId: 'agent_123',
+          status: 'active',
+        },
+        fallbackToDefaultAgent: false,
+      },
+    } satisfies Extract<MemoryResolutionCompletionResult, { ok: true }>)
+}
+
 function deferred() {
   let resolve!: () => void
   const promise = new Promise<void>((res) => {
@@ -225,6 +259,9 @@ describe('createLatestOnlyMemoryUpdateScheduler', () => {
           rationale: ['placeholder'],
           signalTags: [],
           memoryKind: 'other' as const,
+          topicLabel: null,
+          topicSummary: null,
+          topicKeywords: [],
           guardrailsApplied: [],
           engine: 'guardrail-fallback' as const,
           ignoredReason: 'low-information' as const,
@@ -302,8 +339,21 @@ describe('memory update dispatch entrypoints', () => {
         durability: 'durable',
         confidence: 'high',
         memoryKind: 'preference',
+        topicLabel: 'Preference',
+        topicSummary: 'A durable personal preference.',
+        topicKeywords: ['preference'],
         rationale: ['The event captures a durable personal preference.'],
         signalTags: ['personal_preference'],
+      }),
+      completeResolutionChat: createResolutionCompletion({
+        action: 'create_new',
+        targetDirectoryPath: 'Preferences',
+        targetFilePath: 'Preferences/Stable Preference.md',
+        requiredReads: ['Preferences/PREFERENCES.md'],
+        requiresIndexRepair: true,
+        requiresManifestRepair: false,
+        confidence: 'high',
+        rationale: ['The preference belongs in the Preferences area.'],
       }),
       access: createResolutionAccess(),
     })
@@ -341,8 +391,21 @@ describe('memory update dispatch entrypoints', () => {
         durability: 'durable',
         confidence: 'medium',
         memoryKind: 'project',
+        topicLabel: 'Shared project memory',
+        topicSummary: 'A shared project update.',
+        topicKeywords: ['project'],
         rationale: ['The proposal updates durable shared project memory.'],
         signalTags: ['project_state', 'agent_proposal'],
+      }),
+      completeResolutionChat: createResolutionCompletion({
+        action: 'create_new',
+        targetDirectoryPath: 'Current State',
+        targetFilePath: 'Current State/Shared Project Memory.md',
+        requiredReads: ['Current State/CURRENT-STATE.md'],
+        requiresIndexRepair: true,
+        requiresManifestRepair: false,
+        confidence: 'medium',
+        rationale: ['The current shared state area is the right starting point.'],
       }),
       access: createResolutionAccess(),
     })

@@ -5,17 +5,21 @@ import {
   eq,
   isNull,
   memoryPaths,
-  memoryVaults,
   sql,
   type MemoryPath,
   type MemoryVault,
 } from '@kodi/db'
+import { z } from 'zod'
+import {
+  openClawChatCompletion,
+  type OpenClawConversationVisibility,
+} from '../openclaw/client'
 import {
   ensureMemberMemoryVault,
   ensureOrgMemoryVault,
   type MemberVaultIdentity,
 } from './bootstrap'
-import type { MemoryUpdateEvaluation, MemoryUpdateKind } from './evaluation'
+import type { MemoryUpdateEvaluation } from './evaluation'
 import type { NormalizedMemoryUpdateEvent } from './events'
 import {
   parseMemoryDirectoryIndex,
@@ -26,6 +30,7 @@ import {
 import type { MemoryStorage } from './storage'
 
 type MemoryScope = 'org' | 'member'
+type OpenClawChatCompletionFn = typeof openClawChatCompletion
 
 export type ResolvedMemoryVault = Pick<
   MemoryVault,
@@ -95,7 +100,52 @@ export type MemoryResolutionAccess = {
 
 export type MemoryResolutionDeps = {
   access?: MemoryResolutionAccess
+  completeResolutionChat?: OpenClawChatCompletionFn
 }
+
+type MemoryDirectoryContext = {
+  path: string
+  title: string
+  description: string | null
+  indexPath: string | null
+  parsedIndex: ParsedMemoryDirectoryIndex | null
+  knownChildPaths: string[]
+}
+
+type MemoryScopeResolutionContext = {
+  scope: MemoryScope
+  vault: ResolvedMemoryVault
+  manifest: ParsedMemoryManifest
+  manifestPath: string
+  directories: MemoryDirectoryContext[]
+  searchQuery: string
+  searchCandidates: MemoryResolutionSearchResult[]
+}
+
+const MEMORY_RESOLUTION_PROTOCOL_VERSION = 'kodi.memory.resolver.v1'
+const MEMORY_RESOLUTION_TIMEOUT_MS = 12_000
+
+const memoryResolutionResponseSchema = z
+  .object({
+    action: z.enum([
+      'update_existing',
+      'create_new',
+      'delete_obsolete',
+      'trigger_structural_maintenance',
+    ]),
+    targetDirectoryPath: z.string().trim().default(''),
+    targetFilePath: z.string().trim().min(1),
+    requiredReads: z.array(z.string().trim().min(1)).default([]),
+    requiresIndexRepair: z.boolean().default(false),
+    requiresManifestRepair: z.boolean().default(false),
+    confidence: z.enum(['low', 'medium', 'high']).default('medium'),
+    rationale: z.array(z.string().trim().min(1)).default([]),
+  })
+  .strict()
+
+type MemoryResolutionModelResponse = z.infer<
+  typeof memoryResolutionResponseSchema
+>
 
 async function resolveStorage(storage?: MemoryStorage) {
   if (storage) return storage
@@ -114,13 +164,6 @@ function joinPath(...parts: Array<string | undefined | null>) {
   return parts.map((part) => normalizePath(part)).filter(Boolean).join('/')
 }
 
-function basename(path: string) {
-  const normalized = normalizePath(path)
-  if (!normalized) return ''
-  const segments = normalized.split('/')
-  return segments[segments.length - 1] ?? ''
-}
-
 function dirname(path: string) {
   const normalized = normalizePath(path)
   if (!normalized) return ''
@@ -129,317 +172,200 @@ function dirname(path: string) {
   return segments.slice(0, -1).join('/')
 }
 
-function titleCase(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-}
-
-function slugToWords(value: string) {
-  return value.replace(/[-_]+/g, ' ').trim()
-}
-
-function normalizeTitleToken(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
-
-function extractTextSources(event: NormalizedMemoryUpdateEvent) {
-  const metadata = event.metadata ?? {}
-  return [
-    stringValue(metadata.userMessage),
-    stringValue(metadata.text),
-    stringValue(metadata.meetingTitle),
-    stringValue(metadata.assistantMessage),
-    event.summary,
-  ].filter(Boolean)
+function basename(path: string) {
+  const normalized = normalizePath(path)
+  if (!normalized) return ''
+  const segments = normalized.split('/')
+  return segments[segments.length - 1] ?? ''
 }
 
 function stringValue(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function buildSearchQuery(
-  event: NormalizedMemoryUpdateEvent,
-  evaluation: MemoryUpdateEvaluation
-) {
-  const text = extractTextSources(event)
-    .map((value) => value.replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-    .join(' ')
-
-  const tags = evaluation.signalTags
-    .slice(0, 4)
-    .map((tag) => tag.replace(/_/g, ' '))
-    .join(' ')
-
-  return `${text} ${tags}`.replace(/\s+/g, ' ').trim().slice(0, 220)
-}
-
-function defaultDirectoryByKind(scope: MemoryScope, memoryKind: MemoryUpdateKind) {
-  if (scope === 'org') {
-    switch (memoryKind) {
-      case 'project':
-        return 'Projects'
-      case 'customer':
-      case 'relationship':
-        return 'Customers'
-      case 'process':
-        return 'Processes'
-      default:
-        return 'Current State'
-    }
-  }
-
-  switch (memoryKind) {
-    case 'preference':
-      return 'Preferences'
-    case 'responsibility':
-      return 'Responsibilities'
-    case 'relationship':
-      return 'Relationships'
-    default:
-      return 'Current Work'
-  }
-}
-
-function scoreDirectoryCandidate(input: {
-  scope: MemoryScope
-  memoryKind: MemoryUpdateKind
-  directoryPath: string
-  directoryTitle: string
-  description: string
-  event: NormalizedMemoryUpdateEvent
-  evaluation: MemoryUpdateEvaluation
-}) {
-  let score = 0
-  const defaultDirectory = defaultDirectoryByKind(input.scope, input.memoryKind)
-  if (input.directoryPath === defaultDirectory) {
-    score += 20
-  }
-
-  const haystack = normalizeTitleToken(
-    `${input.directoryTitle} ${input.description} ${input.directoryPath}`
-  )
-  const terms = new Set(
-    [
-      input.memoryKind,
-      ...input.evaluation.signalTags,
-      ...extractTextSources(input.event)
-        .flatMap((value) => normalizeTitleToken(value).split(/\s+/))
-        .filter((value) => value.length >= 4),
-    ]
-      .flatMap((value) => normalizeTitleToken(value).split(/\s+/))
-      .filter((value) => value.length >= 4)
-  )
-
-  for (const term of terms) {
-    if (haystack.includes(term)) {
-      score += 1
-    }
-  }
-
-  return score
-}
-
-function buildDirectoryChoices(input: {
-  manifest: ParsedMemoryManifest
-  rootEntries: MemoryResolutionPath[]
-  scope: MemoryScope
-  event: NormalizedMemoryUpdateEvent
-  evaluation: MemoryUpdateEvaluation
-}) {
-  const fromManifest = input.manifest.directoryGuide.map((reference) => ({
-    path: normalizePath(reference.path),
-    title: basename(reference.path) || reference.path.replace(/\/$/, ''),
-    description: reference.description ?? '',
-  }))
-
-  const seen = new Set(fromManifest.map((item) => item.path))
-  const fromPaths = input.rootEntries
-    .filter((entry) => entry.pathType === 'directory')
-    .map((entry) => ({
-      path: entry.path,
-      title: entry.title || basename(entry.path),
-      description: '',
-    }))
-    .filter((entry) => {
-      if (seen.has(entry.path)) return false
-      seen.add(entry.path)
-      return true
-    })
-
-  return [...fromManifest, ...fromPaths]
-    .map((choice) => ({
-      ...choice,
-      score: scoreDirectoryCandidate({
-        scope: input.scope,
-        memoryKind: input.evaluation.memoryKind,
-        directoryPath: choice.path,
-        directoryTitle: choice.title,
-        description: choice.description,
-        event: input.event,
-        evaluation: input.evaluation,
-      }),
-    }))
-    .sort((left, right) => {
-      if (left.score !== right.score) {
-        return right.score - left.score
-      }
-
-      return left.path.localeCompare(right.path)
-    })
-}
-
-function buildPreferredIndexPath(manifest: ParsedMemoryManifest, directoryPath: string) {
-  const normalizedDirectoryPath = normalizePath(directoryPath)
-  const explicit = manifest.importantEntryPoints.find((reference) => {
-    const path = normalizePath(reference.path)
-    return reference.pathType === 'file' && dirname(path) === normalizedDirectoryPath
-  })
-
-  return explicit ? normalizePath(explicit.path) : null
-}
-
-function scoreExistingPath(input: {
-  candidate: MemoryResolutionSearchResult
-  preferredDirectoryPath: string
-  index: ParsedMemoryDirectoryIndex | null
-  evaluation: MemoryUpdateEvaluation
-  event: NormalizedMemoryUpdateEvent
-}) {
-  let score = input.candidate.rank * 10
-
-  if (input.candidate.parentPath === input.preferredDirectoryPath) {
-    score += 12
-  }
-
-  if (
-    input.index?.filePurposes.some(
-      (reference) => normalizePath(reference.path) === input.candidate.path
-    )
-  ) {
-    score += 8
-  }
-
-  const haystack = normalizeTitleToken(
-    `${input.candidate.path} ${input.candidate.title ?? ''}`
-  )
-  const terms = new Set(
-    [
-      input.evaluation.memoryKind,
-      ...input.evaluation.signalTags,
-      ...extractTextSources(input.event)
-        .flatMap((value) => normalizeTitleToken(value).split(/\s+/))
-        .filter((value) => value.length >= 4),
-    ]
-      .flatMap((value) => normalizeTitleToken(value).split(/\s+/))
-      .filter((value) => value.length >= 4)
-  )
-
-  for (const term of terms) {
-    if (haystack.includes(term)) {
-      score += 1
-    }
-  }
-
-  return score
-}
-
-function buildFallbackTitle(memoryKind: MemoryUpdateKind) {
-  switch (memoryKind) {
-    case 'preference':
-      return 'Preference'
-    case 'responsibility':
-      return 'Responsibility'
-    case 'current_state':
-      return 'Current State'
-    case 'relationship':
-      return 'Relationship Notes'
-    case 'process':
-      return 'Process Notes'
-    case 'project':
-      return 'Project Notes'
-    case 'customer':
-      return 'Customer Notes'
-    case 'meeting':
-      return 'Meeting Notes'
-    case 'decision':
-      return 'Decision Notes'
-    case 'reference':
-      return 'Reference Notes'
-    default:
-      return 'Memory Notes'
-  }
-}
-
-function buildSuggestedFileTitle(
-  event: NormalizedMemoryUpdateEvent,
-  evaluation: MemoryUpdateEvaluation
-) {
-  for (const source of extractTextSources(event)) {
-    const cleaned = source
-      .replace(/[`"'“”]/g, ' ')
-      .replace(/[.!?].*$/, '')
-      .replace(/\b(remember|that|i|we|kodi|please|prefer|preferred|decision|decided|assistant|thread|conversation|shared|private|activity|changed|received|turn)\b/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-
-    const words = cleaned
-      .split(/\s+/)
-      .filter((word) => /^[a-z0-9][a-z0-9'-]*$/i.test(word))
-      .filter((word) => word.length >= 3)
-      .slice(0, 6)
-
-    if (words.length >= 2) {
-      return titleCase(words.join(' '))
-    }
-  }
-
-  return buildFallbackTitle(evaluation.memoryKind)
-}
-
-function sanitizeFileName(title: string) {
-  return title
-    .replace(/[\\/:*?"<>|]+/g, ' ')
+function normalizeToken(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
 
-async function buildUniqueTargetPath(input: {
-  access: MemoryResolutionAccess
-  vaultId: string
-  directoryPath: string
-  title: string
-}) {
-  const baseName = sanitizeFileName(input.title) || 'Memory Notes'
-  let attempt = 1
+function extractEventTextSources(event: NormalizedMemoryUpdateEvent) {
+  const metadata = event.metadata ?? {}
 
-  while (true) {
-    const suffix = attempt === 1 ? '' : ` ${attempt}`
-    const path = joinPath(input.directoryPath, `${baseName}${suffix}.md`)
-    const existing = await input.access.getPath({
-      vaultId: input.vaultId,
-      path,
-    })
+  return [
+    event.summary,
+    stringValue(metadata.userMessage),
+    stringValue(metadata.assistantMessage),
+    stringValue(metadata.text),
+    stringValue(metadata.meetingTitle),
+  ].filter(Boolean)
+}
 
-    if (!existing) {
-      return path
-    }
+function buildSearchQuery(
+  event: NormalizedMemoryUpdateEvent,
+  evaluation: MemoryUpdateEvaluation
+) {
+  const semanticHints = [
+    evaluation.topicLabel,
+    evaluation.topicSummary,
+    ...evaluation.topicKeywords,
+    ...evaluation.signalTags.map((tag) => tag.replace(/_/g, ' ')),
+  ].filter(Boolean)
 
-    attempt += 1
-  }
+  return [...semanticHints, ...extractEventTextSources(event)]
+    .map((value) => normalizeToken(String(value)))
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 220)
 }
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))]
 }
 
-async function resolveScopeUpdatePlan(input: {
+function parseResolutionResponse(content: string) {
+  const normalized = content
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+
+  try {
+    return memoryResolutionResponseSchema.parse(JSON.parse(normalized))
+  } catch {
+    return null
+  }
+}
+
+function normalizeSafeRelativePath(path: string, label: string) {
+  const normalized = normalizePath(path)
+  if (!normalized) {
+    throw new Error(`${label} is required.`)
+  }
+
+  if (
+    normalized.includes('..') ||
+    normalized.split('/').some((segment) => segment === '.' || segment === '..')
+  ) {
+    throw new Error(`${label} must stay inside the vault.`)
+  }
+
+  return normalized
+}
+
+function normalizeSafeDirectoryPath(path?: string | null) {
+  if (!path) return ''
+
+  const normalized = normalizePath(path)
+  if (!normalized) return ''
+
+  if (
+    normalized.includes('..') ||
+    normalized.split('/').some((segment) => segment === '.' || segment === '..')
+  ) {
+    throw new Error('Target directory path must stay inside the vault.')
+  }
+
+  return normalized
+}
+
+function requireMarkdownPath(path: string) {
+  const normalized = normalizeSafeRelativePath(path, 'Target file path')
+  if (!/\.md$/i.test(normalized)) {
+    throw new Error('Target file path must point to a markdown file.')
+  }
+
+  return normalized
+}
+
+function buildResolutionRouting(input: {
+  scope: MemoryScope
+  event: NormalizedMemoryUpdateEvent
+}) {
+  if (input.scope === 'member') {
+    const actorUserId = input.event.actor?.userId?.trim()
+    if (!actorUserId) {
+      throw new Error(
+        'Member-scoped path resolution requires an actor user id.'
+      )
+    }
+
+    return {
+      visibility: 'private' as OpenClawConversationVisibility,
+      actorUserId,
+    }
+  }
+
+  return {
+    visibility: 'shared' as OpenClawConversationVisibility,
+    actorUserId: undefined,
+  }
+}
+
+async function buildDirectoryContexts(input: {
+  access: MemoryResolutionAccess
+  vault: ResolvedMemoryVault
+  manifest: ParsedMemoryManifest
+}) {
+  const rootEntries = await input.access.listPaths({
+    vaultId: input.vault.id,
+    parentPath: null,
+  })
+
+  const manifestGuide = new Map(
+    input.manifest.directoryGuide.map((reference) => [
+      normalizePath(reference.path),
+      reference,
+    ])
+  )
+
+  const directoryPaths = uniqueStrings([
+    ...input.manifest.directoryGuide
+      .filter((reference) => reference.pathType === 'directory')
+      .map((reference) => normalizePath(reference.path)),
+    ...rootEntries
+      .filter((entry) => entry.pathType === 'directory')
+      .map((entry) => entry.path),
+  ])
+
+  return Promise.all(
+    directoryPaths.map(async (directoryPath) => {
+      const children = await input.access.listPaths({
+        vaultId: input.vault.id,
+        parentPath: directoryPath,
+      })
+      const indexPath = children.find((entry) => entry.isIndex)?.path ?? null
+      const parsedIndex =
+        indexPath
+          ? parseMemoryDirectoryIndex(
+              await input.access.readFile({
+                vault: input.vault,
+                path: indexPath,
+              }),
+              { path: indexPath }
+            )
+          : null
+
+      return {
+        path: directoryPath,
+        title:
+          manifestGuide.get(directoryPath)?.description
+            ? basename(directoryPath) || directoryPath
+            : rootEntries.find((entry) => entry.path === directoryPath)?.title ||
+              basename(directoryPath) ||
+              directoryPath,
+        description: manifestGuide.get(directoryPath)?.description ?? null,
+        indexPath,
+        parsedIndex,
+        knownChildPaths: children.map((entry) => entry.path),
+      } satisfies MemoryDirectoryContext
+    })
+  )
+}
+
+async function buildScopeResolutionContext(input: {
   access: MemoryResolutionAccess
   scope: MemoryScope
   event: NormalizedMemoryUpdateEvent
@@ -454,153 +380,309 @@ async function resolveScopeUpdatePlan(input: {
 
   const manifestPath = 'MEMORY.md'
   const manifest = parseMemoryManifest(
-    await input.access.readFile({ vault, path: manifestPath })
+    await input.access.readFile({
+      vault,
+      path: manifestPath,
+    })
   )
-  const rootEntries = await input.access.listPaths({
-    vaultId: vault.id,
-    parentPath: null,
-  })
-  const directoryChoices = buildDirectoryChoices({
+  const directories = await buildDirectoryContexts({
+    access: input.access,
+    vault,
     manifest,
-    rootEntries,
-    scope: input.scope,
-    event: input.event,
-    evaluation: input.evaluation,
   })
-
-  const preferredDirectory =
-    directoryChoices[0]?.path ||
-    defaultDirectoryByKind(input.scope, input.evaluation.memoryKind)
-
-  const preferredDirectoryEntries = await input.access.listPaths({
-    vaultId: vault.id,
-    parentPath: preferredDirectory,
-  })
-
-  const explicitIndexPath =
-    buildPreferredIndexPath(manifest, preferredDirectory) ??
-    preferredDirectoryEntries.find((entry) => entry.isIndex)?.path ??
-    null
-
-  const index =
-    explicitIndexPath
-      ? parseMemoryDirectoryIndex(
-          await input.access.readFile({
-            vault,
-            path: explicitIndexPath,
-          }),
-          { path: explicitIndexPath }
-        )
-      : null
-
   const searchQuery = buildSearchQuery(input.event, input.evaluation)
-  const searchResults =
+  const searchCandidates =
     searchQuery.length > 0
       ? await input.access.searchPaths({
           vaultId: vault.id,
           query: searchQuery,
-          limit: 6,
+          limit: 8,
         })
       : []
 
-  const bestSearchMatch = searchResults
-    .filter((result) => !result.isManifest && !result.isIndex)
-    .map((candidate) => ({
-      path: candidate.path,
-      score: scoreExistingPath({
-        candidate,
-        preferredDirectoryPath: preferredDirectory,
-        index,
-        evaluation: input.evaluation,
-        event: input.event,
-      }),
-    }))
-    .sort((left, right) => right.score - left.score)[0]
-
-  const directoryFiles = preferredDirectoryEntries.filter(
-    (entry) => entry.pathType === 'file' && !entry.isIndex && !entry.isManifest
-  )
-
-  const fallbackExistingPath =
-    directoryFiles.length === 1 ? directoryFiles[0]?.path ?? null : null
-
-  const existingPath =
-    bestSearchMatch && bestSearchMatch.score > 0
-      ? bestSearchMatch.path
-      : fallbackExistingPath
-
-  const normalizedAction =
-    input.evaluation.action === 'delete_obsolete' ||
-    input.evaluation.action === 'trigger_structural_maintenance'
-      ? input.evaluation.action
-      : existingPath
-        ? 'update_existing'
-        : 'create_new'
-
-  const finalDirectoryPath = existingPath
-    ? dirname(existingPath) || preferredDirectory
-    : preferredDirectory
-
-  const finalDirectoryEntries =
-    finalDirectoryPath === preferredDirectory
-      ? preferredDirectoryEntries
-      : await input.access.listPaths({
-          vaultId: vault.id,
-          parentPath: finalDirectoryPath,
-        })
-
-  const finalIndexPath =
-    finalDirectoryEntries.find((entry) => entry.isIndex)?.path ??
-    (finalDirectoryPath === preferredDirectory ? explicitIndexPath : null)
-
-  const targetPath =
-    existingPath ??
-    (await buildUniqueTargetPath({
-      access: input.access,
-      vaultId: vault.id,
-      directoryPath: finalDirectoryPath,
-      title: buildSuggestedFileTitle(input.event, input.evaluation),
-    }))
-
-  const scopeRationale = [
-    `Resolved ${input.scope} memory against vault ${vault.id}.`,
-    existingPath
-      ? `Targeted search matched existing file \`${existingPath}\`.`
-      : `No existing file clearly owned the topic, so Kodi should create a new file in \`${finalDirectoryPath}\`.`,
-    finalIndexPath
-      ? `Local navigation will use directory index \`${finalIndexPath}\`.`
-      : 'No directory index was available for the chosen directory.',
-  ]
-
   return {
     scope: input.scope,
-    vaultId: vault.id,
-    rootPath: vault.rootPath,
-    manifestPath: vault.manifestPath,
-    directoryPath: finalDirectoryPath,
-    indexPath: finalIndexPath,
+    vault,
+    manifest,
+    manifestPath,
+    directories,
+    searchQuery,
+    searchCandidates,
+  } satisfies MemoryScopeResolutionContext
+}
+
+function buildResolutionMessages(input: {
+  context: MemoryScopeResolutionContext
+  event: NormalizedMemoryUpdateEvent
+  evaluation: MemoryUpdateEvaluation
+}) {
+  return [
+    {
+      role: 'system' as const,
+      content:
+        'You choose where a durable Kodi memory update belongs inside one scoped vault. The memory-worthiness decision is already made. Use the manifest, directory indexes, targeted search candidates, and current known paths to decide whether to update an existing file, create a new file, delete obsolete memory, or trigger structural maintenance. Prefer updating an existing file when it clearly owns the topic. You may place a new file in an existing directory or propose a new directory when the current structure does not fit. Return JSON only and no prose using this exact shape: {"action":"update_existing|create_new|delete_obsolete|trigger_structural_maintenance","targetDirectoryPath":"relative directory path or empty string for root","targetFilePath":"relative markdown file path","requiredReads":["relative path"],"requiresIndexRepair":true,"requiresManifestRepair":false,"confidence":"low|medium|high","rationale":["short reason"]}. Keep all returned paths inside the vault and never use absolute paths.',
+    },
+    {
+      role: 'user' as const,
+      content: JSON.stringify({
+        protocolVersion: MEMORY_RESOLUTION_PROTOCOL_VERSION,
+        scope: input.context.scope,
+        evaluation: {
+          scope: input.evaluation.scope,
+          action: input.evaluation.action,
+          confidence: input.evaluation.confidence,
+          topicLabel: input.evaluation.topicLabel,
+          topicSummary: input.evaluation.topicSummary,
+          topicKeywords: input.evaluation.topicKeywords,
+          signalTags: input.evaluation.signalTags,
+          rationale: input.evaluation.rationale,
+        },
+        event: {
+          id: input.event.id,
+          source: input.event.source,
+          visibility: input.event.visibility,
+          occurredAt: input.event.occurredAt.toISOString(),
+          summary: input.event.summary,
+          actor: {
+            userId: input.event.actor?.userId ?? null,
+            orgMemberId: input.event.actor?.orgMemberId ?? null,
+            openclawAgentId: input.event.actor?.openclawAgentId ?? null,
+          },
+          textSources: extractEventTextSources(input.event),
+          metadata: input.event.metadata ?? {},
+          payload: input.event.payload,
+        },
+        vault: {
+          manifestPath: input.context.manifestPath,
+          importantEntryPoints: input.context.manifest.importantEntryPoints,
+          directoryGuide: input.context.manifest.directoryGuide,
+          structuralRules: input.context.manifest.structuralRules,
+          updateRules: input.context.manifest.updateRules,
+        },
+        directories: input.context.directories.map((directory) => ({
+          path: directory.path,
+          title: directory.title,
+          description: directory.description,
+          indexPath: directory.indexPath,
+          whatBelongsHere: directory.parsedIndex?.whatBelongsHere ?? null,
+          filePurposes: directory.parsedIndex?.filePurposes ?? [],
+          namingConventions: directory.parsedIndex?.namingConventions ?? [],
+          knownChildPaths: directory.knownChildPaths,
+        })),
+        targetedSearch: {
+          query: input.context.searchQuery,
+          candidates: input.context.searchCandidates.map((candidate) => ({
+            path: candidate.path,
+            title: candidate.title,
+            parentPath: candidate.parentPath,
+            isIndex: candidate.isIndex,
+            isManifest: candidate.isManifest,
+            rank: candidate.rank,
+          })),
+        },
+      }),
+    },
+  ]
+}
+
+async function applyResolutionGuardrails(input: {
+  access: MemoryResolutionAccess
+  context: MemoryScopeResolutionContext
+  modelResponse: MemoryResolutionModelResponse
+}) {
+  const targetPath = requireMarkdownPath(input.modelResponse.targetFilePath)
+  const normalizedDirectoryFromModel = normalizeSafeDirectoryPath(
+    input.modelResponse.targetDirectoryPath
+  )
+  const directoryPath = dirname(targetPath) || normalizedDirectoryFromModel
+
+  const directoryMetadata = directoryPath
+    ? await input.access.getPath({
+        vaultId: input.context.vault.id,
+        path: directoryPath,
+      })
+    : null
+
+  if (directoryMetadata && directoryMetadata.pathType !== 'directory') {
+    throw new Error(`Target directory path ${directoryPath} is not a directory.`)
+  }
+
+  const existingTarget = await input.access.getPath({
+    vaultId: input.context.vault.id,
+    path: targetPath,
+  })
+
+  let action = input.modelResponse.action
+  if (
+    action === 'update_existing' ||
+    action === 'delete_obsolete' ||
+    action === 'trigger_structural_maintenance'
+  ) {
+    if (!existingTarget || existingTarget.pathType !== 'file') {
+      throw new Error(
+        `Resolution action ${action} requires an existing target file.`
+      )
+    }
+  } else if (action === 'create_new' && existingTarget?.pathType === 'file') {
+    action = 'update_existing'
+  }
+
+  const directoryContext = input.context.directories.find(
+    (directory) => directory.path === directoryPath
+  )
+
+  const targetDirectoryEntries = directoryMetadata
+    ? await input.access.listPaths({
+        vaultId: input.context.vault.id,
+        parentPath: directoryPath,
+      })
+    : []
+
+  const indexPath =
+    targetDirectoryEntries.find((entry) => entry.isIndex)?.path ??
+    directoryContext?.indexPath ??
+    null
+
+  const parsedIndex =
+    directoryContext?.parsedIndex ??
+    (indexPath
+      ? parseMemoryDirectoryIndex(
+          await input.access.readFile({
+            vault: input.context.vault,
+            path: indexPath,
+          }),
+          { path: indexPath }
+        )
+      : null)
+
+  const safeRequiredReads = uniqueStrings(
+    input.modelResponse.requiredReads
+      .map((path) => {
+        try {
+          return normalizeSafeRelativePath(path, 'Required read path')
+        } catch {
+          return null
+        }
+      })
+      .map((path) =>
+        path
+          ? path
+          : null
+      )
+  ).filter((path) =>
+    path === targetPath ||
+    path === input.context.manifestPath ||
+    path === indexPath ||
+    Boolean(
+      path &&
+        input.context.searchCandidates.some((candidate) => candidate.path === path)
+    ) ||
+    Boolean(
+      path &&
+        directoryContext?.knownChildPaths.includes(path)
+    )
+  )
+
+  const isTopLevelDirectory = directoryPath.length > 0 && !directoryPath.includes('/')
+  const topLevelDirectoryExists = input.context.directories.some(
+    (directory) => directory.path === directoryPath
+  )
+  const targetListedInIndex = parsedIndex?.filePurposes.some(
+    (reference) => normalizePath(reference.path) === targetPath
+  ) ?? false
+
+  return {
+    scope: input.context.scope,
+    vaultId: input.context.vault.id,
+    rootPath: input.context.vault.rootPath,
+    manifestPath: input.context.vault.manifestPath,
+    directoryPath,
+    indexPath,
     targetPath,
-    action: normalizedAction,
+    action,
     requiredReads: uniqueStrings([
-      manifestPath,
-      finalIndexPath,
-      existingPath ?? null,
+      input.context.manifestPath,
+      indexPath,
+      existingTarget?.path ?? null,
+      ...safeRequiredReads,
     ]),
     candidatePaths: uniqueStrings([
-      ...searchResults.map((result) => result.path),
-      ...directoryFiles.map((entry) => entry.path),
+      ...input.context.searchCandidates.map((candidate) => candidate.path),
+      ...targetDirectoryEntries
+        .filter((entry) => entry.pathType === 'file' && !entry.isIndex)
+        .map((entry) => entry.path),
+      targetPath,
     ]),
-    searchQuery,
+    searchQuery: input.context.searchQuery,
     requiresIndexRepair:
-      normalizedAction !== 'update_existing' ||
-      (Boolean(finalIndexPath) &&
-        !index?.filePurposes.some(
-          (reference) => normalizePath(reference.path) === targetPath
-        )),
+      input.modelResponse.requiresIndexRepair ||
+      action !== 'update_existing' ||
+      !directoryMetadata ||
+      (Boolean(indexPath) && !targetListedInIndex),
     requiresManifestRepair:
-      normalizedAction === 'trigger_structural_maintenance',
-    rationale: uniqueStrings(scopeRationale),
+      input.modelResponse.requiresManifestRepair ||
+      action === 'trigger_structural_maintenance' ||
+      (isTopLevelDirectory && !topLevelDirectoryExists),
+    rationale: uniqueStrings([
+      ...input.modelResponse.rationale,
+      `Resolved ${input.context.scope} memory inside vault ${input.context.vault.id}.`,
+    ]),
   } satisfies MemoryScopeUpdatePlan
+}
+
+async function resolveScopeUpdatePlan(input: {
+  access: MemoryResolutionAccess
+  scope: MemoryScope
+  event: NormalizedMemoryUpdateEvent
+  evaluation: MemoryUpdateEvaluation
+  completeResolutionChat?: OpenClawChatCompletionFn
+}) {
+  const context = await buildScopeResolutionContext({
+    access: input.access,
+    scope: input.scope,
+    event: input.event,
+    evaluation: input.evaluation,
+  })
+  const routing = buildResolutionRouting({
+    scope: input.scope,
+    event: input.event,
+  })
+  const response = await (input.completeResolutionChat ?? openClawChatCompletion)(
+    {
+      orgId: input.event.orgId,
+      actorUserId: routing.actorUserId,
+      visibility: routing.visibility,
+      sessionKey: `memory-resolve:${input.event.dedupeKey}:${input.scope}`,
+      messageChannel: 'memory',
+      messages: buildResolutionMessages({
+        context,
+        event: input.event,
+        evaluation: input.evaluation,
+      }),
+      timeoutMs: MEMORY_RESOLUTION_TIMEOUT_MS,
+      temperature: 0.1,
+      maxTokens: 700,
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `OpenClaw memory resolution was unavailable: ${response.error ?? response.reason}.`
+    )
+  }
+
+  const parsed = parseResolutionResponse(response.content)
+  if (!parsed) {
+    throw new Error(
+      'OpenClaw memory resolution did not return valid structured JSON.'
+    )
+  }
+
+  return applyResolutionGuardrails({
+    access: input.access,
+    context,
+    modelResponse: parsed,
+  })
 }
 
 export async function resolveMemoryUpdatePlan(
@@ -628,6 +710,7 @@ export async function resolveMemoryUpdatePlan(
         scope,
         event,
         evaluation,
+        completeResolutionChat: deps.completeResolutionChat,
       })
     )
   )
@@ -675,28 +758,30 @@ export async function createMemoryResolutionAccess(input?: {
 
     if (input.actorOrgMemberId) {
       const actorOrgMemberId = input.actorOrgMemberId
-      membership = await database.query.orgMembers.findFirst({
-        columns: {
-          id: true,
-          orgId: true,
-          userId: true,
-          role: true,
-        },
-        where: (fields, { and, eq }) =>
-          and(eq(fields.orgId, input.orgId), eq(fields.id, actorOrgMemberId)),
-      }) ?? null
+      membership =
+        (await database.query.orgMembers.findFirst({
+          columns: {
+            id: true,
+            orgId: true,
+            userId: true,
+            role: true,
+          },
+          where: (fields, { and, eq }) =>
+            and(eq(fields.orgId, input.orgId), eq(fields.id, actorOrgMemberId)),
+        })) ?? null
     } else if (input.actorUserId) {
       const actorUserId = input.actorUserId
-      membership = await database.query.orgMembers.findFirst({
-        columns: {
-          id: true,
-          orgId: true,
-          userId: true,
-          role: true,
-        },
-        where: (fields, { and, eq }) =>
-          and(eq(fields.orgId, input.orgId), eq(fields.userId, actorUserId)),
-      }) ?? null
+      membership =
+        (await database.query.orgMembers.findFirst({
+          columns: {
+            id: true,
+            orgId: true,
+            userId: true,
+            role: true,
+          },
+          where: (fields, { and, eq }) =>
+            and(eq(fields.orgId, input.orgId), eq(fields.userId, actorUserId)),
+        })) ?? null
     }
 
     if (!membership) {
@@ -811,7 +896,9 @@ export async function createMemoryResolutionAccess(input?: {
           )
         )
         .orderBy(
-          desc(sql<number>`ts_rank_cd(${memoryPaths.contentSearchVector}, ${tsQuery})`),
+          desc(
+            sql<number>`ts_rank_cd(${memoryPaths.contentSearchVector}, ${tsQuery})`
+          ),
           desc(memoryPaths.lastUpdatedAt)
         )
         .limit(input.limit)

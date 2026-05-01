@@ -1,9 +1,54 @@
 import { describe, expect, it } from 'bun:test'
-import { evaluateMemoryUpdateEvent } from './evaluation'
+import {
+  evaluateMemoryUpdateEvent,
+  type MemoryEvaluationDeps,
+} from './evaluation'
 import { normalizeMemoryUpdateEvent } from './events'
 
+type MemoryCompletionFn = NonNullable<MemoryEvaluationDeps['completeChat']>
+type MemoryCompletionResult = Awaited<ReturnType<MemoryCompletionFn>>
+type MemoryCompletionFailure = Extract<MemoryCompletionResult, { ok: false }>
+type MemoryCompletionSuccessPayload = Record<string, unknown> | string
+
+function createModelCompletion(
+  payload:
+    | MemoryCompletionSuccessPayload
+    | MemoryCompletionFailure
+): MemoryCompletionFn {
+  return async () => {
+    if (isFailurePayload(payload)) {
+      return payload
+    }
+
+    return {
+      ok: true as const,
+      content:
+        typeof payload === 'string' ? payload : JSON.stringify(payload),
+      connection: {
+        instance: {} as never,
+        instanceUrl: 'https://openclaw.test',
+        headers: {},
+        model: 'openclaw/default',
+        routedAgent: {
+          id: 'agent_123',
+          agentType: 'org' as const,
+          openclawAgentId: 'agent_123',
+          status: 'active' as const,
+        },
+        fallbackToDefaultAgent: false,
+      },
+    } satisfies Extract<MemoryCompletionResult, { ok: true }>
+  }
+}
+
+function isFailurePayload(
+  payload: MemoryCompletionSuccessPayload | MemoryCompletionFailure
+): payload is MemoryCompletionFailure {
+  return typeof payload === 'object' && payload !== null && 'ok' in payload
+}
+
 describe('evaluateMemoryUpdateEvent', () => {
-  it('routes explicit private preferences to member memory', () => {
+  it('routes explicit private preferences to member memory', async () => {
     const event = normalizeMemoryUpdateEvent({
       orgId: 'org_123',
       source: 'dashboard_assistant',
@@ -24,14 +69,27 @@ describe('evaluateMemoryUpdateEvent', () => {
       },
     })
 
-    const evaluation = evaluateMemoryUpdateEvent(event)
+    const evaluation = await evaluateMemoryUpdateEvent(event, {
+      completeChat: createModelCompletion({
+        shouldWrite: true,
+        scope: 'member',
+        action: 'update_existing',
+        durability: 'durable',
+        confidence: 'high',
+        memoryKind: 'preference',
+        rationale: ['The user stated a durable personal preference.'],
+        signalTags: ['personal_preference'],
+      }),
+    })
 
     expect(evaluation.shouldWrite).toBe(true)
     expect(evaluation.scope).toBe('member')
-    expect(evaluation.signalTags).toContain('preference')
+    expect(evaluation.memoryKind).toBe('preference')
+    expect(evaluation.signalTags).toContain('personal_preference')
+    expect(evaluation.guardrailsApplied).toEqual([])
   })
 
-  it('routes shared decisions and next steps to org memory', () => {
+  it('routes shared decisions and next steps to org memory', async () => {
     const event = normalizeMemoryUpdateEvent({
       orgId: 'org_123',
       source: 'app_chat',
@@ -52,51 +110,40 @@ describe('evaluateMemoryUpdateEvent', () => {
       },
     })
 
-    const evaluation = evaluateMemoryUpdateEvent(event)
+    const evaluation = await evaluateMemoryUpdateEvent(event, {
+      completeChat: createModelCompletion({
+        shouldWrite: true,
+        scope: 'org',
+        action: 'update_existing',
+        durability: 'durable',
+        confidence: 'high',
+        memoryKind: 'decision',
+        rationale: ['The event contains a team decision and ownership update.'],
+        signalTags: ['decision', 'owner_change', 'project_state'],
+      }),
+    })
 
     expect(evaluation.shouldWrite).toBe(true)
     expect(evaluation.scope).toBe('org')
     expect(evaluation.signalTags).toEqual(
-      expect.arrayContaining(['decision', 'next_steps', 'project_state'])
+      expect.arrayContaining(['decision', 'owner_change', 'project_state'])
     )
   })
 
-  it('routes mixed shared and personal commitments to both scopes', () => {
-    const event = normalizeMemoryUpdateEvent({
-      orgId: 'org_123',
-      source: 'slack',
-      occurredAt: '2026-05-01T10:00:00.000Z',
-      visibility: 'private',
-      summary: 'Slack direct-message activity changed through Kodi.',
-      actor: {
-        userId: 'user_123',
-        orgMemberId: 'org_member_123',
-      },
-      metadata: {
-        text: 'We decided to send the customer recap tomorrow, and I prefer to own the async follow-up myself.',
-      },
-      payload: {
-        channelId: 'D123',
-        isDirectMessage: true,
-      },
-    })
-
-    const evaluation = evaluateMemoryUpdateEvent(event)
-
-    expect(evaluation.shouldWrite).toBe(true)
-    expect(evaluation.scope).toBe('both')
-  })
-
-  it('ignores transient chatter', () => {
+  it('allows both scopes when a shared event explicitly justifies personal memory', async () => {
     const event = normalizeMemoryUpdateEvent({
       orgId: 'org_123',
       source: 'app_chat',
       occurredAt: '2026-05-01T10:00:00.000Z',
       visibility: 'shared',
       summary: 'Shared app chat thread received a new assistant turn.',
+      actor: {
+        userId: 'user_123',
+        orgMemberId: 'org_member_123',
+      },
       metadata: {
-        userMessage: 'Thanks, sounds good.',
-        assistantMessage: 'Happy to help.',
+        userMessage:
+          'We agreed to send the customer recap tomorrow, and I want Kodi to remember that I prefer drafting the follow-up myself.',
       },
       payload: {
         threadId: 'thread_123',
@@ -104,44 +151,113 @@ describe('evaluateMemoryUpdateEvent', () => {
       },
     })
 
-    const evaluation = evaluateMemoryUpdateEvent(event)
+    const evaluation = await evaluateMemoryUpdateEvent(event, {
+      completeChat: createModelCompletion({
+        shouldWrite: true,
+        scope: 'both',
+        action: 'update_existing',
+        durability: 'durable',
+        confidence: 'medium',
+        memoryKind: 'responsibility',
+        rationale: [
+          'The event includes both a shared org commitment and a durable personal working preference.',
+        ],
+        signalTags: ['customer_follow_up', 'personal_preference'],
+        memberScopeJustification:
+          'The actor expressed a durable personal preference about how they want future follow-up handled.',
+      }),
+    })
+
+    expect(evaluation.shouldWrite).toBe(true)
+    expect(evaluation.scope).toBe('both')
+    expect(evaluation.guardrailsApplied).toEqual([])
+  })
+
+  it('blocks member-only scope on a shared event without explicit justification', async () => {
+    const event = normalizeMemoryUpdateEvent({
+      orgId: 'org_123',
+      source: 'app_chat',
+      occurredAt: '2026-05-01T10:00:00.000Z',
+      visibility: 'shared',
+      summary: 'Shared app chat thread received a new assistant turn.',
+      actor: {
+        userId: 'user_123',
+      },
+      metadata: {
+        userMessage: 'I prefer async recaps.',
+      },
+      payload: {
+        threadId: 'thread_123',
+        messageId: 'message_123',
+      },
+    })
+
+    const evaluation = await evaluateMemoryUpdateEvent(event, {
+      completeChat: createModelCompletion({
+        shouldWrite: true,
+        scope: 'member',
+        action: 'update_existing',
+        durability: 'durable',
+        confidence: 'medium',
+        memoryKind: 'preference',
+        rationale: ['The event contains a personal preference.'],
+        signalTags: ['personal_preference'],
+      }),
+    })
 
     expect(evaluation.shouldWrite).toBe(false)
     expect(evaluation.scope).toBe('none')
-    expect(evaluation.action).toBe('ignore')
+    expect(evaluation.ignoredReason).toBe('guardrail-blocked')
+    expect(evaluation.guardrailsApplied).toEqual([
+      'Blocked member-only scope for a shared or system event without explicit justification.',
+    ])
   })
 
-  it('ignores temporary meeting state-change events but keeps meeting completion durable', () => {
-    const stateChange = evaluateMemoryUpdateEvent(
-      normalizeMemoryUpdateEvent({
-        orgId: 'org_123',
-        source: 'meeting',
-        occurredAt: '2026-05-01T10:00:00.000Z',
-        visibility: 'shared',
-        summary: 'Meeting started.',
-        payload: {
-          meetingSessionId: 'meeting_123',
-          trigger: 'state_changed',
-        },
-      })
-    )
+  it('fails closed when the model response is invalid JSON', async () => {
+    const event = normalizeMemoryUpdateEvent({
+      orgId: 'org_123',
+      source: 'app_chat',
+      occurredAt: '2026-05-01T10:00:00.000Z',
+      visibility: 'shared',
+      summary: 'Shared app chat thread received a new assistant turn.',
+      payload: {
+        threadId: 'thread_123',
+        messageId: 'message_123',
+      },
+    })
 
-    const completed = evaluateMemoryUpdateEvent(
-      normalizeMemoryUpdateEvent({
-        orgId: 'org_123',
-        source: 'meeting',
-        occurredAt: '2026-05-01T10:30:00.000Z',
-        visibility: 'shared',
-        summary: 'Meeting completed.',
-        payload: {
-          meetingSessionId: 'meeting_123',
-          trigger: 'completed',
-        },
-      })
-    )
+    const evaluation = await evaluateMemoryUpdateEvent(event, {
+      completeChat: createModelCompletion('not json'),
+    })
 
-    expect(stateChange.shouldWrite).toBe(false)
-    expect(completed.shouldWrite).toBe(true)
-    expect(completed.scope).toBe('org')
+    expect(evaluation.shouldWrite).toBe(false)
+    expect(evaluation.engine).toBe('guardrail-fallback')
+    expect(evaluation.ignoredReason).toBe('invalid-model-response')
+  })
+
+  it('fails closed when OpenClaw is unavailable', async () => {
+    const event = normalizeMemoryUpdateEvent({
+      orgId: 'org_123',
+      source: 'meeting',
+      occurredAt: '2026-05-01T10:30:00.000Z',
+      visibility: 'shared',
+      summary: 'Meeting completed.',
+      payload: {
+        meetingSessionId: 'meeting_123',
+        trigger: 'completed',
+      },
+    })
+
+    const evaluation = await evaluateMemoryUpdateEvent(event, {
+      completeChat: createModelCompletion({
+        ok: false,
+        reason: 'request-failed',
+        error: 'OpenClaw request timed out after 12000ms.',
+      }),
+    })
+
+    expect(evaluation.shouldWrite).toBe(false)
+    expect(evaluation.ignoredReason).toBe('model-unavailable')
+    expect(evaluation.durability).toBe('unknown')
   })
 })

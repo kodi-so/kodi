@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { openClawChatCompletion, type OpenClawConversationVisibility } from '../openclaw/client'
 import type { NormalizedMemoryUpdateEvent } from './events'
 
 export type MemoryUpdateScopeDecision = 'org' | 'member' | 'both' | 'none'
@@ -9,7 +11,27 @@ export type MemoryUpdateAction =
   | 'delete_obsolete'
   | 'trigger_structural_maintenance'
 
-export type MemoryUpdateDurability = 'durable' | 'temporary'
+export type MemoryUpdateDurability = 'durable' | 'temporary' | 'unknown'
+
+export type MemoryUpdateKind =
+  | 'decision'
+  | 'preference'
+  | 'responsibility'
+  | 'current_state'
+  | 'relationship'
+  | 'process'
+  | 'project'
+  | 'customer'
+  | 'meeting'
+  | 'reference'
+  | 'other'
+
+export type MemoryUpdateIgnoreReason =
+  | 'temporary-signal'
+  | 'low-information'
+  | 'guardrail-blocked'
+  | 'model-unavailable'
+  | 'invalid-model-response'
 
 export type MemoryUpdateEvaluation = {
   scope: MemoryUpdateScopeDecision
@@ -19,243 +41,393 @@ export type MemoryUpdateEvaluation = {
   confidence: 'low' | 'medium' | 'high'
   rationale: string[]
   signalTags: string[]
+  memoryKind: MemoryUpdateKind
+  guardrailsApplied: string[]
+  engine: 'openclaw' | 'guardrail-fallback'
+  ignoredReason?: MemoryUpdateIgnoreReason
 }
 
-const ORG_SIGNAL_PATTERNS: Array<[string, RegExp]> = [
-  ['project_state', /\b(project|roadmap|launch|milestone|customer|team|org|company|process)\b/i],
-  ['decision', /\b(decid(?:e|ed|ing)|decision|agreed|approved|resolved)\b/i],
-  ['next_steps', /\b(next step|next steps|owner|ownership|follow[- ]?up|action item|deadline|due)\b/i],
-]
+type OpenClawChatCompletionFn = typeof openClawChatCompletion
 
-const MEMBER_SIGNAL_PATTERNS: Array<[string, RegExp]> = [
-  ['preference', /\b(prefer|preference|working style|async|sync|remind me|remember that i|i prefer)\b/i],
-  ['private_context', /\b(private|personal|my responsibility|my current work|my commitment|1:1|direct message)\b/i],
-  ['responsibility', /\b(responsib(?:ility|ilities)|commitment|task list|working style)\b/i],
-]
+export type MemoryEvaluationDeps = {
+  completeChat?: OpenClawChatCompletionFn
+}
 
-const TEMPORARY_SIGNAL_PATTERNS = [
-  /\b(hello|thanks|thank you|sounds good|great|okay|ok|noted|cool)\b/i,
-]
+const MEMORY_EVALUATION_PROTOCOL_VERSION = 'kodi.memory.evaluator.v1'
+const MEMORY_EVALUATION_TIMEOUT_MS = 12_000
 
-export function evaluateMemoryUpdateEvent(
-  event: NormalizedMemoryUpdateEvent
-): MemoryUpdateEvaluation {
-  const text = extractEventText(event)
-  const signalTags = collectSignalTags(text)
-  const rationale: string[] = []
-
-  if (event.source === 'meeting') {
-    if (event.payload.trigger === 'completed') {
-      rationale.push('Meeting completion can change shared current state.')
-      return buildEvaluation({
-        scope: 'org',
-        action: 'update_existing',
-        durability: 'durable',
-        confidence: 'medium',
-        rationale,
-        signalTags: uniqueStrings([...signalTags, 'meeting_completion']),
-      })
-    }
-
-    if (event.payload.trigger === 'transcript_updated') {
-      rationale.push('Final meeting transcript evidence is durable enough to inspect further.')
-      return buildEvaluation({
-        scope: 'org',
-        action: 'update_existing',
-        durability: 'durable',
-        confidence: 'medium',
-        rationale,
-        signalTags: uniqueStrings([...signalTags, 'meeting_transcript']),
-      })
-    }
-
-    rationale.push('This meeting state change looks temporary rather than durable.')
-    return ignoredEvaluation(rationale, uniqueStrings([...signalTags, 'meeting_state']))
-  }
-
-  if (event.source === 'user_request') {
-    rationale.push('Explicit user requests should flow into the durable memory pipeline.')
-    return buildEvaluation({
-      scope: inferScopeFromTextAndVisibility(event, signalTags),
-      action: 'update_existing',
-      durability: 'durable',
-      confidence: 'high',
-      rationale,
-      signalTags: uniqueStrings([...signalTags, 'explicit_request']),
-    })
-  }
-
-  if (event.source === 'openclaw_proposal') {
-    rationale.push('OpenClaw memory proposals are intended as durable memory candidates.')
-    return buildEvaluation({
-      scope: inferScopeFromTextAndVisibility(event, signalTags),
-      action:
-        event.payload.operation === 'delete'
-          ? 'delete_obsolete'
-          : event.payload.operation === 'move' || event.payload.operation === 'rename'
-            ? 'trigger_structural_maintenance'
-            : 'update_existing',
-      durability: 'durable',
-      confidence: 'medium',
-      rationale,
-      signalTags: uniqueStrings([...signalTags, 'agent_proposal']),
-    })
-  }
-
-  if (event.source === 'work_item') {
-    if (/\b(assign|block|complete|reopen|due|priority|owner)\b/i.test(event.payload.changeType)) {
-      rationale.push('Work item state changes can update durable current work and ownership context.')
-      return buildEvaluation({
-        scope: event.visibility === 'private' ? 'member' : 'org',
-        action: 'update_existing',
-        durability: 'durable',
-        confidence: 'medium',
-        rationale,
-        signalTags: uniqueStrings([...signalTags, 'work_item_change']),
-      })
-    }
-
-    rationale.push('This work item change does not look durable enough yet.')
-    return ignoredEvaluation(rationale, uniqueStrings([...signalTags, 'work_item_change']))
-  }
-
-  if (event.source === 'integration_sync') {
-    if (/\b(created|updated|deleted|synced|status|owner)\b/i.test(event.payload.eventType)) {
-      rationale.push('Integration sync changes can affect durable org context.')
-      return buildEvaluation({
-        scope: 'org',
-        action: 'update_existing',
-        durability: 'durable',
-        confidence: 'medium',
-        rationale,
-        signalTags: uniqueStrings([...signalTags, 'integration_sync']),
-      })
-    }
-
-    rationale.push('This integration sync event does not clearly change durable memory.')
-    return ignoredEvaluation(rationale, uniqueStrings([...signalTags, 'integration_sync']))
-  }
-
-  if (looksTemporary(text) && signalTags.length === 0) {
-    rationale.push('The event reads like transient conversational chatter.')
-    return ignoredEvaluation(rationale, ['temporary_chat'])
-  }
-
-  if (signalTags.length === 0) {
-    rationale.push('The event does not contain a durable decision, preference, next step, or ownership signal yet.')
-    return ignoredEvaluation(rationale, [])
-  }
-
-  rationale.push('The event contains durable conversational signals worth routing into memory.')
-  return buildEvaluation({
-    scope: inferScopeFromTextAndVisibility(event, signalTags),
-    action: 'update_existing',
-    durability: 'durable',
-    confidence: signalTags.length >= 2 ? 'high' : 'medium',
-    rationale,
-    signalTags,
+const memoryEvaluationResponseSchema = z
+  .object({
+    shouldWrite: z.boolean(),
+    scope: z.enum(['org', 'member', 'both', 'none']),
+    action: z.enum([
+      'ignore',
+      'update_existing',
+      'create_new',
+      'delete_obsolete',
+      'trigger_structural_maintenance',
+    ]),
+    durability: z.enum(['durable', 'temporary']),
+    confidence: z.enum(['low', 'medium', 'high']),
+    memoryKind: z.enum([
+      'decision',
+      'preference',
+      'responsibility',
+      'current_state',
+      'relationship',
+      'process',
+      'project',
+      'customer',
+      'meeting',
+      'reference',
+      'other',
+    ]),
+    rationale: z.array(z.string().trim().min(1)).default([]),
+    signalTags: z.array(z.string().trim().min(1)).default([]),
+    memberScopeJustification: z.string().trim().min(1).nullish(),
   })
-}
+  .strict()
 
-function extractEventText(event: NormalizedMemoryUpdateEvent) {
-  const metadata = event.metadata ?? {}
-  const parts = [
-    event.summary,
-    stringValue(metadata.userMessage),
-    stringValue(metadata.assistantMessage),
-    stringValue(metadata.text),
-    stringValue(metadata.meetingTitle),
-  ]
+type MemoryEvaluationModelResponse = z.infer<typeof memoryEvaluationResponseSchema>
 
-  return parts.filter(Boolean).join('\n').trim()
-}
-
-function collectSignalTags(text: string) {
-  const tags = new Set<string>()
-
-  for (const [tag, pattern] of ORG_SIGNAL_PATTERNS) {
-    if (pattern.test(text)) tags.add(tag)
-  }
-
-  for (const [tag, pattern] of MEMBER_SIGNAL_PATTERNS) {
-    if (pattern.test(text)) tags.add(tag)
-  }
-
-  return [...tags]
-}
-
-function inferScopeFromTextAndVisibility(
+export async function evaluateMemoryUpdateEvent(
   event: NormalizedMemoryUpdateEvent,
-  signalTags: string[]
-): MemoryUpdateScopeDecision {
-  const hasOrgSignals = signalTags.some((tag) =>
-    ['project_state', 'decision', 'next_steps'].includes(tag)
-  )
-  const hasMemberSignals = signalTags.some((tag) =>
-    ['preference', 'private_context', 'responsibility'].includes(tag)
-  )
-
-  if (hasOrgSignals && hasMemberSignals) {
-    return 'both'
+  deps: MemoryEvaluationDeps = {}
+): Promise<MemoryUpdateEvaluation> {
+  const routing = resolveEvaluationRouting(event)
+  if (!routing.ok) {
+    return routing.evaluation
   }
 
-  if (hasOrgSignals) {
-    return 'org'
+  const response = await (deps.completeChat ?? openClawChatCompletion)({
+    orgId: event.orgId,
+    actorUserId: routing.actorUserId,
+    visibility: routing.visibility,
+    sessionKey: `memory-eval:${event.dedupeKey}`,
+    messageChannel: 'memory',
+    messages: buildMemoryEvaluationMessages(event),
+    timeoutMs: MEMORY_EVALUATION_TIMEOUT_MS,
+    temperature: 0.1,
+    maxTokens: 500,
+  })
+
+  if (!response.ok) {
+    return buildIgnoredEvaluation({
+      reason: 'model-unavailable',
+      durability: 'unknown',
+      rationale: [
+        `OpenClaw memory evaluation was unavailable: ${response.error ?? response.reason}.`,
+      ],
+      signalTags: [],
+      memoryKind: 'other',
+      engine: 'guardrail-fallback',
+    })
   }
 
-  if (hasMemberSignals) {
-    return event.actor?.orgMemberId || event.visibility === 'private'
-      ? 'member'
-      : 'org'
+  const parsed = parseMemoryEvaluationResponse(response.content)
+  if (!parsed) {
+    return buildIgnoredEvaluation({
+      reason: 'invalid-model-response',
+      durability: 'unknown',
+      rationale: [
+        'OpenClaw memory evaluation did not return valid structured JSON.',
+      ],
+      signalTags: ['invalid_model_response'],
+      memoryKind: 'other',
+      engine: 'guardrail-fallback',
+    })
   }
 
-  if (event.visibility === 'shared') {
-    return 'org'
-  }
-
-  if (event.visibility === 'private') {
-    return event.actor?.orgMemberId ? 'member' : 'org'
-  }
-
-  return 'org'
+  return applyMemoryEvaluationGuardrails(event, parsed)
 }
 
-function buildEvaluation(input: {
-  scope: MemoryUpdateScopeDecision
-  action: MemoryUpdateAction
+function resolveEvaluationRouting(
+  event: NormalizedMemoryUpdateEvent
+):
+  | {
+      ok: true
+      visibility: OpenClawConversationVisibility
+      actorUserId?: string
+    }
+  | {
+      ok: false
+      evaluation: MemoryUpdateEvaluation
+    } {
+  if (event.visibility === 'private') {
+    const actorUserId = event.actor?.userId?.trim()
+
+    if (!actorUserId) {
+      return {
+        ok: false,
+        evaluation: buildIgnoredEvaluation({
+          reason: 'guardrail-blocked',
+          durability: 'unknown',
+          rationale: [
+            'Private memory evaluation requires a concrete actor user id so the request can be routed and attributed safely.',
+          ],
+          signalTags: ['missing_private_actor'],
+          memoryKind: 'other',
+          guardrailsApplied: ['Blocked evaluation for a private event without an actor user id.'],
+          engine: 'guardrail-fallback',
+        }),
+      }
+    }
+
+    return {
+      ok: true,
+      visibility: 'private',
+      actorUserId,
+    }
+  }
+
+  return {
+    ok: true,
+    visibility: 'shared',
+  }
+}
+
+function buildMemoryEvaluationMessages(event: NormalizedMemoryUpdateEvent) {
+  return [
+    {
+      role: 'system' as const,
+      content:
+        'You decide whether new Kodi events deserve durable memory. Reply with JSON only and no prose. Use this exact shape: {"shouldWrite":true,"scope":"org|member|both|none","action":"ignore|update_existing|create_new|delete_obsolete|trigger_structural_maintenance","durability":"durable|temporary","confidence":"low|medium|high","memoryKind":"decision|preference|responsibility|current_state|relationship|process|project|customer|meeting|reference|other","rationale":["short reason"],"signalTags":["tag"],"memberScopeJustification":"required only when scope includes member for a shared or system event"}. Durable memory means information likely useful later, such as decisions, preferences, responsibilities, current state, relationships, or stable reference facts. Temporary chatter, acknowledgements, and momentary operational noise should usually not be written. Prefer scope "org" for shared team/project/customer/process context, "member" for personal preferences or private commitments, "both" only when both kinds of memory are clearly present, and "none" when nothing durable should be stored. Be conservative with member scope on shared or system events: only choose it when the event contains durable personal context tied to a specific actor.',
+    },
+    {
+      role: 'user' as const,
+      content: JSON.stringify(buildMemoryEvaluationPromptContext(event)),
+    },
+  ]
+}
+
+function buildMemoryEvaluationPromptContext(event: NormalizedMemoryUpdateEvent) {
+  return {
+    protocolVersion: MEMORY_EVALUATION_PROTOCOL_VERSION,
+    durableMemoryGoal:
+      'Classify whether this event should update durable memory and which scope that memory belongs to.',
+    event: {
+      id: event.id,
+      orgId: event.orgId,
+      source: event.source,
+      visibility: event.visibility,
+      occurredAt: event.occurredAt.toISOString(),
+      summary: event.summary,
+      dedupeKey: event.dedupeKey,
+      actor: {
+        userId: event.actor?.userId ?? null,
+        orgMemberId: event.actor?.orgMemberId ?? null,
+        openclawAgentId: event.actor?.openclawAgentId ?? null,
+      },
+      payload: sanitizePromptValue(event.payload),
+      metadata: sanitizePromptValue(event.metadata ?? {}),
+    },
+    constraints: {
+      memberScopeAllowed: Boolean(event.actor?.userId),
+      sharedOrSystemEvent:
+        event.visibility === 'shared' || event.visibility === 'system',
+      proposalActionsAllowed:
+        event.source === 'openclaw_proposal'
+          ? ['ignore', 'update_existing', 'create_new', 'delete_obsolete', 'trigger_structural_maintenance']
+          : ['ignore', 'update_existing', 'create_new'],
+    },
+  }
+}
+
+function parseMemoryEvaluationResponse(content: string) {
+  const normalized = content
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+
+  try {
+    return memoryEvaluationResponseSchema.parse(JSON.parse(normalized))
+  } catch {
+    return null
+  }
+}
+
+function applyMemoryEvaluationGuardrails(
+  event: NormalizedMemoryUpdateEvent,
+  modelEvaluation: MemoryEvaluationModelResponse
+): MemoryUpdateEvaluation {
+  const guardrailsApplied: string[] = []
+  const rationale = uniqueStrings(modelEvaluation.rationale)
+  const signalTags = normalizeSignalTags(modelEvaluation.signalTags)
+
+  if (
+    !modelEvaluation.shouldWrite ||
+    modelEvaluation.scope === 'none' ||
+    modelEvaluation.action === 'ignore'
+  ) {
+    return buildIgnoredEvaluation({
+      reason:
+        modelEvaluation.durability === 'temporary'
+          ? 'temporary-signal'
+          : 'low-information',
+      durability: modelEvaluation.durability,
+      rationale:
+        rationale.length > 0
+          ? rationale
+          : ['The model judged this event as not worth durable memory.'],
+      signalTags,
+      memoryKind: modelEvaluation.memoryKind,
+      engine: 'openclaw',
+    })
+  }
+
+  let scope = modelEvaluation.scope
+  let action = modelEvaluation.action
+
+  if (
+    event.source !== 'openclaw_proposal' &&
+    (action === 'delete_obsolete' ||
+      action === 'trigger_structural_maintenance')
+  ) {
+    guardrailsApplied.push(
+      'Downgraded proposal-only action to update_existing for a product event.'
+    )
+    action = 'update_existing'
+  }
+
+  const includesMemberScope = scope === 'member' || scope === 'both'
+  if (includesMemberScope && !event.actor?.userId) {
+    return buildIgnoredEvaluation({
+      reason: 'guardrail-blocked',
+      durability: modelEvaluation.durability,
+      rationale: uniqueStrings([
+        ...rationale,
+        'Member-scoped memory requires a concrete actor user id.',
+      ]),
+      signalTags,
+      memoryKind: modelEvaluation.memoryKind,
+      guardrailsApplied: [
+        ...guardrailsApplied,
+        'Blocked member-scoped memory without an actor user id.',
+      ],
+      engine: 'openclaw',
+    })
+  }
+
+  const memberScopeJustification =
+    modelEvaluation.memberScopeJustification?.trim() || null
+
+  if (
+    includesMemberScope &&
+    event.visibility !== 'private' &&
+    !memberScopeJustification
+  ) {
+    if (scope === 'both') {
+      guardrailsApplied.push(
+        'Removed member scope because the model did not justify a personal memory write from a shared or system event.'
+      )
+      scope = 'org'
+    } else {
+      return buildIgnoredEvaluation({
+        reason: 'guardrail-blocked',
+        durability: modelEvaluation.durability,
+        rationale: uniqueStrings([
+          ...rationale,
+          'Shared or system events need an explicit justification before writing member memory.',
+        ]),
+        signalTags,
+        memoryKind: modelEvaluation.memoryKind,
+        guardrailsApplied: [
+          ...guardrailsApplied,
+          'Blocked member-only scope for a shared or system event without explicit justification.',
+        ],
+        engine: 'openclaw',
+      })
+    }
+  }
+
+  return {
+    scope,
+    action,
+    durability: modelEvaluation.durability,
+    shouldWrite: true,
+    confidence: modelEvaluation.confidence,
+    rationale:
+      rationale.length > 0
+        ? rationale
+        : ['The model found durable information worth writing to memory.'],
+    signalTags,
+    memoryKind: modelEvaluation.memoryKind,
+    guardrailsApplied,
+    engine: 'openclaw',
+  }
+}
+
+function buildIgnoredEvaluation(input: {
+  reason: MemoryUpdateIgnoreReason
   durability: MemoryUpdateDurability
-  confidence: 'low' | 'medium' | 'high'
   rationale: string[]
   signalTags: string[]
+  memoryKind: MemoryUpdateKind
+  guardrailsApplied?: string[]
+  engine: 'openclaw' | 'guardrail-fallback'
 }): MemoryUpdateEvaluation {
   return {
-    ...input,
-    shouldWrite: input.scope !== 'none' && input.action !== 'ignore',
+    scope: 'none',
+    action: 'ignore',
+    durability: input.durability,
+    shouldWrite: false,
+    confidence: 'low',
     rationale: uniqueStrings(input.rationale),
-    signalTags: uniqueStrings(input.signalTags),
+    signalTags: normalizeSignalTags(input.signalTags),
+    memoryKind: input.memoryKind,
+    guardrailsApplied: uniqueStrings(input.guardrailsApplied ?? []),
+    engine: input.engine,
+    ignoredReason: input.reason,
   }
 }
 
-function ignoredEvaluation(
-  rationale: string[],
-  signalTags: string[]
-): MemoryUpdateEvaluation {
-  return buildEvaluation({
-    scope: 'none',
-    action: 'ignore',
-    durability: 'temporary',
-    confidence: 'low',
-    rationale,
-    signalTags,
-  })
+function sanitizePromptValue(value: unknown, depth = 0): unknown {
+  if (value == null) return value
+  if (typeof value === 'string') {
+    return value.length > 1_500 ? `${value.slice(0, 1_500)}…` : value
+  }
+
+  if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return value
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString()
+  }
+
+  if (depth >= 3) {
+    return '[truncated]'
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map((item) => sanitizePromptValue(item, depth + 1))
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).slice(0, 30)
+    return Object.fromEntries(
+      entries.map(([key, childValue]) => [
+        key,
+        sanitizePromptValue(childValue, depth + 1),
+      ])
+    )
+  }
+
+  return String(value)
 }
 
-function looksTemporary(text: string) {
-  return TEMPORARY_SIGNAL_PATTERNS.some((pattern) => pattern.test(text))
-}
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' ? value : ''
+function normalizeSignalTags(tags: string[]) {
+  return uniqueStrings(
+    tags
+      .map((tag) => tag.trim().toLowerCase().replace(/\s+/g, '_'))
+      .filter(Boolean)
+      .slice(0, 8)
+  )
 }
 
 function uniqueStrings(values: string[]) {

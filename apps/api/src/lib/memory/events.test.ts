@@ -1,10 +1,36 @@
 import { describe, expect, it } from 'bun:test'
+import type { MemoryEvaluationDeps } from './evaluation'
 import {
   createLatestOnlyMemoryUpdateScheduler,
   dispatchOpenClawMemoryProposal,
   dispatchProductMemoryEvent,
   normalizeMemoryUpdateEvent,
 } from './events'
+
+type MemoryCompletionFn = NonNullable<MemoryEvaluationDeps['completeChat']>
+type MemoryCompletionResult = Awaited<ReturnType<MemoryCompletionFn>>
+
+function createModelCompletion(
+  payload: Record<string, unknown>
+): MemoryCompletionFn {
+  return async () => ({
+    ok: true as const,
+    content: JSON.stringify(payload),
+    connection: {
+      instance: {} as never,
+      instanceUrl: 'https://openclaw.test',
+      headers: {},
+      model: 'openclaw/default',
+      routedAgent: {
+        id: 'agent_123',
+        agentType: 'org' as const,
+        openclawAgentId: 'agent_123',
+        status: 'active' as const,
+      },
+      fallbackToDefaultAgent: false,
+    },
+  } satisfies Extract<MemoryCompletionResult, { ok: true }>)
+}
 
 function deferred() {
   let resolve!: () => void
@@ -72,11 +98,15 @@ describe('createLatestOnlyMemoryUpdateScheduler', () => {
         evaluation: {
           scope: 'none' as const,
           action: 'ignore' as const,
-          durability: 'temporary' as const,
+          durability: 'unknown' as const,
           shouldWrite: false,
           confidence: 'low' as const,
           rationale: ['placeholder'],
           signalTags: [],
+          memoryKind: 'other' as const,
+          guardrailsApplied: [],
+          engine: 'guardrail-fallback' as const,
+          ignoredReason: 'low-information' as const,
         },
       }
     })
@@ -143,6 +173,17 @@ describe('memory update dispatch entrypoints', () => {
         threadId: 'thread_123',
         messageId: 'message_123',
       },
+    }, {
+      completeChat: createModelCompletion({
+        shouldWrite: true,
+        scope: 'member',
+        action: 'update_existing',
+        durability: 'durable',
+        confidence: 'high',
+        memoryKind: 'preference',
+        rationale: ['The event captures a durable personal preference.'],
+        signalTags: ['personal_preference'],
+      }),
     })
 
     expect(result.status).toBe('evaluated')
@@ -167,6 +208,17 @@ describe('memory update dispatch entrypoints', () => {
         sessionKey: 'session_123',
         operation: 'update',
       },
+    }, {
+      completeChat: createModelCompletion({
+        shouldWrite: true,
+        scope: 'org',
+        action: 'update_existing',
+        durability: 'durable',
+        confidence: 'medium',
+        memoryKind: 'project',
+        rationale: ['The proposal updates durable shared project memory.'],
+        signalTags: ['project_state', 'agent_proposal'],
+      }),
     })
 
     expect(result.status).toBe('evaluated')

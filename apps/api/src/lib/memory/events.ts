@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { evaluateMemoryUpdateEvent, type MemoryUpdateEvaluation } from './evaluation'
+import {
+  evaluateMemoryUpdateEvent,
+  type MemoryUpdateEvaluation,
+  type MemoryUpdateIgnoreReason,
+} from './evaluation'
 
 export const memoryUpdateSourceSchema = z.enum([
   'meeting',
@@ -171,9 +175,7 @@ export type NormalizedMemoryUpdateEvent = MemoryUpdateEvent & {
 export type MemoryUpdateWorkerResult =
   | {
       status: 'ignored'
-      reason:
-        | 'temporary-signal'
-        | 'low-information'
+      reason: MemoryUpdateIgnoreReason
       event: NormalizedMemoryUpdateEvent
       evaluation: MemoryUpdateEvaluation
     }
@@ -242,7 +244,19 @@ export function createLatestOnlyMemoryUpdateScheduler(
         status: 'ignored',
         reason: 'low-information',
         event,
-        evaluation: evaluateMemoryUpdateEvent(event),
+        evaluation: {
+          scope: 'none',
+          action: 'ignore',
+          durability: 'unknown',
+          shouldWrite: false,
+          confidence: 'low',
+          rationale: ['Memory evaluation has not run yet.'],
+          signalTags: [],
+          memoryKind: 'other',
+          guardrailsApplied: [],
+          engine: 'guardrail-fallback',
+          ignoredReason: 'low-information',
+        },
       }),
     }
 
@@ -273,15 +287,20 @@ export function createLatestOnlyMemoryUpdateScheduler(
 }
 
 export async function runMemoryUpdateWorker(
-  input: MemoryUpdateEvent | NormalizedMemoryUpdateEvent | unknown
+  input: MemoryUpdateEvent | NormalizedMemoryUpdateEvent | unknown,
+  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
 ): Promise<MemoryUpdateWorkerResult> {
   const event = normalizeMemoryUpdateEvent(input)
-  const evaluation = evaluateMemoryUpdateEvent(event)
+  const evaluation = await evaluateMemoryUpdateEvent(event, deps)
 
   if (!evaluation.shouldWrite) {
     return {
       status: 'ignored',
-      reason: evaluation.signalTags.length === 0 ? 'low-information' : 'temporary-signal',
+      reason:
+        evaluation.ignoredReason ??
+        (evaluation.signalTags.length === 0
+          ? 'low-information'
+          : 'temporary-signal'),
       event,
       evaluation,
     }
@@ -295,7 +314,8 @@ export async function runMemoryUpdateWorker(
 }
 
 export async function dispatchProductMemoryEvent(
-  input: Exclude<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown
+  input: Exclude<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown,
+  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
 ) {
   const event = normalizeMemoryUpdateEvent(input)
 
@@ -305,11 +325,12 @@ export async function dispatchProductMemoryEvent(
     )
   }
 
-  return runMemoryUpdateWorker(event)
+  return runMemoryUpdateWorker(event, deps)
 }
 
 export async function dispatchOpenClawMemoryProposal(
-  input: Extract<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown
+  input: Extract<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown,
+  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
 ) {
   const event = normalizeMemoryUpdateEvent(input)
 
@@ -319,7 +340,7 @@ export async function dispatchOpenClawMemoryProposal(
     )
   }
 
-  return runMemoryUpdateWorker(event)
+  return runMemoryUpdateWorker(event, deps)
 }
 
 export const scheduleMemoryUpdateEvent =

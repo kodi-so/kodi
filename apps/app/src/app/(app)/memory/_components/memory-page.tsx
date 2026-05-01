@@ -6,19 +6,23 @@ import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
+  ArrowLeft,
   BookMarked,
   Building2,
   FileText,
   Folder,
   type LucideIcon,
   Loader2,
+  MessageSquare,
   RefreshCcw,
+  Send,
   UserRound,
 } from 'lucide-react'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Badge } from '@kodi/ui/components/badge'
 import { Button } from '@kodi/ui/components/button'
 import { Skeleton } from '@kodi/ui/components/skeleton'
+import { Textarea } from '@kodi/ui/components/textarea'
 import {
   Tabs,
   TabsList,
@@ -33,37 +37,32 @@ type MemoryManifest = Awaited<ReturnType<typeof trpc.memory.manifest.query>>
 type MemoryDirectory = Awaited<
   ReturnType<typeof trpc.memory.listDirectory.query>
 >
+type MemoryFile = Awaited<ReturnType<typeof trpc.memory.readPath.query>>
 
 const scopeContent = {
   org: {
-    label: 'Shared',
     shortLabel: 'Shared memory',
     eyebrow: 'Workspace memory',
     description:
       'Context Kodi can use in shared conversations, meetings, and team follow-up work.',
     empty: 'No shared root entries yet.',
-    badge: 'Shared',
     icon: Building2,
   },
   member: {
-    label: 'Private',
     shortLabel: 'Private memory',
     eyebrow: 'Member memory',
     description:
       'Context Kodi can use for your private assistant surfaces without exposing it to the team.',
     empty: 'No private root entries yet.',
-    badge: 'Private',
     icon: UserRound,
   },
 } satisfies Record<
   MemoryScope,
   {
-    label: string
     shortLabel: string
     eyebrow: string
     description: string
     empty: string
-    badge: string
     icon: LucideIcon
   }
 >
@@ -109,6 +108,17 @@ function formatPathLabel(path: string) {
   return path.replace(/\.md$/i, '').replace(/[-_]+/g, ' ')
 }
 
+function basename(path: string) {
+  const parts = path.split('/').filter(Boolean)
+  return parts[parts.length - 1] ?? ''
+}
+
+function parentPath(path: string) {
+  const parts = path.split('/').filter(Boolean)
+  if (parts.length <= 1) return ''
+  return parts.slice(0, -1).join('/')
+}
+
 function formatDate(value: Date | number | string) {
   return new Intl.DateTimeFormat('en', {
     month: 'short',
@@ -116,6 +126,14 @@ function formatDate(value: Date | number | string) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function buildMemoryUrl(scope: MemoryScope, path?: string | null) {
+  const params = new URLSearchParams()
+  if (scope === 'member') params.set('scope', 'member')
+  if (path) params.set('path', path)
+  const query = params.toString()
+  return `/memory${query ? `?${query}` : ''}`
 }
 
 function MemoryLoading() {
@@ -144,13 +162,25 @@ function MemoryLoading() {
 
 function DirectoryRow({
   entry,
+  active,
+  onOpen,
 }: {
   entry: MemoryDirectory['entries'][number]
+  active: boolean
+  onOpen: (entry: MemoryDirectory['entries'][number]) => void
 }) {
   const Icon = entry.pathType === 'directory' ? Folder : FileText
 
   return (
-    <div className="group flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 py-2 text-sm transition-colors hover:border-border hover:bg-secondary/60">
+    <button
+      type="button"
+      onClick={() => onOpen(entry)}
+      className={`group flex min-h-11 w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:border-border hover:bg-secondary/60 ${
+        active
+          ? 'border-border bg-secondary text-foreground'
+          : 'border-transparent'
+      }`}
+    >
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground shadow-[inset_0_0_0_1px_hsl(var(--border))]">
         <Icon className="size-4" />
       </span>
@@ -167,7 +197,7 @@ function DirectoryRow({
           Index
         </Badge>
       ) : null}
-    </div>
+    </button>
   )
 }
 
@@ -203,13 +233,172 @@ function ManifestView({ manifest }: { manifest: MemoryManifest }) {
   )
 }
 
+function DirectoryView({
+  directory,
+  indexFile,
+  onOpen,
+}: {
+  directory: MemoryDirectory
+  indexFile: MemoryFile | null
+  onOpen: (entry: MemoryDirectory['entries'][number]) => void
+}) {
+  return (
+    <article className="min-h-[28rem] rounded-lg border bg-brand-elevated p-6 shadow-[0_22px_70px_-48px_hsl(var(--foreground)/0.35)]">
+      <div className="mb-5 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Folder className="size-4 text-primary" />
+            <h2 className="text-lg font-semibold tracking-tight">
+              {directory.path ? formatPathLabel(basename(directory.path)) : 'Root'}
+            </h2>
+          </div>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            {directory.entries.length} item{directory.entries.length === 1 ? '' : 's'} in this location.
+          </p>
+        </div>
+        <Badge variant="neutral" className="self-start">
+          Directory
+        </Badge>
+      </div>
+
+      {indexFile ? (
+        <div className="mb-6 rounded-lg border bg-background p-4">
+          <ReactMarkdown
+            components={markdownComponents}
+            remarkPlugins={[remarkGfm]}
+          >
+            {indexFile.content}
+          </ReactMarkdown>
+        </div>
+      ) : null}
+
+      <div className="grid gap-2">
+        {directory.entries.length > 0 ? (
+          directory.entries.map((entry) => (
+            <DirectoryRow
+              key={entry.path}
+              entry={entry}
+              active={false}
+              onOpen={onOpen}
+            />
+          ))
+        ) : (
+          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+            This directory is empty.
+          </div>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function FileView({ file }: { file: MemoryFile }) {
+  return (
+    <article className="min-h-[28rem] rounded-lg border bg-brand-elevated p-6 shadow-[0_22px_70px_-48px_hsl(var(--foreground)/0.35)]">
+      <div className="mb-5 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <FileText className="size-4 text-primary" />
+            <h2 className="text-lg font-semibold tracking-tight">
+              {file.title ?? formatPathLabel(basename(file.path))}
+            </h2>
+          </div>
+          <p className="max-w-2xl truncate text-sm leading-6 text-muted-foreground">
+            {file.path}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {file.isIndex ? <Badge variant="neutral">Index</Badge> : null}
+          <Badge variant="outline">Edited {formatDate(file.lastUpdatedAt)}</Badge>
+        </div>
+      </div>
+
+      <div className="max-w-none text-foreground">
+        <ReactMarkdown
+          components={markdownComponents}
+          remarkPlugins={[remarkGfm]}
+        >
+          {file.content}
+        </ReactMarkdown>
+      </div>
+    </article>
+  )
+}
+
+function MemoryChatPanel({
+  scope,
+  path,
+  activeOrgName,
+  onSend,
+}: {
+  scope: MemoryScope
+  path: string
+  activeOrgName: string
+  onSend: (prompt: string) => void
+}) {
+  const [draft, setDraft] = useState('')
+  const scopeLabel = scope === 'member' ? 'private memory' : 'shared memory'
+  const location = path || 'the memory root'
+
+  function submit() {
+    const question = draft.trim()
+    if (!question) return
+    onSend(
+      `In ${activeOrgName}'s ${scopeLabel}, looking at ${location}, ${question}`
+    )
+    setDraft('')
+  }
+
+  return (
+    <aside className="rounded-lg border bg-brand-elevated p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+          <MessageSquare className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">Ask about this memory</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Kodi will open in chat with this scope and path already included.
+          </p>
+        </div>
+      </div>
+
+      <Textarea
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault()
+            submit()
+          }
+        }}
+        placeholder="What changed here?"
+        className="mt-4 min-h-24 resize-none"
+      />
+      <Button
+        type="button"
+        size="sm"
+        className="mt-3 w-full"
+        onClick={submit}
+        disabled={!draft.trim()}
+      >
+        <Send className="mr-2 size-4" />
+        Ask Kodi
+      </Button>
+    </aside>
+  )
+}
+
 export function MemoryPage() {
   const { activeOrg } = useOrg()
   const router = useRouter()
   const searchParams = useSearchParams()
   const scope = parseMemoryScope(searchParams.get('scope'))
+  const selectedPath = searchParams.get('path')?.trim() ?? ''
   const [manifest, setManifest] = useState<MemoryManifest | null>(null)
   const [directory, setDirectory] = useState<MemoryDirectory | null>(null)
+  const [directoryIndex, setDirectoryIndex] = useState<MemoryFile | null>(null)
+  const [selectedFile, setSelectedFile] = useState<MemoryFile | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -224,19 +413,86 @@ export function MemoryPage() {
       .sort((left, right) => right - left)[0]
   }, [directory])
 
-  async function loadMemory(orgId: string, nextScope: MemoryScope) {
-    const [nextManifest, nextDirectory] = await Promise.all([
-      trpc.memory.manifest.query({ orgId, scope: nextScope }),
-      trpc.memory.listDirectory.query({ orgId, scope: nextScope }),
-    ])
+  async function loadDirectoryIndex(
+    orgId: string,
+    nextScope: MemoryScope,
+    nextDirectory: MemoryDirectory
+  ) {
+    const indexEntry = nextDirectory.entries.find((entry) => entry.isIndex)
+    if (!indexEntry) return null
+
+    try {
+      return await trpc.memory.readPath.query({
+        orgId,
+        scope: nextScope,
+        path: indexEntry.path,
+      })
+    } catch {
+      return null
+    }
+  }
+
+  async function loadMemory(
+    orgId: string,
+    nextScope: MemoryScope,
+    nextPath: string
+  ) {
+    const nextManifest = await trpc.memory.manifest.query({
+      orgId,
+      scope: nextScope,
+    })
+    let nextDirectory: MemoryDirectory
+    let nextDirectoryIndex: MemoryFile | null = null
+    let nextFile: MemoryFile | null = null
+
+    if (!nextPath) {
+      nextDirectory = await trpc.memory.listDirectory.query({
+        orgId,
+        scope: nextScope,
+      })
+      nextDirectoryIndex = await loadDirectoryIndex(
+        orgId,
+        nextScope,
+        nextDirectory
+      )
+    } else {
+      try {
+        nextFile = await trpc.memory.readPath.query({
+          orgId,
+          scope: nextScope,
+          path: nextPath,
+        })
+        nextDirectory = await trpc.memory.listDirectory.query({
+          orgId,
+          scope: nextScope,
+          path: parentPath(nextPath),
+        })
+      } catch {
+        nextDirectory = await trpc.memory.listDirectory.query({
+          orgId,
+          scope: nextScope,
+          path: nextPath,
+        })
+        nextDirectoryIndex = await loadDirectoryIndex(
+          orgId,
+          nextScope,
+          nextDirectory
+        )
+      }
+    }
+
     setManifest(nextManifest)
     setDirectory(nextDirectory)
+    setDirectoryIndex(nextDirectoryIndex)
+    setSelectedFile(nextFile)
   }
 
   useEffect(() => {
     if (!activeOrg) {
       setManifest(null)
       setDirectory(null)
+      setDirectoryIndex(null)
+      setSelectedFile(null)
       setLoading(false)
       return
     }
@@ -245,7 +501,7 @@ export function MemoryPage() {
     setLoading(true)
     setError(null)
 
-    void loadMemory(activeOrg.orgId, scope)
+    void loadMemory(activeOrg.orgId, scope, selectedPath)
       .catch((nextError) => {
         if (cancelled) return
         setError(
@@ -261,7 +517,7 @@ export function MemoryPage() {
     return () => {
       cancelled = true
     }
-  }, [activeOrg?.orgId, scope])
+  }, [activeOrg?.orgId, scope, selectedPath])
 
   async function refresh() {
     if (!activeOrg || refreshing) return
@@ -269,7 +525,7 @@ export function MemoryPage() {
     setError(null)
 
     try {
-      await loadMemory(activeOrg.orgId, scope)
+      await loadMemory(activeOrg.orgId, scope, selectedPath)
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -290,9 +546,32 @@ export function MemoryPage() {
     } else {
       params.delete('scope')
     }
+    params.delete('path')
 
     const query = params.toString()
     router.replace(`/memory${query ? `?${query}` : ''}`, { scroll: false })
+  }
+
+  function openPath(path: string) {
+    router.replace(buildMemoryUrl(scope, path), { scroll: false })
+  }
+
+  function openEntry(entry: MemoryDirectory['entries'][number]) {
+    openPath(entry.path)
+  }
+
+  function openParent() {
+    if (!selectedPath) return
+    router.replace(buildMemoryUrl(scope, parentPath(selectedPath)), {
+      scroll: false,
+    })
+  }
+
+  function askKodi(prompt: string) {
+    const params = new URLSearchParams()
+    params.set('dm', 'kodi')
+    params.set('prompt', prompt)
+    router.push(`/chat?${params.toString()}`)
   }
 
   if (!activeOrg) {
@@ -319,6 +598,37 @@ export function MemoryPage() {
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                 {activeScope.description}
               </p>
+              {selectedPath ? (
+                <div className="flex flex-wrap items-center gap-2 pt-2 text-xs text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={() => router.replace(buildMemoryUrl(scope), { scroll: false })}
+                    className="rounded-md px-2 py-1 hover:bg-secondary hover:text-foreground"
+                  >
+                    Root
+                  </button>
+                  {selectedPath.split('/').map((segment, index, parts) => {
+                    const path = parts.slice(0, index + 1).join('/')
+                    const isLast = index === parts.length - 1
+                    return (
+                      <span key={path} className="flex items-center gap-2">
+                        <span>/</span>
+                        <button
+                          type="button"
+                          onClick={() => openPath(path)}
+                          className={`rounded-md px-2 py-1 ${
+                            isLast
+                              ? 'bg-secondary text-foreground'
+                              : 'hover:bg-secondary hover:text-foreground'
+                          }`}
+                        >
+                          {formatPathLabel(segment)}
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -365,7 +675,7 @@ export function MemoryPage() {
         {loading ? (
           <MemoryLoading />
         ) : (
-          <div className="grid min-h-[32rem] gap-4 lg:grid-cols-[20rem_1fr]">
+          <div className="grid min-h-[32rem] gap-4 xl:grid-cols-[20rem_minmax(0,1fr)_19rem]">
             <aside className="rounded-lg border bg-brand-elevated p-3">
               <div className="flex items-center justify-between px-2 py-2">
                 <div>
@@ -380,9 +690,36 @@ export function MemoryPage() {
               </div>
 
               <div className="mt-2 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => router.replace(buildMemoryUrl(scope), { scroll: false })}
+                  className={`flex min-h-10 w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors hover:border-border hover:bg-secondary/60 ${
+                    !selectedPath
+                      ? 'border-border bg-secondary text-foreground'
+                      : 'border-transparent'
+                  }`}
+                >
+                  <BookMarked className="size-4 text-muted-foreground" />
+                  <span className="font-medium">Memory root</span>
+                </button>
+                {selectedPath ? (
+                  <button
+                    type="button"
+                    onClick={openParent}
+                    className="flex min-h-10 w-full items-center gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-secondary/60 hover:text-foreground"
+                  >
+                    <ArrowLeft className="size-4" />
+                    <span>Parent</span>
+                  </button>
+                ) : null}
                 {(directory?.entries ?? []).length > 0 ? (
                   directory?.entries.map((entry) => (
-                    <DirectoryRow key={entry.path} entry={entry} />
+                    <DirectoryRow
+                      key={entry.path}
+                      entry={entry}
+                      active={entry.path === selectedPath}
+                      onOpen={openEntry}
+                    />
                   ))
                 ) : (
                   <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
@@ -392,13 +729,28 @@ export function MemoryPage() {
               </div>
             </aside>
 
-            {manifest ? (
+            {selectedFile ? (
+              <FileView file={selectedFile} />
+            ) : selectedPath && directory ? (
+              <DirectoryView
+                directory={directory}
+                indexFile={directoryIndex}
+                onOpen={openEntry}
+              />
+            ) : manifest ? (
               <ManifestView manifest={manifest} />
             ) : (
               <div className="flex min-h-[28rem] items-center justify-center rounded-lg border bg-brand-elevated p-6 text-sm text-muted-foreground">
                 Memory manifest unavailable.
               </div>
             )}
+
+            <MemoryChatPanel
+              scope={scope}
+              path={selectedPath}
+              activeOrgName={activeOrg.orgName}
+              onSend={askKodi}
+            />
           </div>
         )}
       </div>

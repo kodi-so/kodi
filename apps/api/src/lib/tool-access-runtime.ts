@@ -1,5 +1,6 @@
 import { db, eq, toolActionRuns, toolSessionRuns } from '@kodi/db'
 import { env } from '../env'
+import type { OpenClawConversationVisibility } from './openclaw/client'
 import {
   choosePrimaryConnection,
   getComposioClient,
@@ -16,6 +17,10 @@ import {
   buildApprovalResponseMessage,
   queueToolApprovalRequest,
 } from './tool-access-approvals'
+import {
+  emitSlackMemoryUpdateEvent,
+  resolveSlackMemoryEventInput,
+} from './memory/slack-events'
 
 type AnyDb = typeof db
 
@@ -2514,6 +2519,7 @@ async function executeAllowedToolCall(params: {
   sessionRunId: string
   sourceType: ToolRuntimeSourceType
   sourceId: string | null
+  visibility?: OpenClawConversationVisibility
   composioSessionId: string
   toolCall: OpenAIToolCall
   decision: ToolPermissionDecision
@@ -2633,6 +2639,33 @@ async function executeAllowedToolCall(params: {
       error: response?.error ?? null,
     })
 
+    if (!response?.error && params.decision.toolkitSlug === 'slack') {
+      const slackInput = resolveSlackMemoryEventInput({
+        orgId: params.orgId,
+        actorUserId: params.actorUserId,
+        visibility: params.visibility ?? 'shared',
+        action: params.decision.toolSlug,
+        sourceType: params.sourceType,
+        sourceId: params.sourceId,
+        argumentsPayload: parsedArguments.value,
+        responsePayload: response?.data ?? null,
+      })
+
+      if (slackInput) {
+        try {
+          await emitSlackMemoryUpdateEvent(slackInput)
+        } catch (error) {
+          console.warn('[tool-access] slack memory event dispatch failed', {
+            orgId: params.orgId,
+            toolSlug: params.decision.toolSlug,
+            sourceType: params.sourceType,
+            sourceId: params.sourceId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+    }
+
     if (
       toolPayload.error &&
       isConnectionFailureMessage(toolPayload.error) &&
@@ -2711,6 +2744,7 @@ async function executeScopedToolBySlug(params: {
     | 'sourceId'
     | 'sourceType'
   >
+  visibility?: OpenClawConversationVisibility
   toolSlug: string
 }) {
   const decision = params.runtime.allowedDecisions.get(params.toolSlug)
@@ -2729,6 +2763,7 @@ async function executeScopedToolBySlug(params: {
     sessionRunId: params.runtime.sessionRunId,
     sourceType: params.runtime.sourceType,
     sourceId: params.runtime.sourceId,
+    visibility: params.visibility,
     composioSessionId: params.runtime.composioSessionId,
     toolCall: buildSyntheticToolCall(params.toolSlug, params.argumentsPayload),
     decision,
@@ -2809,6 +2844,7 @@ async function maybeHandleLinearIssueCreation(params: {
   orgId: string
   runtime: ScopedToolRuntime
   userMessage: string
+  visibility: OpenClawConversationVisibility
 }) {
   if (!shouldBrokerLinearIssueCreation(params.userMessage, params.runtime)) {
     return null
@@ -2826,6 +2862,7 @@ async function maybeHandleLinearIssueCreation(params: {
       db: params.db,
       orgId: params.orgId,
       runtime: params.runtime,
+      visibility: params.visibility,
       toolSlug,
     })
 
@@ -2970,6 +3007,7 @@ export async function runChatCompletionWithToolAccess(params: {
   orgId: string
   actorUserId: string
   sourceId?: string | null
+  visibility: OpenClawConversationVisibility
   userMessage: string
   instanceUrl: string
   headers: Record<string, string>
@@ -3070,6 +3108,7 @@ export async function runChatCompletionWithToolAccess(params: {
         orgId: params.orgId,
         runtime: scopedRuntime,
         userMessage: params.userMessage,
+        visibility: params.visibility,
       })
 
       if (linearIssueCreation) {
@@ -3388,6 +3427,7 @@ export async function runChatCompletionWithToolAccess(params: {
           sessionRunId,
           sourceType: scopedRuntime.sourceType,
           sourceId: scopedRuntime.sourceId,
+          visibility: params.visibility,
           composioSessionId,
           toolCall,
           decision,

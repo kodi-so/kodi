@@ -33,6 +33,10 @@ import {
 } from '../composio'
 import { logActivity } from '../activity'
 import { emitTaskActivity } from '../../services/tasks'
+import {
+  emitSlackMemoryUpdateEvent,
+  resolveSlackMemoryEventInput,
+} from '../memory/slack-events'
 
 type AnyDb = typeof db
 
@@ -709,6 +713,33 @@ async function executeSync(params: {
           toolActionRunId: run.id,
         },
       })
+    }
+
+    if (succeeded && params.toolkitSlug === 'slack') {
+      const slackInput = resolveSlackMemoryEventInput({
+        orgId: params.orgId,
+        actorUserId: params.actorUserId,
+        visibility: 'shared',
+        action: params.plan.action,
+        sourceType: 'meeting',
+        sourceId: params.meetingSessionId ?? params.workItemId,
+        argumentsPayload: params.plan.argumentsPayload,
+        responsePayload: response.data ?? null,
+      })
+
+      if (slackInput) {
+        try {
+          await emitSlackMemoryUpdateEvent(slackInput)
+        } catch (error) {
+          console.warn('[meeting-sync] slack memory event dispatch failed', {
+            orgId: params.orgId,
+            meetingSessionId: params.meetingSessionId,
+            workItemId: params.workItemId,
+            action: params.plan.action,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
     }
 
     await params.db

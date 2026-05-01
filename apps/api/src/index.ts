@@ -9,6 +9,7 @@ import { registerLocalMeetingRoutes } from './routes/local-meetings'
 import { registerVoiceAudioRoutes } from './routes/voice-audio'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
+import { registerOpenClawMemoryRoutes } from './routes/openclaw-memory'
 import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 import { db, instances, eq } from '@kodi/db'
 
@@ -22,6 +23,7 @@ registerLocalMeetingRoutes(app)
 registerVoiceAudioRoutes(app)
 registerRecallRoutes(app)
 registerComposioRoutes(app)
+registerOpenClawMemoryRoutes(app)
 app.use(
   '/trpc/*',
   cors({

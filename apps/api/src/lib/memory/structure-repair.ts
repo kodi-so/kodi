@@ -246,16 +246,20 @@ export async function repairStructuralNavigation(input: {
   }
 
   const writes = new Map<string, string>()
+  const staleIndexPaths = new Set<string>()
   const topLevelDirectories = records.filter(
     (record) => record.pathType === 'directory' && record.parentPath === null
   )
 
   for (const directory of topLevelDirectories) {
-    const currentIndexPath =
-      records.find(
-        (record) => record.parentPath === directory.path && record.isIndex
-      )?.path ?? buildDirectoryIndexPath(directory.path)
-    const currentIndexContent = recordMap.get(currentIndexPath)?.content ?? null
+    const canonicalIndexPath = buildDirectoryIndexPath(directory.path)
+    const existingIndexRecords = records.filter(
+      (record) => record.parentPath === directory.path && record.isIndex
+    )
+    const currentIndexRecord =
+      existingIndexRecords.find((record) => record.path === canonicalIndexPath) ??
+      existingIndexRecords[0]
+    const currentIndexContent = currentIndexRecord?.content ?? null
     const childRecords = records.filter((record) => record.parentPath === directory.path)
     const nextIndexContent = buildDirectoryIndexContent({
       directory,
@@ -263,8 +267,17 @@ export async function repairStructuralNavigation(input: {
       childRecords,
     })
 
-    if (currentIndexContent !== nextIndexContent) {
-      writes.set(currentIndexPath, nextIndexContent)
+    if (
+      currentIndexContent !== nextIndexContent ||
+      currentIndexRecord?.path !== canonicalIndexPath
+    ) {
+      writes.set(canonicalIndexPath, nextIndexContent)
+    }
+
+    for (const indexRecord of existingIndexRecords) {
+      if (indexRecord.path !== canonicalIndexPath) {
+        staleIndexPaths.add(indexRecord.path)
+      }
     }
   }
 
@@ -275,6 +288,14 @@ export async function repairStructuralNavigation(input: {
 
   if (manifestRecord.content !== nextManifestContent) {
     writes.set('MEMORY.md', nextManifestContent)
+  }
+
+  for (const relativePath of staleIndexPaths) {
+    const storagePath = joinPath(input.vault.rootPath, relativePath)
+    const stat = await input.storage.statPath(storagePath)
+    if (stat?.type === 'file') {
+      await input.storage.deletePath(storagePath)
+    }
   }
 
   for (const [relativePath, content] of writes) {

@@ -8,10 +8,18 @@ import {
   ensureOrgMemoryVault,
 } from './bootstrap'
 import {
+  executeMemoryUpdatePlan,
+  type MemoryExecutionDeps,
+} from './execution'
+import type { MemoryUpdateEvaluation } from './evaluation'
+import { normalizeMemoryUpdateEvent } from './events'
+import {
   deleteMemoryPath,
   moveMemoryPath,
+  syncMemoryVaultMetadata,
   writeMemoryFile,
 } from './paths'
+import type { MemoryScopeUpdatePlan } from './resolution'
 import {
   getMemoryManifest,
   listMemoryDirectory,
@@ -26,6 +34,16 @@ import type {
   MemoryStorageStat,
   MemoryStorageWriteInput,
 } from './storage'
+import {
+  createScopedMemoryDirectory,
+  createScopedMemoryFile,
+  deleteScopedMemoryPath,
+  mergeScopedMemoryFiles,
+  moveScopedMemoryPath,
+  renameScopedMemoryPath,
+  splitScopedMemoryFile,
+  type MemoryStructureDeps,
+} from './structure'
 
 type SqlFacts = {
   equals: Map<string, unknown>
@@ -590,6 +608,32 @@ class ScenarioMemoryDatabase {
   }
 }
 
+type StructureCompletionFn = NonNullable<MemoryExecutionDeps['completeStructureChat']>
+type StructureCompletionResult = Awaited<ReturnType<StructureCompletionFn>>
+
+function createStructureCompletion(
+  payload: Record<string, unknown>
+): StructureCompletionFn {
+  return async (input) =>
+    ({
+      ok: true as const,
+      content: JSON.stringify(payload),
+      connection: {
+        instance: {} as never,
+        instanceUrl: 'https://openclaw.test',
+        headers: {},
+        model: 'openclaw/default',
+        routedAgent: {
+          id: 'agent_123',
+          agentType: input.visibility === 'private' ? 'member' : 'org',
+          openclawAgentId: 'agent_123',
+          status: 'active',
+        },
+        fallbackToDefaultAgent: false,
+      },
+    } satisfies Extract<StructureCompletionResult, { ok: true }>)
+}
+
 describe('memory foundation scenario coverage', () => {
   it('covers vault bootstrap, file operations, parsing, and scoped search through the service layer', async () => {
     const database = new ScenarioMemoryDatabase()
@@ -787,5 +831,364 @@ describe('memory foundation scenario coverage', () => {
     expect(
       combinedSearch.results.some((result) => result.scopeType === 'member')
     ).toBe(true)
+  })
+
+  it('covers structural maintenance across org and member vaults, including worker-driven maintenance', async () => {
+    const database = new ScenarioMemoryDatabase()
+    const storage = new ScenarioMemoryStorage()
+
+    const org = {
+      id: 'org_456',
+      name: 'Kodi',
+      slug: 'kodi',
+    }
+    const member = {
+      org,
+      orgMember: {
+        id: 'org_member_456',
+        orgId: org.id,
+        userId: 'user_456',
+        role: 'member' as const,
+      },
+    }
+
+    const orgVault = await ensureOrgMemoryVault(database as never, org, storage)
+    const memberVault = await ensureMemberMemoryVault(
+      database as never,
+      member,
+      storage
+    )
+    const syncScenarioStructureVault: NonNullable<
+      MemoryStructureDeps['syncVaultMetadata']
+    > = async (vault, syncStorage) =>
+      syncMemoryVaultMetadata(
+        database as never,
+        {
+          id: vault.id,
+          rootPath: vault.rootPath,
+          manifestPath: vault.manifestPath,
+        },
+        syncStorage
+      )
+    const structureDeps: MemoryStructureDeps = {
+      database: database as never,
+      storage,
+      resolveVault: async (input) =>
+        input.scope === 'member'
+          ? {
+              id: memberVault.id,
+              orgId: memberVault.orgId,
+              scopeType: memberVault.scopeType,
+              orgMemberId: memberVault.orgMemberId,
+              rootPath: memberVault.rootPath,
+              manifestPath: memberVault.manifestPath,
+            }
+          : {
+              id: orgVault.id,
+              orgId: orgVault.orgId,
+              scopeType: orgVault.scopeType,
+              orgMemberId: orgVault.orgMemberId,
+              rootPath: orgVault.rootPath,
+              manifestPath: orgVault.manifestPath,
+            },
+      syncVaultMetadata: syncScenarioStructureVault,
+    }
+
+    await createScopedMemoryDirectory({
+      orgId: org.id,
+      scope: 'org',
+      path: 'Runbooks',
+      deps: structureDeps,
+    })
+    await createScopedMemoryFile({
+      orgId: org.id,
+      scope: 'org',
+      path: 'Runbooks/Onboarding Master.md',
+      content:
+        '# Onboarding Master\n\nChecklist tasks and owners for the onboarding program.\n',
+      deps: structureDeps,
+    })
+    await renameScopedMemoryPath({
+      orgId: org.id,
+      scope: 'org',
+      path: 'Runbooks',
+      newName: 'Playbooks',
+      deps: structureDeps,
+    })
+    await splitScopedMemoryFile({
+      orgId: org.id,
+      scope: 'org',
+      sourcePath: 'Playbooks/Onboarding Master.md',
+      targets: [
+        {
+          path: 'Playbooks/Onboarding Checklist.md',
+          content:
+            '# Onboarding Checklist\n\nChecklist tasks for the onboarding program.\n',
+        },
+        {
+          path: 'Playbooks/Onboarding Owners.md',
+          content:
+            '# Onboarding Owners\n\nOwners for the onboarding program.\n',
+        },
+      ],
+      deps: structureDeps,
+    })
+    await mergeScopedMemoryFiles({
+      orgId: org.id,
+      scope: 'org',
+      sourcePaths: [
+        'Playbooks/Onboarding Checklist.md',
+        'Playbooks/Onboarding Owners.md',
+      ],
+      targetPath: 'Playbooks/Onboarding Guide.md',
+      content:
+        '# Onboarding Program Guide\n\nThe onboarding program guide combines checklist tasks and owners.\n',
+      deps: structureDeps,
+    })
+    await moveScopedMemoryPath({
+      orgId: org.id,
+      scope: 'org',
+      fromPath: 'Playbooks/Onboarding Guide.md',
+      toPath: 'Processes/Onboarding Guide.md',
+      deps: structureDeps,
+    })
+    await renameScopedMemoryPath({
+      orgId: org.id,
+      scope: 'org',
+      path: 'Processes/Onboarding Guide.md',
+      newName: 'Onboarding Program Guide.md',
+      deps: structureDeps,
+    })
+
+    await createScopedMemoryDirectory({
+      orgId: org.id,
+      scope: 'member',
+      actorUserId: member.orgMember.userId,
+      actorOrgMemberId: member.orgMember.id,
+      path: 'Working Sets',
+      deps: structureDeps,
+    })
+    await createScopedMemoryFile({
+      orgId: org.id,
+      scope: 'member',
+      actorUserId: member.orgMember.userId,
+      actorOrgMemberId: member.orgMember.id,
+      path: 'Working Sets/Research Threads.md',
+      content:
+        '# Research Threads\n\nPrivate research thread priorities for Q2.\n',
+      deps: structureDeps,
+    })
+    await renameScopedMemoryPath({
+      orgId: org.id,
+      scope: 'member',
+      actorUserId: member.orgMember.userId,
+      actorOrgMemberId: member.orgMember.id,
+      path: 'Working Sets',
+      newName: 'Private Projects',
+      deps: structureDeps,
+    })
+    await moveScopedMemoryPath({
+      orgId: org.id,
+      scope: 'member',
+      actorUserId: member.orgMember.userId,
+      actorOrgMemberId: member.orgMember.id,
+      fromPath: 'Private Projects/Research Threads.md',
+      toPath: 'Current Work/Research Threads.md',
+      deps: structureDeps,
+    })
+    await renameScopedMemoryPath({
+      orgId: org.id,
+      scope: 'member',
+      actorUserId: member.orgMember.userId,
+      actorOrgMemberId: member.orgMember.id,
+      path: 'Current Work/Research Threads.md',
+      newName: 'Q2 Research Threads.md',
+      deps: structureDeps,
+    })
+    await deleteScopedMemoryPath({
+      orgId: org.id,
+      scope: 'member',
+      actorUserId: member.orgMember.userId,
+      actorOrgMemberId: member.orgMember.id,
+      path: 'Private Projects',
+      deps: structureDeps,
+    })
+
+    const structuralEvent = normalizeMemoryUpdateEvent({
+      orgId: org.id,
+      source: 'user_request',
+      occurredAt: '2026-05-01T18:45:00.000Z',
+      visibility: 'shared',
+      summary: 'Rename the shared onboarding guide so the final title is consistent.',
+      actor: {
+        userId: member.orgMember.userId,
+        orgMemberId: member.orgMember.id,
+      },
+      payload: {
+        requestId: 'request_structure_1',
+        surface: 'memory_ui',
+        path: 'Processes/Onboarding Program Guide.md',
+      },
+    })
+    const structuralEvaluation: MemoryUpdateEvaluation = {
+      scope: 'org',
+      action: 'trigger_structural_maintenance',
+      durability: 'durable',
+      shouldWrite: true,
+      confidence: 'high',
+      rationale: ['The final shared guide title should be normalized.'],
+      signalTags: ['structure'],
+      memoryKind: 'other',
+      topicLabel: 'Shared onboarding program guide',
+      topicSummary: 'Normalize the final title of the shared onboarding guide.',
+      topicKeywords: ['onboarding', 'guide', 'title'],
+      guardrailsApplied: [],
+      engine: 'openclaw',
+    }
+    const structuralPlan: MemoryScopeUpdatePlan = {
+      scope: 'org',
+      vaultId: orgVault.id,
+      rootPath: orgVault.rootPath,
+      manifestPath: orgVault.manifestPath,
+      directoryPath: 'Processes',
+      indexPath: 'Processes/PROCESSES.md',
+      targetPath: 'Processes/Onboarding Program Guide.md',
+      action: 'trigger_structural_maintenance',
+      requiredReads: [
+        'MEMORY.md',
+        'Processes/PROCESSES.md',
+        'Processes/Onboarding Program Guide.md',
+      ],
+      candidatePaths: ['Processes/Onboarding Program Guide.md'],
+      searchQuery: 'shared onboarding guide title',
+      requiresIndexRepair: true,
+      requiresManifestRepair: false,
+      rationale: ['Rename the shared guide to the final stable title.'],
+    }
+
+    const executionResult = await executeMemoryUpdatePlan(
+      structuralEvent,
+      structuralEvaluation,
+      {
+        scopes: [structuralPlan],
+        requiredReads: ['org:Processes/Onboarding Program Guide.md'],
+      },
+      {
+        database: database as never,
+        storage,
+        resolveVault: structureDeps.resolveVault,
+        syncVaultMetadata: async (vault, syncStorage) => {
+          const resolvedVaultId =
+            (vault as { vaultId?: string; id?: string }).vaultId ??
+            (vault as { id?: string }).id
+
+          if (!resolvedVaultId) {
+            throw new Error('Scenario sync expected a vault id.')
+          }
+
+          return syncMemoryVaultMetadata(
+            database as never,
+            {
+              id: resolvedVaultId,
+              rootPath: vault.rootPath,
+              manifestPath: vault.manifestPath,
+            },
+            syncStorage
+          )
+        },
+        completeStructureChat: createStructureCompletion({
+          operation: 'rename_path',
+          path: 'Processes/Onboarding Program Guide.md',
+          newName: 'Shared Onboarding Program Guide.md',
+          rationale: ['The shared guide should use the canonical final title.'],
+        }),
+      }
+    )
+
+    expect(executionResult.executedScopes).toHaveLength(1)
+    expect(executionResult.deferredScopes).toHaveLength(0)
+    expect(executionResult.executedScopes[0]?.structuralOperation).toBe(
+      'rename_path'
+    )
+
+    const orgManifest = await getMemoryManifest(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'org',
+      storage,
+    })
+    expect(orgManifest.content).toContain('Playbooks/')
+    expect(orgManifest.content).not.toContain('Runbooks/')
+
+    const orgProcesses = await listMemoryDirectory(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'org',
+      path: 'Processes',
+    })
+    expect(orgProcesses.entries.map((entry) => entry.path)).toContain(
+      'Processes/Shared Onboarding Program Guide.md'
+    )
+
+    const orgPlaybooks = await listMemoryDirectory(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'org',
+      path: 'Playbooks',
+    })
+    expect(orgPlaybooks.entries.map((entry) => entry.path)).toContain(
+      'Playbooks/PLAYBOOKS.md'
+    )
+
+    const orgGuide = await readMemoryPath(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'org',
+      path: 'Processes/Shared Onboarding Program Guide.md',
+      storage,
+    })
+    expect(orgGuide.content).toContain('onboarding program guide')
+
+    const orgSearch = await searchMemory(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'org',
+      query: 'combines checklist tasks',
+      limit: 5,
+      storage,
+    })
+    expect(orgSearch.results.map((result) => result.path)).toContain(
+      'Processes/Shared Onboarding Program Guide.md'
+    )
+
+    const memberCurrentWork = await listMemoryDirectory(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'member',
+      path: 'Current Work',
+    })
+    expect(memberCurrentWork.entries.map((entry) => entry.path)).toContain(
+      'Current Work/Q2 Research Threads.md'
+    )
+
+    const memberPrivateProjects = await listMemoryDirectory(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'member',
+      path: 'Private Projects',
+    })
+    expect(memberPrivateProjects.entries).toHaveLength(0)
+
+    const memberSearch = await searchMemory(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'member',
+      query: 'research thread priorities',
+      limit: 5,
+      storage,
+    })
+    expect(memberSearch.results.map((result) => result.path)).toContain(
+      'Current Work/Q2 Research Threads.md'
+    )
   })
 })

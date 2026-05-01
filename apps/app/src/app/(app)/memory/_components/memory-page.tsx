@@ -1,30 +1,76 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   BookMarked,
+  Building2,
   FileText,
   Folder,
+  type LucideIcon,
   Loader2,
   RefreshCcw,
-  Search,
+  UserRound,
 } from 'lucide-react'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Badge } from '@kodi/ui/components/badge'
 import { Button } from '@kodi/ui/components/button'
 import { Skeleton } from '@kodi/ui/components/skeleton'
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@kodi/ui/components/tabs'
 import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
 
-type MemoryScope = 'org'
+type MemoryScope = 'org' | 'member'
 type MemoryManifest = Awaited<ReturnType<typeof trpc.memory.manifest.query>>
 type MemoryDirectory = Awaited<
   ReturnType<typeof trpc.memory.listDirectory.query>
 >
+
+const scopeContent = {
+  org: {
+    label: 'Shared',
+    shortLabel: 'Shared memory',
+    eyebrow: 'Workspace memory',
+    description:
+      'Context Kodi can use in shared conversations, meetings, and team follow-up work.',
+    empty: 'No shared root entries yet.',
+    badge: 'Shared',
+    icon: Building2,
+  },
+  member: {
+    label: 'Private',
+    shortLabel: 'Private memory',
+    eyebrow: 'Member memory',
+    description:
+      'Context Kodi can use for your private assistant surfaces without exposing it to the team.',
+    empty: 'No private root entries yet.',
+    badge: 'Private',
+    icon: UserRound,
+  },
+} satisfies Record<
+  MemoryScope,
+  {
+    label: string
+    shortLabel: string
+    eyebrow: string
+    description: string
+    empty: string
+    badge: string
+    icon: LucideIcon
+  }
+>
+
+function parseMemoryScope(value: string | null): MemoryScope {
+  return value === 'member' ? 'member' : 'org'
+}
 
 const markdownComponents = {
   h1: ({ children }) => (
@@ -159,12 +205,16 @@ function ManifestView({ manifest }: { manifest: MemoryManifest }) {
 
 export function MemoryPage() {
   const { activeOrg } = useOrg()
-  const [scope] = useState<MemoryScope>('org')
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const scope = parseMemoryScope(searchParams.get('scope'))
   const [manifest, setManifest] = useState<MemoryManifest | null>(null)
   const [directory, setDirectory] = useState<MemoryDirectory | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const activeScope = scopeContent[scope]
+  const ActiveScopeIcon = activeScope.icon
 
   const entryCount = directory?.entries.length ?? 0
   const lastUpdated = useMemo(() => {
@@ -231,6 +281,20 @@ export function MemoryPage() {
     }
   }
 
+  function selectScope(nextScope: string) {
+    if (nextScope !== 'org' && nextScope !== 'member') return
+
+    const params = new URLSearchParams(searchParams.toString())
+    if (nextScope === 'member') {
+      params.set('scope', 'member')
+    } else {
+      params.delete('scope')
+    }
+
+    const query = params.toString()
+    router.replace(`/memory${query ? `?${query}` : ''}`, { scroll: false })
+  }
+
   if (!activeOrg) {
     return (
       <div className="flex min-h-full items-center justify-center p-6 text-sm text-muted-foreground">
@@ -245,20 +309,32 @@ export function MemoryPage() {
         <header className="flex flex-col gap-5 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              <BookMarked className="size-3.5" />
-              {activeOrg.orgName}
+              <ActiveScopeIcon className="size-3.5" />
+              {activeOrg.orgName} / {activeScope.eyebrow}
             </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 Memory
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Durable context Kodi can use across conversations, meetings, and follow-up work.
+                {activeScope.description}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Tabs value={scope} onValueChange={selectScope}>
+              <TabsList aria-label="Memory scope">
+                <TabsTrigger value="org" className="gap-2">
+                  <Building2 className="size-4" />
+                  Shared
+                </TabsTrigger>
+                <TabsTrigger value="member" className="gap-2">
+                  <UserRound className="size-4" />
+                  Private
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             <Badge variant="neutral">{entryCount} root items</Badge>
             {lastUpdated ? (
               <Badge variant="outline">Updated {formatDate(lastUpdated)}</Badge>
@@ -293,11 +369,13 @@ export function MemoryPage() {
             <aside className="rounded-lg border bg-brand-elevated p-3">
               <div className="flex items-center justify-between px-2 py-2">
                 <div>
-                  <div className="text-sm font-semibold">Shared memory</div>
+                  <div className="text-sm font-semibold">
+                    {activeScope.shortLabel}
+                  </div>
                   <div className="text-xs text-muted-foreground">Root</div>
                 </div>
                 <span className="flex size-8 items-center justify-center rounded-md bg-secondary text-muted-foreground">
-                  <Search className="size-4" />
+                  <ActiveScopeIcon className="size-4" />
                 </span>
               </div>
 
@@ -308,7 +386,7 @@ export function MemoryPage() {
                   ))
                 ) : (
                   <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                    No root entries yet.
+                    {activeScope.empty}
                   </div>
                 )}
               </div>

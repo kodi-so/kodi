@@ -9,6 +9,7 @@ import {
 } from '@kodi/db'
 import { z } from 'zod'
 import { runAssistantTurn } from '../../lib/assistant-chat'
+import { emitDashboardAssistantMemoryUpdateEvent } from '../../lib/memory/chat-events'
 import { memberProcedure, router } from '../../trpc'
 
 const DASHBOARD_SYSTEM_PROMPT =
@@ -368,6 +369,28 @@ export const dashboardAssistantRouter = router({
         })
       }
 
+      try {
+        await emitDashboardAssistantMemoryUpdateEvent({
+          orgId,
+          orgMemberId: ctx.membership.id,
+          actorUserId,
+          threadId: thread.id,
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          userMessage: content,
+          assistantMessage: responseText,
+          conversationMode: 'thread',
+        })
+      } catch (error) {
+        console.warn('[dashboard-assistant] memory event dispatch failed', {
+          orgId,
+          threadId: thread.id,
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+
       return {
         thread,
         userMessage,
@@ -500,6 +523,28 @@ export const dashboardAssistantRouter = router({
               : buildThreadTitle(content),
         })
         .where(eq(dashboardAssistantThreads.id as any, activeThread.id))
+
+      try {
+        await emitDashboardAssistantMemoryUpdateEvent({
+          orgId,
+          orgMemberId: ctx.membership.id,
+          actorUserId,
+          threadId: activeThread.id,
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          userMessage: content,
+          assistantMessage: responseText,
+          conversationMode: 'conversation',
+        })
+      } catch (error) {
+        console.warn('[dashboard-assistant] memory event dispatch failed', {
+          orgId,
+          threadId: activeThread.id,
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
 
       return {
         threadId: activeThread.id,

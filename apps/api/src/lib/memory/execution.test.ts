@@ -21,6 +21,12 @@ type MemoryExecutionCompletionFn = NonNullable<
 type MemoryExecutionCompletionResult = Awaited<
   ReturnType<MemoryExecutionCompletionFn>
 >
+type MemoryStructureCompletionFn = NonNullable<
+  MemoryExecutionDeps['completeStructureChat']
+>
+type MemoryStructureCompletionResult = Awaited<
+  ReturnType<MemoryStructureCompletionFn>
+>
 
 class WritableMemoryStorage implements MemoryStorage {
   constructor(
@@ -28,8 +34,35 @@ class WritableMemoryStorage implements MemoryStorage {
     private readonly files = new Map<string, string>()
   ) {}
 
-  async listDirectory(_path?: string): Promise<MemoryStorageListEntry[]> {
-    throw new Error('Not implemented in execution test storage')
+  async listDirectory(path = ''): Promise<MemoryStorageListEntry[]> {
+    const normalizedPath = this.normalizePath(path)
+    const children = new Map<string, MemoryStorageListEntry>()
+
+    for (const directory of this.directories) {
+      if (this.parentPath(directory) !== normalizedPath) continue
+      children.set(directory, {
+        path: directory,
+        name: this.basename(directory),
+        type: 'directory',
+        size: null,
+        lastModified: null,
+      })
+    }
+
+    for (const [filePath, content] of this.files) {
+      if (this.parentPath(filePath) !== normalizedPath) continue
+      children.set(filePath, {
+        path: filePath,
+        name: this.basename(filePath),
+        type: 'file',
+        size: Buffer.byteLength(content),
+        lastModified: null,
+      })
+    }
+
+    return [...children.values()].sort((left, right) =>
+      left.path.localeCompare(right.path)
+    )
   }
 
   async readFile(path: string) {
@@ -54,11 +87,43 @@ class WritableMemoryStorage implements MemoryStorage {
   }
 
   async movePath(_fromPath: string, _toPath: string) {
-    throw new Error('Not implemented in execution test storage')
+    const normalizedFromPath = this.normalizePath(_fromPath)
+    const normalizedToPath = this.normalizePath(_toPath)
+    const stat = await this.statPath(normalizedFromPath)
+
+    if (!stat) {
+      throw new Error(`Path not found: ${normalizedFromPath}`)
+    }
+
+    if (stat.type === 'file') {
+      const content = this.files.get(normalizedFromPath)
+      if (content === undefined) {
+        throw new Error(`Path not found: ${normalizedFromPath}`)
+      }
+
+      this.ensureParentDirectories(normalizedToPath)
+      this.files.set(normalizedToPath, content)
+      this.files.delete(normalizedFromPath)
+      return
+    }
+
+    throw new Error('Directory moves are not needed in execution test storage')
   }
 
   async deletePath(_path: string) {
-    throw new Error('Not implemented in execution test storage')
+    const normalizedPath = this.normalizePath(_path)
+    const stat = await this.statPath(normalizedPath)
+
+    if (!stat) {
+      throw new Error(`Path not found: ${normalizedPath}`)
+    }
+
+    if (stat.type === 'file') {
+      this.files.delete(normalizedPath)
+      return
+    }
+
+    throw new Error('Directory deletes are not needed in execution test storage')
   }
 
   async createDirectory(path: string) {
@@ -110,6 +175,19 @@ class WritableMemoryStorage implements MemoryStorage {
     this.ensureAllDirectories(parts.slice(0, -1).join('/'))
   }
 
+  private parentPath(path: string) {
+    const normalizedPath = this.normalizePath(path)
+    const parts = normalizedPath.split('/')
+    if (parts.length <= 1) return ''
+    return parts.slice(0, -1).join('/')
+  }
+
+  private basename(path: string) {
+    const normalizedPath = this.normalizePath(path)
+    const parts = normalizedPath.split('/')
+    return parts[parts.length - 1] ?? ''
+  }
+
   private ensureAllDirectories(path: string) {
     const normalizedPath = this.normalizePath(path)
     if (!normalizedPath) return
@@ -142,6 +220,29 @@ function createExecutionCompletion(
         fallbackToDefaultAgent: false,
       },
     } satisfies Extract<MemoryExecutionCompletionResult, { ok: true }>)
+}
+
+function createStructureCompletion(
+  payload: Record<string, unknown>
+): MemoryStructureCompletionFn {
+  return async (input) =>
+    ({
+      ok: true as const,
+      content: JSON.stringify(payload),
+      connection: {
+        instance: {} as never,
+        instanceUrl: 'https://openclaw.test',
+        headers: {},
+        model: 'openclaw/default',
+        routedAgent: {
+          id: 'agent_123',
+          agentType: input.visibility === 'private' ? 'member' : 'org',
+          openclawAgentId: 'agent_123',
+          status: 'active',
+        },
+        fallbackToDefaultAgent: false,
+      },
+    } satisfies Extract<MemoryStructureCompletionResult, { ok: true }>)
 }
 
 function baseEvaluation(
@@ -254,7 +355,7 @@ describe('executeMemoryUpdatePlan', () => {
           rationale: ['This is the minimal durable update to the owned file.'],
         }),
         syncVaultMetadata: async (vault) => {
-          syncedVaults.push(vault.vaultId)
+          syncedVaults.push('vaultId' in vault ? vault.vaultId : vault.id)
           return {
             upsertedCount: 3,
             deletedCount: 0,
@@ -368,8 +469,29 @@ describe('executeMemoryUpdatePlan', () => {
     )
   })
 
-  it('defers structural-only actions instead of writing immediately', async () => {
-    const storage = new WritableMemoryStorage()
+  it('executes structural delete actions through the maintenance worker', async () => {
+    const storage = new WritableMemoryStorage(
+      new Set([
+        'memory',
+        'memory/org_123',
+        'memory/org_123/org',
+        'memory/org_123/org/Projects',
+      ]),
+      new Map([
+        [
+          'memory/org_123/org/MEMORY.md',
+          '# Kodi Memory\n\n## Scope\n\nShared org memory.\n\n## How this vault is organized\n\nKodi maintains shared org memory in concise directories.\n\n## Important entry points\n\n- `MEMORY.md` — this manifest for the scoped vault\n- `Projects/PROJECTS.md` — index for the Projects directory\n\n## Directory guide\n\n- `Projects/` — Shared project memory.\n\n## Structural rules\n\n- Keep navigation aligned with the live vault structure.\n\n## Update rules\n\n- Keep navigation concise and current.\n',
+        ],
+        [
+          'memory/org_123/org/Projects/PROJECTS.md',
+          '# Projects\n\n## What belongs here\n\nShared project memory.\n\n## What files exist here\n\n- `Launch Checklist.md` — Launch Checklist\n\n## What each file is for\n\n- `Launch Checklist.md` — rollout checklist and ownership.\n\n## Naming and structural conventions\n\n- Keep file titles concise.\n',
+        ],
+        [
+          'memory/org_123/org/Projects/Launch Checklist.md',
+          '# Launch Checklist\n\nOutdated duplicate content.\n',
+        ],
+      ])
+    )
     const event = normalizeMemoryUpdateEvent({
       orgId: 'org_123',
       source: 'openclaw_proposal',
@@ -401,17 +523,26 @@ describe('executeMemoryUpdatePlan', () => {
       },
       {
         storage,
+        completeStructureChat: createStructureCompletion({
+          operation: 'delete_path',
+          path: 'Projects/Launch Checklist.md',
+          rationale: ['The duplicate file is obsolete and should be removed.'],
+        }),
+        syncVaultMetadata: async () => ({
+          upsertedCount: 2,
+          deletedCount: 1,
+        }),
       }
     )
 
-    expect(result.executedScopes).toHaveLength(0)
-    expect(result.deferredScopes).toEqual([
-      {
-        scope: 'org',
-        vaultId: 'vault_org',
-        action: 'delete_obsolete',
-        reason: 'structural-action',
-      },
-    ])
+    expect(result.executedScopes).toHaveLength(1)
+    expect(result.deferredScopes).toHaveLength(0)
+    expect(result.executedScopes[0]?.structuralOperation).toBe('delete_path')
+    expect(storage.getText('memory/org_123/org/Projects/Launch Checklist.md')).toBe(
+      null
+    )
+    expect(storage.getText('memory/org_123/org/Projects/PROJECTS.md')).not.toContain(
+      '`Launch Checklist.md`'
+    )
   })
 })

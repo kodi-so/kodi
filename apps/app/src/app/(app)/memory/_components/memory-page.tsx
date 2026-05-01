@@ -31,8 +31,19 @@ import {
 import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import {
+  basename,
+  buildMemoryChatPrompt,
+  buildMemoryChatUrl,
+  buildMemoryUrl,
+  buildScopeSwitchUrl,
+  formatPathLabel,
+  parentPath,
+  parseMemoryScope,
+  selectMemoryViewKind,
+  type MemoryScope,
+} from './memory-page-view-model'
 
-type MemoryScope = 'org' | 'member'
 type MemoryManifest = Awaited<ReturnType<typeof trpc.memory.manifest.query>>
 type MemoryDirectory = Awaited<
   ReturnType<typeof trpc.memory.listDirectory.query>
@@ -67,10 +78,6 @@ const scopeContent = {
   }
 >
 
-function parseMemoryScope(value: string | null): MemoryScope {
-  return value === 'member' ? 'member' : 'org'
-}
-
 const markdownComponents = {
   h1: ({ children }) => (
     <h1 className="mb-4 mt-0 text-xl font-semibold tracking-tight">
@@ -103,22 +110,6 @@ const markdownComponents = {
   ),
 } satisfies Components
 
-function formatPathLabel(path: string) {
-  if (!path) return 'Memory'
-  return path.replace(/\.md$/i, '').replace(/[-_]+/g, ' ')
-}
-
-function basename(path: string) {
-  const parts = path.split('/').filter(Boolean)
-  return parts[parts.length - 1] ?? ''
-}
-
-function parentPath(path: string) {
-  const parts = path.split('/').filter(Boolean)
-  if (parts.length <= 1) return ''
-  return parts.slice(0, -1).join('/')
-}
-
 function formatDate(value: Date | number | string) {
   return new Intl.DateTimeFormat('en', {
     month: 'short',
@@ -126,14 +117,6 @@ function formatDate(value: Date | number | string) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(value))
-}
-
-function buildMemoryUrl(scope: MemoryScope, path?: string | null) {
-  const params = new URLSearchParams()
-  if (scope === 'member') params.set('scope', 'member')
-  if (path) params.set('path', path)
-  const query = params.toString()
-  return `/memory${query ? `?${query}` : ''}`
 }
 
 function MemoryLoading() {
@@ -337,15 +320,16 @@ function MemoryChatPanel({
   onSend: (prompt: string) => void
 }) {
   const [draft, setDraft] = useState('')
-  const scopeLabel = scope === 'member' ? 'private memory' : 'shared memory'
-  const location = path || 'the memory root'
 
   function submit() {
-    const question = draft.trim()
-    if (!question) return
-    onSend(
-      `In ${activeOrgName}'s ${scopeLabel}, looking at ${location}, ${question}`
-    )
+    const prompt = buildMemoryChatPrompt({
+      activeOrgName,
+      scope,
+      path,
+      question: draft,
+    })
+    if (!prompt) return
+    onSend(prompt)
     setDraft('')
   }
 
@@ -412,6 +396,12 @@ export function MemoryPage() {
       .map((entry) => new Date(entry.lastUpdatedAt).getTime())
       .sort((left, right) => right - left)[0]
   }, [directory])
+  const viewKind = selectMemoryViewKind({
+    selectedPath,
+    hasManifest: Boolean(manifest),
+    hasDirectory: Boolean(directory),
+    hasSelectedFile: Boolean(selectedFile),
+  })
 
   async function loadDirectoryIndex(
     orgId: string,
@@ -540,16 +530,10 @@ export function MemoryPage() {
   function selectScope(nextScope: string) {
     if (nextScope !== 'org' && nextScope !== 'member') return
 
-    const params = new URLSearchParams(searchParams.toString())
-    if (nextScope === 'member') {
-      params.set('scope', 'member')
-    } else {
-      params.delete('scope')
-    }
-    params.delete('path')
-
-    const query = params.toString()
-    router.replace(`/memory${query ? `?${query}` : ''}`, { scroll: false })
+    router.replace(
+      buildScopeSwitchUrl(searchParams.toString(), nextScope),
+      { scroll: false }
+    )
   }
 
   function openPath(path: string) {
@@ -568,10 +552,7 @@ export function MemoryPage() {
   }
 
   function askKodi(prompt: string) {
-    const params = new URLSearchParams()
-    params.set('dm', 'kodi')
-    params.set('prompt', prompt)
-    router.push(`/chat?${params.toString()}`)
+    router.push(buildMemoryChatUrl(prompt))
   }
 
   if (!activeOrg) {
@@ -729,15 +710,15 @@ export function MemoryPage() {
               </div>
             </aside>
 
-            {selectedFile ? (
+            {viewKind === 'file' && selectedFile ? (
               <FileView file={selectedFile} />
-            ) : selectedPath && directory ? (
+            ) : viewKind === 'directory' && directory ? (
               <DirectoryView
                 directory={directory}
                 indexFile={directoryIndex}
                 onOpen={openEntry}
               />
-            ) : manifest ? (
+            ) : viewKind === 'manifest' && manifest ? (
               <ManifestView manifest={manifest} />
             ) : (
               <div className="flex min-h-[28rem] items-center justify-center rounded-lg border bg-brand-elevated p-6 text-sm text-muted-foreground">

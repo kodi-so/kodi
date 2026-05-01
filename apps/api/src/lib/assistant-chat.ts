@@ -91,6 +91,7 @@ export async function runAssistantTurn(params: {
     orgId: params.orgId,
     actorUserId: params.actorUserId,
     sourceId: params.sourceId,
+    visibility: params.visibility,
     userMessage: params.userMessage,
     instanceUrl,
     headers,

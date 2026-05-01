@@ -8,6 +8,7 @@ import {
   ListTodo,
   Link2,
   ShieldCheck,
+  BookMarked,
   Settings,
   Check,
   LogOut,
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/meetings', label: 'Meetings', icon: Video },
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
+  { href: '/memory', label: 'Memory', icon: BookMarked },
   { href: '/integrations', label: 'Integrations', icon: Link2 },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
 ]

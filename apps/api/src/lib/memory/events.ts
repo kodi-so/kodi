@@ -1,9 +1,15 @@
 import { z } from 'zod'
 import {
   evaluateMemoryUpdateEvent,
+  type MemoryEvaluationDeps,
   type MemoryUpdateEvaluation,
   type MemoryUpdateIgnoreReason,
 } from './evaluation'
+import {
+  resolveMemoryUpdatePlan,
+  type MemoryResolutionDeps,
+  type MemoryUpdatePlan,
+} from './resolution'
 
 export const memoryUpdateSourceSchema = z.enum([
   'meeting',
@@ -180,10 +186,13 @@ export type MemoryUpdateWorkerResult =
       evaluation: MemoryUpdateEvaluation
     }
   | {
-      status: 'evaluated'
+      status: 'planned'
       event: NormalizedMemoryUpdateEvent
       evaluation: MemoryUpdateEvaluation
+      plan: MemoryUpdatePlan
     }
+
+export type MemoryUpdateWorkerDeps = MemoryEvaluationDeps & MemoryResolutionDeps
 
 type MemoryUpdateJob = {
   dedupeKey: string
@@ -288,7 +297,7 @@ export function createLatestOnlyMemoryUpdateScheduler(
 
 export async function runMemoryUpdateWorker(
   input: MemoryUpdateEvent | NormalizedMemoryUpdateEvent | unknown,
-  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
+  deps: MemoryUpdateWorkerDeps = {}
 ): Promise<MemoryUpdateWorkerResult> {
   const event = normalizeMemoryUpdateEvent(input)
   const evaluation = await evaluateMemoryUpdateEvent(event, deps)
@@ -306,16 +315,19 @@ export async function runMemoryUpdateWorker(
     }
   }
 
+  const plan = await resolveMemoryUpdatePlan(event, evaluation, deps)
+
   return {
-    status: 'evaluated',
+    status: 'planned',
     event,
     evaluation,
+    plan,
   }
 }
 
 export async function dispatchProductMemoryEvent(
   input: Exclude<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown,
-  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
+  deps: MemoryUpdateWorkerDeps = {}
 ) {
   const event = normalizeMemoryUpdateEvent(input)
 
@@ -330,7 +342,7 @@ export async function dispatchProductMemoryEvent(
 
 export async function dispatchOpenClawMemoryProposal(
   input: Extract<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown,
-  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
+  deps: MemoryUpdateWorkerDeps = {}
 ) {
   const event = normalizeMemoryUpdateEvent(input)
 

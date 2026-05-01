@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { MemoryEvaluationDeps } from './evaluation'
+import type { MemoryResolutionAccess, MemoryResolutionPath, ResolvedMemoryVault } from './resolution'
 import {
   createLatestOnlyMemoryUpdateScheduler,
   dispatchOpenClawMemoryProposal,
@@ -9,6 +10,126 @@ import {
 
 type MemoryCompletionFn = NonNullable<MemoryEvaluationDeps['completeChat']>
 type MemoryCompletionResult = Awaited<ReturnType<MemoryCompletionFn>>
+
+function createResolutionAccess(): MemoryResolutionAccess {
+  const orgVault: ResolvedMemoryVault = {
+    id: 'vault_org',
+    orgId: 'org_123',
+    scopeType: 'org',
+    orgMemberId: null,
+    rootPath: 'memory/org_123/org',
+    manifestPath: 'memory/org_123/org/MEMORY.md',
+  }
+
+  const memberVault: ResolvedMemoryVault = {
+    id: 'vault_member',
+    orgId: 'org_123',
+    scopeType: 'member',
+    orgMemberId: 'org_member_123',
+    rootPath: 'memory/org_123/members/org_member_123',
+    manifestPath: 'memory/org_123/members/org_member_123/MEMORY.md',
+  }
+
+  const files = new Map<string, string>([
+    [
+      'vault_org:MEMORY.md',
+      `# Kodi Memory
+
+## Important entry points
+
+- \`Current State/CURRENT-STATE.md\` — current org-wide state
+
+## Directory guide
+
+- \`Current State/\` — What the organization is actively tracking right now: current state, next steps, and owners.
+`,
+    ],
+    [
+      'vault_org:Current State/CURRENT-STATE.md',
+      '# Current State\n\n## What belongs here\n\nCurrent org-wide state.\n',
+    ],
+    [
+      'vault_member:MEMORY.md',
+      `# Kodi Memory
+
+## Important entry points
+
+- \`Preferences/PREFERENCES.md\` — working preferences and communication norms
+
+## Directory guide
+
+- \`Preferences/\` — User-specific preferences, communication patterns, and working style that Kodi should preserve in private member interactions.
+`,
+    ],
+    [
+      'vault_member:Preferences/PREFERENCES.md',
+      '# Preferences\n\n## What belongs here\n\nWorking preferences.\n',
+    ],
+  ])
+
+  const pathMap = new Map<string, MemoryResolutionPath[]>([
+    [
+      'vault_org:',
+      [directory('Current State')],
+    ],
+    [
+      'vault_org:Current State',
+      [indexFile('Current State/CURRENT-STATE.md', 'Current State index')],
+    ],
+    [
+      'vault_member:',
+      [directory('Preferences')],
+    ],
+    [
+      'vault_member:Preferences',
+      [indexFile('Preferences/PREFERENCES.md', 'Preferences index')],
+    ],
+  ])
+
+  return {
+    async resolveVault(input) {
+      return input.scope === 'org' ? orgVault : memberVault
+    },
+    async listPaths(input) {
+      return pathMap.get(`${input.vaultId}:${input.parentPath ?? ''}`) ?? []
+    },
+    async getPath() {
+      return null
+    },
+    async searchPaths() {
+      return []
+    },
+    async readFile(input) {
+      const content = files.get(`${input.vault.id}:${input.path}`)
+      if (!content) throw new Error(`Missing fixture for ${input.vault.id}:${input.path}`)
+      return content
+    },
+  }
+}
+
+function directory(path: string): MemoryResolutionPath {
+  return {
+    path,
+    pathType: 'directory',
+    parentPath: null,
+    title: path,
+    isManifest: false,
+    isIndex: false,
+    lastUpdatedAt: new Date('2026-05-01T00:00:00.000Z'),
+  }
+}
+
+function indexFile(path: string, title: string): MemoryResolutionPath {
+  return {
+    path,
+    pathType: 'file',
+    parentPath: path.split('/').slice(0, -1).join('/'),
+    title,
+    isManifest: false,
+    isIndex: true,
+    lastUpdatedAt: new Date('2026-05-01T00:00:00.000Z'),
+  }
+}
 
 function createModelCompletion(
   payload: Record<string, unknown>
@@ -184,12 +305,16 @@ describe('memory update dispatch entrypoints', () => {
         rationale: ['The event captures a durable personal preference.'],
         signalTags: ['personal_preference'],
       }),
+      access: createResolutionAccess(),
     })
 
-    expect(result.status).toBe('evaluated')
+    expect(result.status).toBe('planned')
     expect(result.event.source).toBe('dashboard_assistant')
     expect(result.evaluation.scope).toBe('member')
     expect(result.evaluation.shouldWrite).toBe(true)
+    if (result.status === 'planned') {
+      expect(result.plan.scopes[0]?.directoryPath).toBe('Preferences')
+    }
   })
 
   it('accepts OpenClaw proposals through the proposal dispatcher', async () => {
@@ -219,11 +344,15 @@ describe('memory update dispatch entrypoints', () => {
         rationale: ['The proposal updates durable shared project memory.'],
         signalTags: ['project_state', 'agent_proposal'],
       }),
+      access: createResolutionAccess(),
     })
 
-    expect(result.status).toBe('evaluated')
+    expect(result.status).toBe('planned')
     expect(result.event.source).toBe('openclaw_proposal')
     expect(result.evaluation.shouldWrite).toBe(true)
     expect(result.evaluation.scope).toBe('org')
+    if (result.status === 'planned') {
+      expect(result.plan.scopes[0]?.directoryPath).toBe('Current State')
+    }
   })
 })

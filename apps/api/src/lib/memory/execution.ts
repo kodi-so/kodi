@@ -9,6 +9,10 @@ import {
 } from './paths'
 import type { MemoryScopeUpdatePlan, MemoryUpdatePlan } from './resolution'
 import type { MemoryStorage } from './storage'
+import {
+  runStructureMaintenanceWorker,
+  type StructuralWorkerDeps,
+} from './structure-worker'
 
 type OpenClawChatCompletionFn = typeof openClawChatCompletion
 type MemoryExecutionEvent = {
@@ -37,10 +41,17 @@ export type MemoryExecutionWrite = {
 export type ExecutedMemoryScopeUpdate = {
   scope: MemoryScopeUpdatePlan['scope']
   vaultId: string
-  action: Extract<MemoryScopeUpdatePlan['action'], 'update_existing' | 'create_new'>
+  action: MemoryScopeUpdatePlan['action']
   writtenPaths: string[]
   rationale: string[]
   syncResult: MemoryPathSyncResult
+  structuralOperation?:
+    | 'delete_path'
+    | 'rename_path'
+    | 'move_path'
+    | 'split_file'
+    | 'merge_files'
+    | 'noop'
 }
 
 export type DeferredMemoryScopeUpdate = {
@@ -58,7 +69,7 @@ export type MemoryUpdateExecutionResult = {
   deferredScopes: DeferredMemoryScopeUpdate[]
 }
 
-export type MemoryExecutionDeps = {
+export type MemoryExecutionDeps = StructuralWorkerDeps & {
   storage?: MemoryStorage
   completeExecutionChat?: OpenClawChatCompletionFn
   syncVaultMetadata?: (
@@ -517,6 +528,7 @@ async function executeScopeUpdatePlan(input: {
   event: MemoryExecutionEvent
   evaluation: MemoryUpdateEvaluation
   completeExecutionChat?: OpenClawChatCompletionFn
+  completeStructureChat?: MemoryExecutionDeps['completeStructureChat']
   syncVaultMetadata?: MemoryExecutionDeps['syncVaultMetadata']
 }): Promise<
   | {
@@ -528,17 +540,46 @@ async function executeScopeUpdatePlan(input: {
       result: DeferredMemoryScopeUpdate
     }
 > {
-  if (
-    input.plan.action === 'delete_obsolete' ||
-    input.plan.action === 'trigger_structural_maintenance'
-  ) {
+  if (input.plan.action === 'delete_obsolete' || input.plan.action === 'trigger_structural_maintenance') {
+    const structuralResult = await runStructureMaintenanceWorker({
+      event: input.event,
+      evaluation: input.evaluation,
+      plan: input.plan,
+      deps: {
+        storage: input.storage,
+        completeStructureChat: input.completeStructureChat,
+        syncVaultMetadata: input.syncVaultMetadata,
+      },
+    })
+
+    if (structuralResult.operation === 'noop') {
+      return {
+        kind: 'deferred',
+        result: {
+          scope: input.plan.scope,
+          vaultId: input.plan.vaultId,
+          action: input.plan.action,
+          reason: 'structural-action',
+        },
+      }
+    }
+
     return {
-      kind: 'deferred',
+      kind: 'executed',
       result: {
         scope: input.plan.scope,
         vaultId: input.plan.vaultId,
         action: input.plan.action,
-        reason: 'structural-action',
+        writtenPaths: structuralResult.touchedPaths,
+        rationale: uniqueStrings([
+          ...input.plan.rationale,
+          ...structuralResult.rationale,
+        ]),
+        syncResult: structuralResult.syncResult ?? {
+          upsertedCount: 0,
+          deletedCount: 0,
+        },
+        structuralOperation: structuralResult.operation,
       },
     }
   }
@@ -639,6 +680,7 @@ export async function executeMemoryUpdatePlan(
       event,
       evaluation,
       completeExecutionChat: deps.completeExecutionChat,
+      completeStructureChat: deps.completeStructureChat,
       syncVaultMetadata: deps.syncVaultMetadata,
     })
 

@@ -15,7 +15,7 @@ import { repairStructuralNavigation } from './structure-repair'
 
 export type MemoryStructureScope = 'org' | 'member'
 
-type ResolvedStructureVault = Pick<
+export type ResolvedStructureVault = Pick<
   MemoryVault,
   'id' | 'orgId' | 'scopeType' | 'orgMemberId' | 'rootPath' | 'manifestPath'
 >

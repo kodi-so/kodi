@@ -58,6 +58,28 @@ export type MemoryStructureMoveResult = MemoryStructureMutationResult & {
   toPath: string
 }
 
+export type MemoryStructureSplitTarget = {
+  path: string
+  content: string
+  contentType?: string
+}
+
+export type MemoryStructureSplitResult = {
+  vaultId: string
+  scope: MemoryStructureScope
+  sourcePath: string
+  createdPaths: string[]
+  syncResult: MemoryPathSyncResult
+}
+
+export type MemoryStructureMergeResult = {
+  vaultId: string
+  scope: MemoryStructureScope
+  sourcePaths: string[]
+  targetPath: string
+  syncResult: MemoryPathSyncResult
+}
+
 function normalizePath(path?: string | null) {
   if (!path) return ''
   return path
@@ -267,6 +289,23 @@ async function assertPathMissing(
   }
 }
 
+function buildSyncVaultMutation(
+  database: typeof db,
+  storage: MemoryStorage,
+  deps?: MemoryStructureDeps
+) {
+  return (vault: ResolvedStructureVault) =>
+    (deps?.syncVaultMetadata ?? ((syncVault, syncStorage) =>
+      defaultSyncVaultMetadata(database, syncVault, syncStorage)))(
+      {
+        id: vault.id,
+        rootPath: vault.rootPath,
+        manifestPath: vault.manifestPath,
+      },
+      storage
+    )
+}
+
 export async function createScopedMemoryDirectory(
   input: MemoryStructureTargetInput & {
     path: string
@@ -281,21 +320,12 @@ export async function createScopedMemoryDirectory(
     storage,
     resolveVault: input.deps?.resolveVault,
   })
+  const syncVaultMutation = buildSyncVaultMutation(database, storage, input.deps)
 
   await assertPathMissing(storage, target.storagePath, 'Directory')
   await storage.createDirectory(target.storagePath)
 
-  const syncResult = await (
-    input.deps?.syncVaultMetadata ?? ((vault, syncStorage) =>
-      defaultSyncVaultMetadata(database, vault, syncStorage))
-  )(
-    {
-      id: target.vault.id,
-      rootPath: target.vault.rootPath,
-      manifestPath: target.vault.manifestPath,
-    },
-    storage
-  )
+  const syncResult = await syncVaultMutation(target.vault)
 
   return {
     vaultId: target.vault.id,
@@ -321,6 +351,7 @@ export async function createScopedMemoryFile(
     storage,
     resolveVault: input.deps?.resolveVault,
   })
+  const syncVaultMutation = buildSyncVaultMutation(database, storage, input.deps)
 
   await assertPathMissing(storage, target.storagePath, 'File')
   await storage.writeFile({
@@ -329,17 +360,7 @@ export async function createScopedMemoryFile(
     contentType: input.contentType ?? DEFAULT_MEMORY_MARKDOWN_CONTENT_TYPE,
   })
 
-  const syncResult = await (
-    input.deps?.syncVaultMetadata ?? ((vault, syncStorage) =>
-      defaultSyncVaultMetadata(database, vault, syncStorage))
-  )(
-    {
-      id: target.vault.id,
-      rootPath: target.vault.rootPath,
-      manifestPath: target.vault.manifestPath,
-    },
-    storage
-  )
+  const syncResult = await syncVaultMutation(target.vault)
 
   return {
     vaultId: target.vault.id,
@@ -365,6 +386,7 @@ export async function moveScopedMemoryPath(
     storage,
     resolveVault: input.deps?.resolveVault,
   })
+  const syncVaultMutation = buildSyncVaultMutation(database, storage, input.deps)
   const toRelativePath = normalizeSafeRelativePath(input.toPath, 'Destination path')
   const toStoragePath = joinPath(fromTarget.vault.rootPath, toRelativePath)
 
@@ -372,17 +394,7 @@ export async function moveScopedMemoryPath(
   await assertPathMissing(storage, toStoragePath, 'Destination path')
   await storage.movePath(fromTarget.storagePath, toStoragePath)
 
-  const syncResult = await (
-    input.deps?.syncVaultMetadata ?? ((vault, syncStorage) =>
-      defaultSyncVaultMetadata(database, vault, syncStorage))
-  )(
-    {
-      id: fromTarget.vault.id,
-      rootPath: fromTarget.vault.rootPath,
-      manifestPath: fromTarget.vault.manifestPath,
-    },
-    storage
-  )
+  const syncResult = await syncVaultMutation(fromTarget.vault)
 
   return {
     vaultId: fromTarget.vault.id,
@@ -432,21 +444,12 @@ export async function deleteScopedMemoryPath(
     storage,
     resolveVault: input.deps?.resolveVault,
   })
+  const syncVaultMutation = buildSyncVaultMutation(database, storage, input.deps)
 
   await assertPathExists(storage, target.storagePath, 'Path')
   await storage.deletePath(target.storagePath)
 
-  const syncResult = await (
-    input.deps?.syncVaultMetadata ?? ((vault, syncStorage) =>
-      defaultSyncVaultMetadata(database, vault, syncStorage))
-  )(
-    {
-      id: target.vault.id,
-      rootPath: target.vault.rootPath,
-      manifestPath: target.vault.manifestPath,
-    },
-    storage
-  )
+  const syncResult = await syncVaultMutation(target.vault)
 
   return {
     vaultId: target.vault.id,
@@ -454,4 +457,149 @@ export async function deleteScopedMemoryPath(
     path: target.relativePath,
     syncResult,
   } satisfies MemoryStructureMutationResult
+}
+
+export async function splitScopedMemoryFile(
+  input: MemoryStructureTargetInput & {
+    sourcePath: string
+    targets: MemoryStructureSplitTarget[]
+    deps?: MemoryStructureDeps
+  }
+) {
+  if (input.targets.length < 2) {
+    throw new Error('File split operations require at least two target files.')
+  }
+
+  const database = input.deps?.database ?? db
+  const storage = await resolveStorage(input.deps?.storage)
+  const source = await resolveScopedPath({
+    ...input,
+    path: input.sourcePath,
+    database,
+    storage,
+    resolveVault: input.deps?.resolveVault,
+  })
+  const syncVaultMutation = buildSyncVaultMutation(database, storage, input.deps)
+
+  const sourceStat = await assertPathExists(storage, source.storagePath, 'Source file')
+  if (sourceStat.type !== 'file') {
+    throw new Error(`Source file must be a file: ${source.relativePath}`)
+  }
+
+  const normalizedTargets = input.targets.map((target) => ({
+    ...target,
+    path: normalizeSafeRelativePath(target.path, 'Split target path'),
+  }))
+  const uniqueTargetPaths = new Set(normalizedTargets.map((target) => target.path))
+
+  if (uniqueTargetPaths.size !== normalizedTargets.length) {
+    throw new Error('Split target paths must be unique.')
+  }
+
+  if (uniqueTargetPaths.has(source.relativePath)) {
+    throw new Error('Split target paths must not reuse the source path.')
+  }
+
+  for (const target of normalizedTargets) {
+    await assertPathMissing(
+      storage,
+      joinPath(source.vault.rootPath, target.path),
+      'Split target path'
+    )
+  }
+
+  for (const target of normalizedTargets) {
+    await storage.writeFile({
+      path: joinPath(source.vault.rootPath, target.path),
+      body: target.content,
+      contentType: target.contentType ?? DEFAULT_MEMORY_MARKDOWN_CONTENT_TYPE,
+    })
+  }
+
+  await storage.deletePath(source.storagePath)
+  const syncResult = await syncVaultMutation(source.vault)
+
+  return {
+    vaultId: source.vault.id,
+    scope: source.vault.scopeType,
+    sourcePath: source.relativePath,
+    createdPaths: normalizedTargets.map((target) => target.path),
+    syncResult,
+  } satisfies MemoryStructureSplitResult
+}
+
+export async function mergeScopedMemoryFiles(
+  input: MemoryStructureTargetInput & {
+    sourcePaths: string[]
+    targetPath: string
+    content: string
+    contentType?: string
+    deps?: MemoryStructureDeps
+  }
+) {
+  if (input.sourcePaths.length < 2) {
+    throw new Error('File merge operations require at least two source files.')
+  }
+
+  const database = input.deps?.database ?? db
+  const storage = await resolveStorage(input.deps?.storage)
+  const firstSource = await resolveScopedPath({
+    ...input,
+    path: input.sourcePaths[0]!,
+    database,
+    storage,
+    resolveVault: input.deps?.resolveVault,
+  })
+  const syncVaultMutation = buildSyncVaultMutation(database, storage, input.deps)
+  const normalizedSourcePaths = input.sourcePaths.map((path) =>
+    normalizeSafeRelativePath(path, 'Merge source path')
+  )
+  const uniqueSourcePaths = new Set(normalizedSourcePaths)
+
+  if (uniqueSourcePaths.size !== normalizedSourcePaths.length) {
+    throw new Error('Merge source paths must be unique.')
+  }
+
+  for (const sourcePath of normalizedSourcePaths) {
+    const stat = await assertPathExists(
+      storage,
+      joinPath(firstSource.vault.rootPath, sourcePath),
+      'Merge source file'
+    )
+    if (stat.type !== 'file') {
+      throw new Error(`Merge source must be a file: ${sourcePath}`)
+    }
+  }
+
+  const targetPath = normalizeSafeRelativePath(input.targetPath, 'Merge target path')
+  const targetStoragePath = joinPath(firstSource.vault.rootPath, targetPath)
+  const targetAlreadyASource = uniqueSourcePaths.has(targetPath)
+  const targetStat = await storage.statPath(targetStoragePath)
+
+  if (targetStat && !targetAlreadyASource) {
+    throw new Error(
+      `Merge target path already exists and is not one of the merge sources: ${targetPath}`
+    )
+  }
+
+  await storage.writeFile({
+    path: targetStoragePath,
+    body: input.content,
+    contentType: input.contentType ?? DEFAULT_MEMORY_MARKDOWN_CONTENT_TYPE,
+  })
+
+  for (const sourcePath of normalizedSourcePaths) {
+    if (sourcePath === targetPath) continue
+    await storage.deletePath(joinPath(firstSource.vault.rootPath, sourcePath))
+  }
+
+  const syncResult = await syncVaultMutation(firstSource.vault)
+
+  return {
+    vaultId: firstSource.vault.id,
+    scope: firstSource.vault.scopeType,
+    sourcePaths: normalizedSourcePaths,
+    targetPath,
+    syncResult,
+  } satisfies MemoryStructureMergeResult
 }

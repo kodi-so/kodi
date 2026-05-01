@@ -4,8 +4,10 @@ import {
   createScopedMemoryDirectory,
   createScopedMemoryFile,
   deleteScopedMemoryPath,
+  mergeScopedMemoryFiles,
   moveScopedMemoryPath,
   renameScopedMemoryPath,
+  splitScopedMemoryFile,
   type MemoryStructureDeps,
 } from './structure'
 import type {
@@ -416,6 +418,98 @@ describe('memory structural path operations', () => {
     expect(
       storage.hasPath('memory/org_123/org/Projects/Archive/Old Launch.md')
     ).toBe(false)
+    expect(syncCalls).toEqual(['vault_org'])
+  })
+
+  it('splits a crowded scoped memory file into multiple files with one sync', async () => {
+    const storage = new StructuralMemoryStorage(
+      new Set([
+        'memory',
+        'memory/org_123',
+        'memory/org_123/org',
+        'memory/org_123/org/Projects',
+      ]),
+      new Map([
+        [
+          'memory/org_123/org/Projects/Launch.md',
+          '# Launch\n\nCombined planning and risks.\n',
+        ],
+      ])
+    )
+    const { deps, syncCalls } = createDeps(storage)
+
+    const result = await splitScopedMemoryFile({
+      orgId: 'org_123',
+      scope: 'org',
+      sourcePath: 'Projects/Launch.md',
+      targets: [
+        {
+          path: 'Projects/Launch Plan.md',
+          content: '# Launch Plan\n\nPlan details.\n',
+        },
+        {
+          path: 'Projects/Launch Risks.md',
+          content: '# Launch Risks\n\nRisk details.\n',
+        },
+      ],
+      deps,
+    })
+
+    expect(result.sourcePath).toBe('Projects/Launch.md')
+    expect(result.createdPaths).toEqual([
+      'Projects/Launch Plan.md',
+      'Projects/Launch Risks.md',
+    ])
+    expect(storage.hasPath('memory/org_123/org/Projects/Launch.md')).toBe(false)
+    expect(
+      storage.readText('memory/org_123/org/Projects/Launch Plan.md')
+    ).toContain('Plan details')
+    expect(
+      storage.readText('memory/org_123/org/Projects/Launch Risks.md')
+    ).toContain('Risk details')
+    expect(syncCalls).toEqual(['vault_org'])
+  })
+
+  it('merges overlapping scoped memory files into an existing target path', async () => {
+    const storage = new StructuralMemoryStorage(
+      new Set([
+        'memory',
+        'memory/org_123',
+        'memory/org_123/org',
+        'memory/org_123/org/Projects',
+      ]),
+      new Map([
+        [
+          'memory/org_123/org/Projects/Launch Plan.md',
+          '# Launch Plan\n\nPlan details.\n',
+        ],
+        [
+          'memory/org_123/org/Projects/Launch Risks.md',
+          '# Launch Risks\n\nRisk details.\n',
+        ],
+      ])
+    )
+    const { deps, syncCalls } = createDeps(storage)
+
+    const result = await mergeScopedMemoryFiles({
+      orgId: 'org_123',
+      scope: 'org',
+      sourcePaths: [
+        'Projects/Launch Plan.md',
+        'Projects/Launch Risks.md',
+      ],
+      targetPath: 'Projects/Launch Plan.md',
+      content: '# Launch Plan\n\nPlan and risks in one concise file.\n',
+      deps,
+    })
+
+    expect(result.targetPath).toBe('Projects/Launch Plan.md')
+    expect(
+      storage.readText('memory/org_123/org/Projects/Launch Plan.md')
+    ).toContain('Plan and risks in one concise file')
+    expect(storage.hasPath('memory/org_123/org/Projects/Launch Risks.md')).toBe(
+      false
+    )
     expect(syncCalls).toEqual(['vault_org'])
   })
 })

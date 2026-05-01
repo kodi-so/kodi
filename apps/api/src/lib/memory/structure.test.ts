@@ -239,6 +239,148 @@ class StructuralMemoryStorage implements MemoryStorage {
   }
 }
 
+function orgNavigationFiles() {
+  return new Map<string, string>([
+    [
+      'memory/org_123/org/MEMORY.md',
+      `# Kodi Memory
+
+## Scope
+
+Shared org memory.
+
+## How this vault is organized
+
+Kodi maintains shared org memory in concise directories.
+
+## Important entry points
+
+- \`MEMORY.md\` — this manifest for the scoped vault
+- \`Projects/PROJECTS.md\` — index for the Projects directory
+- \`Current State/CURRENT-STATE.md\` — index for the Current State directory
+
+## Directory guide
+
+- \`Projects/\` — Shared project memory.
+- \`Current State/\` — Current org-wide state.
+
+## Structural rules
+
+- Keep navigation aligned with the live vault structure.
+
+## Update rules
+
+- Keep navigation concise and current.
+`,
+    ],
+    [
+      'memory/org_123/org/Projects/PROJECTS.md',
+      `# Projects
+
+## What belongs here
+
+Shared project memory.
+
+## What files exist here
+
+- \`Launch Checklist.md\` — Launch Checklist
+
+## What each file is for
+
+- \`Launch Checklist.md\` — rollout checklist and ownership.
+
+## Naming and structural conventions
+
+- Keep file titles concise.
+`,
+    ],
+    [
+      'memory/org_123/org/Current State/CURRENT-STATE.md',
+      `# Current State
+
+## What belongs here
+
+Current org-wide state.
+
+## What files exist here
+
+- This directory currently has no topic files or subdirectories.
+
+## What each file is for
+
+- \`CURRENT-STATE.md\` — tracks what belongs in this directory and helps Kodi navigate it safely.
+
+## Naming and structural conventions
+
+- Keep file titles concise.
+`,
+    ],
+  ])
+}
+
+function memberNavigationFiles() {
+  return new Map<string, string>([
+    [
+      'memory/org_123/members/org_member_123/MEMORY.md',
+      `# Kodi Memory
+
+## Scope
+
+Private member memory.
+
+## How this vault is organized
+
+Kodi maintains private member memory in concise directories.
+
+## Important entry points
+
+- \`MEMORY.md\` — this manifest for the scoped vault
+- \`Preferences/PREFERENCES.md\` — index for the Preferences directory
+
+## Directory guide
+
+- \`Preferences/\` — User-specific preferences.
+
+## Structural rules
+
+- Keep navigation aligned with the live vault structure.
+
+## Update rules
+
+- Keep navigation concise and current.
+`,
+    ],
+    [
+      'memory/org_123/members/org_member_123/Preferences/PREFERENCES.md',
+      `# Preferences
+
+## What belongs here
+
+User-specific preferences.
+
+## What files exist here
+
+- This directory currently has no topic files or subdirectories.
+
+## What each file is for
+
+- \`PREFERENCES.md\` — tracks what belongs in this directory and helps Kodi navigate it safely.
+
+## Naming and structural conventions
+
+- Keep file titles concise.
+`,
+    ],
+  ])
+}
+
+function withFiles(
+  base: Map<string, string>,
+  extra: Array<[string, string]>
+) {
+  return new Map([...base.entries(), ...extra])
+}
+
 function createDeps(storage: StructuralMemoryStorage) {
   const syncCalls: string[] = []
 
@@ -273,8 +415,14 @@ function createDeps(storage: StructuralMemoryStorage) {
 describe('memory structural path operations', () => {
   it('creates a new scoped memory directory and syncs metadata', async () => {
     const storage = new StructuralMemoryStorage(
-      new Set(['memory', 'memory/org_123', 'memory/org_123/org']),
-      new Map()
+      new Set([
+        'memory',
+        'memory/org_123',
+        'memory/org_123/org',
+        'memory/org_123/org/Projects',
+        'memory/org_123/org/Current State',
+      ]),
+      orgNavigationFiles()
     )
     const { deps, syncCalls } = createDeps(storage)
 
@@ -288,6 +436,8 @@ describe('memory structural path operations', () => {
     expect(result.vaultId).toBe('vault_org')
     expect(result.path).toBe('Playbooks')
     expect(storage.hasPath('memory/org_123/org/Playbooks')).toBe(true)
+    expect(storage.hasPath('memory/org_123/org/Playbooks/PLAYBOOKS.md')).toBe(true)
+    expect(storage.readText('memory/org_123/org/MEMORY.md')).toContain('`Playbooks/`')
     expect(syncCalls).toEqual(['vault_org'])
   })
 
@@ -300,7 +450,7 @@ describe('memory structural path operations', () => {
         'memory/org_123/members/org_member_123',
         'memory/org_123/members/org_member_123/Preferences',
       ]),
-      new Map()
+      memberNavigationFiles()
     )
     const { deps, syncCalls } = createDeps(storage)
 
@@ -317,6 +467,11 @@ describe('memory structural path operations', () => {
     expect(storage.readText(
       'memory/org_123/members/org_member_123/Preferences/Recap Preferences.md'
     )).toContain('No Friday recap pings')
+    expect(
+      storage.readText(
+        'memory/org_123/members/org_member_123/Preferences/PREFERENCES.md'
+      )
+    ).toContain('`Recap Preferences.md`')
     expect(syncCalls).toEqual(['vault_member'])
   })
 
@@ -329,7 +484,7 @@ describe('memory structural path operations', () => {
         'memory/org_123/org/Projects',
         'memory/org_123/org/Current State',
       ]),
-      new Map([
+      withFiles(orgNavigationFiles(), [
         [
           'memory/org_123/org/Projects/Launch Checklist.md',
           '# Launch Checklist\n\nDetails.\n',
@@ -354,6 +509,12 @@ describe('memory structural path operations', () => {
     expect(
       storage.hasPath('memory/org_123/org/Current State/Launch Checklist.md')
     ).toBe(true)
+    expect(storage.readText('memory/org_123/org/Projects/PROJECTS.md')).not.toContain(
+      '`Launch Checklist.md`'
+    )
+    expect(
+      storage.readText('memory/org_123/org/Current State/CURRENT-STATE.md')
+    ).toContain('`Launch Checklist.md`')
     expect(syncCalls).toEqual(['vault_org'])
   })
 
@@ -365,7 +526,7 @@ describe('memory structural path operations', () => {
         'memory/org_123/org',
         'memory/org_123/org/Projects',
       ]),
-      new Map([
+      withFiles(orgNavigationFiles(), [
         [
           'memory/org_123/org/Projects/Launch Checklist.md',
           '# Launch Checklist\n\nDetails.\n',
@@ -386,6 +547,9 @@ describe('memory structural path operations', () => {
     expect(storage.hasPath('memory/org_123/org/Projects/Rollout Checklist.md')).toBe(
       true
     )
+    expect(storage.readText('memory/org_123/org/Projects/PROJECTS.md')).toContain(
+      '`Rollout Checklist.md`'
+    )
   })
 
   it('deletes a scoped memory directory recursively', async () => {
@@ -397,7 +561,7 @@ describe('memory structural path operations', () => {
         'memory/org_123/org/Projects',
         'memory/org_123/org/Projects/Archive',
       ]),
-      new Map([
+      withFiles(orgNavigationFiles(), [
         [
           'memory/org_123/org/Projects/Archive/Old Launch.md',
           '# Old Launch\n\nStale.\n',
@@ -418,6 +582,9 @@ describe('memory structural path operations', () => {
     expect(
       storage.hasPath('memory/org_123/org/Projects/Archive/Old Launch.md')
     ).toBe(false)
+    expect(storage.readText('memory/org_123/org/Projects/PROJECTS.md')).not.toContain(
+      'Archive/'
+    )
     expect(syncCalls).toEqual(['vault_org'])
   })
 
@@ -429,7 +596,7 @@ describe('memory structural path operations', () => {
         'memory/org_123/org',
         'memory/org_123/org/Projects',
       ]),
-      new Map([
+      withFiles(orgNavigationFiles(), [
         [
           'memory/org_123/org/Projects/Launch.md',
           '# Launch\n\nCombined planning and risks.\n',
@@ -467,6 +634,12 @@ describe('memory structural path operations', () => {
     expect(
       storage.readText('memory/org_123/org/Projects/Launch Risks.md')
     ).toContain('Risk details')
+    expect(storage.readText('memory/org_123/org/Projects/PROJECTS.md')).toContain(
+      '`Launch Plan.md`'
+    )
+    expect(storage.readText('memory/org_123/org/Projects/PROJECTS.md')).toContain(
+      '`Launch Risks.md`'
+    )
     expect(syncCalls).toEqual(['vault_org'])
   })
 
@@ -478,7 +651,7 @@ describe('memory structural path operations', () => {
         'memory/org_123/org',
         'memory/org_123/org/Projects',
       ]),
-      new Map([
+      withFiles(orgNavigationFiles(), [
         [
           'memory/org_123/org/Projects/Launch Plan.md',
           '# Launch Plan\n\nPlan details.\n',
@@ -509,6 +682,12 @@ describe('memory structural path operations', () => {
     ).toContain('Plan and risks in one concise file')
     expect(storage.hasPath('memory/org_123/org/Projects/Launch Risks.md')).toBe(
       false
+    )
+    expect(storage.readText('memory/org_123/org/Projects/PROJECTS.md')).toContain(
+      '`Launch Plan.md`'
+    )
+    expect(storage.readText('memory/org_123/org/Projects/PROJECTS.md')).not.toContain(
+      '`Launch Risks.md`'
     )
     expect(syncCalls).toEqual(['vault_org'])
   })

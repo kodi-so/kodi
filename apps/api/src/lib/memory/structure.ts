@@ -11,6 +11,7 @@ import {
   type MemoryVaultSyncTarget,
 } from './paths'
 import type { MemoryStorage } from './storage'
+import { repairStructuralNavigation } from './structure-repair'
 
 export type MemoryStructureScope = 'org' | 'member'
 
@@ -294,8 +295,16 @@ function buildSyncVaultMutation(
   storage: MemoryStorage,
   deps?: MemoryStructureDeps
 ) {
-  return (vault: ResolvedStructureVault) =>
-    (deps?.syncVaultMetadata ?? ((syncVault, syncStorage) =>
+  return async (vault: ResolvedStructureVault) => {
+    await repairStructuralNavigation({
+      vault: {
+        rootPath: vault.rootPath,
+        manifestPath: vault.manifestPath,
+      },
+      storage,
+    })
+
+    return (deps?.syncVaultMetadata ?? ((syncVault, syncStorage) =>
       defaultSyncVaultMetadata(database, syncVault, syncStorage)))(
       {
         id: vault.id,
@@ -304,6 +313,7 @@ function buildSyncVaultMutation(
       },
       storage
     )
+  }
 }
 
 export async function createScopedMemoryDirectory(

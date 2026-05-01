@@ -42,6 +42,9 @@ export type MemoryUpdateEvaluation = {
   rationale: string[]
   signalTags: string[]
   memoryKind: MemoryUpdateKind
+  topicLabel: string | null
+  topicSummary: string | null
+  topicKeywords: string[]
   guardrailsApplied: string[]
   engine: 'openclaw' | 'guardrail-fallback'
   ignoredReason?: MemoryUpdateIgnoreReason
@@ -84,6 +87,9 @@ const memoryEvaluationResponseSchema = z
     ]),
     rationale: z.array(z.string().trim().min(1)).default([]),
     signalTags: z.array(z.string().trim().min(1)).default([]),
+    topicLabel: z.string().trim().min(1).nullish(),
+    topicSummary: z.string().trim().min(1).nullish(),
+    topicKeywords: z.array(z.string().trim().min(1)).default([]),
     memberScopeJustification: z.string().trim().min(1).nullish(),
   })
   .strict()
@@ -191,7 +197,7 @@ function buildMemoryEvaluationMessages(event: NormalizedMemoryUpdateEvent) {
     {
       role: 'system' as const,
       content:
-        'You decide whether new Kodi events deserve durable memory. Reply with JSON only and no prose. Use this exact shape: {"shouldWrite":true,"scope":"org|member|both|none","action":"ignore|update_existing|create_new|delete_obsolete|trigger_structural_maintenance","durability":"durable|temporary","confidence":"low|medium|high","memoryKind":"decision|preference|responsibility|current_state|relationship|process|project|customer|meeting|reference|other","rationale":["short reason"],"signalTags":["tag"],"memberScopeJustification":"required only when scope includes member for a shared or system event"}. Durable memory means information likely useful later, such as decisions, preferences, responsibilities, current state, relationships, or stable reference facts. Temporary chatter, acknowledgements, and momentary operational noise should usually not be written. Prefer scope "org" for shared team/project/customer/process context, "member" for personal preferences or private commitments, "both" only when both kinds of memory are clearly present, and "none" when nothing durable should be stored. Be conservative with member scope on shared or system events: only choose it when the event contains durable personal context tied to a specific actor.',
+        'You decide whether new Kodi events deserve durable memory. Reply with JSON only and no prose. Use this exact shape: {"shouldWrite":true,"scope":"org|member|both|none","action":"ignore|update_existing|create_new|delete_obsolete|trigger_structural_maintenance","durability":"durable|temporary","confidence":"low|medium|high","memoryKind":"decision|preference|responsibility|current_state|relationship|process|project|customer|meeting|reference|other","topicLabel":"short stable topic label","topicSummary":"one-sentence semantic summary","topicKeywords":["keyword"],"rationale":["short reason"],"signalTags":["tag"],"memberScopeJustification":"required only when scope includes member for a shared or system event"}. Durable memory means information likely useful later, such as decisions, preferences, responsibilities, current state, relationships, or stable reference facts. Temporary chatter, acknowledgements, and momentary operational noise should usually not be written. Prefer scope "org" for shared team/project/customer/process context, "member" for personal preferences or private commitments, "both" only when both kinds of memory are clearly present, and "none" when nothing durable should be stored. When memory should be written, also provide a concise topicLabel and topicSummary that capture what the memory is actually about in human terms. Be conservative with member scope on shared or system events: only choose it when the event contains durable personal context tied to a specific actor.',
     },
     {
       role: 'user' as const,
@@ -353,6 +359,9 @@ function applyMemoryEvaluationGuardrails(
         : ['The model found durable information worth writing to memory.'],
     signalTags,
     memoryKind: modelEvaluation.memoryKind,
+    topicLabel: modelEvaluation.topicLabel?.trim() || null,
+    topicSummary: modelEvaluation.topicSummary?.trim() || null,
+    topicKeywords: uniqueStrings(modelEvaluation.topicKeywords),
     guardrailsApplied,
     engine: 'openclaw',
   }
@@ -376,6 +385,9 @@ function buildIgnoredEvaluation(input: {
     rationale: uniqueStrings(input.rationale),
     signalTags: normalizeSignalTags(input.signalTags),
     memoryKind: input.memoryKind,
+    topicLabel: null,
+    topicSummary: null,
+    topicKeywords: [],
     guardrailsApplied: uniqueStrings(input.guardrailsApplied ?? []),
     engine: input.engine,
     ignoredReason: input.reason,

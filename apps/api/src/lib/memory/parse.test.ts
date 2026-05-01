@@ -99,6 +99,7 @@ describe('parseMemoryDirectoryIndex', () => {
     expect(parsed.existingFileNotes).toEqual([
       'This directory starts with only this index file.',
       'Kodi should add topic-specific files here as durable org memory is established.',
+      'Kodi may also replace this directory with a better-fitting structure if the starter scaffold stops matching the org.',
     ])
     expect(parsed.filePurposes).toEqual([
       {

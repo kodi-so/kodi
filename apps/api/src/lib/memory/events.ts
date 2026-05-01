@@ -6,6 +6,11 @@ import {
   type MemoryUpdateIgnoreReason,
 } from './evaluation'
 import {
+  executeMemoryUpdatePlan,
+  type MemoryExecutionDeps,
+  type MemoryUpdateExecutionResult,
+} from './execution'
+import {
   resolveMemoryUpdatePlan,
   type MemoryResolutionDeps,
   type MemoryUpdatePlan,
@@ -186,13 +191,16 @@ export type MemoryUpdateWorkerResult =
       evaluation: MemoryUpdateEvaluation
     }
   | {
-      status: 'planned'
+      status: 'executed' | 'deferred'
       event: NormalizedMemoryUpdateEvent
       evaluation: MemoryUpdateEvaluation
       plan: MemoryUpdatePlan
+      execution: MemoryUpdateExecutionResult
     }
 
-export type MemoryUpdateWorkerDeps = MemoryEvaluationDeps & MemoryResolutionDeps
+export type MemoryUpdateWorkerDeps = MemoryEvaluationDeps &
+  MemoryResolutionDeps &
+  MemoryExecutionDeps
 
 type MemoryUpdateJob = {
   dedupeKey: string
@@ -319,12 +327,17 @@ export async function runMemoryUpdateWorker(
   }
 
   const plan = await resolveMemoryUpdatePlan(event, evaluation, deps)
+  const execution = await executeMemoryUpdatePlan(event, evaluation, plan, deps)
 
   return {
-    status: 'planned',
+    status:
+      execution.executedScopes.length > 0
+        ? 'executed'
+        : 'deferred',
     event,
     evaluation,
     plan,
+    execution,
   }
 }
 

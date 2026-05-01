@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'bun:test'
 import type { MemoryEvaluationDeps } from './evaluation'
+import type { MemoryExecutionDeps } from './execution'
 import type {
   MemoryResolutionAccess,
   MemoryResolutionDeps,
   MemoryResolutionPath,
   ResolvedMemoryVault,
 } from './resolution'
+import type {
+  MemoryStorage,
+  MemoryStorageListEntry,
+  MemoryStorageSearchInput,
+  MemoryStorageSearchResult,
+  MemoryStorageStat,
+  MemoryStorageWriteInput,
+} from './storage'
 import {
   createLatestOnlyMemoryUpdateScheduler,
   dispatchOpenClawMemoryProposal,
@@ -21,6 +30,80 @@ type MemoryResolutionCompletionFn = NonNullable<
 type MemoryResolutionCompletionResult = Awaited<
   ReturnType<MemoryResolutionCompletionFn>
 >
+type MemoryExecutionCompletionFn = NonNullable<
+  MemoryExecutionDeps['completeExecutionChat']
+>
+type MemoryExecutionCompletionResult = Awaited<
+  ReturnType<MemoryExecutionCompletionFn>
+>
+
+class WritableMemoryStorage implements MemoryStorage {
+  constructor(private readonly files = new Map<string, string>()) {}
+
+  async listDirectory(_path?: string): Promise<MemoryStorageListEntry[]> {
+    throw new Error('Not implemented in events test storage')
+  }
+
+  async readFile(path: string) {
+    const normalizedPath = this.normalizePath(path)
+    const content = this.files.get(normalizedPath)
+    if (content === undefined) {
+      throw new Error(`Missing storage fixture for ${normalizedPath}`)
+    }
+
+    return Buffer.from(content)
+  }
+
+  async writeFile(input: MemoryStorageWriteInput) {
+    this.files.set(
+      this.normalizePath(input.path),
+      typeof input.body === 'string'
+        ? input.body
+        : Buffer.from(input.body).toString('utf8')
+    )
+  }
+
+  async movePath(_fromPath: string, _toPath: string) {
+    throw new Error('Not implemented in events test storage')
+  }
+
+  async deletePath(_path: string) {
+    throw new Error('Not implemented in events test storage')
+  }
+
+  async createDirectory(_path: string) {
+    // `writeFile` is enough for these tests.
+  }
+
+  async statPath(path: string) {
+    const normalizedPath = this.normalizePath(path)
+    if (!this.files.has(normalizedPath)) {
+      return null
+    }
+
+    return {
+      path: normalizedPath,
+      type: 'file' as const,
+      size: Buffer.byteLength(this.files.get(normalizedPath) ?? ''),
+      lastModified: null,
+    } satisfies MemoryStorageStat
+  }
+
+  async searchContent(
+    _input: MemoryStorageSearchInput
+  ): Promise<MemoryStorageSearchResult[]> {
+    throw new Error('Not implemented in events test storage')
+  }
+
+  getText(path: string) {
+    return this.files.get(this.normalizePath(path)) ?? null
+  }
+
+  private normalizePath(path?: string) {
+    if (!path) return ''
+    return path.replace(/^\/+/, '').replace(/\/+$/, '')
+  }
+}
 
 function createResolutionAccess(): MemoryResolutionAccess {
   const orgVault: ResolvedMemoryVault = {
@@ -187,6 +270,29 @@ function createResolutionCompletion(
     } satisfies Extract<MemoryResolutionCompletionResult, { ok: true }>)
 }
 
+function createExecutionCompletion(
+  payload: Record<string, unknown>
+): MemoryExecutionCompletionFn {
+  return async (input) =>
+    ({
+      ok: true as const,
+      content: JSON.stringify(payload),
+      connection: {
+        instance: {} as never,
+        instanceUrl: 'https://openclaw.test',
+        headers: {},
+        model: 'openclaw/default',
+        routedAgent: {
+          id: 'agent_123',
+          agentType: input.visibility === 'private' ? 'member' : 'org',
+          openclawAgentId: 'agent_123',
+          status: 'active',
+        },
+        fallbackToDefaultAgent: false,
+      },
+    } satisfies Extract<MemoryExecutionCompletionResult, { ok: true }>)
+}
+
 function deferred() {
   let resolve!: () => void
   const promise = new Promise<void>((res) => {
@@ -317,6 +423,27 @@ describe('createLatestOnlyMemoryUpdateScheduler', () => {
 
 describe('memory update dispatch entrypoints', () => {
   it('accepts product events through the product dispatcher', async () => {
+    const storage = new WritableMemoryStorage(
+      new Map([
+        [
+          'memory/org_123/members/org_member_123/MEMORY.md',
+          `# Kodi Memory
+
+## Important entry points
+
+- \`Preferences/PREFERENCES.md\` — working preferences and communication norms
+
+## Directory guide
+
+- \`Preferences/\` — User-specific preferences, communication patterns, and working style that Kodi should preserve in private member interactions.
+`,
+        ],
+        [
+          'memory/org_123/members/org_member_123/Preferences/PREFERENCES.md',
+          '# Preferences\n\n## What belongs here\n\nWorking preferences.\n',
+        ],
+      ])
+    )
     const result = await dispatchProductMemoryEvent({
       orgId: 'org_123',
       source: 'dashboard_assistant',
@@ -356,18 +483,71 @@ describe('memory update dispatch entrypoints', () => {
         rationale: ['The preference belongs in the Preferences area.'],
       }),
       access: createResolutionAccess(),
+      storage,
+      completeExecutionChat: createExecutionCompletion({
+        writes: [
+          {
+            path: 'Preferences/Stable Preference.md',
+            purpose: 'target',
+            content:
+              '# Stable Preference\n\nThe user prefers async recaps in private dashboard conversations.\n',
+          },
+          {
+            path: 'Preferences/PREFERENCES.md',
+            purpose: 'directory_index',
+            content:
+              '# Preferences\n\n## What belongs here\n\nWorking preferences.\n\n## What each file is for\n\n- `Stable Preference.md` — durable preference for async recaps.\n',
+          },
+        ],
+        confidence: 'high',
+        rationale: ['The new preference file needs an index repair.'],
+      }),
+      syncVaultMetadata: async () => ({
+        upsertedCount: 3,
+        deletedCount: 0,
+      }),
     })
 
-    expect(result.status).toBe('planned')
+    expect(result.status).toBe('executed')
     expect(result.event.source).toBe('dashboard_assistant')
     expect(result.evaluation.scope).toBe('member')
     expect(result.evaluation.shouldWrite).toBe(true)
-    if (result.status === 'planned') {
+    expect(
+      storage.getText(
+        'memory/org_123/members/org_member_123/Preferences/Stable Preference.md'
+      )
+    ).toContain('async recaps')
+    if (result.status === 'executed') {
       expect(result.plan.scopes[0]?.directoryPath).toBe('Preferences')
+      expect(result.execution.executedScopes[0]?.writtenPaths).toEqual([
+        'Preferences/Stable Preference.md',
+        'Preferences/PREFERENCES.md',
+      ])
     }
   })
 
   it('accepts OpenClaw proposals through the proposal dispatcher', async () => {
+    const storage = new WritableMemoryStorage(
+      new Map([
+        [
+          'memory/org_123/org/MEMORY.md',
+          `# Kodi Memory
+
+## Important entry points
+
+- \`Current State/CURRENT-STATE.md\` — current org-wide state
+
+## Directory guide
+
+- \`Current State/\` — What the organization is actively tracking right now: current state, next steps, and owners.
+`,
+        ],
+        [
+          'memory/org_123/org/Current State/CURRENT-STATE.md',
+          '# Current State\n\n## What belongs here\n\nCurrent org-wide state.\n',
+        ],
+      ])
+    )
     const result = await dispatchOpenClawMemoryProposal({
       orgId: 'org_123',
       source: 'openclaw_proposal',
@@ -408,14 +588,44 @@ describe('memory update dispatch entrypoints', () => {
         rationale: ['The current shared state area is the right starting point.'],
       }),
       access: createResolutionAccess(),
+      storage,
+      completeExecutionChat: createExecutionCompletion({
+        writes: [
+          {
+            path: 'Current State/Shared Project Memory.md',
+            purpose: 'target',
+            content:
+              '# Shared Project Memory\n\nThis file captures the newly proposed shared project memory.\n',
+          },
+          {
+            path: 'Current State/CURRENT-STATE.md',
+            purpose: 'directory_index',
+            content:
+              '# Current State\n\n## What belongs here\n\nCurrent org-wide state.\n\n## What each file is for\n\n- `Shared Project Memory.md` — new shared project memory proposed by the agent.\n',
+          },
+        ],
+        confidence: 'medium',
+        rationale: ['The new file belongs in the current-state directory index.'],
+      }),
+      syncVaultMetadata: async () => ({
+        upsertedCount: 3,
+        deletedCount: 0,
+      }),
     })
 
-    expect(result.status).toBe('planned')
+    expect(result.status).toBe('executed')
     expect(result.event.source).toBe('openclaw_proposal')
     expect(result.evaluation.shouldWrite).toBe(true)
     expect(result.evaluation.scope).toBe('org')
-    if (result.status === 'planned') {
+    expect(
+      storage.getText('memory/org_123/org/Current State/Shared Project Memory.md')
+    ).toContain('newly proposed shared project memory')
+    if (result.status === 'executed') {
       expect(result.plan.scopes[0]?.directoryPath).toBe('Current State')
+      expect(result.execution.executedScopes[0]?.writtenPaths).toEqual([
+        'Current State/Shared Project Memory.md',
+        'Current State/CURRENT-STATE.md',
+      ])
     }
   })
 })

@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { and, asc, chatChannels, chatMessages, desc, eq, inArray, isNull, lt, or, user } from '@kodi/db'
 import { runAssistantTurn } from '../../lib/assistant-chat'
+import { emitAppChatMemoryUpdateEvent } from '../../lib/memory/chat-events'
 import { memberProcedure, router } from '../../trpc'
 
 const SYSTEM_PROMPT =
@@ -365,6 +366,29 @@ export const chatRouter = router({
         .set({ status: 'sent' })
         .where(eq(chatMessages.id, userMessage.id))
         .returning()
+
+      try {
+        await emitAppChatMemoryUpdateEvent({
+          orgId,
+          orgMemberId: ctx.membership.id,
+          actorUserId: ctx.session.user.id,
+          channelId: input.channelId,
+          threadId: effectiveThreadRootMessageId,
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          userMessage: input.message,
+          assistantMessage: responseText,
+        })
+      } catch (error) {
+        console.warn('[chat] memory event dispatch failed', {
+          orgId,
+          channelId: input.channelId,
+          threadId: effectiveThreadRootMessageId,
+          userMessageId: userMessage.id,
+          assistantMessageId: assistantMessage.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
 
       return {
         userMessage: sentUserMessage ?? { ...userMessage, status: 'sent' },

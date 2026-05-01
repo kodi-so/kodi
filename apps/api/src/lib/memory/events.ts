@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  evaluateMemoryUpdateEvent,
+  type MemoryUpdateEvaluation,
+  type MemoryUpdateIgnoreReason,
+} from './evaluation'
 
 export const memoryUpdateSourceSchema = z.enum([
   'meeting',
@@ -167,11 +172,18 @@ export type NormalizedMemoryUpdateEvent = MemoryUpdateEvent & {
   dedupeKey: string
 }
 
-export type MemoryUpdateWorkerResult = {
-  status: 'ignored'
-  reason: 'memory-worthiness-not-implemented'
-  event: NormalizedMemoryUpdateEvent
-}
+export type MemoryUpdateWorkerResult =
+  | {
+      status: 'ignored'
+      reason: MemoryUpdateIgnoreReason
+      event: NormalizedMemoryUpdateEvent
+      evaluation: MemoryUpdateEvaluation
+    }
+  | {
+      status: 'evaluated'
+      event: NormalizedMemoryUpdateEvent
+      evaluation: MemoryUpdateEvaluation
+    }
 
 type MemoryUpdateJob = {
   dedupeKey: string
@@ -228,11 +240,24 @@ export function createLatestOnlyMemoryUpdateScheduler(
     const state = {
       latestJob: job,
       latestResult: null as MemoryUpdateWorkerResult | null,
-      promise: Promise.resolve({
+      promise: Promise.resolve<MemoryUpdateWorkerResult>({
         status: 'ignored',
-        reason: 'memory-worthiness-not-implemented',
+        reason: 'low-information',
         event,
-      } satisfies MemoryUpdateWorkerResult),
+        evaluation: {
+          scope: 'none',
+          action: 'ignore',
+          durability: 'unknown',
+          shouldWrite: false,
+          confidence: 'low',
+          rationale: ['Memory evaluation has not run yet.'],
+          signalTags: [],
+          memoryKind: 'other',
+          guardrailsApplied: [],
+          engine: 'guardrail-fallback',
+          ignoredReason: 'low-information',
+        },
+      }),
     }
 
     state.promise = (async () => {
@@ -262,22 +287,35 @@ export function createLatestOnlyMemoryUpdateScheduler(
 }
 
 export async function runMemoryUpdateWorker(
-  input: MemoryUpdateEvent | NormalizedMemoryUpdateEvent | unknown
+  input: MemoryUpdateEvent | NormalizedMemoryUpdateEvent | unknown,
+  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
 ): Promise<MemoryUpdateWorkerResult> {
   const event = normalizeMemoryUpdateEvent(input)
+  const evaluation = await evaluateMemoryUpdateEvent(event, deps)
 
-  // KOD-437 establishes the shared event contract and worker entrypoints.
-  // KOD-440 and KOD-441 will teach this worker how to evaluate evidence and
-  // resolve the target scope/path before it starts mutating durable memory.
+  if (!evaluation.shouldWrite) {
+    return {
+      status: 'ignored',
+      reason:
+        evaluation.ignoredReason ??
+        (evaluation.signalTags.length === 0
+          ? 'low-information'
+          : 'temporary-signal'),
+      event,
+      evaluation,
+    }
+  }
+
   return {
-    status: 'ignored',
-    reason: 'memory-worthiness-not-implemented',
+    status: 'evaluated',
     event,
+    evaluation,
   }
 }
 
 export async function dispatchProductMemoryEvent(
-  input: Exclude<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown
+  input: Exclude<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown,
+  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
 ) {
   const event = normalizeMemoryUpdateEvent(input)
 
@@ -287,11 +325,12 @@ export async function dispatchProductMemoryEvent(
     )
   }
 
-  return runMemoryUpdateWorker(event)
+  return runMemoryUpdateWorker(event, deps)
 }
 
 export async function dispatchOpenClawMemoryProposal(
-  input: Extract<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown
+  input: Extract<MemoryUpdateEvent, { source: 'openclaw_proposal' }> | unknown,
+  deps?: Parameters<typeof evaluateMemoryUpdateEvent>[1]
 ) {
   const event = normalizeMemoryUpdateEvent(input)
 
@@ -301,7 +340,7 @@ export async function dispatchOpenClawMemoryProposal(
     )
   }
 
-  return runMemoryUpdateWorker(event)
+  return runMemoryUpdateWorker(event, deps)
 }
 
 export const scheduleMemoryUpdateEvent =

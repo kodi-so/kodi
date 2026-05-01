@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { evaluateMemoryUpdateEvent, type MemoryUpdateEvaluation } from './evaluation'
 
 export const memoryUpdateSourceSchema = z.enum([
   'meeting',
@@ -167,11 +168,20 @@ export type NormalizedMemoryUpdateEvent = MemoryUpdateEvent & {
   dedupeKey: string
 }
 
-export type MemoryUpdateWorkerResult = {
-  status: 'ignored'
-  reason: 'memory-worthiness-not-implemented'
-  event: NormalizedMemoryUpdateEvent
-}
+export type MemoryUpdateWorkerResult =
+  | {
+      status: 'ignored'
+      reason:
+        | 'temporary-signal'
+        | 'low-information'
+      event: NormalizedMemoryUpdateEvent
+      evaluation: MemoryUpdateEvaluation
+    }
+  | {
+      status: 'evaluated'
+      event: NormalizedMemoryUpdateEvent
+      evaluation: MemoryUpdateEvaluation
+    }
 
 type MemoryUpdateJob = {
   dedupeKey: string
@@ -228,11 +238,12 @@ export function createLatestOnlyMemoryUpdateScheduler(
     const state = {
       latestJob: job,
       latestResult: null as MemoryUpdateWorkerResult | null,
-      promise: Promise.resolve({
+      promise: Promise.resolve<MemoryUpdateWorkerResult>({
         status: 'ignored',
-        reason: 'memory-worthiness-not-implemented',
+        reason: 'low-information',
         event,
-      } satisfies MemoryUpdateWorkerResult),
+        evaluation: evaluateMemoryUpdateEvent(event),
+      }),
     }
 
     state.promise = (async () => {
@@ -265,14 +276,21 @@ export async function runMemoryUpdateWorker(
   input: MemoryUpdateEvent | NormalizedMemoryUpdateEvent | unknown
 ): Promise<MemoryUpdateWorkerResult> {
   const event = normalizeMemoryUpdateEvent(input)
+  const evaluation = evaluateMemoryUpdateEvent(event)
 
-  // KOD-437 establishes the shared event contract and worker entrypoints.
-  // KOD-440 and KOD-441 will teach this worker how to evaluate evidence and
-  // resolve the target scope/path before it starts mutating durable memory.
+  if (!evaluation.shouldWrite) {
+    return {
+      status: 'ignored',
+      reason: evaluation.signalTags.length === 0 ? 'low-information' : 'temporary-signal',
+      event,
+      evaluation,
+    }
+  }
+
   return {
-    status: 'ignored',
-    reason: 'memory-worthiness-not-implemented',
+    status: 'evaluated',
     event,
+    evaluation,
   }
 }
 

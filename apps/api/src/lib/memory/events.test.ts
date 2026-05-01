@@ -67,8 +67,17 @@ describe('createLatestOnlyMemoryUpdateScheduler', () => {
 
       return {
         status: 'ignored' as const,
-        reason: 'memory-worthiness-not-implemented' as const,
+        reason: 'low-information' as const,
         event: job.event,
+        evaluation: {
+          scope: 'none' as const,
+          action: 'ignore' as const,
+          durability: 'temporary' as const,
+          shouldWrite: false,
+          confidence: 'low' as const,
+          rationale: ['placeholder'],
+          signalTags: [],
+        },
       }
     })
 
@@ -136,9 +145,10 @@ describe('memory update dispatch entrypoints', () => {
       },
     })
 
-    expect(result.status).toBe('ignored')
-    expect(result.reason).toBe('memory-worthiness-not-implemented')
+    expect(result.status).toBe('evaluated')
     expect(result.event.source).toBe('dashboard_assistant')
+    expect(result.evaluation.scope).toBe('member')
+    expect(result.evaluation.shouldWrite).toBe(true)
   })
 
   it('accepts OpenClaw proposals through the proposal dispatcher', async () => {
@@ -159,8 +169,9 @@ describe('memory update dispatch entrypoints', () => {
       },
     })
 
-    expect(result.status).toBe('ignored')
-    expect(result.reason).toBe('memory-worthiness-not-implemented')
+    expect(result.status).toBe('evaluated')
     expect(result.event.source).toBe('openclaw_proposal')
+    expect(result.evaluation.shouldWrite).toBe(true)
+    expect(result.evaluation.scope).toBe('org')
   })
 })

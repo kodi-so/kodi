@@ -32,12 +32,12 @@ import type { NonceDedupe } from './dedupe'
 export const PLUGIN_PREFIX = '/plugins/kodi-bridge/'
 
 const STUB_ROUTES_EXACT = new Set<string>([
-  'agents/provision',
-  'agents/deprovision',
   'agents/update-policy',
   'admin/update',
 ])
 
+const PROVISION_ROUTE = 'agents/provision'
+const DEPROVISION_ROUTE = 'agents/deprovision'
 const SUBSCRIPTIONS_ROUTE = 'config/subscriptions'
 
 const STUB_ROUTES_PATTERNED: Array<RegExp> = [
@@ -54,6 +54,28 @@ export type ReloadCallback = () => void | Promise<void>
 
 export type SubscriptionsHandler = (rawBody: unknown) => void | Promise<void>
 
+/**
+ * Handler shape for `POST /plugins/kodi-bridge/agents/provision`. Returns
+ * either a parsed result to be JSON-encoded back to Kodi, or a structured
+ * `{ status, body }` to signal a non-200 response (e.g. 400 on bad input).
+ * Throwing is reserved for unexpected internal failures (→ 500).
+ */
+export type ProvisionHandlerResult =
+  | { kind: 'ok'; body: Record<string, unknown> }
+  | { kind: 'badRequest'; message: string }
+
+export type ProvisionHandler = (
+  rawBody: unknown,
+) => Promise<ProvisionHandlerResult>
+
+export type DeprovisionHandlerResult =
+  | { kind: 'ok'; body: Record<string, unknown> }
+  | { kind: 'badRequest'; message: string }
+
+export type DeprovisionHandler = (
+  rawBody: unknown,
+) => Promise<DeprovisionHandlerResult>
+
 export type CreateInboundRouterDeps = {
   /** Function returning the current plugin HMAC secret. Called per request so KOD-385's rotation can swap it in place. */
   getSecret: () => string
@@ -66,6 +88,16 @@ export type CreateInboundRouterDeps = {
    * Validation lives in the handler (event-bus owns the schema).
    */
   subscriptionsHandler?: SubscriptionsHandler
+  /**
+   * If set, `POST /plugins/kodi-bridge/agents/provision` invokes this
+   * handler. Otherwise the route returns 501. KOD-381 wires it.
+   */
+  provisionHandler?: ProvisionHandler
+  /**
+   * If set, `POST /plugins/kodi-bridge/agents/deprovision` invokes this
+   * handler. Otherwise the route returns 501.
+   */
+  deprovisionHandler?: DeprovisionHandler
   logger?: InboundLogger
   now?: () => number
 }
@@ -114,6 +146,8 @@ function notImplemented(res: ServerResponse, subPath: string): void {
 export function isInboundRoute(subPath: string): boolean {
   if (subPath === RELOAD_ROUTE) return true
   if (subPath === SUBSCRIPTIONS_ROUTE) return true
+  if (subPath === PROVISION_ROUTE) return true
+  if (subPath === DEPROVISION_ROUTE) return true
   if (STUB_ROUTES_EXACT.has(subPath)) return true
   return STUB_ROUTES_PATTERNED.some((pattern) => pattern.test(subPath))
 }
@@ -124,6 +158,8 @@ export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRoute
     dedupe,
     reloadCallbacks,
     subscriptionsHandler,
+    provisionHandler,
+    deprovisionHandler,
     logger = console,
     now,
   } = deps
@@ -229,6 +265,58 @@ export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRoute
         }
       }
       return writeJson(res, 200, { ok: true, ran, failed })
+    }
+
+    if (subPath === PROVISION_ROUTE) {
+      if (!provisionHandler) return notImplemented(res, subPath)
+      try {
+        const result = await provisionHandler(parsedBody)
+        if (result.kind === 'badRequest') {
+          return writeJson(res, 400, {
+            error: 'Bad Request',
+            code: 'INVALID_BODY',
+            message: result.message,
+          })
+        }
+        return writeJson(res, 200, result.body)
+      } catch (err) {
+        logger.warn(
+          JSON.stringify({
+            msg: 'inbound provision handler failed',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        )
+        return writeJson(res, 500, {
+          error: 'Internal Server Error',
+          code: 'PROVISION_FAILED',
+        })
+      }
+    }
+
+    if (subPath === DEPROVISION_ROUTE) {
+      if (!deprovisionHandler) return notImplemented(res, subPath)
+      try {
+        const result = await deprovisionHandler(parsedBody)
+        if (result.kind === 'badRequest') {
+          return writeJson(res, 400, {
+            error: 'Bad Request',
+            code: 'INVALID_BODY',
+            message: result.message,
+          })
+        }
+        return writeJson(res, 200, result.body)
+      } catch (err) {
+        logger.warn(
+          JSON.stringify({
+            msg: 'inbound deprovision handler failed',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        )
+        return writeJson(res, 500, {
+          error: 'Internal Server Error',
+          code: 'DEPROVISION_FAILED',
+        })
+      }
     }
 
     return notImplemented(res, subPath)

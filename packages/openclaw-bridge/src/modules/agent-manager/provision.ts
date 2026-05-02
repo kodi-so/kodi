@@ -1,26 +1,36 @@
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Emitter } from '../event-bus/emitter'
-import type { ComposioModuleApi, ComposioStatus } from '../composio'
+import type {
+  ComposioAction,
+  ComposioModuleApi,
+  ComposioStatus,
+} from '../composio'
 import type { AgentRegistry } from './registry'
 import { buildIdentityMarkdown } from './identity'
 
 /**
- * `provisionAgent` — creates one OpenClaw agent for one Kodi user inside this
- * instance.
+ * `provisionAgent` — creates or refreshes one OpenClaw agent for one Kodi
+ * user inside this instance.
  *
  * Per the M0-T3 spike, an OpenClaw agent is three things:
  *   1. an entry in `OpenClawConfig.agents.list`
  *   2. a workspace directory with bootstrap files
  *   3. an `IDENTITY.md` file inside that workspace
  *
- * This function does all three programmatically (no CLI subprocess) and
- * follows up with Composio tool registration + an `agent.provisioned` event.
+ * Two paths:
  *
- * Idempotency: if an agent already exists for the same `user_id` in the
- * registry, return that entry without touching disk, config, Composio, or
- * the event bus. Same applies if the OpenClaw config already lists an agent
- * with the generated id (defense-in-depth against startup-reconcile races).
+ *   - **First-time**: do all three above + register Composio tools + emit
+ *     `agent.provisioned`.
+ *   - **Re-provision** (KOD-381 idempotent path): the agent already exists
+ *     for this user, so skip workspace / identity / config writes; just
+ *     re-call `composio.registerToolsForAgent` so the tool surface stays
+ *     in sync with the user's current toolkit allowlist (the composio
+ *     module diffs add/remove internally), refresh the cached
+ *     `composio_status` on the registry entry, and return the same
+ *     `openclaw_agent_id`. No `agent.provisioned` re-emit — Kodi already
+ *     knows about this agent and would dedupe; emitting again would be
+ *     misleading semantics.
  */
 
 export type AgentEntryShape = {
@@ -71,12 +81,21 @@ export type ProvisionDeps = {
 
 export type ProvisionInput = {
   user_id: string
-  composio_session?: unknown
   /**
-   * Kodi DB UUID, when known. KOD-381's inbound provision route will pass
-   * it; until then, the plugin operates without it and the registry holds
-   * `kodi_agent_id: undefined`. Subsequent agent-context-bearing events
-   * for this agent omit the `agent.agent_id` field rather than fabricate.
+   * Opaque Composio session id from Kodi. `null`/absent when the user has
+   * not connected a Composio session — agent still provisions, just with
+   * `composio_status: 'skipped'` (set by the composio module).
+   */
+  composio_session_id?: string | null
+  /**
+   * Full current action list for this user. Empty array means the user has
+   * revoked everything; the agent stays alive but no tools are registered.
+   */
+  actions?: readonly ComposioAction[]
+  /**
+   * Kodi DB UUID, when known. KOD-381's inbound provision route passes it.
+   * Subsequent agent-context-bearing events for this agent omit the
+   * `agent.agent_id` field when this is absent rather than fabricate.
    */
   kodi_agent_id?: string
 }
@@ -85,7 +104,8 @@ export type ProvisionResult = {
   openclaw_agent_id: string
   workspace_dir: string
   composio_status: ComposioStatus
-  /** False if we returned an existing agent; true if a new one was created. */
+  registered_tool_count: number
+  /** False if the agent already existed; true if a new one was created. */
   created: boolean
 }
 
@@ -94,8 +114,36 @@ const IDENTITY_FILENAME = 'IDENTITY.md'
 
 /** Generate the OpenClaw runtime ID. Format: `agent_<8-char-hex>`. */
 function defaultAgentIdFactory(): string {
-  // randomUUID is hex with dashes — strip and slice to 8 chars
   return `agent_${randomUUID().replace(/-/g, '').slice(0, 8)}`
+}
+
+/**
+ * Call composio.registerToolsForAgent with safe error handling. The contract
+ * forbids throwing, but any misbehavior is treated as a `failed` outcome so
+ * the agent is still persisted on the agent-manager side.
+ */
+async function syncComposio(
+  composio: ComposioModuleApi,
+  params: {
+    user_id: string
+    openclaw_agent_id: string
+    composio_session_id?: string | null
+    actions: readonly ComposioAction[]
+  },
+  logger: Pick<Console, 'log' | 'warn'>,
+): Promise<{ status: ComposioStatus; registered_tool_count: number }> {
+  try {
+    return await composio.registerToolsForAgent(params)
+  } catch (err) {
+    logger.warn(
+      JSON.stringify({
+        msg: 'composio registerToolsForAgent threw — treating as failed',
+        openclaw_agent_id: params.openclaw_agent_id,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    )
+    return { status: 'failed', registered_tool_count: 0 }
+  }
 }
 
 export async function provisionAgent(
@@ -117,17 +165,36 @@ export async function provisionAgent(
     logger = console,
   } = deps
 
-  // Idempotency on user — the registry is the source of truth in-process.
+  const actions = input.actions ?? []
+
+  // Re-provision path: agent already exists for this user. Sync tool surface
+  // and Composio session ref, then return — no workspace/IDENTITY/config
+  // writes, no event emit.
   const existingByUser = registry.getByUser(input.user_id)
   if (existingByUser) {
+    const sync = await syncComposio(
+      composio,
+      {
+        user_id: input.user_id,
+        openclaw_agent_id: existingByUser.openclaw_agent_id,
+        composio_session_id: input.composio_session_id ?? null,
+        actions,
+      },
+      logger,
+    )
+    // Update the cached status; everything else on the registry entry is
+    // unchanged (workspace_dir, created_at, kodi_agent_id all stable).
+    registry.add({ ...existingByUser, composio_status: sync.status })
     return {
       openclaw_agent_id: existingByUser.openclaw_agent_id,
       workspace_dir: existingByUser.workspace_dir,
-      composio_status: existingByUser.composio_status,
+      composio_status: sync.status,
+      registered_tool_count: sync.registered_tool_count,
       created: false,
     }
   }
 
+  // First-time path.
   const openclaw_agent_id = agentIdFactory()
   const workspace_dir = path.join(
     resolveStateDir(),
@@ -152,8 +219,8 @@ export async function provisionAgent(
   )
 
   // Add to OpenClaw's `agents.list` so the gateway can route turns to it.
-  // We use a load-mutate-write cycle; the spike confirms the gateway picks
-  // this up on the next turn-prep without restart.
+  // Spike confirms the gateway picks this up on the next turn-prep without
+  // a restart.
   const cfg = loadConfig()
   const list: AgentEntryShape[] = Array.isArray(cfg.agents?.list)
     ? [...(cfg.agents!.list as AgentEntryShape[])]
@@ -170,47 +237,37 @@ export async function provisionAgent(
     })
   }
 
-  // Composio tool registration. The contract guarantees this never throws
-  // — failures surface as `status: 'failed'`. We persist the agent in the
-  // registry either way so the row can be reconciled / retried later.
-  let composio_status: ComposioStatus = 'pending'
-  try {
-    const result = await composio.registerToolsForAgent({
+  const sync = await syncComposio(
+    composio,
+    {
       user_id: input.user_id,
       openclaw_agent_id,
-      composio_session: input.composio_session,
-    })
-    composio_status = result.status
-  } catch (err) {
-    logger.warn(
-      JSON.stringify({
-        msg: 'composio registerToolsForAgent threw — treating as failed',
-        openclaw_agent_id,
-        error: err instanceof Error ? err.message : String(err),
-      }),
-    )
-    composio_status = 'failed'
-  }
+      composio_session_id: input.composio_session_id ?? null,
+      actions,
+    },
+    logger,
+  )
 
   registry.add({
     user_id: input.user_id,
     openclaw_agent_id,
     workspace_dir,
     kodi_agent_id: input.kodi_agent_id,
-    composio_status,
+    composio_status: sync.status,
     created_at,
   })
 
   await emitter.emit('agent.provisioned', {
     user_id: input.user_id,
     openclaw_agent_id,
-    composio_status,
+    composio_status: sync.status,
   })
 
   return {
     openclaw_agent_id,
     workspace_dir,
-    composio_status,
+    composio_status: sync.status,
+    registered_tool_count: sync.registered_tool_count,
     created: true,
   }
 }

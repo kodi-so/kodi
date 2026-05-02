@@ -1,6 +1,7 @@
 import type { KodiBridgeContext, KodiBridgeModule } from '../../types/module'
 import type { BridgeCore } from '../bridge-core'
 import type { EventBus } from '../event-bus'
+import type { AgentManager } from '../agent-manager'
 import { parseSubscriptionsBody } from '../event-bus/subscription-loader'
 import { createNonceDedupe, type NonceDedupe } from './dedupe'
 import {
@@ -9,6 +10,10 @@ import {
   type InboundRouter,
   type ReloadCallback,
 } from './router'
+import {
+  createProvisionHandler,
+  createDeprovisionHandler,
+} from './agent-handlers'
 
 /**
  * `inbound-api` — exposes the HTTP surface Kodi calls into.
@@ -45,6 +50,7 @@ export const inboundApiModule: KodiBridgeModule = {
       throw new Error('inbound-api requires bridge-core to register first')
     }
     const eventBus = ctx.eventBus as EventBus | undefined
+    const agentManager = ctx.agentManager as AgentManager | undefined
 
     const dedupe = createNonceDedupe()
     const reloadCallbacks: ReloadCallback[] = []
@@ -58,6 +64,12 @@ export const inboundApiModule: KodiBridgeModule = {
             const subs = parseSubscriptionsBody(rawBody)
             eventBus.setSubscriptions(subs)
           }
+        : undefined,
+      provisionHandler: agentManager
+        ? createProvisionHandler(agentManager.provision)
+        : undefined,
+      deprovisionHandler: agentManager
+        ? createDeprovisionHandler(agentManager.deprovision)
         : undefined,
     })
 
@@ -89,6 +101,18 @@ export {
   type InboundRouter,
   type ReloadCallback,
   type SubscriptionsHandler,
+  type ProvisionHandler,
+  type ProvisionHandlerResult,
+  type DeprovisionHandler,
+  type DeprovisionHandlerResult,
 } from './router'
 export { createNonceDedupe, type NonceDedupe } from './dedupe'
 export { verifyInbound, type VerifyInboundInput, type VerifyInboundResult } from './verify'
+export {
+  createProvisionHandler,
+  createDeprovisionHandler,
+  parseProvisionBody,
+  parseDeprovisionBody,
+  type ParsedProvisionBody,
+  type ParsedDeprovisionBody,
+} from './agent-handlers'

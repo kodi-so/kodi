@@ -4,6 +4,7 @@ import {
   type EventEnvelope,
   type EventKind,
 } from '@kodi/shared/events'
+import { triggerAgentRotation } from '../agent-lifecycle'
 
 /**
  * Per-kind dispatch for events arriving on `/api/openclaw/events`.
@@ -71,6 +72,27 @@ async function noop(): Promise<void> {
   /* intentional no-op — the event is in plugin_event_log */
 }
 
+/**
+ * KOD-386 reauth recovery: when the plugin reports that a tool call hit
+ * an auth error, fire a rotation. The trigger is idempotent and skips
+ * when the instance isn't running, so re-firing on a sustained Composio
+ * outage is a no-op. If the user has reauth'd in the meantime, the
+ * rotation picks up the fresh session and tools come back online.
+ */
+async function handleComposioSessionFailed({
+  envelope,
+  instance,
+}: DispatchContext): Promise<void> {
+  const payload = envelope.event.payload as { user_id?: unknown } | null
+  const userId = typeof payload?.user_id === 'string' ? payload.user_id : null
+  if (!userId) return
+  await triggerAgentRotation({
+    org_id: instance.orgId,
+    user_id: userId,
+    source: 'reauth-recovery',
+  })
+}
+
 const HANDLERS: Record<EventKind, EventHandler> = {
   'plugin.started': handlePluginStarted,
   'plugin.degraded': noop,
@@ -94,7 +116,7 @@ const HANDLERS: Record<EventKind, EventHandler> = {
   'tool.denied': noop,
   'tool.approval_requested': noop,
   'tool.approval_resolved': noop,
-  'composio.session_failed': noop,
+  'composio.session_failed': handleComposioSessionFailed,
   'composio.session_rotated': noop,
 }
 

@@ -125,4 +125,23 @@ describe('dispatchEvent', () => {
       dispatchEvent({ envelope: envelopeFor('plugin.started'), instance: FAKE_INSTANCE }, handlers),
     ).rejects.toThrow('db unavailable')
   })
+
+  test('composio.session_failed handler is wired (KOD-386 reauth recovery)', () => {
+    // The default handler routes through triggerAgentRotation. We can't
+    // exercise it end-to-end here without a DB, but verifying it's not
+    // the noop confirms the dispatcher map was updated by KOD-386.
+    expect(eventHandlers['composio.session_failed']).not.toBe(
+      eventHandlers['composio.session_rotated'],
+    )
+  })
+
+  test('composio.session_failed handler is a no-op when payload lacks user_id', async () => {
+    // The handler resolves the trigger using triggerAgentRotation; without
+    // a user_id it must skip cleanly rather than throw — protecting the
+    // route from a 500 on a malformed event.
+    const env = envelopeFor('composio.session_failed', { error: 'no user' })
+    await expect(
+      dispatchEvent({ envelope: env, instance: FAKE_INSTANCE }),
+    ).resolves.toBeUndefined()
+  })
 })

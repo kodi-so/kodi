@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import {
   buildAgentToolLoadout,
+  rotateAgentToolLoadout,
   toolToComposioAction,
   type BuildAgentToolLoadoutResult,
   type ComposioToolFetcher,
+  type ProvisionAgentForUserResult,
   type RawComposioTool,
+  type RotateAgentToolLoadoutInput,
 } from './composio-sessions'
 
 const USER = '11111111-1111-4111-8111-111111111111'
@@ -176,5 +179,60 @@ describe('buildAgentToolLoadout', () => {
       composioToolFetcher: fetcher,
     })
     expect(result.toolkits_with_actions).toEqual(['github', 'gmail', 'slack'])
+  })
+})
+
+describe('rotateAgentToolLoadout (KOD-386)', () => {
+  function fakeDb(opts: { member: { id: string } | null }) {
+    return {
+      query: {
+        orgMembers: {
+          findFirst: async () => opts.member ?? undefined,
+        },
+      },
+    } as unknown as RotateAgentToolLoadoutInput['dbInstance']
+  }
+
+  test('returns rotated:false when the user has no org_members row', async () => {
+    let called = false
+    const provisionFn = (async () => {
+      called = true
+      return {} as ProvisionAgentForUserResult
+    }) as unknown as RotateAgentToolLoadoutInput['provisionFn']
+
+    const result = await rotateAgentToolLoadout({
+      dbInstance: fakeDb({ member: null }),
+      org_id: '11111111-1111-4111-8111-111111111111',
+      user_id: USER,
+      provisionFn,
+    })
+    expect(result.rotated).toBe(false)
+    if (!result.rotated) {
+      expect(result.reason).toBe('no-member-row')
+    }
+    expect(called).toBe(false)
+  })
+
+  test('delegates to provisionFn with the resolved org_member_id', async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const provisionFn = (async (input: Record<string, unknown>) => {
+      calls.push(input)
+      return {
+        openclaw_agent_id: 'agent_x',
+        composio_status: 'active',
+        registered_tool_count: 3,
+      } as unknown as ProvisionAgentForUserResult
+    }) as unknown as RotateAgentToolLoadoutInput['provisionFn']
+
+    const result = await rotateAgentToolLoadout({
+      dbInstance: fakeDb({ member: { id: 'member-1' } }),
+      org_id: '11111111-1111-4111-8111-111111111111',
+      user_id: USER,
+      provisionFn,
+    })
+    expect(result.rotated).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.org_member_id).toBe('member-1')
+    expect(calls[0]?.user_id).toBe(USER)
   })
 })

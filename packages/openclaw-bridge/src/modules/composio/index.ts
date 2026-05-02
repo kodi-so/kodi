@@ -71,13 +71,20 @@ export type ComposioModuleApi = {
  * Internal options: lets tests inject fake dispatcher / session cache /
  * registerTool seam without touching the OpenClaw runtime.
  */
+export type ComposioEmitKind = 'composio.session_failed' | 'composio.session_rotated'
+
+export type ComposioEmitPayload = {
+  'composio.session_failed': { user_id: string; error: string }
+  'composio.session_rotated': { user_id: string }
+}
+
 export type ComposioModuleOptions = {
   registerTool?: RegisterToolFn
   dispatcher?: ComposioDispatcher
   sessionCache?: ComposioSessionCache
-  emit?: (
-    kind: 'composio.session_failed',
-    payload: { user_id: string; error: string },
+  emit?: <K extends ComposioEmitKind>(
+    kind: K,
+    payload: ComposioEmitPayload[K],
   ) => Promise<void>
   logger?: Pick<Console, 'log' | 'warn'>
 }
@@ -128,11 +135,20 @@ export function createComposioModuleApi(
         }
       }
 
+      // Detect rotation vs initial provision before mutating the cache.
+      // Re-provision is the case where the agent already has a session
+      // entry; KOD-386 requires emitting `composio.session_rotated` so
+      // Kodi can observe the rotation propagated to the plugin.
+      const wasPresentBeforeCall = sessionCache.getSession(openclaw_agent_id) !== undefined
+
       try {
         const result = registerComposioToolsForAgent(
           { registerTool, sessionCache, dispatcher, everRegistered, logger },
           { user_id, openclaw_agent_id, composio_session_id, actions },
         )
+        if (wasPresentBeforeCall) {
+          await emit('composio.session_rotated', { user_id })
+        }
         return {
           status: 'active',
           registered_tool_count: result.registered_tool_count,

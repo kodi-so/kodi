@@ -3,6 +3,7 @@ import type { Context, Hono } from 'hono'
 import { db } from '@kodi/db'
 import { env } from '../env'
 import { logActivity } from '../lib/activity'
+import { triggerAgentRotation } from '../lib/agent-lifecycle'
 import {
   getComposioClient,
   revalidatePersistedConnectionsBatch,
@@ -135,6 +136,7 @@ export function registerComposioRoutes(app: Hono) {
         ? await syncWebhookConnectionUpdate(db, connectionData)
         : []
 
+      const rotatedKeys = new Set<string>()
       for (const connection of updatedConnections) {
         await logActivity(
           db,
@@ -149,6 +151,21 @@ export function registerComposioRoutes(app: Hono) {
           },
           connection.userId
         )
+
+        // KOD-386: webhook is the canonical signal for "user's
+        // connection state changed" — trigger a rotation so the
+        // plugin's agent loadout matches reality. Dedupe by
+        // (orgId, userId) to avoid double-firing when a webhook
+        // touches multiple toolkit_connections rows for the same user.
+        const key = `${connection.orgId}:${connection.userId}`
+        if (rotatedKeys.has(key)) continue
+        rotatedKeys.add(key)
+        await triggerAgentRotation({
+          dbInstance: db,
+          org_id: connection.orgId,
+          user_id: connection.userId,
+          source: `webhook:${eventType ?? 'unknown'}`,
+        })
       }
 
       return c.json({

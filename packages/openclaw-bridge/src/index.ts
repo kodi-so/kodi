@@ -17,18 +17,24 @@ import { memoryModule } from './modules/memory'
  * Module registration order is intentional:
  *   1. bridge-core    — populates ctx with KodiClient, identity, HMAC
  *   2. event-bus      — needed early so other modules can emit events
- *   3. agent-manager  — sets up the per-agent registry that composio + autonomy read
- *   4. composio       — relies on agent-manager + event-bus
- *   5. autonomy       — relies on agent-manager (for agent resolution at hook time)
- *   6. inbound-api    — registers HTTP routes that fan out to the modules above
+ *   3. composio       — installs the ComposioModuleApi on ctx (no-op stub
+ *                       until KOD-382); agent-manager reads it at provision
+ *                       time
+ *   4. agent-manager  — per-agent runtime registry; depends on bridge-core,
+ *                       event-bus, and composio
+ *   5. autonomy       — relies on agent-manager (for agent resolution at
+ *                       hook time)
+ *   6. inbound-api    — registers HTTP routes that fan out to the modules
+ *                       above
  *   7. updater        — independent; runs a timer
- *   8. memory         — independent; only depends on bridge-core for KodiClient
+ *   8. memory         — independent; only depends on bridge-core for
+ *                       KodiClient
  */
 const REGISTRATION_ORDER = [
   bridgeCoreModule,
   eventBusModule,
-  agentManagerModule,
   composioModule,
+  agentManagerModule,
   autonomyModule,
   inboundApiModule,
   updaterModule,

@@ -35,13 +35,20 @@ export type Heartbeat = {
   stop: () => void
   /** Manually fire a tick — used in tests to avoid waiting on real timers. */
   tick: () => Promise<void>
+  /**
+   * Replace the function used to read `agent_count` for each tick. The
+   * `agent-manager` module wires this to its registry after both modules
+   * have registered (event-bus runs before agent-manager in the
+   * registration order).
+   */
+  setAgentCountSource: (source: () => number) => void
 }
 
 export function createHeartbeat(deps: HeartbeatDeps): Heartbeat {
   const {
     emitter,
     intervalSeconds,
-    getAgentCount = () => 0,
+    getAgentCount,
     now = Date.now,
     setIntervalImpl = setInterval,
     clearIntervalImpl = clearInterval,
@@ -49,10 +56,11 @@ export function createHeartbeat(deps: HeartbeatDeps): Heartbeat {
 
   const startedAt = now()
   let timer: ReturnType<typeof setInterval> | null = null
+  let agentCountSource: () => number = getAgentCount ?? (() => 0)
 
   async function tick(): Promise<void> {
     const uptime_s = Math.max(0, Math.floor((now() - startedAt) / 1000))
-    await emitter.emit('heartbeat', { uptime_s, agent_count: getAgentCount() })
+    await emitter.emit('heartbeat', { uptime_s, agent_count: agentCountSource() })
   }
 
   function start(): void {
@@ -71,5 +79,12 @@ export function createHeartbeat(deps: HeartbeatDeps): Heartbeat {
     }
   }
 
-  return { start, stop, tick }
+  return {
+    start,
+    stop,
+    tick,
+    setAgentCountSource: (source) => {
+      agentCountSource = source
+    },
+  }
 }

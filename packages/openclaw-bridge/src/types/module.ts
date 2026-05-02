@@ -19,7 +19,9 @@ export type KodiBridgeContext = {
    * Typed loosely here to avoid premature coupling; tightened in KOD-365.
    */
   bridgeCore?: unknown
+  /** Set by the `agent-manager` module (KOD-380). */
   agentManager?: unknown
+  /** Set by the `composio` module — interface contract lives in `modules/composio`. */
   composio?: unknown
   eventBus?: unknown
   inboundApi?: unknown

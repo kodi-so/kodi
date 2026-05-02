@@ -326,3 +326,167 @@ describe('createInboundRouter — body parsing', () => {
     expect(res.statusCode).toBe(200)
   })
 })
+
+describe('createInboundRouter — agents/provision + agents/deprovision (KOD-381)', () => {
+  function buildRouterWithAgentHandlers(
+    provisionResultBody: Record<string, unknown> = {
+      openclaw_agent_id: 'agent_xyz',
+      composio_status: 'active',
+      registered_tool_count: 1,
+    },
+    deprovisionResultBody: Record<string, unknown> = { ok: true },
+  ) {
+    const dedupe = createNonceDedupe()
+    return {
+      dedupe,
+      router: createInboundRouter({
+        getSecret: () => SECRET,
+        dedupe,
+        reloadCallbacks: () => [],
+        provisionHandler: async (raw) => {
+          if (
+            !raw ||
+            typeof raw !== 'object' ||
+            !('user_id' in (raw as Record<string, unknown>))
+          ) {
+            return { kind: 'badRequest', message: 'missing user_id' }
+          }
+          return { kind: 'ok', body: provisionResultBody }
+        },
+        deprovisionHandler: async (raw) => {
+          if (
+            !raw ||
+            typeof raw !== 'object' ||
+            !('user_id' in (raw as Record<string, unknown>))
+          ) {
+            return { kind: 'badRequest', message: 'missing user_id' }
+          }
+          return { kind: 'ok', body: deprovisionResultBody }
+        },
+        logger: { log: () => {}, warn: () => {} },
+        now: () => NOW,
+      }),
+    }
+  }
+
+  test('provision: valid body → 200 with handler payload', async () => {
+    const { router } = buildRouterWithAgentHandlers()
+    const body = JSON.stringify({
+      org_id: '11111111-1111-4111-8111-111111111111',
+      user_id: '22222222-2222-4222-8222-222222222222',
+      actions: [],
+    })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/provision`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toEqual({
+      openclaw_agent_id: 'agent_xyz',
+      composio_status: 'active',
+      registered_tool_count: 1,
+    })
+  })
+
+  test('provision: bad body → 400 INVALID_BODY', async () => {
+    const { router } = buildRouterWithAgentHandlers()
+    const body = JSON.stringify({ org_id: 'oops' }) // no user_id
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/provision`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).code).toBe('INVALID_BODY')
+  })
+
+  test('provision: handler throws → 500 PROVISION_FAILED', async () => {
+    const dedupe = createNonceDedupe()
+    const router = createInboundRouter({
+      getSecret: () => SECRET,
+      dedupe,
+      reloadCallbacks: () => [],
+      provisionHandler: async () => {
+        throw new Error('agent-manager exploded')
+      },
+      logger: { log: () => {}, warn: () => {} },
+      now: () => NOW,
+    })
+    const body = JSON.stringify({ user_id: '22222222-2222-4222-8222-222222222222' })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/provision`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(500)
+    expect(JSON.parse(res.body).code).toBe('PROVISION_FAILED')
+  })
+
+  test('provision: missing handler → 501 NOT_IMPLEMENTED', async () => {
+    const { router } = buildRouter()
+    const body = JSON.stringify({ user_id: '22222222-2222-4222-8222-222222222222' })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/provision`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(501)
+    expect(JSON.parse(res.body).code).toBe('NOT_IMPLEMENTED')
+  })
+
+  test('deprovision: valid body → 200 { ok: true }', async () => {
+    const { router } = buildRouterWithAgentHandlers()
+    const body = JSON.stringify({
+      user_id: '22222222-2222-4222-8222-222222222222',
+    })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/deprovision`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toEqual({ ok: true })
+  })
+
+  test('deprovision: missing user_id → 400', async () => {
+    const { router } = buildRouterWithAgentHandlers()
+    const body = JSON.stringify({})
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/deprovision`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).code).toBe('INVALID_BODY')
+  })
+
+  test('deprovision: missing handler → 501', async () => {
+    const { router } = buildRouter()
+    const body = JSON.stringify({
+      user_id: '22222222-2222-4222-8222-222222222222',
+    })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/deprovision`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(501)
+  })
+
+  test('agent routes still require valid HMAC (smoke test)', async () => {
+    const { router } = buildRouterWithAgentHandlers()
+    const body = JSON.stringify({ user_id: '22222222-2222-4222-8222-222222222222' })
+    const res = fakeRes()
+    // Don't sign — should 401
+    await router.handle(
+      fakeReq({
+        url: `${PLUGIN_PREFIX}agents/provision`,
+        body,
+        headers: { 'content-type': 'application/json' },
+      }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(401)
+  })
+})

@@ -58,7 +58,10 @@ function signed(body: string, nonce = '00000000-0000-0000-0000-000000000001') {
   }
 }
 
-function buildRouter(reloadCallbacks: Array<() => void | Promise<void>> = []) {
+function buildRouter(
+  reloadCallbacks: Array<() => void | Promise<void>> = [],
+  subscriptionsHandler?: (raw: unknown) => void | Promise<void>,
+) {
   const dedupe = createNonceDedupe()
   return {
     dedupe,
@@ -66,6 +69,7 @@ function buildRouter(reloadCallbacks: Array<() => void | Promise<void>> = []) {
       getSecret: () => SECRET,
       dedupe,
       reloadCallbacks: () => reloadCallbacks,
+      subscriptionsHandler,
       logger: { log: () => {}, warn: () => {} },
       now: () => NOW,
     }),
@@ -241,6 +245,61 @@ describe('createInboundRouter — stub routes', () => {
       res.res,
     )
     expect(res.statusCode).toBe(404)
+  })
+})
+
+describe('createInboundRouter — config/subscriptions', () => {
+  test('returns 501 when no subscriptionsHandler is wired', async () => {
+    const { router } = buildRouter()
+    const body = '{"subscriptions":{}}'
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({
+        url: `${PLUGIN_PREFIX}config/subscriptions`,
+        headers: signed(body),
+        body,
+      }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(501)
+  })
+
+  test('routes the parsed body to subscriptionsHandler and returns 200', async () => {
+    const captured: unknown[] = []
+    const { router } = buildRouter([], async (raw) => {
+      captured.push(raw)
+    })
+    const body = '{"subscriptions":{"plugin.*":{"enabled":true,"verbosity":"summary"}}}'
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({
+        url: `${PLUGIN_PREFIX}config/subscriptions`,
+        headers: signed(body),
+        body,
+      }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(200)
+    expect(captured).toHaveLength(1)
+    expect((captured[0] as { subscriptions: Record<string, unknown> }).subscriptions['plugin.*']).toBeDefined()
+  })
+
+  test('returns 400 INVALID_SUBSCRIPTIONS when the handler throws', async () => {
+    const { router } = buildRouter([], async () => {
+      throw new Error('bad input')
+    })
+    const body = '{"subscriptions":{}}'
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({
+        url: `${PLUGIN_PREFIX}config/subscriptions`,
+        headers: signed(body),
+        body,
+      }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).code).toBe('INVALID_SUBSCRIPTIONS')
   })
 })
 

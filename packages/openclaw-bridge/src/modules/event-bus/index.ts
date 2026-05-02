@@ -1,13 +1,183 @@
-import type { KodiBridgeModule } from '../../types/module'
+import * as path from 'node:path'
+import type { KodiBridgeContext, KodiBridgeModule } from '../../types/module'
+import type { BridgeCore } from '../bridge-core'
+import {
+  createEmitter,
+  DEFAULT_SUBSCRIPTIONS,
+  type Emitter,
+  type Subscriptions,
+} from './emitter'
+import { registerHookBindings } from './hook-bindings'
+import { createDiskOutbox, type DiskOutbox } from './outbox'
+import { createHeartbeat, type Heartbeat } from './heartbeat'
+import {
+  createSubscriptionLoader,
+  buildDefaultSubscriptions,
+  type SubscriptionLoader,
+} from './subscription-loader'
 
 /**
  * `event-bus` — outbound typed events to Kodi (signed POSTs to
- * `/api/openclaw/events`), subscription-based verbosity, disk-backed
- * retry outbox. Real impl: M3 (KOD-373, KOD-374, KOD-378).
+ * `/api/openclaw/events`), subscription-based verbosity, OpenClaw hook
+ * bindings, and a disk-backed retry outbox (KOD-374).
+ *
+ * This module owns the canonical envelope (per KOD-371) and replaces the
+ * inline `plugin.started` emission from KOD-367 — bridge-core no longer
+ * emits directly; instead the event-bus fires `plugin.started` once it
+ * has wired the emitter and hooks.
+ *
+ * Subscription config defaults to `DEFAULT_SUBSCRIPTIONS` (every kind
+ * `enabled: true, verbosity: 'summary'`) until the M3-T5 (KOD-375) loader
+ * supplies the real config; that loader will mutate the holder so changes
+ * apply atomically without re-registering hooks.
+ *
+ * Outbox: failed emits land in `<outbox_path>/pending.jsonl`; the outbox
+ * flushes on startup and every 30s thereafter. Disk-full → emit
+ * `plugin.degraded` over the network path so Kodi sees the signal even
+ * when local persistence is broken.
  */
+
+const DEFAULT_OUTBOX_PATH = '/var/lib/kodi-bridge/outbox'
+
+export type EventBus = {
+  emitter: Emitter
+  outbox: DiskOutbox
+  heartbeat: Heartbeat
+  subscriptionLoader: SubscriptionLoader
+  /** Swap the active subscription map. Called by the loader, by the
+   * /config/subscriptions inbound route, and tests. */
+  setSubscriptions: (next: Subscriptions) => void
+  /** Currently-active subscription map, for diagnostics. */
+  getSubscriptions: () => Subscriptions
+  /** Cancel every timer (outbox flush, heartbeat, subscription refetch). */
+  shutdown: () => void
+}
+
 export const eventBusModule: KodiBridgeModule = {
   id: 'event-bus',
-  register: () => {
-    // KOD-373 wires hook-bindings + emitter; KOD-374 adds outbox; KOD-378 heartbeat.
+  register: (api, ctx: KodiBridgeContext) => {
+    const bridgeCore = ctx.bridgeCore as BridgeCore | undefined
+    if (!bridgeCore) {
+      throw new Error('event-bus requires bridge-core to register first')
+    }
+
+    // Start with the spec § 4.2 default; the loader replaces this on
+    // first successful fetch (or leaves it in place if Kodi can't be
+    // reached at boot, per ticket "subscription fetch fails at startup:
+    // use the default").
+    let subscriptions: Subscriptions = buildDefaultSubscriptions()
+    const outboxPath = path.resolve(ctx.config.outbox_path ?? DEFAULT_OUTBOX_PATH)
+
+    const outbox = createDiskOutbox({
+      outboxPath,
+      kodiClient: bridgeCore.kodiClient,
+      onDegraded: (reason) => {
+        // Cross over to the network path — even if disk is dead, Kodi
+        // should see `plugin.degraded` so ops can react.
+        void emitter.emit('plugin.degraded', {
+          reason,
+          since: new Date().toISOString(),
+        })
+      },
+    })
+
+    const emitter = createEmitter({
+      kodiClient: bridgeCore.kodiClient,
+      identity: bridgeCore.identity,
+      subscriptions: () => subscriptions,
+      outbox: { push: (env) => void outbox.push(env) },
+    })
+
+    registerHookBindings(api, emitter)
+
+    // Kick off the periodic flush + initial drain. Errors are logged
+    // inside `outbox.start()`; we don't block plugin load on them.
+    void outbox.start()
+
+    // Heartbeat: starts immediately so Kodi sees liveness within the first
+    // tick. Subscription gating happens inside emitter.emit, so toggling
+    // `heartbeat` in subscriptions silences output on the next tick.
+    const heartbeat = createHeartbeat({
+      emitter,
+      intervalSeconds: ctx.config.heartbeat_interval_seconds,
+      // M4 wires this to ctx.agentManager.count(); for now we report 0.
+      getAgentCount: () => 0,
+    })
+    heartbeat.start()
+
+    const setSubscriptions = (next: Subscriptions): void => {
+      subscriptions = next
+    }
+
+    const subscriptionLoader = createSubscriptionLoader({
+      kodiClient: bridgeCore.kodiClient,
+      instanceId: bridgeCore.identity.instance_id,
+      applySubscriptions: setSubscriptions,
+    })
+    // Best-effort startup fetch + 10-minute timer. Errors are logged
+    // inside the loader; we don't block plugin load on a Kodi outage
+    // — the buildDefaultSubscriptions seed is already in place.
+    void subscriptionLoader.start()
+
+    const eventBus: EventBus = {
+      emitter,
+      outbox,
+      heartbeat,
+      subscriptionLoader,
+      setSubscriptions,
+      getSubscriptions: () => subscriptions,
+      shutdown: () => {
+        subscriptionLoader.stop()
+        heartbeat.stop()
+        outbox.stop()
+      },
+    }
+    ctx.eventBus = eventBus
+
+    // Fire the startup beacon through the canonical envelope. Fire-and-forget;
+    // a Kodi outage at boot must never break the plugin load. The emitter
+    // already swallows errors and logs / falls back to the outbox.
+    void emitter.emit('plugin.started', {
+      pid: typeof process !== 'undefined' ? process.pid : 0,
+      started_at: new Date().toISOString(),
+    })
   },
 }
+
+export {
+  createEmitter,
+  DEFAULT_SUBSCRIPTIONS,
+  resolveSubscription,
+  EVENTS_INGEST_PATH,
+  type Emitter,
+  type EmitOptions,
+  type EmitterDeps,
+  type Subscriptions,
+  type SubscriptionEntry,
+} from './emitter'
+export {
+  registerHookBindings,
+  buildHookBindings,
+  HOOK_NAMES,
+  type HookBindings,
+  type HookName,
+} from './hook-bindings'
+export {
+  createDiskOutbox,
+  DEFAULT_FLUSH_INTERVAL_MS,
+  DEFAULT_MAX_FILE_BYTES,
+  type DiskOutbox,
+  type DiskOutboxDeps,
+  type FlushResult,
+} from './outbox'
+export { createHeartbeat, type Heartbeat, type HeartbeatDeps } from './heartbeat'
+export {
+  createSubscriptionLoader,
+  buildDefaultSubscriptions,
+  parseSubscriptionsBody,
+  SubscriptionsParseError,
+  SUBSCRIPTIONS_API_PATH,
+  DEFAULT_FETCH_INTERVAL_MS,
+  type SubscriptionLoader,
+  type SubscriptionLoaderDeps,
+} from './subscription-loader'

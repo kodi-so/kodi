@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { Instance } from '@kodi/db'
 import { encrypt } from '@kodi/db'
-import { pushPluginRoute, pushAdminReload } from './plugin-client'
+import {
+  pushAgentDeprovision,
+  pushAgentProvision,
+  pushAdminReload,
+  pushPluginRoute,
+} from './plugin-client'
 
 const SECRET = 'test-secret-32-bytes-of-randomness--'
 const NOW = 1_750_000_000_000
@@ -168,5 +173,108 @@ describe('pushAdminReload', () => {
     })
     expect(calls[0]!.url.endsWith('/plugins/kodi-bridge/admin/reload')).toBe(true)
     expect(calls[0]!.init!.body).toBe('{}')
+  })
+})
+
+describe('pushAgentProvision (KOD-381 body shape)', () => {
+  test('POSTs to /agents/provision with the request body and parses response', async () => {
+    const { fetchImpl, calls } = captureFetch({
+      status: 200,
+      body: JSON.stringify({
+        openclaw_agent_id: 'agent_xyz',
+        composio_status: 'active',
+        registered_tool_count: 3,
+      }),
+    })
+    const result = await pushAgentProvision({
+      instance: instanceFor(),
+      body: {
+        org_id: '11111111-1111-4111-8111-111111111111',
+        user_id: '22222222-2222-4222-8222-222222222222',
+        composio_session_id: 'sess_x',
+        actions: [
+          {
+            name: 'gmail__send_email',
+            description: 'Send Gmail',
+            parameters: { type: 'object' },
+            toolkit: 'gmail',
+            action: 'send_email',
+          },
+        ],
+      },
+      now: () => NOW,
+      nonceFactory: () => 'nonce-1',
+      fetchImpl,
+    })
+    expect(result.ok).toBe(true)
+    expect(calls[0]!.url.endsWith('/plugins/kodi-bridge/agents/provision')).toBe(true)
+    const sentBody = JSON.parse(String(calls[0]!.init!.body))
+    expect(sentBody.user_id).toBe('22222222-2222-4222-8222-222222222222')
+    expect(sentBody.actions).toHaveLength(1)
+    if (result.ok) {
+      expect(result.parsedBody).toEqual({
+        openclaw_agent_id: 'agent_xyz',
+        composio_status: 'active',
+        registered_tool_count: 3,
+      })
+    }
+  })
+
+  test('returns ok with parsedBody undefined when server returns empty body', async () => {
+    const { fetchImpl } = captureFetch({ status: 200, body: '' })
+    const result = await pushAgentProvision({
+      instance: instanceFor(),
+      body: {
+        org_id: '11111111-1111-4111-8111-111111111111',
+        user_id: '22222222-2222-4222-8222-222222222222',
+        actions: [],
+      },
+      now: () => NOW,
+      nonceFactory: () => 'nonce-1',
+      fetchImpl,
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.parsedBody).toBeUndefined()
+    }
+  })
+
+  test('returns ok with parsedBody undefined when server returns non-JSON', async () => {
+    const { fetchImpl } = captureFetch({ status: 200, body: 'not-json' })
+    const result = await pushAgentProvision({
+      instance: instanceFor(),
+      body: {
+        org_id: '11111111-1111-4111-8111-111111111111',
+        user_id: '22222222-2222-4222-8222-222222222222',
+        actions: [],
+      },
+      now: () => NOW,
+      nonceFactory: () => 'nonce-1',
+      fetchImpl,
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.parsedBody).toBeUndefined()
+    }
+  })
+})
+
+describe('pushAgentDeprovision', () => {
+  test('POSTs to /agents/deprovision with { user_id }', async () => {
+    const { fetchImpl, calls } = captureFetch({
+      status: 200,
+      body: JSON.stringify({ ok: true }),
+    })
+    const result = await pushAgentDeprovision({
+      instance: instanceFor(),
+      body: { user_id: '22222222-2222-4222-8222-222222222222' },
+      now: () => NOW,
+      nonceFactory: () => 'nonce-1',
+      fetchImpl,
+    })
+    expect(result.ok).toBe(true)
+    expect(calls[0]!.url.endsWith('/plugins/kodi-bridge/agents/deprovision')).toBe(true)
+    const sentBody = JSON.parse(String(calls[0]!.init!.body))
+    expect(sentBody).toEqual({ user_id: '22222222-2222-4222-8222-222222222222' })
   })
 })

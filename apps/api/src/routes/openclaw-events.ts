@@ -1,7 +1,11 @@
 import type { Hono } from 'hono'
-import { z } from 'zod'
 import { db, decrypt, eq, instances, pluginEventLog, type Instance } from '@kodi/db'
 import { verifyRequest } from '@kodi/shared/hmac'
+import {
+  EventEnvelopeSchema,
+  type EventEnvelope,
+} from '@kodi/shared/events'
+import { dispatchEvent, UnknownEventKindError } from '../lib/openclaw-events/dispatcher'
 
 /**
  * Inbound event ingestion from kodi-bridge plugins.
@@ -11,23 +15,13 @@ import { verifyRequest } from '@kodi/shared/hmac'
  *   2. `x-kb-signature` + `x-kb-timestamp` + `x-kb-nonce` HMAC-verify the
  *      raw body using that instance's plugin_hmac_secret.
  *
- * Events dedupe via `(instance_id, idempotency_key)` on `plugin_event_log`;
- * replays are 200 OK with `{ deduped: true }`.
- *
- * In M2 the handler logs and persists; full event-kind dispatch lands in M3
- * (KOD-377).
+ * Body shape: the canonical envelope from `@kodi/shared/events` (KOD-371).
+ * The route persists every event to `plugin_event_log` first — that's the
+ * audit row of record — then runs the per-kind dispatcher (KOD-377). On
+ * dispatcher failure we return 500 so the plugin retries; the persisted
+ * row stays put and dedupe via `(instance_id, idempotency_key)` keeps
+ * the retry idempotent.
  */
-
-const eventEnvelopeSchema = z.object({
-  protocol_version: z.string().min(1),
-  kind: z.string().min(1),
-  payload: z.unknown().optional(),
-  idempotency_key: z.string().min(1),
-  emitted_at: z.string().datetime().optional(),
-  agent_id: z.string().min(1).optional(),
-})
-
-type EventEnvelope = z.infer<typeof eventEnvelopeSchema>
 
 function readBearerToken(headerValue: string | null): string | null {
   if (!headerValue) return null
@@ -82,9 +76,6 @@ export function registerOpenClawEventsRoutes(app: Hono): void {
       return c.json({ error: 'Unauthorized' }, 401)
     }
 
-    // We need the raw body bytes to verify the signature. Hono's c.req.text()
-    // gives us the verbatim body; we then JSON.parse from the same string the
-    // signer used.
     const rawBody = await c.req.text()
     const verify = verifyRequest({
       body: rawBody,
@@ -98,14 +89,14 @@ export function registerOpenClawEventsRoutes(app: Hono): void {
       return c.json({ error: 'Unauthorized' }, 401)
     }
 
-    // 3. Body shape
+    // 3. Body shape — canonical envelope from KOD-371
     let parsedJson: unknown
     try {
       parsedJson = JSON.parse(rawBody)
     } catch {
       return c.json({ error: 'Body is not valid JSON' }, 400)
     }
-    const parsed = eventEnvelopeSchema.safeParse(parsedJson)
+    const parsed = EventEnvelopeSchema.safeParse(parsedJson)
     if (!parsed.success) {
       return c.json({ error: 'Invalid envelope', details: parsed.error.flatten() }, 400)
     }
@@ -115,28 +106,52 @@ export function registerOpenClawEventsRoutes(app: Hono): void {
     try {
       await db.insert(pluginEventLog).values({
         instanceId: instance.id,
-        agentId: envelope.agent_id ?? null,
-        eventKind: envelope.kind,
-        protocolVersion: envelope.protocol_version,
-        payloadJson: (envelope.payload as object | null | undefined) ?? null,
-        idempotencyKey: envelope.idempotency_key,
+        agentId: envelope.agent?.agent_id ?? null,
+        eventKind: envelope.event.kind,
+        protocolVersion: envelope.protocol,
+        payloadJson: (envelope.event.payload as object | null | undefined) ?? null,
+        idempotencyKey: envelope.event.idempotency_key,
       })
     } catch (err) {
       if (isUniqueViolation(err)) {
-        // M3 will dispatch handlers; for now, replays are a no-op success
+        // Replay: row already in plugin_event_log, dispatcher already ran.
         return c.json({ ok: true, deduped: true }, 200)
       }
       throw err
     }
 
-    // 5. Stub dispatcher — real per-kind handlers land in M3-T7 (KOD-377)
+    // 5. Dispatch per-kind side effect
+    try {
+      await dispatchEvent({ envelope, instance })
+    } catch (err) {
+      if (err instanceof UnknownEventKindError) {
+        // The row is already in plugin_event_log so the audit trail keeps
+        // it; we still surface 400 so the plugin (and observability) sees
+        // an explicit signal that this kind is not recognised.
+        return c.json(
+          { error: 'Unknown event kind', code: 'UNKNOWN_KIND', kind: err.receivedKind },
+          400,
+        )
+      }
+      console.error(
+        JSON.stringify({
+          msg: 'openclaw event dispatch failed',
+          instance_id: instance.id,
+          kind: envelope.event.kind,
+          idempotency_key: envelope.event.idempotency_key,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      )
+      return c.json({ error: 'Dispatch failed', code: 'DISPATCH_FAILED' }, 500)
+    }
+
     console.log(
       JSON.stringify({
-        msg: 'openclaw event received',
+        msg: 'openclaw event handled',
         instance_id: instance.id,
-        kind: envelope.kind,
-        agent_id: envelope.agent_id ?? null,
-        idempotency_key: envelope.idempotency_key,
+        kind: envelope.event.kind,
+        agent_id: envelope.agent?.agent_id ?? null,
+        idempotency_key: envelope.event.idempotency_key,
       }),
     )
 

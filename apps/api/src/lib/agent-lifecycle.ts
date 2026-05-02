@@ -8,7 +8,9 @@ import {
 import {
   deprovisionAgentForUser,
   provisionAgentForUser,
+  provisionOrgAgent,
   type ProvisionAgentForUserResult,
+  type ProvisionOrgAgentResult,
   type DeprovisionAgentForUserResult,
 } from './composio-sessions'
 
@@ -172,12 +174,81 @@ async function runDeprovisionInBackground(
   }
 }
 
+// ── Org agent (KOD-385) ───────────────────────────────────────────────────
+
+export type TriggerOrgAgentProvisionInput = {
+  org_id: string
+  dbInstance?: typeof defaultDb
+  provisionFn?: typeof provisionOrgAgent
+  logger?: Pick<Console, 'log' | 'warn' | 'error'>
+}
+
+export type TriggerOrgAgentProvisionOutcome =
+  | { kind: 'started' }
+  | { kind: 'skipped'; reason: 'no-instance' | 'instance-not-running' }
+
+/**
+ * Fire-and-forget org-agent provision. Same instance-readiness gate as
+ * `triggerAgentProvision`. Reconciliation at the tail of instance
+ * provisioning (KOD-384) calls `provisionOrgAgent` directly through
+ * `reconcileAgentsForOrg`; this trigger exists for any future call site
+ * that needs to provision the org agent outside the reconcile path.
+ */
+export async function triggerOrgAgentProvision(
+  input: TriggerOrgAgentProvisionInput,
+): Promise<TriggerOrgAgentProvisionOutcome> {
+  const dbInstance = input.dbInstance ?? defaultDb
+  const provisionFn = input.provisionFn ?? provisionOrgAgent
+  const logger = input.logger ?? console
+
+  const inst = await resolveInstanceForOrg(dbInstance, input.org_id)
+  if (!inst) return { kind: 'skipped', reason: 'no-instance' }
+  if (inst.status !== 'running') {
+    return { kind: 'skipped', reason: 'instance-not-running' }
+  }
+
+  void runOrgAgentInBackground(provisionFn, dbInstance, input, logger)
+  return { kind: 'started' }
+}
+
+async function runOrgAgentInBackground(
+  provisionFn: typeof provisionOrgAgent,
+  dbInstance: typeof defaultDb,
+  input: TriggerOrgAgentProvisionInput,
+  logger: Pick<Console, 'log' | 'warn' | 'error'>,
+): Promise<void> {
+  try {
+    const result: ProvisionOrgAgentResult = await provisionFn({
+      dbInstance,
+      org_id: input.org_id,
+    })
+    logger.log(
+      JSON.stringify({
+        msg: 'agent.org.provision.background',
+        org_id: input.org_id,
+        composio_status: result.composio_status,
+        openclaw_agent_id: result.openclaw_agent_id,
+      }),
+    )
+  } catch (err) {
+    logger.error(
+      JSON.stringify({
+        msg: 'agent.org.provision.background.failed',
+        org_id: input.org_id,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    )
+  }
+}
+
 // ── Instance-side reconciliation ──────────────────────────────────────────
 
 export type ReconcileAgentsForOrgInput = {
   org_id: string
   dbInstance?: typeof defaultDb
   provisionFn?: typeof provisionAgentForUser
+  /** Org-agent provisioner; defaults to the real `provisionOrgAgent`. */
+  orgProvisionFn?: typeof provisionOrgAgent
   logger?: Pick<Console, 'log' | 'warn' | 'error'>
 }
 
@@ -200,6 +271,18 @@ export type ReconcileAgentsForOrgResult = {
         error: string
       }
   >
+  /**
+   * Org-agent provisioning outcome — separate from per-member results
+   * because the org agent has no `org_member_id`. Always attempted
+   * before the member loop.
+   */
+  orgAgent:
+    | {
+        ok: true
+        composio_status: ProvisionOrgAgentResult['composio_status']
+        openclaw_agents_row_id: string
+      }
+    | { ok: false; error: string }
 }
 
 /**
@@ -220,7 +303,34 @@ export async function reconcileAgentsForOrg(
 ): Promise<ReconcileAgentsForOrgResult> {
   const dbInstance = input.dbInstance ?? defaultDb
   const provisionFn = input.provisionFn ?? provisionAgentForUser
+  const orgProvisionFn = input.orgProvisionFn ?? provisionOrgAgent
   const logger = input.logger ?? console
+
+  // KOD-385: provision the org agent before iterating members. It has no
+  // user identity, so it doesn't fit the per-member loop. Idempotent —
+  // subsequent reconciles return the existing row + plugin no-op.
+  let orgAgent: ReconcileAgentsForOrgResult['orgAgent']
+  try {
+    const orgResult = await orgProvisionFn({
+      dbInstance,
+      org_id: input.org_id,
+    })
+    orgAgent = {
+      ok: true,
+      composio_status: orgResult.composio_status,
+      openclaw_agents_row_id: orgResult.openclaw_agents_row_id,
+    }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    logger.warn(
+      JSON.stringify({
+        msg: 'agent.reconcile.org_agent.failed',
+        org_id: input.org_id,
+        error,
+      }),
+    )
+    orgAgent = { ok: false, error }
+  }
 
   const members = await dbInstance
     .select({
@@ -235,6 +345,7 @@ export async function reconcileAgentsForOrg(
     succeeded: 0,
     failed: 0,
     results: [],
+    orgAgent,
   }
 
   for (const member of members) {
@@ -303,4 +414,5 @@ async function resolveInstanceForOrg(
 export {
   provisionAgentForUser,
   deprovisionAgentForUser,
+  provisionOrgAgent,
 } from './composio-sessions'

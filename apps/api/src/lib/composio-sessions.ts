@@ -473,3 +473,101 @@ export async function deprovisionAgentForUser(
 // Re-export the org-agent helper so triggers (M4-T5) can ensure it
 // without pulling from @kodi/db directly.
 export { ensureOrgOpenClawAgent }
+
+// ── Org agent (KOD-385 / M4-T6) ───────────────────────────────────────────
+
+export type ProvisionOrgAgentInput = {
+  org_id: string
+  dbInstance?: typeof defaultDb
+  pluginPush?: typeof pushAgentProvision
+}
+
+export type ProvisionOrgAgentResult = {
+  openclaw_agents_row_id: string
+  /** Kodi-side `openclaw_agents.openclaw_agent_id` (e.g. `kodi-agent-<orgId>`). */
+  openclaw_agent_id: string
+  /** Always `'skipped'` in v1: the org agent has no user identity, so
+   * there's no Composio session to attach. KOD-385 docs note this is the
+   * v1 contract; future work may wire an org-wide service account. */
+  composio_status: ComposioStatus
+  pluginResult: PushResult | { ok: false; reason: 'no-instance' } | null
+}
+
+/**
+ * Provision the "org agent" — one agent per org with no user identity.
+ * Represents org-level autonomous work (background tasks, scheduled jobs,
+ * or anything that runs without a specific user logged in).
+ *
+ * v1 contract:
+ *   - DB: `openclaw_agents` row with `agent_type='org'`, `org_member_id=null`
+ *     (created by `ensureOrgOpenClawAgent`)
+ *   - Composio: `composio_status='skipped'` — no user → no session
+ *   - Plugin: signed POST to `/agents/provision` with the org agent id;
+ *     uses the org_id as a sentinel for the plugin's per-user registry
+ *     key (UUIDs are unique so the org_id can never collide with a real
+ *     user). The plugin treats it as a normal agent with no Composio.
+ *
+ * Idempotent: subsequent calls return the same row, plugin diffs an
+ * empty actions list (no-op).
+ */
+export async function provisionOrgAgent(
+  input: ProvisionOrgAgentInput,
+): Promise<ProvisionOrgAgentResult> {
+  const dbInstance = input.dbInstance ?? defaultDb
+  const pluginPush = input.pluginPush ?? pushAgentProvision
+
+  // 1. Ensure the org-level openclaw_agents row exists.
+  const agent = await ensureOrgOpenClawAgent(dbInstance, {
+    orgId: input.org_id,
+    status: 'active',
+    metadata: { source: 'org-agent-provisioner' },
+  })
+
+  // 2. Stamp composio_status. Skipped for v1 — no user → no session.
+  await dbInstance
+    .update(openClawAgents)
+    .set({
+      composioStatus: 'skipped',
+      composioUserId: null,
+      composioSessionEnc: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(openClawAgents.id, agent.id))
+
+  // 3. Plugin call. The plugin's body parser requires user_id to be a
+  // UUID; we use the org_id as a sentinel since UUIDs are unique and the
+  // org_id can never collide with a real user. The plugin's per-user
+  // registry treats it like any other agent — Kodi-side `agent_type`
+  // is the source of truth for "this is the org agent".
+  let pluginResult:
+    | PushResult
+    | { ok: false; reason: 'no-instance' }
+    | null = null
+
+  const inst = await dbInstance.query.instances.findFirst({
+    where: (fields, { and, eq, ne }) =>
+      and(eq(fields.orgId, input.org_id), ne(fields.status, 'deleted')),
+  })
+
+  if (!inst) {
+    pluginResult = { ok: false, reason: 'no-instance' }
+  } else {
+    pluginResult = await pluginPush({
+      instance: inst,
+      body: {
+        org_id: input.org_id,
+        user_id: input.org_id,
+        composio_session_id: null,
+        actions: [],
+        kodi_agent_id: agent.id,
+      },
+    })
+  }
+
+  return {
+    openclaw_agents_row_id: agent.id,
+    openclaw_agent_id: agent.openclawAgentId,
+    composio_status: 'skipped',
+    pluginResult,
+  }
+}

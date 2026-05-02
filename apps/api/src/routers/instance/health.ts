@@ -1,4 +1,5 @@
 import { db, eq, instances, type Instance } from '@kodi/db'
+import { reconcileAgentsForOrg } from '../../lib/agent-lifecycle'
 import { checkCloudInitComplete } from './ssh'
 
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
@@ -25,7 +26,29 @@ export async function checkInstanceHealth(inst: Instance): Promise<HealthCheckRe
   const httpHealthy = cloudInitDone ? await checkHttpHealth(inst.hostname) : false
 
   const newStatus = cloudInitDone && httpHealthy ? 'running' : inst.status
-  return updateStatus(inst.id, newStatus)
+  const result = await updateStatus(inst.id, newStatus)
+
+  // KOD-384: when an instance first transitions to `running`, backfill
+  // agents for every org_member who joined while the org had no instance
+  // (or whose earlier provision call skipped because of the same). The
+  // early-return at the top of this fn narrows inst.status to `installing`,
+  // so reaching this branch means we just flipped from installing → running.
+  // Fire-and-forget — health checks must stay fast, and the orchestrator
+  // is idempotent so a failure here is recoverable on the next call.
+  if (newStatus === 'running') {
+    void reconcileAgentsForOrg({ org_id: inst.orgId }).catch((err) => {
+      console.error(
+        JSON.stringify({
+          msg: 'agent.reconcile.org.failed',
+          org_id: inst.orgId,
+          instance_id: inst.id,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    })
+  }
+
+  return result
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────

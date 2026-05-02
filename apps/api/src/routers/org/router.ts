@@ -3,6 +3,10 @@ import { activityLog, and, asc, desc, ensureMemberOpenClawAgent, ensurePersonalO
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
 import { logActivity } from '../../lib/activity'
+import {
+  triggerAgentDeprovision,
+  triggerAgentProvision,
+} from '../../lib/agent-lifecycle'
 import { deprovisionInstance } from '../instance/provisioning'
 
 async function listOrganizationsForUser(database: typeof import('@kodi/db').db, userId: string) {
@@ -151,6 +155,17 @@ export const orgRouter = router({
           displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Owner',
           metadata: { source: 'org-create', role: 'owner' },
         })
+        // KOD-384: provision the actual OpenClaw agent (async; agents only
+        // exist once the org has a running instance, so this no-ops on
+        // brand-new orgs and is backfilled by `reconcileAgentsForOrg` at
+        // the tail of instance provisioning).
+        await triggerAgentProvision({
+          dbInstance: ctx.db,
+          org_id: org.id,
+          user_id: userId,
+          org_member_id: member.id,
+          display_name: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Owner',
+        })
       }
 
       return { orgId: org.id, orgSlug: org.slug, orgName: org.name }
@@ -213,9 +228,21 @@ export const orgRouter = router({
         where: eq(user.id, input.userId),
       })
 
+      // Capture the org_member_id before deletion so KOD-384's deprovision
+      // trigger can find the openclaw_agents row by org_member_id.
+      const orgMemberId = existing.id
+
       await ctx.db
         .delete(orgMembers)
         .where(and(eq(orgMembers.orgId, ctx.org.id), eq(orgMembers.userId, input.userId)))
+
+      // KOD-384: tear down the user's agent (async, best-effort).
+      await triggerAgentDeprovision({
+        dbInstance: ctx.db,
+        org_id: ctx.org.id,
+        user_id: input.userId,
+        org_member_id: orgMemberId,
+      })
 
       // Log activity
       await logActivity(

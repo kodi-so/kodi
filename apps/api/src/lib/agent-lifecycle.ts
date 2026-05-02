@@ -1,14 +1,9 @@
-import {
-  db as defaultDb,
-  eq,
-  instances,
-  orgMembers,
-  type Instance,
-} from '@kodi/db'
+import { db as defaultDb, eq, orgMembers } from '@kodi/db'
 import {
   deprovisionAgentForUser,
   provisionAgentForUser,
   provisionOrgAgent,
+  resolveOrgInstance,
   type ProvisionAgentForUserResult,
   type ProvisionOrgAgentResult,
   type DeprovisionAgentForUserResult,
@@ -27,8 +22,8 @@ import {
  *   - failure does NOT roll back the membership change
  *   - failure is retryable: any subsequent membership/connection event
  *     funnels through the same idempotent orchestrator
- *   - org with no running instance: skip until KOD-385's instance-side
- *     reconciliation backfills agents at instance startup
+ *   - org with no running instance: triggers skip; `reconcileAgentsForOrg`
+ *     backfills every member at the installing → running transition
  */
 
 // ── Trigger sources ───────────────────────────────────────────────────────
@@ -68,7 +63,7 @@ export async function triggerAgentProvision(
   const provisionFn = input.provisionFn ?? provisionAgentForUser
   const logger = input.logger ?? console
 
-  const inst = await resolveInstanceForOrg(dbInstance, input.org_id)
+  const inst = await resolveOrgInstance(dbInstance, input.org_id)
   if (!inst) return { kind: 'skipped', reason: 'no-instance' }
   if (inst.status !== 'running') {
     return { kind: 'skipped', reason: 'instance-not-running' }
@@ -201,7 +196,7 @@ export async function triggerOrgAgentProvision(
   const provisionFn = input.provisionFn ?? provisionOrgAgent
   const logger = input.logger ?? console
 
-  const inst = await resolveInstanceForOrg(dbInstance, input.org_id)
+  const inst = await resolveOrgInstance(dbInstance, input.org_id)
   if (!inst) return { kind: 'skipped', reason: 'no-instance' }
   if (inst.status !== 'running') {
     return { kind: 'skipped', reason: 'instance-not-running' }
@@ -394,19 +389,6 @@ export async function reconcileAgentsForOrg(
     }),
   )
   return result
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-async function resolveInstanceForOrg(
-  dbInstance: typeof defaultDb,
-  org_id: string,
-): Promise<Instance | null> {
-  const inst = await dbInstance.query.instances.findFirst({
-    where: (fields, { and, eq, ne }) =>
-      and(eq(fields.orgId, org_id), ne(fields.status, 'deleted')),
-  })
-  return inst ?? null
 }
 
 // Re-export the underlying orchestrator names for convenience at

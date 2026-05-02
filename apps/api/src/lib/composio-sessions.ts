@@ -296,7 +296,12 @@ export async function computeEffectiveToolkitAllowlist(params: {
 
 // ── Provisioning orchestrator ────────────────────────────────────────────
 
-async function resolveOrgInstance(
+/**
+ * Find the org's primary OpenClaw instance, ignoring soft-deleted rows.
+ * Shared by every agent-orchestration callsite that needs to push to the
+ * plugin or decide whether the plugin is reachable.
+ */
+export async function resolveOrgInstance(
   dbInstance: typeof defaultDb,
   org_id: string,
 ): Promise<Instance | null> {
@@ -490,7 +495,7 @@ export type ProvisionOrgAgentResult = {
    * there's no Composio session to attach. KOD-385 docs note this is the
    * v1 contract; future work may wire an org-wide service account. */
   composio_status: ComposioStatus
-  pluginResult: PushResult | { ok: false; reason: 'no-instance' } | null
+  pluginResult: PushResult | { ok: false; reason: 'no-instance' }
 }
 
 /**
@@ -539,30 +544,19 @@ export async function provisionOrgAgent(
   // org_id can never collide with a real user. The plugin's per-user
   // registry treats it like any other agent — Kodi-side `agent_type`
   // is the source of truth for "this is the org agent".
-  let pluginResult:
-    | PushResult
-    | { ok: false; reason: 'no-instance' }
-    | null = null
-
-  const inst = await dbInstance.query.instances.findFirst({
-    where: (fields, { and, eq, ne }) =>
-      and(eq(fields.orgId, input.org_id), ne(fields.status, 'deleted')),
-  })
-
-  if (!inst) {
-    pluginResult = { ok: false, reason: 'no-instance' }
-  } else {
-    pluginResult = await pluginPush({
-      instance: inst,
-      body: {
-        org_id: input.org_id,
-        user_id: input.org_id,
-        composio_session_id: null,
-        actions: [],
-        kodi_agent_id: agent.id,
-      },
-    })
-  }
+  const inst = await resolveOrgInstance(dbInstance, input.org_id)
+  const pluginResult: PushResult | { ok: false; reason: 'no-instance' } = inst
+    ? await pluginPush({
+        instance: inst,
+        body: {
+          org_id: input.org_id,
+          user_id: input.org_id,
+          composio_session_id: null,
+          actions: [],
+          kodi_agent_id: agent.id,
+        },
+      })
+    : { ok: false, reason: 'no-instance' }
 
   return {
     openclaw_agents_row_id: agent.id,

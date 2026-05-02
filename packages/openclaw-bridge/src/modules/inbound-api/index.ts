@@ -1,12 +1,94 @@
-import type { KodiBridgeModule } from '../../types/module'
+import type { KodiBridgeContext, KodiBridgeModule } from '../../types/module'
+import type { BridgeCore } from '../bridge-core'
+import type { EventBus } from '../event-bus'
+import { parseSubscriptionsBody } from '../event-bus/subscription-loader'
+import { createNonceDedupe, type NonceDedupe } from './dedupe'
+import {
+  createInboundRouter,
+  PLUGIN_PREFIX,
+  type InboundRouter,
+  type ReloadCallback,
+} from './router'
 
 /**
- * `inbound-api` — HTTP routes Kodi calls into, all wrapped in HMAC verify
- * middleware. Real impl: M3-T6 (KOD-376) + M4-T2 (KOD-381) + M5-T3 (KOD-391).
+ * `inbound-api` — exposes the HTTP surface Kodi calls into.
+ *
+ * The module registers a single OpenClaw HTTP route at the
+ * `/plugins/kodi-bridge/` prefix and runs in-house dispatch + HMAC
+ * verification.
+ *
+ *   - `/config/subscriptions` is real (KOD-375): wired to
+ *     ctx.eventBus.setSubscriptions, validation lives in the
+ *     subscription-loader module.
+ *   - `/admin/reload` is real (KOD-376): runs every callback registered
+ *     via ctx.inboundApi.onReload(fn).
+ *   - Everything else returns 501 until the follow-up tickets in M3,
+ *     M4, and M5 land their handlers.
  */
+
+export type InboundApi = {
+  /** Register a callback to run on POST /admin/reload. */
+  onReload: (cb: ReloadCallback) => void
+  /** Currently registered reload callbacks (for diagnostics / tests). */
+  readonly reloadCallbacks: readonly ReloadCallback[]
+  /** The router instance (handler can be re-registered if OpenClaw allows). */
+  router: InboundRouter
+  /** The nonce deduper, exposed so other modules can probe state. */
+  dedupe: NonceDedupe
+}
+
 export const inboundApiModule: KodiBridgeModule = {
   id: 'inbound-api',
-  register: () => {
-    // KOD-376 wires verify middleware + 501 stubs; KOD-381 fills agents/provision.
+  register: (api, ctx: KodiBridgeContext) => {
+    const bridgeCore = ctx.bridgeCore as BridgeCore | undefined
+    if (!bridgeCore) {
+      throw new Error('inbound-api requires bridge-core to register first')
+    }
+    const eventBus = ctx.eventBus as EventBus | undefined
+
+    const dedupe = createNonceDedupe()
+    const reloadCallbacks: ReloadCallback[] = []
+
+    const router = createInboundRouter({
+      getSecret: () => ctx.config.hmac_secret,
+      dedupe,
+      reloadCallbacks: () => reloadCallbacks,
+      subscriptionsHandler: eventBus
+        ? async (rawBody) => {
+            const subs = parseSubscriptionsBody(rawBody)
+            eventBus.setSubscriptions(subs)
+          }
+        : undefined,
+    })
+
+    api.registerHttpRoute({
+      path: PLUGIN_PREFIX,
+      match: 'prefix',
+      auth: 'plugin',
+      handler: (req, res) => router.handle(req, res),
+    })
+
+    const inboundApi: InboundApi = {
+      onReload: (cb) => {
+        reloadCallbacks.push(cb)
+      },
+      get reloadCallbacks() {
+        return reloadCallbacks.slice()
+      },
+      router,
+      dedupe,
+    }
+    ctx.inboundApi = inboundApi
   },
 }
+
+export {
+  createInboundRouter,
+  PLUGIN_PREFIX,
+  isInboundRoute,
+  type InboundRouter,
+  type ReloadCallback,
+  type SubscriptionsHandler,
+} from './router'
+export { createNonceDedupe, type NonceDedupe } from './dedupe'
+export { verifyInbound, type VerifyInboundInput, type VerifyInboundResult } from './verify'

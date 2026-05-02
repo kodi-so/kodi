@@ -98,6 +98,15 @@ export type ProvisionInput = {
    * `agent.agent_id` field when this is absent rather than fabricate.
    */
   kodi_agent_id?: string
+  /**
+   * Force a specific OpenClaw runtime ID instead of generating a fresh
+   * `agent_<short>`. Used by KOD-387 reconciliation: Kodi already knows
+   * which agent_id each agent should have (`kodi-member-agent-<id>` or
+   * `kodi-agent-<orgId>`); the plugin reuses it rather than diverging.
+   * Only honoured on the first-time path — re-provision keeps the
+   * existing agent's id regardless.
+   */
+  openclaw_agent_id?: string
 }
 
 export type ProvisionResult = {
@@ -195,7 +204,7 @@ export async function provisionAgent(
   }
 
   // First-time path.
-  const openclaw_agent_id = agentIdFactory()
+  const openclaw_agent_id = input.openclaw_agent_id ?? agentIdFactory()
   const workspace_dir = path.join(
     resolveStateDir(),
     KODI_WORKSPACE_DIR,

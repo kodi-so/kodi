@@ -8,6 +8,7 @@ import {
   SubscriptionsSchema,
   type Subscriptions,
 } from '../lib/openclaw-events/subscriptions'
+import { pushAdminReload } from '../lib/openclaw/plugin-client'
 
 /**
  * Subscription read/write surface for the kodi-bridge plugin.
@@ -142,9 +143,27 @@ export function registerOpenClawSubscriptionsRoutes(app: Hono): void {
       return c.json({ error: 'Upsert returned no row' }, 500)
     }
 
-    // KOD-379 wires a reload push here so the plugin picks the change up
-    // within seconds. Until that lands, the plugin's 10-minute refetch
-    // timer is the worst-case latency.
+    // Push /admin/reload so the plugin picks the change up within seconds.
+    // Per ticket: failure during push must NOT block the PUT — the plugin's
+    // 10-minute refetch is the worst-case fallback. We log every failure
+    // mode so a Kodi-side dashboard can surface the misconfiguration.
+    const reload =
+      target.status === 'running'
+        ? await pushAdminReload(target)
+        : ({ ok: false, reason: 'instance-not-running' } as const)
+
+    if (!reload.ok) {
+      const level = reload.reason === 'unauthorized' ? 'error' : 'warn'
+      console[level === 'error' ? 'error' : 'warn'](
+        JSON.stringify({
+          msg: 'subscriptions push reload failed',
+          instance_id: instance_id,
+          reason: reload.reason,
+          status: 'status' in reload ? reload.status : undefined,
+          error: 'error' in reload ? reload.error : undefined,
+        }),
+      )
+    }
 
     return c.json(
       {
@@ -152,6 +171,8 @@ export function registerOpenClawSubscriptionsRoutes(app: Hono): void {
         instance_id: row.instanceId,
         subscriptions: row.subscriptions,
         updated_at: row.updatedAt,
+        reload_pushed: reload.ok,
+        reload_reason: reload.ok ? null : reload.reason,
       },
       200,
     )

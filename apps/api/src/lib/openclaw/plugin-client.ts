@@ -17,7 +17,7 @@ import { signRequest } from '@kodi/shared/hmac'
  */
 
 export type PushResult =
-  | { ok: true; status: number }
+  | { ok: true; status: number; parsedBody?: unknown }
   | {
       ok: false
       reason:
@@ -110,7 +110,19 @@ export async function pushPluginRoute(input: PushPluginRouteInput): Promise<Push
         error: text.slice(0, 200),
       }
     }
-    return { ok: true, status: response.status }
+    // Best-effort body parse — handlers like /agents/provision return
+    // structured JSON, while /admin/reload may return empty. Failing to
+    // parse is non-fatal; success without a body is still success.
+    let parsedBody: unknown
+    const responseText = await response.text().catch(() => '')
+    if (responseText.length > 0) {
+      try {
+        parsedBody = JSON.parse(responseText)
+      } catch {
+        // ignore — caller treats absence of parsedBody as "no JSON"
+      }
+    }
+    return { ok: true, status: response.status, parsedBody }
   } catch (err) {
     clearTimeout(timeoutId)
     return {
@@ -130,4 +142,60 @@ export async function pushAdminReload(
   opts: Omit<PushPluginRouteInput, 'instance' | 'subPath' | 'body'> = {},
 ): Promise<PushResult> {
   return pushPluginRoute({ ...opts, instance, subPath: 'admin/reload', body: {} })
+}
+
+/**
+ * Body shape for `POST /plugins/kodi-bridge/agents/provision` — see
+ * KOD-381 spec § Body. Composio session id and Kodi agent UUID are both
+ * optional from the plugin's perspective.
+ */
+export type AgentProvisionRequestBody = {
+  org_id: string
+  user_id: string
+  composio_session_id?: string | null
+  actions: ReadonlyArray<{
+    name: string
+    description: string
+    parameters: unknown
+    toolkit: string
+    action: string
+  }>
+  kodi_agent_id?: string
+}
+
+export type AgentDeprovisionRequestBody = {
+  user_id: string
+}
+
+/**
+ * Convenience wrapper for `POST /plugins/kodi-bridge/agents/provision`.
+ * Used by KOD-383's orchestrator. The response body (when ok=true) is
+ * `{ openclaw_agent_id, composio_status, registered_tool_count }`,
+ * accessible via `parsedBody`.
+ */
+export async function pushAgentProvision(
+  input: Omit<PushPluginRouteInput, 'subPath' | 'body'> & {
+    body: AgentProvisionRequestBody
+  },
+): Promise<PushResult> {
+  return pushPluginRoute({
+    ...input,
+    subPath: 'agents/provision',
+    body: input.body as unknown as Record<string, unknown>,
+  })
+}
+
+/**
+ * Convenience wrapper for `POST /plugins/kodi-bridge/agents/deprovision`.
+ */
+export async function pushAgentDeprovision(
+  input: Omit<PushPluginRouteInput, 'subPath' | 'body'> & {
+    body: AgentDeprovisionRequestBody
+  },
+): Promise<PushResult> {
+  return pushPluginRoute({
+    ...input,
+    subPath: 'agents/deprovision',
+    body: input.body as unknown as Record<string, unknown>,
+  })
 }

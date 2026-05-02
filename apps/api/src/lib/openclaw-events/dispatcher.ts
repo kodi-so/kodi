@@ -4,7 +4,6 @@ import {
   type EventEnvelope,
   type EventKind,
 } from '@kodi/shared/events'
-import { triggerAgentRotation } from '../agent-lifecycle'
 
 /**
  * Per-kind dispatch for events arriving on `/api/openclaw/events`.
@@ -72,26 +71,22 @@ async function noop(): Promise<void> {
   /* intentional no-op — the event is in plugin_event_log */
 }
 
-/**
- * KOD-386 reauth recovery: when the plugin reports that a tool call hit
- * an auth error, fire a rotation. The trigger is idempotent and skips
- * when the instance isn't running, so re-firing on a sustained Composio
- * outage is a no-op. If the user has reauth'd in the meantime, the
- * rotation picks up the fresh session and tools come back online.
- */
-async function handleComposioSessionFailed({
-  envelope,
-  instance,
-}: DispatchContext): Promise<void> {
-  const payload = envelope.event.payload as { user_id?: unknown } | null
-  const userId = typeof payload?.user_id === 'string' ? payload.user_id : null
-  if (!userId) return
-  await triggerAgentRotation({
-    org_id: instance.orgId,
-    user_id: userId,
-    source: 'reauth-recovery',
-  })
-}
+// KOD-386 reauth recovery: NOT auto-firing rotation from this event.
+// The plugin currently emits `composio.session_failed` from
+// `registerToolsForAgent` failures (api.registerTool throwing) — auto-
+// rotating in response would loop tightly: rotate → re-call provision →
+// plugin registration fails again → emits session_failed → rotate → ...
+// Bounded only by HTTP latency, so a persistent failure spams the event
+// log within seconds.
+//
+// The intended reauth path: user reauths in Kodi UI → Composio webhook
+// fires → existing webhook handler calls triggerAgentRotation. That
+// covers the spec's reauth-recovery requirement without an auto-loop.
+//
+// When the plugin gains explicit `auth_error` reporting from
+// `dispatcher.execute` (likely KOD-388), this handler can fire rotation
+// for that specific case with a debounce. Until then, the canonical
+// row in plugin_event_log is the audit record.
 
 const HANDLERS: Record<EventKind, EventHandler> = {
   'plugin.started': handlePluginStarted,
@@ -116,7 +111,7 @@ const HANDLERS: Record<EventKind, EventHandler> = {
   'tool.denied': noop,
   'tool.approval_requested': noop,
   'tool.approval_resolved': noop,
-  'composio.session_failed': handleComposioSessionFailed,
+  'composio.session_failed': noop,
   'composio.session_rotated': noop,
 }
 

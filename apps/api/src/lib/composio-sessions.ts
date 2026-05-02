@@ -479,6 +479,67 @@ export async function deprovisionAgentForUser(
 // without pulling from @kodi/db directly.
 export { ensureOrgOpenClawAgent }
 
+// ── Rotation (KOD-386 / M4-T7) ────────────────────────────────────────────
+
+export type RotateAgentToolLoadoutInput = {
+  org_id: string
+  user_id: string
+  dbInstance?: typeof defaultDb
+  /** Test-only: stub the underlying provisionAgentForUser orchestrator. */
+  provisionFn?: typeof provisionAgentForUser
+}
+
+export type RotateAgentToolLoadoutResult =
+  | (ProvisionAgentForUserResult & { rotated: true })
+  | { rotated: false; reason: 'no-member-row'; org_id: string; user_id: string }
+
+/**
+ * Rotate the agent's tool loadout for one user. Single idempotent
+ * re-call of `/agents/provision` with the freshly-built action list,
+ * regardless of trigger source (UI connect/disconnect, Composio
+ * webhook, policy edit, reauth recovery).
+ *
+ * The plugin handles the diff: tools added since last call are
+ * registered, tools no longer in the allowlist are dropped from the
+ * agent's allowed-name set. In-flight tool calls execute against the
+ * pre-rotation session_id (closure capture in the dispatcher) — the
+ * documented "fail-gracefully" policy: existing calls finish on the
+ * old session, the next call uses the new one. No drain needed.
+ *
+ * Returns `{ rotated: false }` when no `org_members` row exists for
+ * (org_id, user_id) — that means the user isn't actually in the org
+ * yet (e.g. webhook for a user we don't track), or the rotation arrived
+ * before membership was committed. Either way, no agent to rotate.
+ */
+export async function rotateAgentToolLoadout(
+  input: RotateAgentToolLoadoutInput,
+): Promise<RotateAgentToolLoadoutResult> {
+  const dbInstance = input.dbInstance ?? defaultDb
+  const provisionFn = input.provisionFn ?? provisionAgentForUser
+
+  const member = await dbInstance.query.orgMembers.findFirst({
+    where: (fields, { and, eq }) =>
+      and(eq(fields.orgId, input.org_id), eq(fields.userId, input.user_id)),
+  })
+  if (!member) {
+    return {
+      rotated: false,
+      reason: 'no-member-row',
+      org_id: input.org_id,
+      user_id: input.user_id,
+    }
+  }
+
+  const result = await provisionFn({
+    dbInstance,
+    org_id: input.org_id,
+    user_id: input.user_id,
+    org_member_id: member.id,
+  })
+
+  return { ...result, rotated: true }
+}
+
 // ── Org agent (KOD-385 / M4-T6) ───────────────────────────────────────────
 
 export type ProvisionOrgAgentInput = {

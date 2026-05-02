@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   triggerAgentProvision,
   triggerAgentDeprovision,
+  triggerAgentRotation,
   triggerOrgAgentProvision,
   reconcileAgentsForOrg,
   type ReconcileAgentsForOrgInput,
+  type TriggerAgentRotationInput,
   type TriggerOrgAgentProvisionInput,
   type TriggerProvisionInput,
 } from './agent-lifecycle'
@@ -12,6 +14,7 @@ import type {
   ProvisionAgentForUserResult,
   ProvisionOrgAgentResult,
   DeprovisionAgentForUserResult,
+  RotateAgentToolLoadoutResult,
 } from './composio-sessions'
 
 const ORG = '11111111-1111-4111-8111-111111111111'
@@ -285,6 +288,103 @@ describe('reconcileAgentsForOrg', () => {
     }
     expect(result.attempted).toBe(1)
     expect(result.succeeded).toBe(1)
+  })
+})
+
+describe('triggerAgentRotation', () => {
+  test('skips when org has no instance', async () => {
+    let called = false
+    const out = await triggerAgentRotation({
+      dbInstance: makeFakeDb({ instance: null }),
+      org_id: ORG,
+      user_id: USER_A,
+      source: 'ui-disconnect',
+      rotateFn: (async () => {
+        called = true
+        return { rotated: true } as unknown as RotateAgentToolLoadoutResult
+      }) as unknown as TriggerAgentRotationInput['rotateFn'],
+      logger: silentLogger(),
+    })
+    expect(out).toEqual({ kind: 'skipped', reason: 'no-instance' })
+    expect(called).toBe(false)
+  })
+
+  test('skips when instance is not running', async () => {
+    let called = false
+    const out = await triggerAgentRotation({
+      dbInstance: makeFakeDb({ instance: { status: 'installing' } }),
+      org_id: ORG,
+      user_id: USER_A,
+      source: 'webhook',
+      rotateFn: (async () => {
+        called = true
+        return { rotated: true } as unknown as RotateAgentToolLoadoutResult
+      }) as unknown as TriggerAgentRotationInput['rotateFn'],
+      logger: silentLogger(),
+    })
+    expect(out).toEqual({ kind: 'skipped', reason: 'instance-not-running' })
+    expect(called).toBe(false)
+  })
+
+  test('starts background work when instance is running', async () => {
+    let calls = 0
+    const rotateFn = (async () => {
+      calls += 1
+      return {
+        rotated: true,
+        composio_status: 'active',
+        registered_tool_count: 2,
+      } as unknown as RotateAgentToolLoadoutResult
+    }) as unknown as TriggerAgentRotationInput['rotateFn']
+
+    const out = await triggerAgentRotation({
+      dbInstance: makeFakeDb({ instance: { status: 'running' } }),
+      org_id: ORG,
+      user_id: USER_A,
+      source: 'policy-edit',
+      rotateFn,
+      logger: silentLogger(),
+    })
+    expect(out).toEqual({ kind: 'started' })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(calls).toBe(1)
+  })
+
+  test('background failure does NOT throw to caller', async () => {
+    const rotateFn = (async () => {
+      throw new Error('plugin offline')
+    }) as unknown as TriggerAgentRotationInput['rotateFn']
+
+    const out = await triggerAgentRotation({
+      dbInstance: makeFakeDb({ instance: { status: 'running' } }),
+      org_id: ORG,
+      user_id: USER_A,
+      source: 'reauth-recovery',
+      rotateFn,
+      logger: silentLogger(),
+    })
+    expect(out).toEqual({ kind: 'started' })
+    await new Promise((r) => setTimeout(r, 0))
+  })
+
+  test('handles "no-member-row" rotated:false outcome without crashing', async () => {
+    const rotateFn = (async () => ({
+      rotated: false,
+      reason: 'no-member-row',
+      org_id: ORG,
+      user_id: USER_A,
+    })) as unknown as TriggerAgentRotationInput['rotateFn']
+
+    const out = await triggerAgentRotation({
+      dbInstance: makeFakeDb({ instance: { status: 'running' } }),
+      org_id: ORG,
+      user_id: USER_A,
+      source: 'webhook',
+      rotateFn,
+      logger: silentLogger(),
+    })
+    expect(out).toEqual({ kind: 'started' })
+    await new Promise((r) => setTimeout(r, 0))
   })
 })
 

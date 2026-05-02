@@ -125,4 +125,18 @@ describe('dispatchEvent', () => {
       dispatchEvent({ envelope: envelopeFor('plugin.started'), instance: FAKE_INSTANCE }, handlers),
     ).rejects.toThrow('db unavailable')
   })
+
+  test('composio.session_failed remains a no-op (KOD-386 reauth recovery via webhook)', async () => {
+    // Auto-rotation on this event would loop indefinitely against a
+    // persistent registration failure. The reauth path is covered by
+    // the Composio webhook hook in /integrations/composio/webhook,
+    // which fires triggerAgentRotation when the user actually reauths.
+    const env = envelopeFor('composio.session_failed', {
+      user_id: '11111111-1111-4111-8111-111111111111',
+      error: 'auth_error',
+    })
+    await expect(
+      dispatchEvent({ envelope: env, instance: FAKE_INSTANCE }),
+    ).resolves.toBeUndefined()
+  })
 })

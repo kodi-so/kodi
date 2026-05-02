@@ -153,6 +153,75 @@ describe('createComposioModuleApi — registerToolsForAgent', () => {
     })
     expect(registered).toHaveLength(1)
   })
+
+  test('first provision does NOT emit composio.session_rotated', async () => {
+    const events: Array<{ kind: string; payload: unknown }> = []
+    const api = createComposioModuleApi({
+      registerTool: () => {},
+      emit: async (kind, payload) => {
+        events.push({ kind, payload })
+      },
+      logger: silentLogger(),
+    })
+    await api.registerToolsForAgent({
+      user_id: USER,
+      openclaw_agent_id: AGENT,
+      composio_session_id: SESSION,
+      actions: [ACTION],
+    })
+    expect(events).toEqual([])
+  })
+
+  test('second provision (rotation) DOES emit composio.session_rotated', async () => {
+    const events: Array<{ kind: string; payload: unknown }> = []
+    const api = createComposioModuleApi({
+      registerTool: () => {},
+      emit: async (kind, payload) => {
+        events.push({ kind, payload })
+      },
+      logger: silentLogger(),
+    })
+    await api.registerToolsForAgent({
+      user_id: USER,
+      openclaw_agent_id: AGENT,
+      composio_session_id: SESSION,
+      actions: [ACTION],
+    })
+    await api.registerToolsForAgent({
+      user_id: USER,
+      openclaw_agent_id: AGENT,
+      composio_session_id: 'sess_NEW',
+      actions: [ACTION],
+    })
+    expect(events).toEqual([
+      { kind: 'composio.session_rotated', payload: { user_id: USER } },
+    ])
+  })
+
+  test('skipped (null session) does not emit a rotation event even if agent existed', async () => {
+    const events: Array<{ kind: string; payload: unknown }> = []
+    const api = createComposioModuleApi({
+      registerTool: () => {},
+      emit: async (kind, payload) => {
+        events.push({ kind, payload })
+      },
+      logger: silentLogger(),
+    })
+    await api.registerToolsForAgent({
+      user_id: USER,
+      openclaw_agent_id: AGENT,
+      composio_session_id: SESSION,
+      actions: [ACTION],
+    })
+    // Now revoke (null session_id → skipped path; doesn't go through register-tools)
+    await api.registerToolsForAgent({
+      user_id: USER,
+      openclaw_agent_id: AGENT,
+      composio_session_id: null,
+      actions: [ACTION],
+    })
+    expect(events).toEqual([])
+  })
 })
 
 describe('createComposioModuleApi — unregisterToolsForAgent', () => {

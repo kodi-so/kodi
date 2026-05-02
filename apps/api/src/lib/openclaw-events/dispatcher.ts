@@ -71,6 +71,23 @@ async function noop(): Promise<void> {
   /* intentional no-op — the event is in plugin_event_log */
 }
 
+// KOD-386 reauth recovery: NOT auto-firing rotation from this event.
+// The plugin currently emits `composio.session_failed` from
+// `registerToolsForAgent` failures (api.registerTool throwing) — auto-
+// rotating in response would loop tightly: rotate → re-call provision →
+// plugin registration fails again → emits session_failed → rotate → ...
+// Bounded only by HTTP latency, so a persistent failure spams the event
+// log within seconds.
+//
+// The intended reauth path: user reauths in Kodi UI → Composio webhook
+// fires → existing webhook handler calls triggerAgentRotation. That
+// covers the spec's reauth-recovery requirement without an auto-loop.
+//
+// When the plugin gains explicit `auth_error` reporting from
+// `dispatcher.execute` (likely KOD-388), this handler can fire rotation
+// for that specific case with a debounce. Until then, the canonical
+// row in plugin_event_log is the audit record.
+
 const HANDLERS: Record<EventKind, EventHandler> = {
   'plugin.started': handlePluginStarted,
   'plugin.degraded': noop,

@@ -4,9 +4,11 @@ import {
   provisionAgentForUser,
   provisionOrgAgent,
   resolveOrgInstance,
+  rotateAgentToolLoadout,
   type ProvisionAgentForUserResult,
   type ProvisionOrgAgentResult,
   type DeprovisionAgentForUserResult,
+  type RotateAgentToolLoadoutResult,
 } from './composio-sessions'
 
 /**
@@ -161,6 +163,89 @@ async function runDeprovisionInBackground(
     logger.error(
       JSON.stringify({
         msg: 'agent.deprovision.background.failed',
+        org_id: input.org_id,
+        user_id: input.user_id,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    )
+  }
+}
+
+// ── Rotation (KOD-386) ────────────────────────────────────────────────────
+
+export type TriggerAgentRotationInput = {
+  org_id: string
+  user_id: string
+  /** Free-form for diagnostics: 'ui-connect' | 'ui-disconnect' | 'policy-edit' | 'webhook' | 'reauth-recovery' | string. */
+  source: string
+  dbInstance?: typeof defaultDb
+  rotateFn?: typeof rotateAgentToolLoadout
+  logger?: Pick<Console, 'log' | 'warn' | 'error'>
+}
+
+export type TriggerAgentRotationOutcome =
+  | { kind: 'started' }
+  | { kind: 'skipped'; reason: 'no-instance' | 'instance-not-running' }
+
+/**
+ * Fire-and-forget agent-tool-loadout rotation. KOD-386's single funnel
+ * for every credential-change trigger source (UI connect/disconnect,
+ * Composio webhook, policy edit, reauth recovery).
+ *
+ * Same instance-readiness gate as `triggerAgentProvision` — when the
+ * org has no running instance, the rotation is skipped. The next
+ * `reconcileAgentsForOrg` (post-instance-running) will rebuild the
+ * loadout from current state, so dropped triggers self-heal.
+ */
+export async function triggerAgentRotation(
+  input: TriggerAgentRotationInput,
+): Promise<TriggerAgentRotationOutcome> {
+  const dbInstance = input.dbInstance ?? defaultDb
+  const rotateFn = input.rotateFn ?? rotateAgentToolLoadout
+  const logger = input.logger ?? console
+
+  const inst = await resolveOrgInstance(dbInstance, input.org_id)
+  if (!inst) return { kind: 'skipped', reason: 'no-instance' }
+  if (inst.status !== 'running') {
+    return { kind: 'skipped', reason: 'instance-not-running' }
+  }
+
+  void runRotationInBackground(rotateFn, dbInstance, input, logger)
+  return { kind: 'started' }
+}
+
+async function runRotationInBackground(
+  rotateFn: typeof rotateAgentToolLoadout,
+  dbInstance: typeof defaultDb,
+  input: TriggerAgentRotationInput,
+  logger: Pick<Console, 'log' | 'warn' | 'error'>,
+): Promise<void> {
+  try {
+    const result: RotateAgentToolLoadoutResult = await rotateFn({
+      dbInstance,
+      org_id: input.org_id,
+      user_id: input.user_id,
+    })
+    logger.log(
+      JSON.stringify({
+        msg: 'agent.rotation.background',
+        source: input.source,
+        org_id: input.org_id,
+        user_id: input.user_id,
+        rotated: result.rotated,
+        ...(result.rotated
+          ? {
+              composio_status: result.composio_status,
+              registered_tool_count: result.registered_tool_count,
+            }
+          : { reason: result.reason }),
+      }),
+    )
+  } catch (err) {
+    logger.error(
+      JSON.stringify({
+        msg: 'agent.rotation.background.failed',
+        source: input.source,
         org_id: input.org_id,
         user_id: input.user_id,
         error: err instanceof Error ? err.message : String(err),
@@ -397,4 +482,5 @@ export {
   provisionAgentForUser,
   deprovisionAgentForUser,
   provisionOrgAgent,
+  rotateAgentToolLoadout,
 } from './composio-sessions'

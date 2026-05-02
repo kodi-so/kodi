@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { openclawAgents } from './openclaw-agents'
+import { openClawAgents } from './work-items'
 import { user } from './auth'
 
 // App-layer enum (validated via zod in helpers/routers).
@@ -22,7 +22,7 @@ export type AutonomyOverrides = Record<string, AutonomyOverrideAction>
 export const agentAutonomyPolicies = pgTable('agent_autonomy_policies', {
   agentId: text('agent_id')
     .primaryKey()
-    .references(() => openclawAgents.id, { onDelete: 'cascade' }),
+    .references(() => openClawAgents.id, { onDelete: 'cascade' }),
   autonomyLevel: text('autonomy_level').notNull().default('normal'),
   overrides: jsonb('overrides').$type<AutonomyOverrides | null>(),
   updatedByUserId: text('updated_by_user_id').references(() => user.id, { onDelete: 'set null' }),
@@ -30,9 +30,9 @@ export const agentAutonomyPolicies = pgTable('agent_autonomy_policies', {
 })
 
 export const agentAutonomyPoliciesRelations = relations(agentAutonomyPolicies, ({ one }) => ({
-  agent: one(openclawAgents, {
+  agent: one(openClawAgents, {
     fields: [agentAutonomyPolicies.agentId],
-    references: [openclawAgents.id],
+    references: [openClawAgents.id],
   }),
   updatedBy: one(user, {
     fields: [agentAutonomyPolicies.updatedByUserId],

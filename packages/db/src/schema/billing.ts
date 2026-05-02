@@ -84,9 +84,12 @@ export const usageSyncLog = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [
-    index('usage_sync_log_org_period_idx').on(table.orgId, table.periodEnd),
-  ],
+  (table) => ({
+    orgPeriodIdx: index('usage_sync_log_org_period_idx').on(
+      table.orgId,
+      table.periodEnd
+    ),
+  })
 )
 
 // Relations

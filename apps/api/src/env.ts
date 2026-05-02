@@ -39,6 +39,10 @@ const envSchema = z.object({
   KODI_FEATURE_TOOL_ACCESS: envBoolean('KODI_FEATURE_TOOL_ACCESS').default(
     false
   ),
+  KODI_FEATURE_LOCAL_MEETINGS: envBoolean('KODI_FEATURE_LOCAL_MEETINGS').default(
+    false
+  ),
+  KODI_FEATURE_TASK_BOARD: envBoolean('KODI_FEATURE_TASK_BOARD').default(true),
 
   // ── Required in Phase 1 (meeting intelligence) ───────────────────────────
 
@@ -90,6 +94,23 @@ const envSchema = z.object({
   AWS_SECURITY_GROUP_ID: z.string().optional(),
   AWS_SUBNET_ID: z.string().optional(),
   AWS_AMI_ID: z.string().optional(),
+
+  // Cloudflare R2 (shared object storage for durable memory vaults)
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET_NAME: z.string().optional(),
+
+  // Memory storage overrides (optional if memory should use a distinct R2 bucket or endpoint)
+  MEMORY_STORAGE_BUCKET: z.string().optional(),
+  MEMORY_STORAGE_REGION: z.string().optional(),
+  MEMORY_STORAGE_ENDPOINT: z.string().url().optional(),
+  MEMORY_STORAGE_ACCESS_KEY_ID: z.string().optional(),
+  MEMORY_STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
+  MEMORY_STORAGE_PREFIX: z.string().optional(),
+  MEMORY_STORAGE_FORCE_PATH_STYLE: envBoolean(
+    'MEMORY_STORAGE_FORCE_PATH_STYLE'
+  ).default(false),
 
   // Cloudflare
   CLOUDFLARE_API_TOKEN: z.string().optional(),
@@ -262,6 +283,56 @@ export function requireAws() {
     AWS_SECURITY_GROUP_ID,
     AWS_SUBNET_ID,
     AWS_AMI_ID,
+  }
+}
+
+export function requireMemoryStorage() {
+  const {
+    R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY,
+    R2_BUCKET_NAME,
+    MEMORY_STORAGE_BUCKET,
+    MEMORY_STORAGE_REGION,
+    MEMORY_STORAGE_ENDPOINT,
+    MEMORY_STORAGE_ACCESS_KEY_ID,
+    MEMORY_STORAGE_SECRET_ACCESS_KEY,
+    MEMORY_STORAGE_PREFIX,
+    MEMORY_STORAGE_FORCE_PATH_STYLE,
+  } = env
+
+  const bucket = MEMORY_STORAGE_BUCKET ?? R2_BUCKET_NAME
+  const accessKeyId = MEMORY_STORAGE_ACCESS_KEY_ID ?? R2_ACCESS_KEY_ID
+  const secretAccessKey =
+    MEMORY_STORAGE_SECRET_ACCESS_KEY ?? R2_SECRET_ACCESS_KEY
+  const endpoint =
+    MEMORY_STORAGE_ENDPOINT ??
+    (R2_ACCOUNT_ID
+      ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+      : undefined)
+  const region =
+    MEMORY_STORAGE_REGION ??
+    (endpoint?.includes('.r2.cloudflarestorage.com') ? 'auto' : 'us-east-1')
+
+  if (
+    !bucket ||
+    !accessKeyId ||
+    !secretAccessKey ||
+    !endpoint
+  ) {
+    throw new Error(
+      'Memory storage environment variables are not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME, or provide explicit MEMORY_STORAGE_* overrides.'
+    )
+  }
+
+  return {
+    MEMORY_STORAGE_BUCKET: bucket,
+    MEMORY_STORAGE_REGION: region,
+    MEMORY_STORAGE_ENDPOINT: endpoint,
+    MEMORY_STORAGE_ACCESS_KEY_ID: accessKeyId,
+    MEMORY_STORAGE_SECRET_ACCESS_KEY: secretAccessKey,
+    MEMORY_STORAGE_PREFIX,
+    MEMORY_STORAGE_FORCE_PATH_STYLE,
   }
 }
 

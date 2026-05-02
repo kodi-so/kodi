@@ -1,7 +1,7 @@
 import { pgTable, text, timestamp, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { instances } from './orgs'
-import { openclawAgents } from './openclaw-agents'
+import { openClawAgents } from './work-items'
 
 /**
  * Per-instance subscription configuration. Tells the plugin which event
@@ -53,7 +53,7 @@ export const pluginEventLog = pgTable(
     instanceId: text('instance_id')
       .notNull()
       .references(() => instances.id, { onDelete: 'cascade' }),
-    agentId: text('agent_id').references(() => openclawAgents.id, { onDelete: 'set null' }),
+    agentId: text('agent_id').references(() => openClawAgents.id, { onDelete: 'set null' }),
     eventKind: text('event_kind').notNull(),
     protocolVersion: text('protocol_version'),
     payloadJson: jsonb('payload_json'),
@@ -77,9 +77,9 @@ export const pluginEventLogRelations = relations(pluginEventLog, ({ one }) => ({
     fields: [pluginEventLog.instanceId],
     references: [instances.id],
   }),
-  agent: one(openclawAgents, {
+  agent: one(openClawAgents, {
     fields: [pluginEventLog.agentId],
-    references: [openclawAgents.id],
+    references: [openClawAgents.id],
   }),
 }))
 

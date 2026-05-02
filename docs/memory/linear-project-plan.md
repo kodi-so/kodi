@@ -27,7 +27,7 @@ When a user talks to Kodi in a shared surface, such as a public Slack channel or
 
 This project delivers the first complete version of scoped memory:
 
-- scoped markdown vaults backed by S3-compatible storage
+- scoped markdown vaults backed by Cloudflare R2 through its S3-compatible API
 - lightweight Postgres metadata
 - org and member OpenClaw agent registration
 - a bridge-hosted `memory` module inside the required `kodi-bridge` plugin
@@ -155,7 +155,7 @@ Milestone: Scoped Vault Foundations
 
 Description:
 
-Create the storage interface for vault operations using S3-compatible object storage across all Railway environments. Environments should be isolated by bucket or prefix while sharing the same storage behavior. The abstraction should support directory listing, file reads and writes, moves, deletes, directory creation, stat, and search.
+Create the storage interface for vault operations using Cloudflare R2 across all Railway environments through its S3-compatible API. Environments should be isolated by bucket or prefix while sharing the same storage behavior. The abstraction should support directory listing, file reads and writes, moves, deletes, directory creation, stat, and search.
 
 Dependencies:
 
@@ -318,7 +318,7 @@ Milestone: Agent Identity And Persistent Memory Access
 
 Description:
 
-Attach the memory tool surface to the `memory` module inside `kodi-bridge`. The surface should cover manifests, indexes, search, path reads, related reads, recent changes, and memory update proposals. It should call Kodi's authenticated Memory API and should not access S3, Postgres, or vault files directly.
+Attach the memory tool surface to the `memory` module inside `kodi-bridge`. The surface should cover manifests, indexes, search, path reads, related reads, recent changes, and memory update proposals. It should call Kodi's authenticated Memory API and should not access R2, Postgres, or vault files directly.
 
 Dependencies:
 

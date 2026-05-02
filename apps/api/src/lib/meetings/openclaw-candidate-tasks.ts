@@ -75,6 +75,9 @@ export async function processMeetingCandidateTasks(
 
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:candidate-tasks`,
+    messageChannel: 'meeting',
     messages: buildCandidateTaskMessages({
       meetingSession: input.meetingSession,
       analysis,

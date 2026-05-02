@@ -67,6 +67,11 @@ export const kodiTailwindTheme = {
       'danger-soft': 'hsl(var(--kodi-danger-soft))',
       info: 'hsl(var(--kodi-info))',
       'info-soft': 'hsl(var(--kodi-info-soft))',
+      'room-dark': 'hsl(var(--kodi-room-dark))',
+      'room-dark-border': 'hsl(var(--kodi-room-dark-border))',
+      'room-dark-text': 'hsl(var(--kodi-room-dark-text))',
+      'room-dark-muted': 'hsl(var(--kodi-room-dark-muted))',
+      'warm-sand': 'hsl(var(--kodi-warm-sand))',
     },
   },
   borderRadius: {

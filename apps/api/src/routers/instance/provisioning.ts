@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { db, encrypt, eq, instances, type Instance } from '@kodi/db'
+import { db, encrypt, ensureOrgOpenClawAgent, eq, instances, type Instance } from '@kodi/db'
 import { env } from '../../env'
 import { generateCloudInit, type PluginInstallConfig } from './cloud-init'
 import * as cloudflare from './cloudflare-dns'
@@ -42,6 +42,12 @@ export async function provisionInstance(orgId: string): Promise<Instance> {
     pluginHmacSecret,
     litellmVirtualKey,
   )
+
+  await ensureOrgOpenClawAgent(db, {
+    orgId,
+    status: 'provisioning',
+    metadata: { source: 'instance-provisioning', instanceId: record.id },
+  })
 
   const pluginInstall = await resolvePluginInstall({
     instanceId: record.id,

@@ -1,6 +1,8 @@
 import { pgTable, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { subscriptions, organizationSettings } from './billing'
+import { memoryVaults } from './memory'
+import { openClawAgents } from './work-items'
 
 export const orgMemberRoleEnum = pgEnum('org_member_role', ['owner', 'member'])
 export const instanceStatusEnum = pgEnum('instance_status', [
@@ -23,6 +25,7 @@ export const organizations = pgTable('organizations', {
   stripeCustomerId: text('stripe_customer_id'),
   image: text('image'), // workspace logo — data URL or external URL
   status: text('status').notNull().default('active'), // 'active' | 'pending_billing'
+  completedOnboardingAt: timestamp('completed_onboarding_at'), // null = not yet completed
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
@@ -72,16 +75,20 @@ export const organizationsRelations = relations(
   ({ many, one }) => ({
     members: many(orgMembers),
     instances: many(instances),
+    memoryVaults: many(memoryVaults),
+    openClawAgents: many(openClawAgents),
     subscription: one(subscriptions),
     settings: one(organizationSettings),
   }),
 )
 
-export const orgMembersRelations = relations(orgMembers, ({ one }) => ({
+export const orgMembersRelations = relations(orgMembers, ({ many, one }) => ({
   org: one(organizations, {
     fields: [orgMembers.orgId],
     references: [organizations.id],
   }),
+  memoryVaults: many(memoryVaults),
+  openClawAgents: many(openClawAgents),
 }))
 
 export const instancesRelations = relations(instances, ({ one }) => ({

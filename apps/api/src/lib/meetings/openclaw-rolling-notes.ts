@@ -82,6 +82,9 @@ export async function processMeetingRollingNotes(
 
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:rolling-notes`,
+    messageChannel: 'meeting',
     messages: buildRollingNotesMessages({
       meetingSession: input.meetingSession,
       analysis,

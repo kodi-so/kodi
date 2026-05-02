@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { activityLog, and, asc, desc, ensurePersonalOrganizationForUser, eq, instances, orgMembers, organizations, user } from '@kodi/db'
+import { activityLog, and, asc, desc, ensureMemberOpenClawAgent, ensurePersonalOrganizationForUser, eq, instances, orgMembers, organizations, user } from '@kodi/db'
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
 import { logActivity } from '../../lib/activity'
@@ -13,6 +13,7 @@ async function listOrganizationsForUser(database: typeof import('@kodi/db').db, 
       orgSlug: organizations.slug,
       orgImage: organizations.image,
       orgStatus: organizations.status,
+      completedOnboardingAt: organizations.completedOnboardingAt,
       role: orgMembers.role,
       joinedAt: orgMembers.createdAt,
     })
@@ -52,6 +53,7 @@ export const orgRouter = router({
         orgSlug: membership.orgSlug,
         orgImage: membership.orgImage,
         orgStatus: membership.orgStatus,
+        completedOnboardingAt: membership.completedOnboardingAt,
         role: membership.role,
       }
     }),
@@ -136,11 +138,20 @@ export const orgRouter = router({
       if (!org) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create organization' })
 
       // Add creator as owner member
-      await ctx.db.insert(orgMembers).values({
+      const [member] = await ctx.db.insert(orgMembers).values({
         orgId: org.id,
         userId,
         role: 'owner',
-      })
+      }).returning()
+
+      if (member) {
+        await ensureMemberOpenClawAgent(ctx.db, {
+          orgId: org.id,
+          orgMemberId: member.id,
+          displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Owner',
+          metadata: { source: 'org-create', role: 'owner' },
+        })
+      }
 
       return { orgId: org.id, orgSlug: org.slug, orgName: org.name }
     }),
@@ -231,5 +242,19 @@ export const orgRouter = router({
         .where(eq(activityLog.orgId, ctx.org.id))
         .orderBy(desc(activityLog.createdAt))
         .limit(input.limit)
+    }),
+
+  /**
+   * org.completeOnboarding — owner only, idempotent.
+   * Sets completed_onboarding_at = NOW() to mark the wizard as finished.
+   * Called from the done screen; safe to call multiple times.
+   */
+  completeOnboarding: ownerProcedure
+    .mutation(async ({ ctx }) => {
+      await ctx.db
+        .update(organizations)
+        .set({ completedOnboardingAt: new Date() })
+        .where(eq(organizations.id, ctx.org.id))
+      return { ok: true }
     }),
 })

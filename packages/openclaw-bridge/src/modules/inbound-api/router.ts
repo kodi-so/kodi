@@ -12,21 +12,19 @@ import type { NonceDedupe } from './dedupe'
  * web framework.
  *
  * Routes per implementation-spec § 2.4.5:
- *   - POST /agents/provision          (501 stub — KOD-???)
- *   - POST /agents/deprovision        (501 stub)
- *   - POST /agents/update-policy      (501 stub)
+ *   - POST /agents/provision          (KOD-381)
+ *   - POST /agents/deprovision        (KOD-381)
+ *   - POST /agents/update-policy      (KOD-389)
  *   - POST /agents/:agentId/inject    (501 stub)
  *   - POST /agents/:agentId/push-event (501 stub)
- *   - POST /approvals/:id/resolve     (501 stub — KOD-385/M5)
- *   - POST /config/subscriptions      (501 stub — KOD-375)
- *   - POST /admin/update              (501 stub — KOD-???/M6)
+ *   - POST /approvals/:id/resolve     (KOD-391)
+ *   - POST /config/subscriptions      (KOD-375)
+ *   - POST /admin/update              (501 stub — M6)
  *   - POST /admin/reload              (real — runs reload callbacks)
  *
- * The `reload` route is the only one with real behavior in this PR. It
- * iterates the registered reload callbacks; modules add themselves via
- * `inboundApi.onReload(fn)` from their own `register()`. Per the ticket
- * this is what KOD-375 and follow-ups will hook into to swap their
- * cached config in place.
+ * Modules register their handlers via the inbound-api factory, which
+ * passes them to `createInboundRouter`. Routes without a handler return
+ * 501.
  */
 
 export const PLUGIN_PREFIX = '/plugins/kodi-bridge/'
@@ -43,8 +41,9 @@ const SUBSCRIPTIONS_ROUTE = 'config/subscriptions'
 const STUB_ROUTES_PATTERNED: Array<RegExp> = [
   /^agents\/[^/]+\/inject$/,
   /^agents\/[^/]+\/push-event$/,
-  /^approvals\/[^/]+\/resolve$/,
 ]
+
+const APPROVALS_RESOLVE_PATTERN = /^approvals\/([^/]+)\/resolve$/
 
 const RELOAD_ROUTE = 'admin/reload'
 
@@ -84,6 +83,20 @@ export type UpdatePolicyHandler = (
   rawBody: unknown,
 ) => Promise<UpdatePolicyHandlerResult>
 
+export type ApprovalsResolveRouterResult =
+  | { kind: 'ok'; body: Record<string, unknown> }
+  | { kind: 'badRequest'; message: string }
+  | { kind: 'notFound' }
+  | { kind: 'gone' }
+
+/** Handler signature: receives the dynamic `:request_id` from the path
+ * plus the parsed body. Returns the same `Result` shape used by the
+ * other handlers, with two extra terminal states for 404 / 410. */
+export type ApprovalsResolveRouterHandler = (
+  requestId: string,
+  rawBody: unknown,
+) => Promise<ApprovalsResolveRouterResult>
+
 export type CreateInboundRouterDeps = {
   /** Function returning the current plugin HMAC secret. Called per request so KOD-385's rotation can swap it in place. */
   getSecret: () => string
@@ -112,6 +125,11 @@ export type CreateInboundRouterDeps = {
    * Otherwise the route returns 501.
    */
   updatePolicyHandler?: UpdatePolicyHandler
+  /**
+   * If set, `POST /plugins/kodi-bridge/approvals/:request_id/resolve`
+   * invokes this handler (KOD-391). Otherwise the route returns 501.
+   */
+  approvalsResolveHandler?: ApprovalsResolveRouterHandler
   logger?: InboundLogger
   now?: () => number
 }
@@ -164,6 +182,7 @@ export function isInboundRoute(subPath: string): boolean {
   if (subPath === DEPROVISION_ROUTE) return true
   if (subPath === UPDATE_POLICY_ROUTE) return true
   if (STUB_ROUTES_EXACT.has(subPath)) return true
+  if (APPROVALS_RESOLVE_PATTERN.test(subPath)) return true
   return STUB_ROUTES_PATTERNED.some((pattern) => pattern.test(subPath))
 }
 
@@ -176,6 +195,7 @@ export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRoute
     provisionHandler,
     deprovisionHandler,
     updatePolicyHandler,
+    approvalsResolveHandler,
     logger = console,
     now,
   } = deps
@@ -357,6 +377,49 @@ export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRoute
         return writeJson(res, 500, {
           error: 'Internal Server Error',
           code: 'UPDATE_POLICY_FAILED',
+        })
+      }
+    }
+
+    const resolveMatch = APPROVALS_RESOLVE_PATTERN.exec(subPath)
+    if (resolveMatch) {
+      if (!approvalsResolveHandler) return notImplemented(res, subPath)
+      const requestId = resolveMatch[1]!
+      try {
+        const result = await approvalsResolveHandler(requestId, parsedBody)
+        if (result.kind === 'badRequest') {
+          return writeJson(res, 400, {
+            error: 'Bad Request',
+            code: 'INVALID_BODY',
+            message: result.message,
+          })
+        }
+        if (result.kind === 'notFound') {
+          return writeJson(res, 404, {
+            error: 'Not Found',
+            code: 'UNKNOWN_REQUEST_ID',
+            request_id: requestId,
+          })
+        }
+        if (result.kind === 'gone') {
+          return writeJson(res, 410, {
+            error: 'Gone',
+            code: 'APPROVAL_EXPIRED',
+            request_id: requestId,
+          })
+        }
+        return writeJson(res, 200, result.body)
+      } catch (err) {
+        logger.warn(
+          JSON.stringify({
+            msg: 'inbound approvals-resolve handler failed',
+            request_id: requestId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        )
+        return writeJson(res, 500, {
+          error: 'Internal Server Error',
+          code: 'RESOLVE_FAILED',
         })
       }
     }

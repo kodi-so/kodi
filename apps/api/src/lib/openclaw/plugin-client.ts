@@ -199,3 +199,26 @@ export async function pushAgentDeprovision(
     body: input.body as unknown as Record<string, unknown>,
   })
 }
+
+export type ApprovalsResolveRequestBody = {
+  approved: boolean
+  reason?: string
+}
+
+/**
+ * Convenience wrapper for `POST /plugins/kodi-bridge/approvals/:request_id/resolve`
+ * (KOD-391). Plugin-side handler runs the deferred tool, injects the result
+ * into the agent's session, and emits `tool.approval_resolved`.
+ */
+export async function pushApprovalsResolve(
+  input: Omit<PushPluginRouteInput, 'subPath' | 'body'> & {
+    requestId: string
+    body: ApprovalsResolveRequestBody
+  },
+): Promise<PushResult> {
+  return pushPluginRoute({
+    ...input,
+    subPath: `approvals/${encodeURIComponent(input.requestId)}/resolve`,
+    body: input.body as unknown as Record<string, unknown>,
+  })
+}

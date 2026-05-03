@@ -77,6 +77,7 @@ function makeDeps(opts: {
           opts.composioToolCount ?? params.actions.length,
       }
     },
+    runActionForAgent: async () => ({ kind: 'failed', reason: 'no_session', message: 'mock' }),
     unregisterToolsForAgent: async () => {},
   }
 
@@ -290,6 +291,7 @@ describe('provisionAgent — re-provision path (idempotent)', () => {
         status: 'failed',
         registered_tool_count: 0,
       }),
+      runActionForAgent: async () => ({ kind: 'failed', reason: 'no_session', message: 'mock' }),
       unregisterToolsForAgent: async () => {},
     }
 

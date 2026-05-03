@@ -13,6 +13,11 @@ import {
   type RegisterToolFn,
 } from './register-tools'
 import { unregisterComposioToolsForAgent } from './unregister-tools'
+import {
+  runActionForAgent as runActionForAgentImpl,
+  type RunActionInput,
+  type RunActionResult,
+} from './run-action'
 
 /**
  * Composio integration: per-agent persistent session + per-action
@@ -65,6 +70,14 @@ export type ComposioModuleApi = {
   unregisterToolsForAgent: (params: {
     openclaw_agent_id: string
   }) => Promise<void>
+
+  /**
+   * Re-run a Composio action by tool name. Used by KOD-391's approval-
+   * resolve handler — the original `before_tool_call` blocked the
+   * registered tool's `execute()` from running, so when the user
+   * approves later we replay the call here with the persisted args.
+   */
+  runActionForAgent: (input: RunActionInput) => Promise<RunActionResult>
 }
 
 /**
@@ -173,6 +186,9 @@ export function createComposioModuleApi(
         { openclaw_agent_id },
       )
     },
+
+    runActionForAgent: async (input) =>
+      runActionForAgentImpl({ sessionCache, dispatcher }, input),
   }
 }
 
@@ -234,3 +250,9 @@ export {
   type UnregisterComposioToolsInput,
   type UnregisterComposioToolsResult,
 } from './unregister-tools'
+export {
+  runActionForAgent,
+  type RunActionDeps,
+  type RunActionInput,
+  type RunActionResult,
+} from './run-action'

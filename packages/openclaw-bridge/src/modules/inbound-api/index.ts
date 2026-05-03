@@ -3,6 +3,7 @@ import type { BridgeCore } from '../bridge-core'
 import type { EventBus } from '../event-bus'
 import type { AgentManager } from '../agent-manager'
 import type { AutonomyModuleApi } from '../autonomy'
+import type { ComposioModuleApi } from '../composio'
 import { parseSubscriptionsBody } from '../event-bus/subscription-loader'
 import { createNonceDedupe, type NonceDedupe } from './dedupe'
 import {
@@ -16,6 +17,7 @@ import {
   createDeprovisionHandler,
 } from './agent-handlers'
 import { createUpdatePolicyHandler } from './policy-handler'
+import { createApprovalsResolveHandler } from './approvals-resolve'
 
 /**
  * `inbound-api` — exposes the HTTP surface Kodi calls into.
@@ -54,9 +56,22 @@ export const inboundApiModule: KodiBridgeModule = {
     const eventBus = ctx.eventBus as EventBus | undefined
     const agentManager = ctx.agentManager as AgentManager | undefined
     const autonomy = ctx.autonomy as AutonomyModuleApi | undefined
+    const composio = ctx.composio as ComposioModuleApi | undefined
 
     const dedupe = createNonceDedupe()
     const reloadCallbacks: ReloadCallback[] = []
+
+    const approvalsResolveHandler =
+      autonomy && composio && agentManager && eventBus
+        ? createApprovalsResolveHandler({
+            queue: autonomy.queue,
+            resume: autonomy.resume,
+            composio,
+            registry: agentManager.registry,
+            emit: (kind, payload, opts) =>
+              eventBus.emitter.emit(kind, payload, opts),
+          })
+        : undefined
 
     const router = createInboundRouter({
       getSecret: () => ctx.config.hmac_secret,
@@ -77,6 +92,7 @@ export const inboundApiModule: KodiBridgeModule = {
       updatePolicyHandler: autonomy
         ? createUpdatePolicyHandler(autonomy.loader)
         : undefined,
+      approvalsResolveHandler,
     })
 
     api.registerHttpRoute({
@@ -126,4 +142,15 @@ export { createUpdatePolicyHandler } from './policy-handler'
 export type {
   UpdatePolicyHandler,
   UpdatePolicyHandlerResult,
+  ApprovalsResolveRouterHandler,
+  ApprovalsResolveRouterResult,
 } from './router'
+export {
+  createApprovalsResolveHandler,
+  parseApprovalsResolveBody,
+  type ApprovalsResolveBody,
+  type ApprovalsResolveHandler,
+  type ApprovalsResolveResult,
+  type ApprovalsEmitFn,
+  type CreateApprovalsResolveHandlerDeps,
+} from './approvals-resolve'

@@ -110,14 +110,9 @@ export const ADMIN_KEYWORDS: readonly string[] = [
  *   3. signature contains `DRAFT` OR a DRAFT_VERBS token → draft
  *   4. a slug token matches READ_VERBS → read
  *   5. a slug token matches WRITE_VERBS → write
- *   6. fallback → read
- *
- * Note: callers in `autonomy/interceptor.ts` (KOD-390) treat unknown
- * tool names as `write` for policy evaluation. That promotion happens
- * at the policy layer, not here — this fn returns 'read' as the
- * conservative-display fallback to match Kodi-side display behavior.
+ *   6. fallback → read (display) / write (policy — see classifyToolCallForPolicy)
  */
-export function classifyToolCall(toolName: string): ToolActionClass {
+function matchClass(toolName: string): ToolActionClass | null {
   const sig = toolName.toUpperCase()
   const slugTokens = sig.split(/[^A-Z0-9]+/).filter(Boolean)
 
@@ -137,5 +132,23 @@ export function classifyToolCall(toolName: string): ToolActionClass {
 
   if (slugTokens.some((t) => WRITE_VERBS.has(t))) return 'write'
 
-  return 'read'
+  return null
+}
+
+/**
+ * Display-side classifier: fallback is 'read' to match Kodi's
+ * tool-access UI (the safer display when the verb isn't recognized).
+ */
+export function classifyToolCall(toolName: string): ToolActionClass {
+  return matchClass(toolName) ?? 'read'
+}
+
+/**
+ * Policy-side classifier: fallback is 'write'. Per implementation-spec
+ * § 5.1, an unrecognized tool name is the conservative *enforcement*
+ * default — callers like the bridge's autonomy interceptor (KOD-390)
+ * use this so unknown verbs get the stricter level rule applied.
+ */
+export function classifyToolCallForPolicy(toolName: string): ToolActionClass {
+  return matchClass(toolName) ?? 'write'
 }

@@ -79,6 +79,27 @@ match the deploy target's OS/arch. The spec explicitly allows the
 JSONL fallback. Approval volume is low (typically a handful of pending
 entries even on a busy org) so file size stays small.
 
+### Durability boundary
+
+The queue uses `fs.appendFile` for each record, which:
+
+- **Survives** plugin process restarts, gateway restarts, self-update
+  cycles. The OS page cache absorbs the write and flushes it; on a
+  clean process exit the data is durable.
+- **Does not fsync.** A host-level crash (kernel panic, power loss)
+  within the page-cache window can lose the most recent few seconds
+  of writes. For our threat model (process-level events) this is
+  acceptable.
+- **May tear a record on hard process kill mid-write.** If the plugin
+  is `kill -9`'d in the middle of writing a `resolve` record, on
+  replay the partial line will fail JSON.parse and be skipped — the
+  effect is the prior `enqueue` is still cached as `pending`, so the
+  user is asked to approve again. Fail-safe; not silent corruption.
+
+If a host crash truncates the file: rotate it aside (`approvals.jsonl.host-crashed`),
+let the plugin start fresh, and have the operator re-trigger any
+in-flight approvals from Kodi's UI.
+
 ---
 
 ## Smoke test: plugin bootstrap (KOD-370)

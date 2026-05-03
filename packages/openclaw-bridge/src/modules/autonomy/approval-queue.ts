@@ -119,7 +119,15 @@ export type CreateApprovalQueueDeps = {
 
 const FILENAME = 'approvals.jsonl'
 const DEFAULT_SWEEP_MS = 60 * 1000
-const RESOLVED_STATUSES: ReadonlySet<ApprovalStatus> = new Set([
+const VALID_STATUSES: ReadonlySet<string> = new Set<ApprovalStatus>([
+  'pending',
+  'approved',
+  'denied',
+  'expired',
+  'orphaned',
+  'resolved',
+])
+const RESOLVED_STATUSES: ReadonlySet<string> = new Set<ApprovalStatus>([
   'approved',
   'denied',
   'expired',
@@ -150,7 +158,8 @@ function parseRecord(line: string): LogRecord | null {
       typeof a.args_json !== 'string' ||
       typeof a.created_at !== 'string' ||
       typeof a.expires_at !== 'string' ||
-      typeof a.status !== 'string'
+      typeof a.status !== 'string' ||
+      !VALID_STATUSES.has(a.status)
     ) {
       return null
     }
@@ -161,7 +170,7 @@ function parseRecord(line: string): LogRecord | null {
     if (
       typeof json.request_id !== 'string' ||
       typeof json.status !== 'string' ||
-      !RESOLVED_STATUSES.has(json.status as ApprovalStatus) ||
+      !RESOLVED_STATUSES.has(json.status) ||
       typeof json.resolved_at !== 'string'
     ) {
       return null

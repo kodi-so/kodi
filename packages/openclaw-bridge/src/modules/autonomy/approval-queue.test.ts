@@ -197,6 +197,35 @@ describe('createApprovalQueue — durable across restart', () => {
     expect(await q2.get('r2')).not.toBeNull()
   })
 
+  test('enqueue records with unknown status values are rejected on replay', async () => {
+    // Defends against hand-edited or future-version log files leaking
+    // bad enum values into the in-memory cache.
+    const dir = await freshDir()
+    await fs.writeFile(
+      path.join(dir, 'approvals.jsonl'),
+      JSON.stringify({
+        type: 'enqueue',
+        approval: {
+          request_id: 'r-bad',
+          agent_id: 'a',
+          session_key: 's',
+          tool_name: 't',
+          args_json: '{}',
+          created_at: '2026-05-03T00:00:00Z',
+          expires_at: '2026-05-03T01:00:00Z',
+          status: 'wibble',
+        },
+      }) + '\n',
+      'utf8',
+    )
+    const q = await createApprovalQueue({
+      stateDir: dir,
+      logger: silentLogger(),
+    })
+    expect(await q.get('r-bad')).toBeNull()
+    expect(q.snapshot()).toEqual([])
+  })
+
   test('completely unreadable file is rotated aside, queue starts fresh', async () => {
     const dir = await freshDir()
     const file = path.join(dir, 'approvals.jsonl')

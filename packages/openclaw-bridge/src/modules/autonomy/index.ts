@@ -14,6 +14,7 @@ import {
   type ApprovalQueue,
   type PendingApproval,
 } from './approval-queue'
+import { createResume, type ResumeApi } from './resume'
 
 /**
  * `autonomy` — per-agent policy enforcement on tool invocations.
@@ -34,6 +35,9 @@ export type AutonomyModuleApi = {
   /** Durable approval queue. KOD-390's interceptor enqueues pending
    * approvals; KOD-391's resolve handler calls `markResolved`. */
   queue: ApprovalQueue
+  /** Resume an agent session after approval (KOD-416). Wired by
+   * KOD-391's resolve handler once the user's decision lands. */
+  resume: ResumeApi
 }
 
 export const autonomyModule: KodiBridgeModule = {
@@ -73,7 +77,26 @@ export const autonomyModule: KodiBridgeModule = {
       })
     })
 
-    const moduleApi: AutonomyModuleApi = { loader, queue }
+    // KOD-416: resume primitive. Injects user-side messages into an
+    // existing agent session via runtime.subagent.run after the user's
+    // approve/deny decision lands.
+    const resume = createResume({
+      queue,
+      inject: ({ sessionKey, message }) =>
+        api.runtime.subagent.run({
+          sessionKey,
+          message,
+          deliver: true,
+        }),
+      onOrphan: (entry) =>
+        eventBus.emitter.emit('tool.approval_resolved', {
+          request_id: entry.request_id,
+          approved: false,
+          reason: entry.resolution_reason ?? 'orphaned',
+        }),
+    })
+
+    const moduleApi: AutonomyModuleApi = { loader, queue, resume }
     ctx.autonomy = moduleApi
   },
 }
@@ -99,3 +122,13 @@ export {
   type PendingApproval,
   type ResolvedStatus,
 } from './approval-queue'
+export {
+  createResume,
+  composeApprovalMessage,
+  type CreateResumeOptions,
+  type EmitOrphanFn,
+  type ResumeApi,
+  type ResumeInput,
+  type ResumeOutcome,
+  type SessionInjectFn,
+} from './resume'

@@ -57,6 +57,7 @@ describe('EventKindSchema and EVENT_KINDS', () => {
       'tool.denied',
       'tool.approval_requested',
       'tool.approval_resolved',
+      'tool.approval_timeout',
       'composio.session_failed',
       'composio.session_rotated',
     ] as const

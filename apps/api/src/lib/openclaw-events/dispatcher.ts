@@ -111,6 +111,7 @@ const HANDLERS: Record<EventKind, EventHandler> = {
   'tool.denied': noop,
   'tool.approval_requested': noop,
   'tool.approval_resolved': noop,
+  'tool.approval_timeout': noop,
   'composio.session_failed': noop,
   'composio.session_rotated': noop,
 }

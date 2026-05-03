@@ -16,6 +16,7 @@ import {
   type DeprovisionInput,
   type DeprovisionResult,
 } from './deprovision'
+import { reconcileAgents, type ReconcileResult } from './reconcile'
 
 /**
  * `agent-manager` — plugin-side authority for the OpenClaw agents inside this
@@ -33,7 +34,17 @@ export type AgentManager = {
   registry: AgentRegistry
   provision: (input: ProvisionInput) => Promise<ProvisionResult>
   deprovision: (input: DeprovisionInput) => Promise<DeprovisionResult>
+  /**
+   * Run a single reconcile pass against Kodi's canonical agent list.
+   * Exposed so KOD-387's startup wiring (and future ops endpoints) can
+   * trigger reconcile without re-routing through the registry directly.
+   */
+  reconcile: () => Promise<ReconcileResult>
 }
+
+/** One hour — the cadence on which we retry reconcile if Kodi was
+ * unreachable at startup, per KOD-387's spec. */
+export const RECONCILE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 
 export const agentManagerModule: KodiBridgeModule = {
   id: 'agent-manager',
@@ -103,12 +114,65 @@ export const agentManagerModule: KodiBridgeModule = {
         input,
       )
 
-    const agentManager: AgentManager = { registry, provision, deprovision }
+    const reconcile = () =>
+      reconcileAgents({
+        kodiClient: bridgeCore.kodiClient,
+        registry,
+        provision,
+        deprovision,
+      })
+
+    const agentManager: AgentManager = {
+      registry,
+      provision,
+      deprovision,
+      reconcile,
+    }
     ctx.agentManager = agentManager
 
     // Wire the heartbeat's agent count through to the live registry.
     eventBus.heartbeat.setAgentCountSource(() => registry.count())
+
+    // KOD-387: kick off the startup reconcile in the background. If Kodi
+    // is unreachable at boot we don't want to block plugin register;
+    // an hourly retry timer takes over until reconcile succeeds.
+    void runStartupReconcile(reconcile)
   },
+}
+
+/**
+ * Fire the first reconcile and, on failure, schedule retries on the
+ * hourly cadence per KOD-387 spec ("Kodi unreachable at startup: log,
+ * proceed with stale local state; retry reconciliation on an hourly
+ * cadence"). Once reconcile succeeds we stop retrying — subsequent
+ * drift is handled by Kodi-initiated triggers (KOD-384, KOD-386).
+ */
+async function runStartupReconcile(
+  reconcile: () => Promise<ReconcileResult>,
+): Promise<void> {
+  const first = await safeReconcile(reconcile)
+  if (first.ok) return
+
+  const timer = setInterval(async () => {
+    const result = await safeReconcile(reconcile)
+    if (result.ok) clearInterval(timer)
+  }, RECONCILE_RETRY_INTERVAL_MS)
+  // Don't keep the process alive purely for this retry timer.
+  ;(timer as { unref?: () => void }).unref?.()
+}
+
+async function safeReconcile(
+  reconcile: () => Promise<ReconcileResult>,
+): Promise<ReconcileResult> {
+  try {
+    return await reconcile()
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      results: [],
+    }
+  }
 }
 
 export {
@@ -129,3 +193,11 @@ export {
   type DeprovisionResult,
 } from './deprovision'
 export { buildIdentityMarkdown, type IdentityFrontmatter } from './identity'
+export {
+  reconcileAgents,
+  RECONCILE_AGENTS_PATH,
+  type ReconcileAgentEntry,
+  type ReconcileDeps,
+  type ReconcileResult,
+  type ReconcileEntryResult,
+} from './reconcile'

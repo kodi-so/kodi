@@ -210,6 +210,21 @@ describe('provisionAgent — first-time path', () => {
     expect(deps.registry.getByUser(USER_A)?.kodi_agent_id).toBe(KODI_UUID)
   })
 
+  test('openclaw_agent_id override (KOD-387) wins over the factory', async () => {
+    const deps = makeDeps({ agentIds: ['agent_factory_default'] })
+    const result = await provisionAgent(deps, {
+      user_id: USER_A,
+      actions: [],
+      openclaw_agent_id: 'kodi-member-agent-explicit',
+    })
+    expect(result.openclaw_agent_id).toBe('kodi-member-agent-explicit')
+    expect(result.workspace_dir).toBe(
+      '/state/kodi-workspaces/kodi-member-agent-explicit',
+    )
+    const stored = deps.registry.getByUser(USER_A)
+    expect(stored?.openclaw_agent_id).toBe('kodi-member-agent-explicit')
+  })
+
   test('null composio_session_id is normalized and passed through', async () => {
     const deps = makeDeps({ agentIds: ['agent_nosess'] })
     await provisionAgent(deps, {

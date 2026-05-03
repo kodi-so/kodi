@@ -67,8 +67,8 @@ export type ApprovalsResolveResult =
   | { kind: 'gone' }
 
 export type ApprovalsEmitFn = (
-  kind: 'tool.approval_resolved',
-  payload: { request_id: string; approved: boolean; reason?: string },
+  kind: 'tool.approval_resolved' | 'tool.invoke.after',
+  payload: Record<string, unknown>,
   opts?: {
     agent?: { agent_id: string; openclaw_agent_id: string; user_id: string }
   },
@@ -184,6 +184,7 @@ export function createApprovalsResolveHandler(
     let executionStatus: 'ok' | 'failed' | 'skipped' = 'skipped'
     let executionReason: string | undefined
     let resultPayload: unknown = undefined
+    let executionDurationMs: number | undefined
 
     if (approved) {
       const params = safeParseArgs(approval.args_json)
@@ -202,11 +203,13 @@ export function createApprovalsResolveHandler(
         executionReason =
           'Could not resolve the agent registry entry for this approval.'
       } else {
+        const startedAt = Date.now()
         const runOutcome = await composio.runActionForAgent({
           tool_name: approval.tool_name,
           params,
           user_id: entry.user_id,
         })
+        executionDurationMs = Date.now() - startedAt
         if (runOutcome.kind === 'ok') {
           executionStatus = 'ok'
           resultPayload = runOutcome.payload
@@ -235,13 +238,34 @@ export function createApprovalsResolveHandler(
           reason,
         })
 
+    const envelope = agentEnvelopeFor(approval)
+    const envelopeOpts = envelope ? { agent: envelope } : undefined
+
     // Emit the audit event regardless of resume outcome. Kodi gets the
     // record even if the agent session was unreachable.
     void emit(
       'tool.approval_resolved',
       { request_id: requestId, approved, reason },
-      agentEnvelopeFor(approval) ? { agent: agentEnvelopeFor(approval)! } : undefined,
+      envelopeOpts,
     )
+
+    // KOD-393 audit: when we actually ran the deferred tool, emit
+    // `tool.invoke.after` so the run shows up in plugin_event_log
+    // alongside ordinary (non-deferred) executions. The SDK's
+    // after_tool_call hook only fires for tools dispatched through the
+    // agent's normal execute path, which the deferred re-run bypasses.
+    if (approved && executionStatus !== 'skipped') {
+      void emit(
+        'tool.invoke.after',
+        {
+          tool_name: approval.tool_name,
+          duration_ms: executionDurationMs ?? 0,
+          outcome: executionStatus === 'ok' ? 'ok' : 'error',
+          ...(executionReason ? { error: executionReason } : {}),
+        },
+        envelopeOpts,
+      )
+    }
 
     if (resumeOutcome.kind === 'orphaned') {
       return {

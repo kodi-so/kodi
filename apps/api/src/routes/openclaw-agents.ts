@@ -4,11 +4,15 @@ import {
   and,
   db,
   decrypt,
+  desc,
   eq,
+  gte,
+  inArray,
   instances,
   ne,
   openClawAgents,
   orgMembers,
+  pluginEventLog,
   type AgentAutonomyPolicy,
   type AutonomyLevel,
   type AutonomyOverrides,
@@ -288,5 +292,130 @@ export function registerOpenClawAgentsRoutes(app: Hono): void {
     })
 
     return c.json(result, 200)
+  })
+
+  /**
+   * GET /api/openclaw/agents/:id/tool-log (KOD-393 / M5-T5)
+   *
+   * Returns plugin_event_log rows for tool-family events on a single
+   * agent: `tool.invoke.before`, `tool.invoke.after`, `tool.denied`,
+   * `tool.approval_requested`, `tool.approval_resolved`,
+   * `tool.approval_timeout`. Ops/debug surface — covers the
+   * "auditable" half of the M5-T5 ticket.
+   *
+   * Auth: better-auth session + member of the agent's org (any role —
+   * audit reads aren't gated to owners since the table is read-only and
+   * doesn't expose secrets beyond what the agent already saw).
+   *
+   * Query parameters:
+   *   - since: ISO datetime; only rows with received_at >= since.
+   *   - limit: number; default 100, max 500.
+   *   - kinds: comma-separated EventKind list; defaults to all tool.*.
+   */
+  app.get('/api/openclaw/agents/:id/tool-log', async (c) => {
+    const session = await getSessionFromHeaders(c.req.raw.headers)
+    if (!session?.user?.id) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    const agentId = c.req.param('id')
+    if (!agentId) return c.json({ error: 'Missing agent id' }, 400)
+
+    const agent = await db.query.openClawAgents.findFirst({
+      where: eq(openClawAgents.id, agentId),
+    })
+    if (!agent) return c.json({ error: 'Not Found' }, 404)
+
+    const membership = await db.query.orgMembers.findFirst({
+      where: and(
+        eq(orgMembers.orgId, agent.orgId),
+        eq(orgMembers.userId, session.user.id),
+      ),
+    })
+    if (!membership) return c.json({ error: 'Forbidden' }, 403)
+
+    const sinceParam = c.req.query('since')
+    let since: Date | null = null
+    if (sinceParam) {
+      const parsed = new Date(sinceParam)
+      if (Number.isNaN(parsed.getTime())) {
+        return c.json({ error: 'Invalid `since` — must be ISO datetime' }, 400)
+      }
+      since = parsed
+    }
+
+    const limitParam = c.req.query('limit')
+    let limit = 100
+    if (limitParam) {
+      const n = Number.parseInt(limitParam, 10)
+      if (!Number.isFinite(n) || n <= 0) {
+        return c.json({ error: 'Invalid `limit` — must be a positive integer' }, 400)
+      }
+      limit = Math.min(n, 500)
+    }
+
+    const TOOL_KINDS = [
+      'tool.invoke.before',
+      'tool.invoke.after',
+      'tool.denied',
+      'tool.approval_requested',
+      'tool.approval_resolved',
+      'tool.approval_timeout',
+    ] as const
+
+    const kindsParam = c.req.query('kinds')
+    let kinds: readonly string[] = TOOL_KINDS
+    if (kindsParam) {
+      const requested = kindsParam.split(',').map((s) => s.trim()).filter(Boolean)
+      const invalid = requested.filter(
+        (k) => !(TOOL_KINDS as readonly string[]).includes(k),
+      )
+      if (invalid.length > 0) {
+        return c.json(
+          {
+            error: 'Invalid `kinds` — only tool.* event kinds are supported',
+            invalid,
+          },
+          400,
+        )
+      }
+      kinds = requested
+    }
+
+    const conditions = [
+      eq(pluginEventLog.agentId, agentId),
+      inArray(pluginEventLog.eventKind, [...kinds]),
+    ]
+    if (since) {
+      conditions.push(gte(pluginEventLog.receivedAt, since))
+    }
+
+    const rows = await db
+      .select({
+        id: pluginEventLog.id,
+        eventKind: pluginEventLog.eventKind,
+        payloadJson: pluginEventLog.payloadJson,
+        receivedAt: pluginEventLog.receivedAt,
+        idempotencyKey: pluginEventLog.idempotencyKey,
+      })
+      .from(pluginEventLog)
+      .where(and(...conditions))
+      .orderBy(desc(pluginEventLog.receivedAt))
+      .limit(limit)
+
+    return c.json({
+      agent_id: agentId,
+      count: rows.length,
+      limit,
+      since: since?.toISOString() ?? null,
+      kinds,
+      events: rows.map((r) => ({
+        id: r.id,
+        event_kind: r.eventKind,
+        received_at: r.receivedAt,
+        idempotency_key: r.idempotencyKey,
+        payload: r.payloadJson,
+      })),
+    })
   })
 }

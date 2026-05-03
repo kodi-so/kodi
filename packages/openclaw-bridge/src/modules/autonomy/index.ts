@@ -17,6 +17,7 @@ import {
 } from './approval-queue'
 import { createResume, type ResumeApi } from './resume'
 import { createInterceptor, type Interceptor } from './interceptor'
+import { createAuditAfterToolCall } from './audit'
 
 /**
  * `autonomy` — per-agent policy enforcement on tool invocations.
@@ -136,6 +137,35 @@ export const autonomyModule: KodiBridgeModule = {
       return result
     })
 
+    // KOD-393: audit every allowed tool execution. The SDK's
+    // `after_tool_call` hook fires once execution finishes (with or
+    // without an error). The deferred-execute path (resolve handler in
+    // inbound-api) doesn't go through the SDK's dispatch so it emits
+    // `tool.invoke.after` directly.
+    const auditAfterToolCall = createAuditAfterToolCall({
+      registry: agentManager.registry,
+      emit: (kind, payload, opts) => eventBus.emitter.emit(kind, payload, opts),
+    })
+    api.on('after_tool_call', async (event, hookCtx) => {
+      await auditAfterToolCall(
+        {
+          toolName: event.toolName,
+          params: event.params,
+          toolCallId: event.toolCallId,
+          runId: event.runId,
+          result: event.result,
+          error: event.error,
+          durationMs: event.durationMs,
+        },
+        {
+          agentId: hookCtx.agentId,
+          sessionKey: hookCtx.sessionKey,
+          toolName: hookCtx.toolName,
+          toolCallId: hookCtx.toolCallId,
+        },
+      )
+    })
+
     const moduleApi: AutonomyModuleApi = { loader, queue, resume, interceptor }
     ctx.autonomy = moduleApi
   },
@@ -182,3 +212,11 @@ export {
   type InterceptorAgentLookup,
   type InterceptorEmitFn,
 } from './interceptor'
+export {
+  createAuditAfterToolCall,
+  type AfterToolCallContext,
+  type AfterToolCallEvent,
+  type AuditAgentLookup,
+  type AuditEmitFn,
+  type CreateAuditAfterToolCallDeps,
+} from './audit'

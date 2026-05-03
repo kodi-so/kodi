@@ -196,7 +196,7 @@ describe('evaluatePolicy — overrides beat level', () => {
 })
 
 describe('createInterceptor — happy paths', () => {
-  test('yolo: every call allowed; nothing emitted, nothing enqueued', async () => {
+  test('yolo: every call allowed; emits tool.invoke.before audit, nothing enqueued', async () => {
     const queue = await realQueue()
     const emit = captureEmit()
     const interceptor = createInterceptor({
@@ -211,11 +211,24 @@ describe('createInterceptor — happy paths', () => {
       { agentId: OC_AGENT_ID, sessionKey: SESS, toolName: 'GMAIL_SEND_EMAIL' },
     )
     expect(out).toBeUndefined()
-    expect(emit.calls).toHaveLength(0)
+    // KOD-393 audit: every allowed call emits tool.invoke.before.
+    expect(emit.calls).toHaveLength(1)
+    expect(emit.calls[0]?.kind).toBe('tool.invoke.before')
+    expect(emit.calls[0]?.payload).toMatchObject({
+      tool_name: 'GMAIL_SEND_EMAIL',
+      args: { to: 'a@b.com' },
+      args_summary: '{"to":"a@b.com"}',
+      session_key: SESS,
+    })
+    expect(emit.calls[0]?.agent).toEqual({
+      agent_id: KODI_AGENT_ID,
+      openclaw_agent_id: OC_AGENT_ID,
+      user_id: USER_ID,
+    })
     expect((await queue.listPending()).length).toBe(0)
   })
 
-  test('normal + read: allow', async () => {
+  test('normal + read: allow + emits tool.invoke.before', async () => {
     const queue = await realQueue()
     const emit = captureEmit()
     const interceptor = createInterceptor({
@@ -230,7 +243,8 @@ describe('createInterceptor — happy paths', () => {
       { agentId: OC_AGENT_ID, sessionKey: SESS, toolName: 'GMAIL_LIST_MESSAGES' },
     )
     expect(out).toBeUndefined()
-    expect(emit.calls).toHaveLength(0)
+    expect(emit.calls).toHaveLength(1)
+    expect(emit.calls[0]?.kind).toBe('tool.invoke.before')
   })
 
   test('strict: every call enqueues for approval, emits tool.approval_requested', async () => {

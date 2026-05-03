@@ -203,10 +203,24 @@ describe('createApprovalsResolveHandler — happy paths', () => {
     const after = await queue.get(REQ_ID)
     expect(after?.status).toBe('approved')
 
-    expect(emit.calls).toHaveLength(1)
+    // KOD-393 audit: approve+success emits BOTH tool.approval_resolved
+    // AND tool.invoke.after (the deferred re-run bypasses the SDK's
+    // after_tool_call hook so we emit it manually).
+    expect(emit.calls).toHaveLength(2)
     expect(emit.calls[0]?.kind).toBe('tool.approval_resolved')
     expect(emit.calls[0]?.payload).toEqual({ request_id: REQ_ID, approved: true })
     expect(emit.calls[0]?.agent).toEqual({
+      agent_id: KODI_AGENT_ID,
+      openclaw_agent_id: OC_AGENT,
+      user_id: USER_ID,
+    })
+    expect(emit.calls[1]?.kind).toBe('tool.invoke.after')
+    expect(emit.calls[1]?.payload).toMatchObject({
+      tool_name: TOOL,
+      outcome: 'ok',
+    })
+    expect(typeof emit.calls[1]?.payload.duration_ms).toBe('number')
+    expect(emit.calls[1]?.agent).toEqual({
       agent_id: KODI_AGENT_ID,
       openclaw_agent_id: OC_AGENT,
       user_id: USER_ID,
@@ -252,7 +266,15 @@ describe('createApprovalsResolveHandler — happy paths', () => {
     const after = await queue.get(REQ_ID)
     expect(after?.status).toBe('approved')
 
-    expect(emit.calls).toHaveLength(1)
+    // approval_resolved + tool.invoke.after with outcome=error.
+    expect(emit.calls).toHaveLength(2)
+    expect(emit.calls[0]?.kind).toBe('tool.approval_resolved')
+    expect(emit.calls[1]?.kind).toBe('tool.invoke.after')
+    expect(emit.calls[1]?.payload).toMatchObject({
+      tool_name: TOOL,
+      outcome: 'error',
+      error: 'dispatch_failed: OAuth expired',
+    })
   })
 
   test('deny: no tool run, resume called with deny, queue marked denied', async () => {
@@ -454,7 +476,11 @@ describe('createApprovalsResolveHandler — failure paths', () => {
     const result = await handler(REQ_ID, { approved: true })
     expect(result.kind).toBe('ok')
     if (result.kind === 'ok') expect(result.body.status).toBe('orphaned')
-    expect(emit.calls).toHaveLength(1)
+    // approval_resolved + tool.invoke.after — both emitted regardless
+    // of resume orphan outcome (audit is independent of agent reach).
+    expect(emit.calls).toHaveLength(2)
+    expect(emit.calls[0]?.kind).toBe('tool.approval_resolved')
+    expect(emit.calls[1]?.kind).toBe('tool.invoke.after')
     const after = await queue.get(REQ_ID)
     expect(after?.status).toBe('orphaned')
   })

@@ -1,5 +1,6 @@
 import type { Hono } from 'hono'
 import {
+  agentAutonomyPolicies,
   and,
   db,
   decrypt,
@@ -8,6 +9,9 @@ import {
   ne,
   openClawAgents,
   orgMembers,
+  type AgentAutonomyPolicy,
+  type AutonomyLevel,
+  type AutonomyOverrides,
   type Instance,
   type OpenClawAgent,
 } from '@kodi/db'
@@ -131,6 +135,35 @@ async function buildReconcileEntry(
   }
 }
 
+export type AutonomyPolicyResponse = {
+  agent_id: string
+  autonomy_level: AutonomyLevel
+  overrides: AutonomyOverrides | null
+}
+
+/**
+ * Default returned to the plugin when no `agent_autonomy_policies` row
+ * exists for the agent. Spec note from KOD-389: missing rows mean
+ * "use defaults", and the defaults live in application code (here)
+ * rather than as DB triggers.
+ */
+export const DEFAULT_AUTONOMY_POLICY: Omit<AutonomyPolicyResponse, 'agent_id'> = {
+  autonomy_level: 'normal',
+  overrides: null,
+}
+
+function rowToResponse(
+  row: AgentAutonomyPolicy | undefined,
+  agentId: string,
+): AutonomyPolicyResponse {
+  if (!row) return { agent_id: agentId, ...DEFAULT_AUTONOMY_POLICY }
+  return {
+    agent_id: row.agentId,
+    autonomy_level: row.autonomyLevel as AutonomyLevel,
+    overrides: row.overrides ?? null,
+  }
+}
+
 export function registerOpenClawAgentsRoutes(app: Hono): void {
   app.get('/api/openclaw/agents', async (c) => {
     const bearer = readBearerToken(c.req.header('authorization') ?? null)
@@ -158,5 +191,39 @@ export function registerOpenClawAgentsRoutes(app: Hono): void {
     )
 
     return c.json<ReconcileAgentsResponse>({ agents: entries })
+  })
+
+  /**
+   * GET /api/openclaw/agents/:id/autonomy (KOD-389)
+   *
+   * Returns the autonomy policy for a single agent. Used by the plugin's
+   * autonomy module on cache miss / TTL expiry. Bearer-auth via the
+   * instance's gateway token; the agent must belong to the calling
+   * instance's org so one instance can't probe another's policies.
+   */
+  app.get('/api/openclaw/agents/:id/autonomy', async (c) => {
+    const bearer = readBearerToken(c.req.header('authorization') ?? null)
+    if (!bearer) return c.json({ error: 'Unauthorized' }, 401)
+
+    const instance = await resolveInstanceByToken(bearer)
+    if (!instance) return c.json({ error: 'Unauthorized' }, 401)
+
+    const agentId = c.req.param('id')
+    if (!agentId) return c.json({ error: 'Missing agent id' }, 400)
+
+    // Ownership check: the requested agent must be in this instance's org.
+    const agent = await db.query.openClawAgents.findFirst({
+      where: and(
+        eq(openClawAgents.id, agentId),
+        eq(openClawAgents.orgId, instance.orgId),
+      ),
+    })
+    if (!agent) return c.json({ error: 'Not Found' }, 404)
+
+    const row = await db.query.agentAutonomyPolicies.findFirst({
+      where: eq(agentAutonomyPolicies.agentId, agentId),
+    })
+
+    return c.json<AutonomyPolicyResponse>(rowToResponse(row, agentId))
   })
 }

@@ -32,12 +32,12 @@ import type { NonceDedupe } from './dedupe'
 export const PLUGIN_PREFIX = '/plugins/kodi-bridge/'
 
 const STUB_ROUTES_EXACT = new Set<string>([
-  'agents/update-policy',
   'admin/update',
 ])
 
 const PROVISION_ROUTE = 'agents/provision'
 const DEPROVISION_ROUTE = 'agents/deprovision'
+const UPDATE_POLICY_ROUTE = 'agents/update-policy'
 const SUBSCRIPTIONS_ROUTE = 'config/subscriptions'
 
 const STUB_ROUTES_PATTERNED: Array<RegExp> = [
@@ -76,6 +76,14 @@ export type DeprovisionHandler = (
   rawBody: unknown,
 ) => Promise<DeprovisionHandlerResult>
 
+export type UpdatePolicyHandlerResult =
+  | { kind: 'ok'; body: Record<string, unknown> }
+  | { kind: 'badRequest'; message: string }
+
+export type UpdatePolicyHandler = (
+  rawBody: unknown,
+) => Promise<UpdatePolicyHandlerResult>
+
 export type CreateInboundRouterDeps = {
   /** Function returning the current plugin HMAC secret. Called per request so KOD-385's rotation can swap it in place. */
   getSecret: () => string
@@ -98,6 +106,12 @@ export type CreateInboundRouterDeps = {
    * handler. Otherwise the route returns 501.
    */
   deprovisionHandler?: DeprovisionHandler
+  /**
+   * If set, `POST /plugins/kodi-bridge/agents/update-policy` invokes
+   * this handler (KOD-389 — push autonomy policy refreshes from Kodi).
+   * Otherwise the route returns 501.
+   */
+  updatePolicyHandler?: UpdatePolicyHandler
   logger?: InboundLogger
   now?: () => number
 }
@@ -148,6 +162,7 @@ export function isInboundRoute(subPath: string): boolean {
   if (subPath === SUBSCRIPTIONS_ROUTE) return true
   if (subPath === PROVISION_ROUTE) return true
   if (subPath === DEPROVISION_ROUTE) return true
+  if (subPath === UPDATE_POLICY_ROUTE) return true
   if (STUB_ROUTES_EXACT.has(subPath)) return true
   return STUB_ROUTES_PATTERNED.some((pattern) => pattern.test(subPath))
 }
@@ -160,6 +175,7 @@ export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRoute
     subscriptionsHandler,
     provisionHandler,
     deprovisionHandler,
+    updatePolicyHandler,
     logger = console,
     now,
   } = deps
@@ -315,6 +331,32 @@ export function createInboundRouter(deps: CreateInboundRouterDeps): InboundRoute
         return writeJson(res, 500, {
           error: 'Internal Server Error',
           code: 'DEPROVISION_FAILED',
+        })
+      }
+    }
+
+    if (subPath === UPDATE_POLICY_ROUTE) {
+      if (!updatePolicyHandler) return notImplemented(res, subPath)
+      try {
+        const result = await updatePolicyHandler(parsedBody)
+        if (result.kind === 'badRequest') {
+          return writeJson(res, 400, {
+            error: 'Bad Request',
+            code: 'INVALID_BODY',
+            message: result.message,
+          })
+        }
+        return writeJson(res, 200, result.body)
+      } catch (err) {
+        logger.warn(
+          JSON.stringify({
+            msg: 'inbound update-policy handler failed',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        )
+        return writeJson(res, 500, {
+          error: 'Internal Server Error',
+          code: 'UPDATE_POLICY_FAILED',
         })
       }
     }

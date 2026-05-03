@@ -490,3 +490,100 @@ describe('createInboundRouter — agents/provision + agents/deprovision (KOD-381
     expect(res.statusCode).toBe(401)
   })
 })
+
+describe('createInboundRouter — agents/update-policy (KOD-389)', () => {
+  function buildRouterWithUpdatePolicy(opts: {
+    badRequest?: boolean
+    handlerThrows?: boolean
+  } = {}) {
+    const dedupe = createNonceDedupe()
+    return {
+      dedupe,
+      router: createInboundRouter({
+        getSecret: () => SECRET,
+        dedupe,
+        reloadCallbacks: () => [],
+        updatePolicyHandler: async (raw) => {
+          if (opts.handlerThrows) throw new Error('loader broke')
+          if (opts.badRequest) return { kind: 'badRequest', message: 'no good' }
+          if (
+            !raw ||
+            typeof raw !== 'object' ||
+            !('agent_id' in (raw as Record<string, unknown>))
+          ) {
+            return { kind: 'badRequest', message: 'missing agent_id' }
+          }
+          return { kind: 'ok', body: { ok: true } }
+        },
+        logger: { log: () => {}, warn: () => {} },
+        now: () => NOW,
+      }),
+    }
+  }
+
+  test('valid body → 200 { ok: true }', async () => {
+    const { router } = buildRouterWithUpdatePolicy()
+    const body = JSON.stringify({
+      agent_id: 'kodi-member-agent-aaa',
+      autonomy_level: 'normal',
+      overrides: null,
+    })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/update-policy`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body)).toEqual({ ok: true })
+  })
+
+  test('bad body → 400 INVALID_BODY', async () => {
+    const { router } = buildRouterWithUpdatePolicy({ badRequest: true })
+    const body = JSON.stringify({ agent_id: 'a' })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/update-policy`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).code).toBe('INVALID_BODY')
+  })
+
+  test('handler throws → 500 UPDATE_POLICY_FAILED', async () => {
+    const { router } = buildRouterWithUpdatePolicy({ handlerThrows: true })
+    const body = JSON.stringify({ agent_id: 'a' })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/update-policy`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(500)
+    expect(JSON.parse(res.body).code).toBe('UPDATE_POLICY_FAILED')
+  })
+
+  test('no handler wired → 501', async () => {
+    const { router } = buildRouter()
+    const body = JSON.stringify({ agent_id: 'a' })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({ url: `${PLUGIN_PREFIX}agents/update-policy`, headers: signed(body), body }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(501)
+  })
+
+  test('still requires HMAC', async () => {
+    const { router } = buildRouterWithUpdatePolicy()
+    const body = JSON.stringify({ agent_id: 'a' })
+    const res = fakeRes()
+    await router.handle(
+      fakeReq({
+        url: `${PLUGIN_PREFIX}agents/update-policy`,
+        body,
+        headers: { 'content-type': 'application/json' },
+      }),
+      res.res,
+    )
+    expect(res.statusCode).toBe(401)
+  })
+})

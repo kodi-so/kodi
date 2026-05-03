@@ -137,7 +137,7 @@ export type InterceptorAgentLookup = {
 }
 
 export type InterceptorEmitFn = (
-  kind: 'tool.denied' | 'tool.approval_requested',
+  kind: 'tool.denied' | 'tool.approval_requested' | 'tool.invoke.before',
   payload: Record<string, unknown>,
   opts?: {
     agent?: { agent_id: string; openclaw_agent_id: string; user_id: string }
@@ -191,6 +191,18 @@ function safeJsonStringify(value: unknown): string {
   } catch {
     return '{}'
   }
+}
+
+/**
+ * Build a compact `args_summary` for `tool.invoke.before` payloads at
+ * `summary` verbosity. Capped at 200 chars so high-volume agents don't
+ * blow up the event log on a single call. Full args ride alongside at
+ * `full` verbosity (the spec's default for tool.invoke.after).
+ */
+function previewArgsSummary(args: unknown): string {
+  const s = safeJsonStringify(args ?? {})
+  if (s.length <= 200) return s
+  return `${s.slice(0, 197)}…`
 }
 
 export function createInterceptor(opts: CreateInterceptorOptions): Interceptor {
@@ -271,7 +283,23 @@ export function createInterceptor(opts: CreateInterceptorOptions): Interceptor {
         }
       : undefined
 
-    if (decision === 'allow') return undefined
+    if (decision === 'allow') {
+      // Audit the call (KOD-393): every allowed invocation produces a
+      // `tool.invoke.before` row in plugin_event_log. The `after_tool_call`
+      // typed hook fires `tool.invoke.after` once execution completes.
+      // Fire-and-forget — failure to emit must not stall the agent's turn.
+      void emit(
+        'tool.invoke.before',
+        {
+          tool_name: toolName,
+          args_summary: previewArgsSummary(event.params),
+          args: event.params,
+          session_key: sessionKey,
+        },
+        agentEnvelope ? { agent: agentEnvelope } : undefined,
+      )
+      return undefined
+    }
 
     if (decision === 'deny') {
       void emit(

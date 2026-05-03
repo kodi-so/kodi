@@ -5,7 +5,6 @@ import * as path from 'node:path'
 import {
   composeApprovalMessage,
   createResume,
-  type ResumeInput,
   type SessionInjectFn,
 } from './resume'
 import {

@@ -194,7 +194,7 @@ export function createResume(opts: CreateResumeOptions): ResumeApi {
     // approve/deny decision. The queue's idempotency means re-calls
     // are safe.
     const finalStatus: ResolvedStatus = input.approved ? 'approved' : 'denied'
-    const reason = input.approved ? undefined : (input as { reason?: string }).reason
+    const reason = input.approved ? undefined : input.reason
     await queue.markResolved(approval.request_id, finalStatus, reason)
     const after = (await queue.get(approval.request_id)) ?? approval
 

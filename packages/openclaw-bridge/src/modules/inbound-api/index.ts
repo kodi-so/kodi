@@ -2,6 +2,7 @@ import type { KodiBridgeContext, KodiBridgeModule } from '../../types/module'
 import type { BridgeCore } from '../bridge-core'
 import type { EventBus } from '../event-bus'
 import type { AgentManager } from '../agent-manager'
+import type { AutonomyModuleApi } from '../autonomy'
 import { parseSubscriptionsBody } from '../event-bus/subscription-loader'
 import { createNonceDedupe, type NonceDedupe } from './dedupe'
 import {
@@ -14,6 +15,7 @@ import {
   createProvisionHandler,
   createDeprovisionHandler,
 } from './agent-handlers'
+import { createUpdatePolicyHandler } from './policy-handler'
 
 /**
  * `inbound-api` — exposes the HTTP surface Kodi calls into.
@@ -51,6 +53,7 @@ export const inboundApiModule: KodiBridgeModule = {
     }
     const eventBus = ctx.eventBus as EventBus | undefined
     const agentManager = ctx.agentManager as AgentManager | undefined
+    const autonomy = ctx.autonomy as AutonomyModuleApi | undefined
 
     const dedupe = createNonceDedupe()
     const reloadCallbacks: ReloadCallback[] = []
@@ -70,6 +73,9 @@ export const inboundApiModule: KodiBridgeModule = {
         : undefined,
       deprovisionHandler: agentManager
         ? createDeprovisionHandler(agentManager.deprovision)
+        : undefined,
+      updatePolicyHandler: autonomy
+        ? createUpdatePolicyHandler(autonomy.loader)
         : undefined,
     })
 
@@ -116,3 +122,8 @@ export {
   type ParsedProvisionBody,
   type ParsedDeprovisionBody,
 } from './agent-handlers'
+export { createUpdatePolicyHandler } from './policy-handler'
+export type {
+  UpdatePolicyHandler,
+  UpdatePolicyHandlerResult,
+} from './router'

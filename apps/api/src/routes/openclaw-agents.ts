@@ -1,9 +1,11 @@
 import type { Hono } from 'hono'
 import {
+  and,
   db,
   decrypt,
   eq,
   instances,
+  ne,
   openClawAgents,
   orgMembers,
   type Instance,
@@ -74,48 +76,39 @@ export type ReconcileAgentsResponse = {
   agents: ReconcileAgentEntry[]
 }
 
+function emptyEntry(
+  agent: OpenClawAgent,
+  agent_type: 'org' | 'member',
+  user_id: string,
+): ReconcileAgentEntry {
+  return {
+    kodi_agent_id: agent.id,
+    openclaw_agent_id: agent.openclawAgentId,
+    agent_type,
+    user_id,
+    composio_session_id: null,
+    actions: [],
+  }
+}
+
 async function buildReconcileEntry(
   agent: OpenClawAgent,
   org_id: string,
 ): Promise<ReconcileAgentEntry> {
-  if (agent.agentType === 'org') {
-    // Org agent: no user identity → no Composio session, empty actions.
-    return {
-      kodi_agent_id: agent.id,
-      openclaw_agent_id: agent.openclawAgentId,
-      agent_type: 'org',
-      user_id: org_id,
-      composio_session_id: null,
-      actions: [],
-    }
-  }
+  // Org agent: no user identity → no Composio session, empty actions.
+  if (agent.agentType === 'org') return emptyEntry(agent, 'org', org_id)
 
-  // Member agent: resolve user_id via org_members, build action list.
+  // Defensive: a member-typed agent without org_member_id (or whose
+  // member row vanished) is malformed; surface as zero-action skipped
+  // agent rather than crash the route.
   if (!agent.orgMemberId) {
-    // Defensive: a member-typed agent without org_member_id is malformed;
-    // surface as zero-action skipped agent rather than crash the route.
-    return {
-      kodi_agent_id: agent.id,
-      openclaw_agent_id: agent.openclawAgentId,
-      agent_type: 'member',
-      user_id: agent.composioUserId ?? '',
-      composio_session_id: null,
-      actions: [],
-    }
+    return emptyEntry(agent, 'member', agent.composioUserId ?? '')
   }
-
   const member = await db.query.orgMembers.findFirst({
     where: eq(orgMembers.id, agent.orgMemberId),
   })
   if (!member) {
-    return {
-      kodi_agent_id: agent.id,
-      openclaw_agent_id: agent.openclawAgentId,
-      agent_type: 'member',
-      user_id: agent.composioUserId ?? '',
-      composio_session_id: null,
-      actions: [],
-    }
+    return emptyEntry(agent, 'member', agent.composioUserId ?? '')
   }
 
   const allowlist = await computeEffectiveToolkitAllowlist({
@@ -149,14 +142,20 @@ export function registerOpenClawAgentsRoutes(app: Hono): void {
     const agents = await db
       .select()
       .from(openClawAgents)
-      .where(eq(openClawAgents.orgId, instance.orgId))
+      .where(
+        and(
+          eq(openClawAgents.orgId, instance.orgId),
+          ne(openClawAgents.status, 'deprovisioned'),
+        ),
+      )
 
-    const entries: ReconcileAgentEntry[] = []
-    for (const agent of agents) {
-      // Skip deprovisioned rows — the plugin should not re-create them.
-      if (agent.status === 'deprovisioned') continue
-      entries.push(await buildReconcileEntry(agent, instance.orgId))
-    }
+    // Build entries in parallel — each member row triggers a Composio
+    // tools.list fetch, and serial would block the response for ~N×500ms
+    // on large orgs. Composio's per-account rate limit applies regardless;
+    // parallel just keeps the wall-clock low for the common case.
+    const entries = await Promise.all(
+      agents.map((agent) => buildReconcileEntry(agent, instance.orgId)),
+    )
 
     return c.json<ReconcileAgentsResponse>({ agents: entries })
   })

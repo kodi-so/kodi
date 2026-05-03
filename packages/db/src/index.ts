@@ -31,6 +31,7 @@ export {
   inArray,
   isNull,
   lt,
+  ne,
   or,
   sql,
 } from 'drizzle-orm'

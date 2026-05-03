@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
   buildAgentToolLoadout,
+  computeEffectiveToolkitAllowlist,
+  parseDefaultToolkitsEnv,
   rotateAgentToolLoadout,
   toolToComposioAction,
   type BuildAgentToolLoadoutResult,
@@ -234,5 +236,158 @@ describe('rotateAgentToolLoadout (KOD-386)', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0]?.org_member_id).toBe('member-1')
     expect(calls[0]?.user_id).toBe(USER)
+  })
+})
+
+describe('parseDefaultToolkitsEnv (KOD-388)', () => {
+  test('empty / unset returns empty set', () => {
+    expect(parseDefaultToolkitsEnv(undefined).size).toBe(0)
+    expect(parseDefaultToolkitsEnv('').size).toBe(0)
+    expect(parseDefaultToolkitsEnv('  ').size).toBe(0)
+  })
+
+  test('splits, trims, lowercases, drops empties', () => {
+    const set = parseDefaultToolkitsEnv('Gmail, Slack ,googlecalendar,,  github')
+    expect(Array.from(set).sort()).toEqual([
+      'github',
+      'gmail',
+      'googlecalendar',
+      'slack',
+    ])
+  })
+
+  test('single value', () => {
+    const set = parseDefaultToolkitsEnv('gmail')
+    expect(Array.from(set)).toEqual(['gmail'])
+  })
+})
+
+describe('computeEffectiveToolkitAllowlist — env defaults (KOD-388)', () => {
+  // We don't exercise the real DB; just stub `dbInstance` to return the
+  // shapes the function reads. The two queries are
+  // `listPersistedConnections` and `listToolkitPolicies`, both of which
+  // accept a `db` and return promises.
+  function fakeDb(opts: {
+    connections: Array<{ toolkitSlug: string; connectedAccountStatus: string }>
+    policies: Array<{ toolkitSlug: string; enabled?: boolean }>
+  }) {
+    // listPersistedConnections + listToolkitPolicies both accept a db and
+    // call .query.<table>.findMany. They live in apps/api/src/lib/composio.ts
+    // and route through the drizzle relational query API. Easiest stub:
+    // reach into Drizzle's findMany shape.
+    return {
+      query: {
+        toolkitConnections: {
+          findMany: async () => opts.connections,
+        },
+        toolkitPolicies: {
+          findMany: async () => opts.policies,
+        },
+      },
+    } as unknown as Parameters<typeof computeEffectiveToolkitAllowlist>[0]['dbInstance']
+  }
+
+  test('policy empty + env default set: intersect connections with default', async () => {
+    const result = await computeEffectiveToolkitAllowlist({
+      dbInstance: fakeDb({
+        connections: [
+          { toolkitSlug: 'gmail', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'slack', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'github', connectedAccountStatus: 'ACTIVE' },
+        ],
+        policies: [],
+      }),
+      org_id: 'o1',
+      user_id: USER,
+      defaultToolkits: new Set(['gmail', 'slack']),
+    })
+    expect(result).toEqual(['gmail', 'slack'])
+  })
+
+  test('policy empty + no env default: fall back to all connected', async () => {
+    const result = await computeEffectiveToolkitAllowlist({
+      dbInstance: fakeDb({
+        connections: [
+          { toolkitSlug: 'gmail', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'slack', connectedAccountStatus: 'ACTIVE' },
+        ],
+        policies: [],
+      }),
+      org_id: 'o1',
+      user_id: USER,
+      defaultToolkits: new Set(),
+    })
+    expect(result).toEqual(['gmail', 'slack'])
+  })
+
+  test('policy non-empty: env default is ignored, intersect with policy', async () => {
+    const result = await computeEffectiveToolkitAllowlist({
+      dbInstance: fakeDb({
+        connections: [
+          { toolkitSlug: 'gmail', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'slack', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'github', connectedAccountStatus: 'ACTIVE' },
+        ],
+        policies: [
+          { toolkitSlug: 'gmail', enabled: true },
+          { toolkitSlug: 'github', enabled: true },
+          { toolkitSlug: 'slack', enabled: false },
+        ],
+      }),
+      org_id: 'o1',
+      user_id: USER,
+      defaultToolkits: new Set(['slack']), // would match if env default applied
+    })
+    // policy wins: only gmail + github (slack disabled by policy)
+    expect(result).toEqual(['github', 'gmail'])
+  })
+
+  test('inactive connections filtered regardless of policy/default', async () => {
+    const result = await computeEffectiveToolkitAllowlist({
+      dbInstance: fakeDb({
+        connections: [
+          { toolkitSlug: 'gmail', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'slack', connectedAccountStatus: 'EXPIRED' },
+        ],
+        policies: [],
+      }),
+      org_id: 'o1',
+      user_id: USER,
+      defaultToolkits: new Set(['gmail', 'slack']),
+    })
+    expect(result).toEqual(['gmail'])
+  })
+
+  test('user has no connections at all: empty result', async () => {
+    const result = await computeEffectiveToolkitAllowlist({
+      dbInstance: fakeDb({ connections: [], policies: [] }),
+      org_id: 'o1',
+      user_id: USER,
+      defaultToolkits: new Set(['gmail']),
+    })
+    expect(result).toEqual([])
+  })
+
+  test('policies exist but all enabled=false: nothing allowed (KOD-388 stricter behavior)', async () => {
+    // Pre-KOD-388 code's `enabledToolkits.size === 0` predicate
+    // accidentally treated "all disabled" the same as "no policies" and
+    // allowed everything. The new logic distinguishes them: admin
+    // explicitly disabled all toolkits → nothing allowed.
+    const result = await computeEffectiveToolkitAllowlist({
+      dbInstance: fakeDb({
+        connections: [
+          { toolkitSlug: 'gmail', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'slack', connectedAccountStatus: 'ACTIVE' },
+        ],
+        policies: [
+          { toolkitSlug: 'gmail', enabled: false },
+          { toolkitSlug: 'slack', enabled: false },
+        ],
+      }),
+      org_id: 'o1',
+      user_id: USER,
+      defaultToolkits: new Set(['gmail', 'slack']), // ignored — policy is non-empty
+    })
+    expect(result).toEqual([])
   })
 })

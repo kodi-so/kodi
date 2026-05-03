@@ -75,6 +75,20 @@ const envSchema = z.object({
   COMPOSIO_AUTH_CONFIG_LINEAR: z.string().optional(),
   COMPOSIO_AUTH_CONFIG_NOTION: z.string().optional(),
 
+  /**
+   * KOD-388 default toolkit allowlist.
+   *
+   * Comma-separated list of Composio toolkit slugs (e.g.
+   * "gmail,slack,googlecalendar"). Used by the agent-loadout builder
+   * (composio-sessions.ts) when the org has no `toolkit_policies` rows
+   * yet — the user gets these toolkits enabled by default rather than
+   * starting with an empty agent. Once the admin saves a policy, the
+   * org-level policy table takes over and this default is ignored.
+   *
+   * Empty / unset → preserve the current "all enabled" fallback.
+   */
+  COMPOSIO_SESSION_DEFAULT_TOOLKITS: z.string().optional(),
+
   // Optional provider credentials for Kodi-owned OAuth apps used via
   // Composio custom auth configs. These remain optional until the
   // corresponding toolkit is enabled in a given environment.

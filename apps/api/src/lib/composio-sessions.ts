@@ -18,6 +18,7 @@ import {
   pushAgentProvision,
   type PushResult,
 } from './openclaw/plugin-client'
+import { env } from '../env'
 
 /**
  * Kodi-side Composio session creation + agent provisioning orchestration.
@@ -260,13 +261,40 @@ export function toolToComposioAction(
 // ── Allowlist resolution ──────────────────────────────────────────────────
 
 /**
- * Compute the user's effective toolkit allowlist: toolkits the user has
- * an ACTIVE persisted connection for AND the org's policy enables.
+ * Parse `COMPOSIO_SESSION_DEFAULT_TOOLKITS` (KOD-388) into a clean slug
+ * set. Whitespace and casing are normalized so the env value can be
+ * forgiving (e.g. `"Gmail, Slack ,googlecalendar"` works).
+ */
+export function parseDefaultToolkitsEnv(raw: string | undefined): Set<string> {
+  if (!raw) return new Set()
+  return new Set(
+    raw
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.length > 0),
+  )
+}
+
+/**
+ * Compute the user's effective toolkit allowlist.
+ *
+ * Behavior:
+ *   - With an org policy: intersect ACTIVE connections with toolkits the
+ *     policy marks enabled.
+ *   - Without an org policy AND `COMPOSIO_SESSION_DEFAULT_TOOLKITS` set:
+ *     intersect connections with the env-defined default set (KOD-388).
+ *     New orgs get a sensible starter loadout instead of "everything the
+ *     user happens to have connected".
+ *   - Without an org policy AND no env default: fall back to "every
+ *     ACTIVE connection is enabled" — preserves the current behavior on
+ *     environments that haven't set the env var.
  */
 export async function computeEffectiveToolkitAllowlist(params: {
   dbInstance: typeof defaultDb
   org_id: string
   user_id: string
+  /** Override the env default for tests. Falls back to env when omitted. */
+  defaultToolkits?: ReadonlySet<string>
 }): Promise<string[]> {
   const [connections, policies] = await Promise.all([
     listPersistedConnections(params.dbInstance, params.org_id, params.user_id),
@@ -283,15 +311,25 @@ export async function computeEffectiveToolkitAllowlist(params: {
       .map((c) => c.toolkitSlug),
   )
 
-  const intersection: string[] = []
-  for (const slug of connectedActive) {
-    // Default to enabled when no policy row exists (matches
-    // getDefaultToolkitPolicy() in composio.ts).
-    if (enabledToolkits.size === 0 || enabledToolkits.has(slug)) {
-      intersection.push(slug)
-    }
+  const policyEmpty = policies.length === 0
+  const defaults =
+    params.defaultToolkits ??
+    parseDefaultToolkitsEnv(env.COMPOSIO_SESSION_DEFAULT_TOOLKITS)
+
+  // Note: the "policies present but all enabled=false" case allows nothing
+  // here, even though pre-KOD-388 code allowed every connection (its
+  // predicate `enabledToolkits.size === 0` couldn't distinguish "no
+  // policies" from "all policies disabled"). The stricter behavior is
+  // the right semantic — admin explicitly disabled everything → nothing
+  // allowed — but it's a silent change for any environment that's been
+  // running with all-disabled policies.
+  const isAllowed = (slug: string): boolean => {
+    if (policyEmpty && defaults.size > 0) return defaults.has(slug)
+    if (policyEmpty) return true
+    return enabledToolkits.has(slug)
   }
-  return intersection.sort()
+
+  return Array.from(connectedActive).filter(isAllowed).sort()
 }
 
 // ── Provisioning orchestrator ────────────────────────────────────────────

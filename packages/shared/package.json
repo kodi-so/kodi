@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./hmac": "./src/hmac.ts",
-    "./events": "./src/events.ts"
+    "./events": "./src/events.ts",
+    "./action-class": "./src/action-class.ts"
   },
   "scripts": {
     "test": "bun test",

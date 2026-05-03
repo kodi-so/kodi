@@ -315,17 +315,21 @@ export async function computeEffectiveToolkitAllowlist(params: {
   const defaults =
     params.defaultToolkits ??
     parseDefaultToolkitsEnv(env.COMPOSIO_SESSION_DEFAULT_TOOLKITS)
-  const useEnvDefault = policyEmpty && defaults.size > 0
 
-  const intersection: string[] = []
-  for (const slug of connectedActive) {
-    if (useEnvDefault) {
-      if (defaults.has(slug)) intersection.push(slug)
-    } else if (policyEmpty || enabledToolkits.has(slug)) {
-      intersection.push(slug)
-    }
+  // Note: the "policies present but all enabled=false" case allows nothing
+  // here, even though pre-KOD-388 code allowed every connection (its
+  // predicate `enabledToolkits.size === 0` couldn't distinguish "no
+  // policies" from "all policies disabled"). The stricter behavior is
+  // the right semantic — admin explicitly disabled everything → nothing
+  // allowed — but it's a silent change for any environment that's been
+  // running with all-disabled policies.
+  const isAllowed = (slug: string): boolean => {
+    if (policyEmpty && defaults.size > 0) return defaults.has(slug)
+    if (policyEmpty) return true
+    return enabledToolkits.has(slug)
   }
-  return intersection.sort()
+
+  return Array.from(connectedActive).filter(isAllowed).sort()
 }
 
 // ── Provisioning orchestrator ────────────────────────────────────────────

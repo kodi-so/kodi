@@ -367,4 +367,27 @@ describe('computeEffectiveToolkitAllowlist — env defaults (KOD-388)', () => {
     })
     expect(result).toEqual([])
   })
+
+  test('policies exist but all enabled=false: nothing allowed (KOD-388 stricter behavior)', async () => {
+    // Pre-KOD-388 code's `enabledToolkits.size === 0` predicate
+    // accidentally treated "all disabled" the same as "no policies" and
+    // allowed everything. The new logic distinguishes them: admin
+    // explicitly disabled all toolkits → nothing allowed.
+    const result = await computeEffectiveToolkitAllowlist({
+      dbInstance: fakeDb({
+        connections: [
+          { toolkitSlug: 'gmail', connectedAccountStatus: 'ACTIVE' },
+          { toolkitSlug: 'slack', connectedAccountStatus: 'ACTIVE' },
+        ],
+        policies: [
+          { toolkitSlug: 'gmail', enabled: false },
+          { toolkitSlug: 'slack', enabled: false },
+        ],
+      }),
+      org_id: 'o1',
+      user_id: USER,
+      defaultToolkits: new Set(['gmail', 'slack']), // ignored — policy is non-empty
+    })
+    expect(result).toEqual([])
+  })
 })

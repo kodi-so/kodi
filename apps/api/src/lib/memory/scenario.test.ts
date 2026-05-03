@@ -671,6 +671,16 @@ describe('memory foundation scenario coverage', () => {
     expect(storage.files.has(orgSeedPlan.manifestPath)).toBe(true)
     expect(storage.files.has(memberSeedPlan.manifestPath)).toBe(true)
 
+    const seededOrgRoot = await listMemoryDirectory(database as never, {
+      orgId: org.id,
+      orgMemberId: member.orgMember.id,
+      scope: 'org',
+    })
+    expect(seededOrgRoot.entries.map((entry) => entry.path)).toContain(
+      'MEMORY.md'
+    )
+    expect(seededOrgRoot.entries.map((entry) => entry.path)).toContain('Projects')
+
     await writeMemoryFile({
       database: database as never,
       vault: {
@@ -831,6 +841,52 @@ describe('memory foundation scenario coverage', () => {
     expect(
       combinedSearch.results.some((result) => result.scopeType === 'member')
     ).toBe(true)
+  })
+
+  it('lazily bootstraps missing org and member vaults for first memory reads', async () => {
+    const database = new ScenarioMemoryDatabase()
+    const storage = new ScenarioMemoryStorage()
+
+    const org = {
+      id: 'org_existing',
+      name: 'Existing Org',
+      slug: 'existing-org',
+    }
+    const identity = {
+      org,
+      orgMember: {
+        id: 'org_member_existing',
+        orgId: org.id,
+        userId: 'user_existing',
+        role: 'owner' as const,
+      },
+    }
+
+    const orgManifest = await getMemoryManifest(database as never, {
+      orgId: org.id,
+      orgMemberId: identity.orgMember.id,
+      org,
+      orgMember: identity.orgMember,
+      scope: 'org',
+      storage,
+    })
+    const memberRoot = await listMemoryDirectory(database as never, {
+      orgId: org.id,
+      orgMemberId: identity.orgMember.id,
+      org,
+      orgMember: identity.orgMember,
+      scope: 'member',
+      storage,
+    })
+
+    expect(orgManifest.parsed.scopeType).toBe('org')
+    expect(database.vaults).toHaveLength(2)
+    expect(memberRoot.entries.map((entry) => entry.path)).toContain(
+      'MEMORY.md'
+    )
+    expect(memberRoot.entries.map((entry) => entry.path)).toContain(
+      'Preferences'
+    )
   })
 
   it('covers structural maintenance across org and member vaults, including worker-driven maintenance', async () => {

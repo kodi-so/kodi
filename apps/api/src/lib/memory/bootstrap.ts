@@ -436,10 +436,6 @@ export async function ensureOrgMemoryVault(
   }
 
   const seedPlan = buildOrgVaultSeedPlan(org)
-  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
-    rootPath: seedPlan.rootPath,
-    manifestPath: seedPlan.manifestPath,
-  })
 
   for (const directory of seedPlan.directories) {
     await resolvedStorage.createDirectory(`${seedPlan.rootPath}/${directory.path}`)
@@ -452,6 +448,11 @@ export async function ensureOrgMemoryVault(
       contentType: 'text/markdown; charset=utf-8',
     })
   }
+
+  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
+    rootPath: seedPlan.rootPath,
+    manifestPath: seedPlan.manifestPath,
+  })
 
   return database.transaction(async (tx) => {
     await tx.execute(
@@ -514,10 +515,6 @@ export async function ensureMemberMemoryVault(
   }
 
   const seedPlan = buildMemberVaultSeedPlan(identity)
-  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
-    rootPath: seedPlan.rootPath,
-    manifestPath: seedPlan.manifestPath,
-  })
 
   for (const directory of seedPlan.directories) {
     await resolvedStorage.createDirectory(`${seedPlan.rootPath}/${directory.path}`)
@@ -530,6 +527,11 @@ export async function ensureMemberMemoryVault(
       contentType: 'text/markdown; charset=utf-8',
     })
   }
+
+  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
+    rootPath: seedPlan.rootPath,
+    manifestPath: seedPlan.manifestPath,
+  })
 
   return database.transaction(async (tx) => {
     await tx.execute(

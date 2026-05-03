@@ -21,6 +21,8 @@ export const memoryRouter = router({
       return getMemoryManifest(ctx.db, {
         orgId: ctx.org.id,
         orgMemberId: ctx.membership.id,
+        org: ctx.org,
+        orgMember: ctx.membership,
         scope: input.scope,
       })
     }),
@@ -36,6 +38,8 @@ export const memoryRouter = router({
       return listMemoryDirectory(ctx.db, {
         orgId: ctx.org.id,
         orgMemberId: ctx.membership.id,
+        org: ctx.org,
+        orgMember: ctx.membership,
         scope: input.scope,
         path: input.path,
       })
@@ -52,6 +56,8 @@ export const memoryRouter = router({
       return readMemoryPath(ctx.db, {
         orgId: ctx.org.id,
         orgMemberId: ctx.membership.id,
+        org: ctx.org,
+        orgMember: ctx.membership,
         scope: input.scope,
         path: input.path,
       })
@@ -69,6 +75,8 @@ export const memoryRouter = router({
       return searchMemory(ctx.db, {
         orgId: ctx.org.id,
         orgMemberId: ctx.membership.id,
+        org: ctx.org,
+        orgMember: ctx.membership,
         scope: input.scope,
         query: input.query,
         limit: input.limit,

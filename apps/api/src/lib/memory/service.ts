@@ -8,9 +8,15 @@ import {
   memoryPaths,
   memoryVaults,
   sql,
+  type OrgMember,
+  type Organization,
   type MemoryPath,
   type MemoryVault,
 } from '@kodi/db'
+import {
+  ensureMemberMemoryVault,
+  ensureOrgMemoryVault,
+} from './bootstrap'
 import { parseMemoryDocument, parseMemoryManifest } from './parse'
 import type { MemoryStorage } from './storage'
 
@@ -21,6 +27,12 @@ type ResolvedMemoryVault = Pick<
   MemoryVault,
   'id' | 'orgId' | 'scopeType' | 'orgMemberId' | 'rootPath' | 'manifestPath'
 >
+
+type MemoryVaultBootstrapContext = {
+  org?: Pick<Organization, 'id' | 'name' | 'slug'>
+  orgMember?: Pick<OrgMember, 'id' | 'orgId' | 'userId' | 'role'>
+  storage?: MemoryStorage
+}
 
 export type MemoryDirectoryEntry = Pick<
   MemoryPath,
@@ -70,7 +82,7 @@ async function resolveMemoryVault(
     orgId: string
     orgMemberId: string
     scope: MemoryScope
-  }
+  } & MemoryVaultBootstrapContext
 ) {
   const where =
     input.scope === 'org'
@@ -96,6 +108,25 @@ async function resolveMemoryVault(
     where,
   })
 
+  if (!vault && input.org && input.scope === 'org') {
+    return ensureOrgMemoryVault(
+      database,
+      input.org,
+      input.storage
+    ) as Promise<ResolvedMemoryVault>
+  }
+
+  if (!vault && input.org && input.orgMember && input.scope === 'member') {
+    return ensureMemberMemoryVault(
+      database,
+      {
+        org: input.org,
+        orgMember: input.orgMember,
+      },
+      input.storage
+    ) as Promise<ResolvedMemoryVault>
+  }
+
   if (!vault) {
     throw new TRPCError({
       code: 'NOT_FOUND',
@@ -115,7 +146,7 @@ async function resolveSearchVaults(
     orgId: string
     orgMemberId: string
     scope: MemorySearchScope
-  }
+  } & MemoryVaultBootstrapContext
 ) {
   if (input.scope === 'org' || input.scope === 'member') {
     return [
@@ -163,10 +194,10 @@ export async function getMemoryManifest(
     orgMemberId: string
     scope: MemoryScope
     storage?: MemoryStorage
-  }
+  } & MemoryVaultBootstrapContext
 ) {
   const storage = await resolveStorage(input.storage)
-  const vault = await resolveMemoryVault(database, input)
+  const vault = await resolveMemoryVault(database, { ...input, storage })
   const content = (
     await storage.readFile(buildStoragePath(vault, 'MEMORY.md'))
   ).toString('utf8')
@@ -186,7 +217,8 @@ export async function listMemoryDirectory(
     orgMemberId: string
     scope: MemoryScope
     path?: string
-  }
+    storage?: MemoryStorage
+  } & MemoryVaultBootstrapContext
 ) {
   const vault = await resolveMemoryVault(database, input)
   const normalizedPath = normalizePath(input.path)
@@ -234,10 +266,10 @@ export async function readMemoryPath(
     scope: MemoryScope
     path: string
     storage?: MemoryStorage
-  }
+  } & MemoryVaultBootstrapContext
 ) {
   const storage = await resolveStorage(input.storage)
-  const vault = await resolveMemoryVault(database, input)
+  const vault = await resolveMemoryVault(database, { ...input, storage })
   const normalizedPath = normalizePath(input.path)
 
   const metadata = await database.query.memoryPaths.findFirst({
@@ -287,7 +319,7 @@ export async function searchMemory(
     query: string
     limit?: number
     storage?: MemoryStorage
-  }
+  } & MemoryVaultBootstrapContext
 ) {
   const normalizedQuery = input.query.trim()
   if (!normalizedQuery) {

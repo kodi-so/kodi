@@ -3,6 +3,7 @@ import type { OpenClawPluginApi } from 'openclaw/plugin-sdk'
 import type { KodiBridgeContext, KodiBridgeModule } from '../../types/module'
 import type { BridgeCore } from '../bridge-core'
 import type { EventBus } from '../event-bus'
+import type { AgentManager } from '../agent-manager'
 import {
   createPolicyLoader,
   parsePolicyResponse,
@@ -15,19 +16,22 @@ import {
   type PendingApproval,
 } from './approval-queue'
 import { createResume, type ResumeApi } from './resume'
+import { createInterceptor, type Interceptor } from './interceptor'
 
 /**
  * `autonomy` — per-agent policy enforcement on tool invocations.
  *
  * Pieces shipped so far:
  *   - KOD-389 / M5-T1: policy loader (cached, fetches from Kodi)
- *   - KOD-415 / M5-T8: durable approval queue (this PR — JSONL-backed,
- *     survives plugin restart, periodic sweep timer for expiries)
- *
- * KOD-390 (M5-T2): the pre-tool-invoke interceptor that consumes
- * `autonomy.getPolicy(agentId)` and either allows / denies / enqueues
- * for approval. This module exposes both the loader and the queue so
- * the interceptor can be wired up cleanly when M5-T2 lands.
+ *   - KOD-394 / M5-T6: shared action-class classifier in `@kodi/shared`
+ *   - KOD-415 / M5-T8: durable approval queue (JSONL-backed, survives
+ *     plugin restart, periodic sweep timer for expiries)
+ *   - KOD-416 / M5-T9: resume primitive — injects a follow-up message
+ *     into the agent session once the user decides
+ *   - KOD-390 / M5-T2: the `before_tool_call` interceptor — wires the
+ *     four pieces above to enforce policy on every tool call. Allow,
+ *     deny, or enqueue-for-approval (deferred pattern, no in-memory
+ *     waiting).
  */
 
 export type AutonomyModuleApi = {
@@ -38,6 +42,9 @@ export type AutonomyModuleApi = {
   /** Resume an agent session after approval (KOD-416). Wired by
    * KOD-391's resolve handler once the user's decision lands. */
   resume: ResumeApi
+  /** before_tool_call interceptor (KOD-390). Surfaced for tests; the
+   * runtime registration happens inside `register()` below. */
+  interceptor: Interceptor
 }
 
 export const autonomyModule: KodiBridgeModule = {
@@ -50,6 +57,10 @@ export const autonomyModule: KodiBridgeModule = {
     const eventBus = ctx.eventBus as EventBus | undefined
     if (!eventBus) {
       throw new Error('autonomy requires event-bus to register first')
+    }
+    const agentManager = ctx.agentManager as AgentManager | undefined
+    if (!agentManager) {
+      throw new Error('autonomy requires agent-manager to register first')
     }
 
     const loader = createPolicyLoader({
@@ -96,7 +107,36 @@ export const autonomyModule: KodiBridgeModule = {
         }),
     })
 
-    const moduleApi: AutonomyModuleApi = { loader, queue, resume }
+    // KOD-390: pre-tool-invoke interceptor. Registered against the
+    // typed `before_tool_call` hook so we can return `{ block, blockReason }`
+    // — not the SDK's `requireApproval` (that one waits in-memory and
+    // doesn't survive plugin restarts; our deferred pattern needs the
+    // durable queue + resume primitive instead).
+    const interceptor = createInterceptor({
+      loader,
+      queue,
+      registry: agentManager.registry,
+      emit: (kind, payload, opts) => eventBus.emitter.emit(kind, payload, opts),
+    })
+    api.on('before_tool_call', async (event, hookCtx) => {
+      const result = await interceptor.handleBeforeToolCall(
+        {
+          toolName: event.toolName,
+          params: event.params,
+          toolCallId: event.toolCallId,
+          runId: event.runId,
+        },
+        {
+          agentId: hookCtx.agentId,
+          sessionKey: hookCtx.sessionKey,
+          toolName: hookCtx.toolName,
+          toolCallId: hookCtx.toolCallId,
+        },
+      )
+      return result
+    })
+
+    const moduleApi: AutonomyModuleApi = { loader, queue, resume, interceptor }
     ctx.autonomy = moduleApi
   },
 }
@@ -132,3 +172,13 @@ export {
   type ResumeOutcome,
   type SessionInjectFn,
 } from './resume'
+export {
+  createInterceptor,
+  evaluatePolicy,
+  resolveOverride,
+  type CreateInterceptorOptions,
+  type Decision,
+  type Interceptor,
+  type InterceptorAgentLookup,
+  type InterceptorEmitFn,
+} from './interceptor'

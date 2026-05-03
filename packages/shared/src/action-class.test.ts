@@ -5,6 +5,7 @@ import {
   READ_VERBS,
   WRITE_VERBS,
   classifyToolCall,
+  classifyToolCallForPolicy,
   type ToolActionClass,
 } from './action-class'
 
@@ -141,6 +142,20 @@ describe('classifyToolCall — fallback + edge cases', () => {
   test('verb-only token without context still classifies', () => {
     expect(classifyToolCall('LIST')).toBe('read')
     expect(classifyToolCall('CREATE')).toBe('write')
+  })
+})
+
+describe('classifyToolCallForPolicy — same matching, write fallback', () => {
+  test('matched verbs unchanged from classifyToolCall', () => {
+    expect(classifyToolCallForPolicy('GMAIL_LIST_MESSAGES')).toBe('read')
+    expect(classifyToolCallForPolicy('GMAIL_SEND_EMAIL')).toBe('write')
+    expect(classifyToolCallForPolicy('GMAIL_DRAFT_REPLY')).toBe('draft')
+    expect(classifyToolCallForPolicy('SCIM_USERS_LIST')).toBe('admin')
+  })
+
+  test('unknown verb → write (vs read for the display variant)', () => {
+    expect(classifyToolCallForPolicy('GMAIL_FROBNICATE')).toBe('write')
+    expect(classifyToolCallForPolicy('')).toBe('write')
   })
 })
 

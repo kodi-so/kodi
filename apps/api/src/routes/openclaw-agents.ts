@@ -20,6 +20,11 @@ import {
   computeEffectiveToolkitAllowlist,
   type ComposioAction,
 } from '../lib/composio-sessions'
+import { getSessionFromHeaders } from '../context'
+import {
+  setAgentAutonomyPolicy,
+  SetAgentAutonomyBodySchema,
+} from '../lib/openclaw/autonomy'
 
 /**
  * GET /api/openclaw/agents
@@ -225,5 +230,63 @@ export function registerOpenClawAgentsRoutes(app: Hono): void {
     })
 
     return c.json<AutonomyPolicyResponse>(rowToResponse(row, agentId))
+  })
+
+  /**
+   * PUT /api/openclaw/agents/:id/autonomy (KOD-392 / M5-T4)
+   *
+   * Admin mutation: set the autonomy level + overrides for a single agent.
+   * Auth: better-auth session cookie + role='owner' membership in the
+   * agent's org. After the upsert, signs and POSTs to
+   * `/plugins/kodi-bridge/agents/update-policy` so the plugin's loader
+   * cache invalidates within seconds (rather than waiting for the
+   * 15-min TTL).
+   */
+  app.put('/api/openclaw/agents/:id/autonomy', async (c) => {
+    const session = await getSessionFromHeaders(c.req.raw.headers)
+    if (!session?.user?.id) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    const agentId = c.req.param('id')
+    if (!agentId) return c.json({ error: 'Missing agent id' }, 400)
+
+    const agent = await db.query.openClawAgents.findFirst({
+      where: eq(openClawAgents.id, agentId),
+    })
+    if (!agent) return c.json({ error: 'Not Found' }, 404)
+
+    // Ownership check: caller must be `owner` of the agent's org. We use
+    // the existing org_members table — same primitive tRPC's
+    // `requireOwner` middleware leans on.
+    const membership = await db.query.orgMembers.findFirst({
+      where: and(
+        eq(orgMembers.orgId, agent.orgId),
+        eq(orgMembers.userId, session.user.id),
+      ),
+    })
+    if (!membership) return c.json({ error: 'Forbidden' }, 403)
+    if (membership.role !== 'owner') {
+      return c.json({ error: 'Forbidden — owner role required' }, 403)
+    }
+
+    const rawBody = await c.req.json().catch(() => null)
+    const parsed = SetAgentAutonomyBodySchema.safeParse(rawBody)
+    if (!parsed.success) {
+      return c.json(
+        { error: 'Invalid body', details: parsed.error.flatten() },
+        400,
+      )
+    }
+
+    const result = await setAgentAutonomyPolicy({
+      agentId,
+      orgId: agent.orgId,
+      autonomyLevel: parsed.data.autonomy_level,
+      overrides: parsed.data.overrides ?? null,
+      decidedByUserId: session.user.id,
+    })
+
+    return c.json(result, 200)
   })
 }

@@ -222,3 +222,27 @@ export async function pushApprovalsResolve(
     body: input.body as unknown as Record<string, unknown>,
   })
 }
+
+export type UpdatePolicyRequestBody = {
+  agent_id: string
+  autonomy_level: 'strict' | 'normal' | 'lenient' | 'yolo'
+  overrides: Record<string, 'allow' | 'ask' | 'deny'> | null
+}
+
+/**
+ * Convenience wrapper for `POST /plugins/kodi-bridge/agents/update-policy`
+ * (KOD-389 receive end / KOD-392 send end). Pushes a fresh autonomy policy
+ * to the plugin so its in-memory loader cache invalidates without waiting
+ * for the 15-min TTL to elapse.
+ */
+export async function pushUpdatePolicy(
+  input: Omit<PushPluginRouteInput, 'subPath' | 'body'> & {
+    body: UpdatePolicyRequestBody
+  },
+): Promise<PushResult> {
+  return pushPluginRoute({
+    ...input,
+    subPath: 'agents/update-policy',
+    body: input.body as unknown as Record<string, unknown>,
+  })
+}

@@ -4,6 +4,7 @@ import {
   type EventEnvelope,
   type EventKind,
 } from '@kodi/shared/events'
+import { createToolApprovalRequestedHandler } from './tool-approval-handlers'
 
 /**
  * Per-kind dispatch for events arriving on `/api/openclaw/events`.
@@ -88,6 +89,8 @@ async function noop(): Promise<void> {
 // for that specific case with a debounce. Until then, the canonical
 // row in plugin_event_log is the audit record.
 
+const handleToolApprovalRequested = createToolApprovalRequestedHandler()
+
 const HANDLERS: Record<EventKind, EventHandler> = {
   'plugin.started': handlePluginStarted,
   'plugin.degraded': noop,
@@ -109,7 +112,7 @@ const HANDLERS: Record<EventKind, EventHandler> = {
   'tool.invoke.before': noop,
   'tool.invoke.after': noop,
   'tool.denied': noop,
-  'tool.approval_requested': noop,
+  'tool.approval_requested': handleToolApprovalRequested,
   'tool.approval_resolved': noop,
   'tool.approval_timeout': noop,
   'composio.session_failed': noop,

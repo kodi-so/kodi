@@ -60,6 +60,7 @@ function makeDeps(opts: {
 
   const composio: ComposioModuleApi = {
     registerToolsForAgent: async () => ({ status: 'pending', registered_tool_count: 0 }),
+    runActionForAgent: async () => ({ kind: 'failed', reason: 'no_session', message: 'mock' }),
     unregisterToolsForAgent: async (params) => {
       composioUnregisterCalls.push(params)
       if (opts.composioUnregisterThrows) throw opts.composioUnregisterThrows

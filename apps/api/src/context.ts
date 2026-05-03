@@ -22,6 +22,24 @@ function getAuth() {
   return _auth as ReturnType<typeof betterAuth>
 }
 
+/**
+ * Resolve the better-auth session from raw request headers. Returns null
+ * for unauthenticated requests OR if the auth lookup fails. Used by Hono
+ * routes that need session-cookie auth (e.g. KOD-392's PUT route);
+ * tRPC's middleware uses the same primitive via `createContext`.
+ */
+export async function getSessionFromHeaders(
+  headers: Headers,
+): Promise<Session | null> {
+  try {
+    const auth = getAuth()
+    const result = await auth.api.getSession({ headers })
+    return result ? (result as Session) : null
+  } catch {
+    return null
+  }
+}
+
 export type Session = {
   user: { id: string; email: string; name: string; image?: string | null }
   session: { id: string; userId: string }
@@ -34,16 +52,7 @@ export type OrgMemberWithOrg = typeof orgMembers.$inferSelect & {
 
 export async function createContext(opts: { req: Request; resHeaders: Headers }) {
   // Try to validate the session from the incoming request
-  let session: Session | null = null
-  try {
-    const auth = getAuth()
-    const result = await auth.api.getSession({ headers: opts.req.headers })
-    if (result) {
-      session = result as Session
-    }
-  } catch {
-    // Unauthenticated or session fetch failed — session stays null
-  }
+  const session = await getSessionFromHeaders(opts.req.headers)
 
   // Per-request membership cache — avoids duplicate DB hits across middleware + resolver
   const membershipCache = new Map<string, OrgMemberWithOrg | null>()

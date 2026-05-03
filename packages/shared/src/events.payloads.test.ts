@@ -108,6 +108,7 @@ const validPayloads: Record<EventKind, unknown> = {
     policy_level: 'normal',
   },
   'tool.approval_resolved': { request_id: REQUEST_ID, approved: true },
+  'tool.approval_timeout': { request_id: REQUEST_ID },
   'composio.session_failed': { user_id: USER_ID, error: 'OAuth expired' },
   'composio.session_rotated': { user_id: USER_ID },
 }

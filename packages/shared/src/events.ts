@@ -65,6 +65,7 @@ export const EVENT_KINDS = [
   'tool.denied',
   'tool.approval_requested',
   'tool.approval_resolved',
+  'tool.approval_timeout',
 
   // Composio
   'composio.session_failed',
@@ -219,6 +220,10 @@ const ToolApprovalResolvedPayload = z.object({
   reason: z.string().optional(),
 })
 
+const ToolApprovalTimeoutPayload = z.object({
+  request_id: z.string().uuid(),
+})
+
 const ComposioSessionFailedPayload = z.object({
   user_id: z.string().uuid(),
   error: z.string().min(1),
@@ -251,6 +256,7 @@ export const PayloadByKind: Record<EventKind, z.ZodTypeAny> = {
   'tool.denied': ToolDeniedPayload,
   'tool.approval_requested': ToolApprovalRequestedPayload,
   'tool.approval_resolved': ToolApprovalResolvedPayload,
+  'tool.approval_timeout': ToolApprovalTimeoutPayload,
   'composio.session_failed': ComposioSessionFailedPayload,
   'composio.session_rotated': ComposioSessionRotatedPayload,
 }

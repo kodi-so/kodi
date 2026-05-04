@@ -16,6 +16,13 @@ This directory contains the planning and implementation docs for the `kodi-bridg
   - upload-ready Linear project, milestone, and issue plan
   - translates the plugin work into a team-reviewable Linear structure
 
+- [autonomy.md](./autonomy.md)
+  - per-agent autonomy admin guide: levels, overrides, approval flow, audit
+  - covers the API surface admins use today (until a UI ships)
+
+- [runbook.md](./runbook.md)
+  - operator reference: where data lives, how to inspect it, what to do when things go wrong
+
 ## Recommended Reading Order
 
 1. [architecture-plan.md](./architecture-plan.md)

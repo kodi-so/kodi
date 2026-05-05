@@ -10,6 +10,7 @@ import { Textarea } from '@kodi/ui/components/textarea'
 import { cn } from '@kodi/ui/lib/utils'
 import { useSession } from '@/lib/auth-client'
 import { trpc } from '@/lib/trpc'
+import { getBudgetErrorMessage, BILLING_SETTINGS_PATH } from '@/lib/billing-errors'
 
 type ConversationMessage = {
   id: string
@@ -28,6 +29,7 @@ type DashboardAssistantProps = {
   orgId: string
   orgName: string
   embedded?: boolean
+  initialPrompt?: string | null
   initialThreadId?: string | null
   buildThreadUrl?: (threadId: string | null) => string
 }
@@ -122,6 +124,7 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
   const [loadingConversation, setLoadingConversation] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [promptHandled, setPromptHandled] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const hasInitialScrollRef = useRef(false)
 
@@ -179,8 +182,8 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
     hasInitialScrollRef.current = true
   }, [loadingConversation, messages.length, sending])
 
-  async function sendMessage() {
-    const content = draft.trim()
+  async function sendMessage(messageOverride?: string) {
+    const content = (messageOverride ?? draft).trim()
     if (!content || sending) return
 
     const optimisticUserId = makeTempId('message')
@@ -197,7 +200,7 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
       userImage: session?.user?.image ?? null,
     }
 
-    setDraft('')
+    if (!messageOverride) setDraft('')
     setSending(true)
     setError(null)
     setMessages((current) => [...current, optimisticUserMessage])
@@ -235,15 +238,32 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
         current.filter((message) => message.id !== optimisticUserId)
       )
       setDraft(content)
+      const budgetMsg = getBudgetErrorMessage(sendError)
       setError(
-        sendError instanceof Error
-          ? sendError.message
-          : 'Failed to send message.'
+        budgetMsg ??
+          (sendError instanceof Error
+            ? sendError.message
+            : 'Failed to send message.'),
       )
     } finally {
       setSending(false)
     }
   }
+
+  useEffect(() => {
+    if (
+      !props.initialPrompt ||
+      loadingConversation ||
+      promptHandled ||
+      sending
+    ) {
+      return
+    }
+
+    setPromptHandled(true)
+    void sendMessage(props.initialPrompt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingConversation, promptHandled, props.initialPrompt, sending])
 
   const content = (
     <section className="flex h-full min-h-0 flex-col bg-background">
@@ -365,7 +385,17 @@ export function DashboardAssistant(props: DashboardAssistantProps) {
         </div>
 
         {error ? (
-          <p className="mt-2 text-[13px] text-brand-danger">{error}</p>
+          <div className="mt-2 text-[13px] text-brand-danger">
+            {error}
+            {getBudgetErrorMessage(error) && (
+              <a
+                href={BILLING_SETTINGS_PATH}
+                className="ml-1 text-brand-info underline underline-offset-2"
+              >
+                Go to Billing Settings
+              </a>
+            )}
+          </div>
         ) : null}
       </div>
     </section>

@@ -105,6 +105,9 @@ export async function processMeetingStructuredInsights(
 
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:structured-insights`,
+    messageChannel: 'meeting',
     messages: buildStructuredInsightMessages({
       meetingSession: input.meetingSession,
       analysis,

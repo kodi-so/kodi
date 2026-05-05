@@ -32,6 +32,11 @@ import {
   listToolkitPolicies,
 } from '../composio'
 import { logActivity } from '../activity'
+import { emitTaskActivity } from '../../services/tasks'
+import {
+  emitSlackMemoryUpdateEvent,
+  resolveSlackMemoryEventInput,
+} from '../memory/slack-events'
 
 type AnyDb = typeof db
 
@@ -488,6 +493,31 @@ async function insertWorkItemSyncApproval(params: {
     .set({ approvalRequestId: approval.id })
     .where(eq(toolActionRuns.id as never, run.id as never) as never)
 
+  if (params.workItemId) {
+    await params.db
+      .update(workItems)
+      .set({
+        syncState: 'queued',
+        executionState: 'awaiting_approval',
+        updatedAt: new Date(),
+      } as never)
+      .where(eq(workItems.id as never, params.workItemId as never) as never)
+
+    await emitTaskActivity(params.db, {
+      orgId: params.orgId,
+      workItemId: params.workItemId,
+      eventType: 'edited',
+      actorType: 'user',
+      actorUserId: params.actorUserId,
+      summary: `Queued ${TOOLKIT_DISPLAY_NAME[params.toolkitSlug as WorkItemSyncTarget]} sync for approval.`,
+      metadata: {
+        approvalRequestId: approval.id,
+        toolActionRunId: run.id,
+        toolkitSlug: params.toolkitSlug,
+      },
+    })
+  }
+
   await logActivity(
     params.db,
     params.orgId,
@@ -516,6 +546,26 @@ async function executeSync(params: {
   connection: ToolkitConnection
   plan: SyncPlan
 }): Promise<{ externalId: string | null; externalUrl: string | null }> {
+  if (params.workItemId) {
+    await params.db
+      .update(workItems)
+      .set({
+        syncState: 'syncing',
+        executionState: 'running',
+        updatedAt: new Date(),
+      } as never)
+      .where(eq(workItems.id as never, params.workItemId as never) as never)
+
+    await emitTaskActivity(params.db, {
+      orgId: params.orgId,
+      workItemId: params.workItemId,
+      eventType: 'execution_started',
+      actorType: 'kodi',
+      summary: `Started ${TOOLKIT_DISPLAY_NAME[params.toolkitSlug as WorkItemSyncTarget]} sync.`,
+      metadata: { toolkitSlug: params.toolkitSlug },
+    })
+  }
+
   const composio = getComposioClient()
   const idempotencyKey = [
     'work_item_sync_direct',
@@ -640,6 +690,56 @@ async function executeSync(params: {
         externalId,
         externalUrl
       )
+    } else if (!succeeded && params.workItemId) {
+      await params.db
+        .update(workItems)
+        .set({
+          syncState: 'error',
+          executionState: 'failed',
+          lastSyncError: response.error ?? 'Execution failed with no error message.',
+          updatedAt: new Date(),
+        } as never)
+        .where(eq(workItems.id as never, params.workItemId as never) as never)
+
+      await emitTaskActivity(params.db, {
+        orgId: params.orgId,
+        workItemId: params.workItemId,
+        eventType: 'sync_failed',
+        actorType: 'kodi',
+        summary: `Failed to sync task to ${TOOLKIT_DISPLAY_NAME[params.toolkitSlug as WorkItemSyncTarget]}.`,
+        metadata: {
+          toolkitSlug: params.toolkitSlug,
+          error: response.error ?? null,
+          toolActionRunId: run.id,
+        },
+      })
+    }
+
+    if (succeeded && params.toolkitSlug === 'slack') {
+      const slackInput = resolveSlackMemoryEventInput({
+        orgId: params.orgId,
+        actorUserId: params.actorUserId,
+        visibility: 'shared',
+        action: params.plan.action,
+        sourceType: 'meeting',
+        sourceId: params.meetingSessionId ?? params.workItemId,
+        argumentsPayload: params.plan.argumentsPayload,
+        responsePayload: response.data ?? null,
+      })
+
+      if (slackInput) {
+        try {
+          await emitSlackMemoryUpdateEvent(slackInput)
+        } catch (error) {
+          console.warn('[meeting-sync] slack memory event dispatch failed', {
+            orgId: params.orgId,
+            meetingSessionId: params.meetingSessionId,
+            workItemId: params.workItemId,
+            action: params.plan.action,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
     }
 
     await params.db
@@ -686,6 +786,31 @@ async function executeSync(params: {
       .set({ expiredAt: new Date() })
       .where(eq(toolSessionRuns.id as never, sessionRun.id as never) as never)
 
+    if (params.workItemId) {
+      await params.db
+        .update(workItems)
+        .set({
+          syncState: 'error',
+          executionState: 'failed',
+          lastSyncError: message,
+          updatedAt: new Date(),
+        } as never)
+        .where(eq(workItems.id as never, params.workItemId as never) as never)
+
+      await emitTaskActivity(params.db, {
+        orgId: params.orgId,
+        workItemId: params.workItemId,
+        eventType: 'sync_failed',
+        actorType: 'kodi',
+        summary: `Failed to sync task to ${TOOLKIT_DISPLAY_NAME[params.toolkitSlug as WorkItemSyncTarget]}.`,
+        metadata: {
+          toolkitSlug: params.toolkitSlug,
+          error: message,
+          toolActionRunId: run.id,
+        },
+      })
+    }
+
     throw error
   }
 
@@ -713,16 +838,47 @@ export async function updateWorkItemAfterSync(
     newMetadata = { ...(item?.metadata ?? {}), externalUrl }
   }
 
+  const item = await dbInstance.query.workItems.findFirst({
+    where: (fields, { eq }) => eq(fields.id, workItemId),
+    columns: { orgId: true, metadata: true },
+  })
+
   await dbInstance
     .update(workItems)
     .set({
       status: 'synced',
+      syncState: 'healthy',
       externalSystem: toolkitSlug,
       externalId: externalId ?? undefined,
+      linkedExternalSystem: toolkitSlug,
+      linkedExternalId: externalId,
+      linkedExternalUrl: externalUrl,
+      lastSyncedAt: new Date(),
+      lastSyncError: null,
+      externalSnapshot: {
+        system: toolkitSlug,
+        id: externalId,
+        url: externalUrl,
+      },
       metadata: newMetadata,
       updatedAt: new Date(),
     } as never)
     .where(eq(workItems.id as never, workItemId as never) as never)
+
+  if (item) {
+    await emitTaskActivity(dbInstance, {
+      orgId: item.orgId,
+      workItemId,
+      eventType: 'sync_succeeded',
+      actorType: 'system',
+      summary: `Task synced to ${TOOLKIT_DISPLAY_NAME[toolkitSlug]}.`,
+      toValue: {
+        externalSystem: toolkitSlug,
+        externalId,
+        externalUrl,
+      },
+    })
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -48,6 +48,9 @@ export async function forwardMeetingEventToOpenClaw(
 
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:event-forwarding`,
+    messageChannel: 'meeting',
     messages: buildOpenClawMeetingMessages(envelope),
     timeoutMs: 10_000,
   })

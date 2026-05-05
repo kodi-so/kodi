@@ -17,6 +17,7 @@ import type {
 } from './_components/meeting-utils'
 import { MeetingRow } from './_components/meeting-row'
 import { StartMeetingDialog } from './_components/start-meeting-dialog'
+import type { LocalSessionStartInput } from './_components/start-meeting-dialog'
 import { BotIdentityButton } from './_components/bot-identity-bar'
 import { EmptyState } from './_components/empty-state'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -171,6 +172,38 @@ export default function MeetingsPage() {
     })
   }
 
+  async function startLocalSession(input: LocalSessionStartInput) {
+    if (!activeOrg) return
+
+    startStartTransition(() => {
+      void (async () => {
+        try {
+          const result = await trpc.meeting.startLocalSession.mutate({
+            orgId: activeOrg.orgId,
+            ...input,
+            participationMode:
+              workspaceCopilotSettings?.defaultParticipationMode ?? undefined,
+          })
+
+          window.sessionStorage.setItem(
+            `kodi.localMeeting.${result.meetingSessionId}.ingestToken`,
+            result.ingestToken
+          )
+          setError(null)
+          setTitle('')
+          setDialogOpen(false)
+          router.push(`/meetings/${encodeMeetingId(result.meetingSessionId)}`)
+        } catch (err) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'Failed to start the local session.'
+          )
+        }
+      })()
+    })
+  }
+
   const liveCount = useMemo(
     () =>
       meetings.filter((meeting) =>
@@ -225,11 +258,11 @@ export default function MeetingsPage() {
 
         {/* Page header */}
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Meetings
             </h1>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Summaries, transcripts, and follow-ups from every conversation
               Kodi has joined.
             </p>
@@ -262,7 +295,8 @@ export default function MeetingsPage() {
               onTitleChange={setTitle}
               isStarting={isStarting}
               onStart={() => void startMeeting()}
-              copilotSettings={workspaceCopilotSettings}
+              onStartLocal={(input) => void startLocalSession(input)}
+              copilotConfig={copilotConfig}
             />
           </div>
         </div>

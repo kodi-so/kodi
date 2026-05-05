@@ -1,63 +1,81 @@
 'use client'
 
-import Link from 'next/link'
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Button } from '@kodi/ui/components/button'
 import { Input } from '@kodi/ui/components/input'
 import { Label } from '@kodi/ui/components/label'
 import { Separator } from '@kodi/ui/components/separator'
-import { signIn } from '@/lib/auth-client'
+import { authClient } from '@/lib/auth-client'
 import { AuthShell } from '@/components/auth-shell'
 import { GoogleAuthButton } from '@/components/google-auth-button'
+import { Mail } from 'lucide-react'
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect') ?? '/chat'
 
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [sent, setSent] = useState(false)
 
   async function handleGoogleSignIn() {
     setGoogleLoading(true)
     setError('')
-
     try {
-      await signIn.social({ provider: 'google', callbackURL: redirectTo })
+      await authClient.signIn.social({ provider: 'google', callbackURL: redirectTo })
     } catch {
       setError('Google sign-in failed. Try again.')
       setGoogleLoading(false)
     }
   }
 
-  async function handleEmailSignIn(event: React.FormEvent) {
+  async function handleMagicLink(event: React.FormEvent) {
     event.preventDefault()
     setLoading(true)
     setError('')
 
-    try {
-      const result = await signIn.email({
-        email,
-        password,
-        callbackURL: redirectTo,
-      })
+    const result = await authClient.signIn.magicLink({
+      email,
+      callbackURL: redirectTo,
+    })
 
-      if (result?.error) {
-        setError(result.error.message ?? 'Email or password is incorrect.')
-        setLoading(false)
-        return
-      }
-
-      router.push(redirectTo)
-    } catch {
-      setError('We could not sign you in. Try again.')
+    if (result?.error) {
+      setError(result.error.message ?? 'Could not send sign-in link. Try again.')
       setLoading(false)
+      return
     }
+
+    setSent(true)
+    setLoading(false)
+  }
+
+  if (sent) {
+    return (
+      <AuthShell
+        title="Check your inbox"
+        description={`We sent a sign-in link to ${email}`}
+      >
+        <div className="flex flex-col items-center gap-4 py-2 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/10 border border-indigo-500/20">
+            <Mail className="h-6 w-6 text-indigo-400" />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Click the link in the email to sign in. It expires in 10 minutes.
+          </p>
+          <button
+            type="button"
+            onClick={() => { setSent(false); setEmail('') }}
+            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+          >
+            Use a different email
+          </button>
+        </div>
+      </AuthShell>
+    )
   }
 
   return (
@@ -78,28 +96,17 @@ function LoginForm() {
         <Separator className="flex-1" />
       </div>
 
-      <form onSubmit={handleEmailSignIn} className="space-y-4">
+      <form onSubmit={handleMagicLink} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
             required
+            autoFocus
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="Your password"
           />
         </div>
 
@@ -114,19 +121,9 @@ function LoginForm() {
           disabled={loading || googleLoading}
           className="w-full"
         >
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? 'Sending link...' : 'Continue with email'}
         </Button>
       </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        New to Kodi?{' '}
-        <Link
-          href="/signup"
-          className="text-foreground underline underline-offset-4"
-        >
-          Create an account
-        </Link>
-      </p>
     </AuthShell>
   )
 }

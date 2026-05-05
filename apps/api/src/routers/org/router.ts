@@ -1,8 +1,9 @@
 import { TRPCError } from '@trpc/server'
-import { activityLog, and, asc, desc, ensurePersonalOrganizationForUser, eq, orgMembers, organizations, user } from '@kodi/db'
+import { activityLog, and, asc, desc, ensureMemberOpenClawAgent, ensurePersonalOrganizationForUser, eq, instances, orgMembers, organizations, user } from '@kodi/db'
 import { z } from 'zod'
 import { router, protectedProcedure, memberProcedure, ownerProcedure } from '../../trpc'
 import { logActivity } from '../../lib/activity'
+import { deprovisionInstance } from '../instance/provisioning'
 
 async function listOrganizationsForUser(database: typeof import('@kodi/db').db, userId: string) {
   return database
@@ -10,6 +11,9 @@ async function listOrganizationsForUser(database: typeof import('@kodi/db').db, 
       orgId: organizations.id,
       orgName: organizations.name,
       orgSlug: organizations.slug,
+      orgImage: organizations.image,
+      orgStatus: organizations.status,
+      completedOnboardingAt: organizations.completedOnboardingAt,
       role: orgMembers.role,
       joinedAt: orgMembers.createdAt,
     })
@@ -47,6 +51,9 @@ export const orgRouter = router({
         orgId: membership.orgId,
         orgName: membership.orgName,
         orgSlug: membership.orgSlug,
+        orgImage: membership.orgImage,
+        orgStatus: membership.orgStatus,
+        completedOnboardingAt: membership.completedOnboardingAt,
         role: membership.role,
       }
     }),
@@ -80,6 +87,7 @@ export const orgRouter = router({
           joinedAt: orgMembers.createdAt,
           name: user.name,
           email: user.email,
+          image: user.image,
         })
         .from(orgMembers)
         .innerJoin(user, eq(orgMembers.userId, user.id))
@@ -90,15 +98,93 @@ export const orgRouter = router({
     }),
 
   /**
-   * org.update — owner only, updates org name (and optionally slug).
+   * org.update — owner only, updates org name and/or image.
    */
   update: ownerProcedure
-    .input(z.object({ name: z.string().min(1).max(80) }))
+    .input(z.object({
+      name: z.string().min(1).max(80).optional(),
+      image: z.string().nullable().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
+      const patch: Record<string, unknown> = {}
+      if (input.name !== undefined) patch.name = input.name.trim()
+      if (input.image !== undefined) patch.image = input.image
+      if (Object.keys(patch).length === 0) return { success: true }
       await ctx.db
         .update(organizations)
-        .set({ name: input.name.trim() })
+        .set(patch)
         .where(and(eq(organizations.id, ctx.org.id), eq(organizations.ownerId, ctx.session!.user.id)))
+      return { success: true }
+    }),
+
+  /**
+   * org.create — creates a new organization owned by the caller.
+   * The org starts in 'pending_billing' status until a subscription is confirmed.
+   */
+  create: protectedProcedure
+    .input(z.object({ name: z.string().min(1).max(80) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session!.user.id
+      const slug = `${input.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${crypto.randomUUID().slice(0, 8)}`
+      const [org] = await ctx.db
+        .insert(organizations)
+        .values({
+          name: input.name.trim(),
+          slug,
+          ownerId: userId,
+          status: 'pending_billing',
+        })
+        .returning()
+      if (!org) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create organization' })
+
+      // Add creator as owner member
+      const [member] = await ctx.db.insert(orgMembers).values({
+        orgId: org.id,
+        userId,
+        role: 'owner',
+      }).returning()
+
+      if (member) {
+        await ensureMemberOpenClawAgent(ctx.db, {
+          orgId: org.id,
+          orgMemberId: member.id,
+          displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Owner',
+          metadata: { source: 'org-create', role: 'owner' },
+        })
+      }
+
+      return { orgId: org.id, orgSlug: org.slug, orgName: org.name }
+    }),
+
+  /**
+   * org.delete — owner only, tears down all associated infrastructure and removes the org.
+   * Cannot delete personal/only org.
+   */
+  delete: ownerProcedure
+    .mutation(async ({ ctx }) => {
+      const userId = ctx.session!.user.id
+      const orgId = ctx.org.id
+
+      // Prevent deleting the last org — user must always have at least one
+      const allOrgs = await listOrganizationsForUser(ctx.db, userId)
+      if (allOrgs.length <= 1) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete your only workspace' })
+      }
+
+      // Deprovision any active instance
+      const inst = await ctx.db.query.instances.findFirst({
+        where: eq(instances.orgId, orgId),
+      })
+      if (inst && inst.status !== 'deleted') {
+        await deprovisionInstance(inst.id)
+      }
+
+      // TODO: cancel Stripe subscription when billing is implemented
+      // await stripe.subscriptions.cancel(org.stripeSubscriptionId)
+
+      // Delete the org — cascades to org_members, instances, etc.
+      await ctx.db.delete(organizations).where(eq(organizations.id, orgId))
+
       return { success: true }
     }),
 
@@ -156,5 +242,19 @@ export const orgRouter = router({
         .where(eq(activityLog.orgId, ctx.org.id))
         .orderBy(desc(activityLog.createdAt))
         .limit(input.limit)
+    }),
+
+  /**
+   * org.completeOnboarding — owner only, idempotent.
+   * Sets completed_onboarding_at = NOW() to mark the wizard as finished.
+   * Called from the done screen; safe to call multiple times.
+   */
+  completeOnboarding: ownerProcedure
+    .mutation(async ({ ctx }) => {
+      await ctx.db
+        .update(organizations)
+        .set({ completedOnboardingAt: new Date() })
+        .where(eq(organizations.id, ctx.org.id))
+      return { ok: true }
     }),
 })

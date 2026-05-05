@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm'
 import { organizations, orgMembers } from '../schema'
+import { ensureMemberOpenClawAgent } from './openclaw-agent-registry'
 
 const PERSONAL_ORG_NAME = 'Personal'
 
@@ -28,6 +29,16 @@ export async function ensurePersonalOrganizationForUser(
       where: eq(orgMembers.userId, userId),
     })
     if (existingMembership) {
+      await ensureMemberOpenClawAgent(tx, {
+        orgId: existingMembership.orgId,
+        orgMemberId: existingMembership.id,
+        displayName:
+          existingMembership.role === 'owner' ? 'Kodi Owner' : 'Kodi Member',
+        metadata: {
+          source: 'personal-org-membership-backfill',
+          role: existingMembership.role,
+        },
+      })
       return
     }
 
@@ -35,11 +46,20 @@ export async function ensurePersonalOrganizationForUser(
       where: eq(organizations.ownerId, userId),
     })
     if (existingOwnedOrg) {
-      await tx.insert(orgMembers).values({
+      const [member] = await tx.insert(orgMembers).values({
         orgId: existingOwnedOrg.id,
         userId,
         role: 'owner',
-      })
+      }).returning()
+
+      if (member) {
+        await ensureMemberOpenClawAgent(tx, {
+          orgId: existingOwnedOrg.id,
+          orgMemberId: member.id,
+          displayName: 'Kodi Owner',
+          metadata: { source: 'personal-org-backfill', role: 'owner' },
+        })
+      }
       return
     }
 
@@ -52,10 +72,19 @@ export async function ensurePersonalOrganizationForUser(
       ownerId: userId,
     })
 
-    await tx.insert(orgMembers).values({
+    const [member] = await tx.insert(orgMembers).values({
       orgId: organizationId,
       userId,
       role: 'owner',
-    })
+    }).returning()
+
+    if (member) {
+      await ensureMemberOpenClawAgent(tx, {
+        orgId: organizationId,
+        orgMemberId: member.id,
+        displayName: 'Kodi Owner',
+        metadata: { source: 'personal-org-bootstrap', role: 'owner' },
+      })
+    }
   })
 }

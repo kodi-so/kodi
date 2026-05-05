@@ -123,6 +123,9 @@ export async function generateMeetingAnswer(
 
   const response = await openClawChatCompletion({
     orgId: input.orgId,
+    visibility: 'shared',
+    sessionKey: `meeting:${input.meetingSession.id}:answer:${deliveryMode}`,
+    messageChannel: 'meeting',
     messages,
     // 60 s gives a real safety buffer for the Moonshot API round-trip through
     // the EC2 LiteLLM proxy, without blocking the handler indefinitely.

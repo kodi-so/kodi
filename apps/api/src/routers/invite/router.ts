@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { Resend } from 'resend'
-import { and, eq, gt, isNull, orgInvites, orgMembers, organizations } from '@kodi/db'
+import { and, ensureMemberOpenClawAgent, eq, gt, isNull, orgInvites, orgMembers, organizations } from '@kodi/db'
 import {
   router,
   protectedProcedure,
@@ -280,6 +280,13 @@ export const inviteRouter = router({
         ),
       })
       if (existingMember) {
+        await ensureMemberOpenClawAgent(ctx.db, {
+          orgId: invite.orgId,
+          orgMemberId: existingMember.id,
+          displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Member',
+          metadata: { source: 'invite-accept-backfill', role: existingMember.role },
+        })
+
         // Already a member — mark invite used if not already and return success
         if (invite.usedAt === null) {
           await ctx.db
@@ -294,11 +301,20 @@ export const inviteRouter = router({
       }
 
       // 5. Insert org_members row
-      await ctx.db.insert(orgMembers).values({
+      const [member] = await ctx.db.insert(orgMembers).values({
         orgId: invite.orgId,
         userId,
         role: 'member',
-      })
+      }).returning()
+
+      if (member) {
+        await ensureMemberOpenClawAgent(ctx.db, {
+          orgId: invite.orgId,
+          orgMemberId: member.id,
+          displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Member',
+          metadata: { source: 'invite-accept', role: 'member' },
+        })
+      }
 
       // 6. Mark invite used
       await ctx.db

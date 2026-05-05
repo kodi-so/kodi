@@ -6,7 +6,8 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./schema": "./src/schema/index.ts",
-    "./meeting-bot-identity": "./src/lib/meeting-bot-identity.ts"
+    "./meeting-bot-identity": "./src/lib/meeting-bot-identity.ts",
+    "./plans": "./src/lib/plans.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
@@ -17,7 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "0.45.2",
     "postgres": "^3.4.4"
   },
   "devDependencies": {

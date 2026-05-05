@@ -11,6 +11,8 @@ import {
   type MeetingParticipationMode,
 } from '@kodi/db'
 import { getRecallSetupStatus } from '../providers/recall/config'
+import { isTtsAvailable } from '../providers/tts/client'
+import { featureFlags } from '../features'
 
 type Database = typeof db
 
@@ -27,9 +29,23 @@ function normalizeBotDisplayName(value: string | null | undefined) {
 
 export function buildMeetingPilotSetupContract() {
   const recall = getRecallSetupStatus()
+  const localEnabled = featureFlags.localMeetings
+  const voiceEnabled = isTtsAvailable()
 
   return {
     recall,
+    capabilities: {
+      canStartLocalSession: localEnabled,
+      canJoinExternalMeeting: recall.enabled && recall.configured,
+      canUseVoiceReplies: voiceEnabled,
+      requiresRecallForLinkBasedMeetings: true,
+    },
+    local: {
+      enabled: localEnabled,
+      transcriptionProvider: 'browser-speech-recognition',
+      disclosure:
+        'Kodi uses your browser microphone for local sessions. Transcripts and outputs follow your existing meeting retention settings.',
+    },
     checks: [
       {
         key: 'feature-flags',
@@ -37,6 +53,20 @@ export function buildMeetingPilotSetupContract() {
         state: recall.enabled ? ('ready' as const) : ('missing' as const),
         detail:
           'KODI_FEATURE_MEETING_INTELLIGENCE should be enabled in the target environment.',
+      },
+      {
+        key: 'local-meetings',
+        label: 'Local meetings enabled',
+        state: localEnabled ? ('ready' as const) : ('missing' as const),
+        detail:
+          'KODI_FEATURE_LOCAL_MEETINGS controls the staged local-session rollout.',
+      },
+      {
+        key: 'voice-replies',
+        label: 'Voice replies configured',
+        state: voiceEnabled ? ('ready' as const) : ('manual' as const),
+        detail:
+          'TTS configuration controls whether Kodi can speak replies back to the browser or meeting transport.',
       },
       {
         key: 'recall-config',

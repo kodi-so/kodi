@@ -21,6 +21,7 @@ import { PostMeetingReview } from './_components/post-meeting-review'
 import { OverviewTab } from './_components/overview-tab'
 import { TranscriptTab } from './_components/transcript-tab'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { LocalSessionControlStrip } from './_components/local-session-control-strip'
 
 export default function MeetingDetailsPage() {
   const m = useMeetingDetail()
@@ -152,6 +153,19 @@ export default function MeetingDetailsPage() {
               {m.runtimeCopy.alertDescription}
             </AlertDescription>
           </Alert>
+        )}
+
+        {m.meeting.provider === 'local' && m.localSession && (
+          <LocalSessionControlStrip
+            localSession={m.localSession}
+            captureActive={m.localCaptureActive}
+            captureError={m.localCaptureError}
+            onPause={() => void m.pauseLocalSession()}
+            onResume={() => void m.resumeLocalSession()}
+            onEnd={() => void m.endLocalSession()}
+            onAsk={() => m.setAskSheetOpen(true)}
+            onStopSpeaking={() => void m.stopVoice()}
+          />
         )}
 
         {/* Post-meeting review */}

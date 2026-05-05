@@ -1,7 +1,9 @@
 import { betterAuth } from 'better-auth'
+import { magicLink } from 'better-auth/plugins'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { db, ensurePersonalOrganizationForUser } from '@kodi/db'
 import * as schema from '@kodi/db/schema'
+import { sendMagicLinkEmail } from './email'
 
 const betterAuthUrl = process.env.BETTER_AUTH_URL!
 const trustedOrigins = [
@@ -43,9 +45,14 @@ export const auth = betterAuth({
       },
     },
   },
-  emailAndPassword: {
-    enabled: true,
-  },
+  plugins: [
+    magicLink({
+      sendMagicLink: async ({ email, url }) => {
+        await sendMagicLinkEmail({ email, url })
+      },
+      expiresIn: 600, // 10 minutes
+    }),
+  ],
   ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
     ? {
         socialProviders: {

@@ -183,6 +183,69 @@
       "when": 1776214800000,
       "tag": "0026_phase_4_durable_voice_media",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1776301200000,
+      "tag": "0027_billing_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1745539200000,
+      "tag": "0028_org_image_and_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1777256156000,
+      "tag": "0029_memory_scoped_vaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1777256609227,
+      "tag": "0030_onboarding_experience",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1777339200000,
+      "tag": "0031_task_board_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1777420800000,
+      "tag": "0032_local_meetings",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1777421400000,
+      "tag": "0033_memory_path_search_vectors",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1777424400000,
+      "tag": "0034_memory_vault_storage_backend_r2",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1777428000000,
+      "tag": "0035_openclaw_agent_registry_schema",
+      "breakpoints": true
     }
   ]
 }

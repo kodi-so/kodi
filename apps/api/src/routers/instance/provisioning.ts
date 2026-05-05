@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { db, encrypt, eq, instances, type Instance } from '@kodi/db'
+import { db, encrypt, ensureOrgOpenClawAgent, eq, instances, type Instance } from '@kodi/db'
 import { env } from '../../env'
 import { generateCloudInit } from './cloud-init'
 import * as cloudflare from './cloudflare-dns'
@@ -27,6 +27,11 @@ export async function provisionInstance(orgId: string): Promise<Instance> {
   const { litellmVirtualKey } = await setupLiteLLM(orgId)
   const cloudInit = buildCloudInit(gatewayToken, hostname, litellmVirtualKey)
   const record = await createPendingRecord(orgId, hostname, gatewayToken, litellmVirtualKey)
+  await ensureOrgOpenClawAgent(db, {
+    orgId,
+    status: 'provisioning',
+    metadata: { source: 'instance-provisioning', instanceId: record.id },
+  })
 
   return withErrorRecovery(record.id, () => launch(record.id, orgId, hostname, cloudInit))
 }

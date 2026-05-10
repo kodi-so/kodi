@@ -22,6 +22,7 @@ import { OverviewTab } from './_components/overview-tab'
 import { TranscriptTab } from './_components/transcript-tab'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { LocalSessionControlStrip } from './_components/local-session-control-strip'
+import { LiveCaptureBanner } from './_components/live-capture-banner'
 
 export default function MeetingDetailsPage() {
   const m = useMeetingDetail()
@@ -391,11 +392,21 @@ export default function MeetingDetailsPage() {
             speakerColorMap={m.speakerColorMap}
             isEmpty={
               m.transcriptSpeakerGroups.length === 0 &&
-              m.liveFinalLines.length === 0 &&
-              !m.liveInterimText
+              m.liveFinalLines.length === 0
             }
-            liveInterimText={m.liveInterimText}
             liveFinalLines={m.liveFinalLines}
+            captureBanner={
+              m.localCaptureActive || m.localCaptureError ? (
+                <LiveCaptureBanner
+                  phase={m.capturePhase}
+                  audioLevel={m.audioLevel}
+                  lastSpeechAt={m.lastSpeechAt}
+                  transcriptCount={m.transcriptCount}
+                  interimText={m.liveInterimText}
+                  errorMessage={m.localCaptureError}
+                />
+              ) : null
+            }
           />
         </Tabs>
 

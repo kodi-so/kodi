@@ -20,8 +20,8 @@ export function TranscriptTab({
   onScroll,
   speakerColorMap,
   isEmpty,
-  liveInterimText,
   liveFinalLines,
+  captureBanner,
 }: {
   speakerGroups: TranscriptSpeakerGroup[]
   collapsedSpeakers: Set<string>
@@ -32,11 +32,10 @@ export function TranscriptTab({
   onScroll: () => void
   speakerColorMap: RefObject<Map<string, string>>
   isEmpty: boolean
-  liveInterimText?: string
   liveFinalLines?: { id: string; text: string; createdAt: Date }[]
+  captureBanner?: React.ReactNode
 }) {
-  const hasLive =
-    (liveFinalLines && liveFinalLines.length > 0) || !!liveInterimText
+  const hasLocalLines = !!(liveFinalLines && liveFinalLines.length > 0)
   return (
     <TabsContent value="transcript" className="mt-6">
       <Card className="border-border shadow-sm">
@@ -54,22 +53,16 @@ export function TranscriptTab({
           </div>
         </CardHeader>
         <CardContent>
-          {hasLive && (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/60 dark:bg-emerald-950/30">
-              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                Live
+          {captureBanner}
+          {hasLocalLines && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                This session
               </div>
               <div className="space-y-1 text-sm leading-6 text-foreground">
                 {liveFinalLines?.map((line) => (
                   <p key={line.id}>{line.text}</p>
                 ))}
-                {liveInterimText ? (
-                  <p className="italic text-muted-foreground">{liveInterimText}</p>
-                ) : null}
               </div>
             </div>
           )}

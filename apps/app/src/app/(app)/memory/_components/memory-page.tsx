@@ -565,13 +565,9 @@ export function MemoryPage() {
 
   return (
     <div className={pageShellClass}>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-5 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-8 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-10 -mx-4 flex flex-col gap-5 border-b bg-background px-4 pb-6 pt-8 sm:-mx-6 sm:flex-row sm:items-end sm:justify-between sm:px-6 lg:-mx-8 lg:px-8">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              <ActiveScopeIcon className="size-3.5" />
-              {activeOrg.orgName} / {activeScope.eyebrow}
-            </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 Memory

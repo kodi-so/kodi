@@ -228,13 +228,9 @@ export function TasksBoard() {
 
   return (
     <div className={pageShellClass}>
-      <div className="flex min-h-svh flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex min-h-svh flex-col gap-5 px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-10 -mx-4 flex flex-col gap-4 border-b border-border bg-background px-4 pb-5 pt-5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:flex-row lg:items-end lg:justify-between lg:px-8">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Bot className="size-5 text-muted-foreground" />
-              <p className="text-sm font-medium text-muted-foreground">Kodi task board</p>
-            </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-normal text-foreground">
                 Tasks

@@ -249,7 +249,7 @@ export default function MeetingsPage() {
 
   return (
     <div className={pageShellClass}>
-      <div className="mx-auto w-full max-w-4xl px-6 py-10">
+      <div className="mx-auto w-full max-w-4xl px-6 pb-10">
         {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertDescription>{error}</AlertDescription>
@@ -257,7 +257,7 @@ export default function MeetingsPage() {
         )}
 
         {/* Page header */}
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="sticky top-0 z-10 -mx-6 flex flex-col gap-5 border-b border-border bg-background px-6 pb-5 pt-10 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Meetings

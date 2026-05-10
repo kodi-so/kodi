@@ -97,6 +97,7 @@ export function StartMeetingDialog({
     if (!open || tab !== 'local') return
     let cancelled = false
     let stream: MediaStream | null = null
+    let audioContext: AudioContext | null = null
     let frame = 0
     async function loadDevices() {
       setCheckingMic(true)
@@ -105,23 +106,36 @@ export function StartMeetingDialog({
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('This browser does not support microphone capture.')
         }
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: selectedMicId
+            ? { deviceId: { exact: selectedMicId } }
+            : true,
+        })
         const nextDevices = (await navigator.mediaDevices.enumerateDevices())
           .filter((device) => device.kind === 'audioinput')
         if (cancelled) return
         setDevices(nextDevices)
         setSelectedMicId((current) => current || nextDevices[0]?.deviceId || '')
 
-        const audioContext = new AudioContext()
+        audioContext = new AudioContext()
         const analyser = audioContext.createAnalyser()
+        analyser.fftSize = 1024
+        analyser.smoothingTimeConstant = 0.5
         const source = audioContext.createMediaStreamSource(stream)
-        const data = new Uint8Array(analyser.frequencyBinCount)
-        analyser.fftSize = 512
         source.connect(analyser)
+        // Time-domain RMS gives a real volume reading; frequency-domain average
+        // skews quiet because most bins are near-silent for typical speech.
+        const data = new Uint8Array(analyser.fftSize)
         const tick = () => {
-          analyser.getByteFrequencyData(data)
-          const avg = data.reduce((sum, value) => sum + value, 0) / data.length
-          setMicLevel(Math.min(100, Math.round(avg * 1.6)))
+          analyser.getByteTimeDomainData(data)
+          let sumSquares = 0
+          for (let i = 0; i < data.length; i += 1) {
+            const normalized = (data[i] - 128) / 128
+            sumSquares += normalized * normalized
+          }
+          const rms = Math.sqrt(sumSquares / data.length)
+          // RMS for normal speech sits around 0.05-0.2; scale so that range fills the bar.
+          setMicLevel(Math.min(100, Math.round(rms * 400)))
           frame = window.requestAnimationFrame(tick)
         }
         tick()
@@ -143,8 +157,10 @@ export function StartMeetingDialog({
       cancelled = true
       if (frame) window.cancelAnimationFrame(frame)
       stream?.getTracks().forEach((track) => track.stop())
+      void audioContext?.close().catch(() => {})
+      setMicLevel(0)
     }
-  }, [open, tab])
+  }, [open, tab, selectedMicId])
 
   function startLocal() {
     const browser = browserSummary()

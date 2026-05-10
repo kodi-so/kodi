@@ -389,7 +389,13 @@ export default function MeetingDetailsPage() {
             atBottom={m.transcriptAtBottom}
             onScroll={m.handleTranscriptScroll}
             speakerColorMap={m.speakerColorMap}
-            isEmpty={m.transcriptSpeakerGroups.length === 0}
+            isEmpty={
+              m.transcriptSpeakerGroups.length === 0 &&
+              m.liveFinalLines.length === 0 &&
+              !m.liveInterimText
+            }
+            liveInterimText={m.liveInterimText}
+            liveFinalLines={m.liveFinalLines}
           />
         </Tabs>
 

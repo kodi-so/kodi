@@ -557,6 +557,7 @@ export function useMeetingDetail() {
     const activeLocalSession = localSession
 
     let cancelled = false
+    let recognitionFailed = false
     let sequence = localSession.lastSequence ?? 0
     let mediaRecorder: MediaRecorder | null = null
     let stream: MediaStream | null = null
@@ -646,8 +647,13 @@ export function useMeetingDetail() {
           }
         }
         recognition.onerror = (event: any) => {
-          const message = event?.error
-            ? `Local transcription stopped: ${event.error}`
+          const errorCode = event?.error
+          // 'no-speech' fires on silence (normal); 'aborted' fires when we call stop() ourselves.
+          // Both are non-fatal — let onend restart the recognizer without alarming the user.
+          if (errorCode === 'no-speech' || errorCode === 'aborted') return
+          recognitionFailed = true
+          const message = errorCode
+            ? `Local transcription stopped: ${errorCode}`
             : 'Local transcription stopped.'
           setLocalCaptureError(message)
           void sendIngest({
@@ -657,7 +663,7 @@ export function useMeetingDetail() {
           }).catch(() => {})
         }
         recognition.onend = () => {
-          if (!cancelled && activeLocalSession.captureState === 'capturing') {
+          if (!cancelled && !recognitionFailed) {
             try {
               recognition.start()
             } catch {

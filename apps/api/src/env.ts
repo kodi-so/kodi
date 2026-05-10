@@ -141,6 +141,14 @@ const envSchema = z.object({
     .default('alloy'),
   TTS_OPENAI_MODEL: z.enum(['tts-1', 'tts-1-hd']).default('tts-1'),
 
+  // OpenAI Whisper for local meeting transcription. Falls back to
+  // TTS_OPENAI_API_KEY if unset, since it's the same OpenAI account 99% of the
+  // time. Set explicitly to use a separate key.
+  STT_OPENAI_API_KEY: z.string().optional(),
+  STT_OPENAI_MODEL: z
+    .enum(['whisper-1', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe'])
+    .default('whisper-1'),
+
   // Public base URL of the API server (used to build Recall-accessible voice audio URLs)
   // e.g. https://api.kodi.so — must be reachable by Recall.ai in production
   API_BASE_URL: z.string().url().optional(),

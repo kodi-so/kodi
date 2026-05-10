@@ -577,10 +577,11 @@ export function useMeetingDetail() {
     const activeLocalSession = localSession
 
     let cancelled = false
-    let recognitionFailed = false
     let sequence = localSession.lastSequence ?? 0
+    let transcribeSequence = 0
     let stream: MediaStream | null = null
-    let recognition: any = null
+    let mediaRecorder: MediaRecorder | null = null
+    let recorderTimer: number | null = null
     let heartbeat: number | null = null
 
     const apiBaseUrl =
@@ -676,130 +677,117 @@ export function useMeetingDetail() {
           console.warn('[local-meetings] level meter failed to start', err)
         }
 
-        // NOTE: We intentionally do NOT spin up a MediaRecorder here. The Web
-        // Speech API acquires its own internal mic stream in Chrome, and on
-        // some Chromium versions running a MediaRecorder against the same
-        // device causes SpeechRecognition to silently produce no results.
-
-        if (!window.isSecureContext) {
+        // Server-side transcription via OpenAI Whisper. Cycle a MediaRecorder
+        // in ~4s windows: each window stops, ships its blob to /local-transcribe,
+        // and the next window starts. Each blob is a complete webm file with
+        // its own header, so the server can decode it independently.
+        if (typeof MediaRecorder === 'undefined') {
           setLocalCaptureError(
-            'Live browser transcription requires HTTPS. Open this page over HTTPS (or localhost) and try again.'
+            'Audio capture is not supported in this browser. Try Chrome, Edge, or Firefox.'
           )
           return
         }
 
-        const SpeechRecognition =
-          (window as any).SpeechRecognition ||
-          (window as any).webkitSpeechRecognition
-        if (!SpeechRecognition) {
-          setLocalCaptureError(
-            'Live browser transcription is not supported here yet. Try Chrome or Edge for local capture.'
-          )
-          return
-        }
+        const WINDOW_MS = 4000
+        const mimeType = pickRecorderMime()
+        setCapturePhase('listening')
 
-        recognition = new SpeechRecognition()
-        recognition.continuous = true
-        recognition.interimResults = true
-        recognition.lang = 'en-US'
-        recognition.onstart = () => {
-          console.info('[local-meetings] speech recognition: started')
-          setCapturePhase('listening')
-        }
-        recognition.onaudiostart = () => {
-          console.info('[local-meetings] speech recognition: audio started')
-          setCapturePhase((prev) => (prev === 'initializing' ? 'listening' : prev))
-        }
-        recognition.onspeechstart = () => {
-          console.info('[local-meetings] speech recognition: speech detected')
-          setLastSpeechAt(new Date())
-          setCapturePhase((prev) =>
-            prev === 'transcribing' ? prev : 'hearing'
-          )
-        }
-        recognition.onspeechend = () => {
-          setLastSpeechAt(new Date())
-        }
-        recognition.onresult = (event: any) => {
-          let interimAcc = ''
-          let resultCount = 0
-          let finalCount = 0
-          for (let i = event.resultIndex; i < event.results.length; i += 1) {
-            const result = event.results[i]
-            const text: string | undefined = result?.[0]?.transcript
-            if (!text) continue
-            resultCount += 1
-            const confidence =
-              typeof result?.[0]?.confidence === 'number'
-                ? result[0].confidence
-                : null
-            if (result.isFinal) {
-              finalCount += 1
-              const finalText = text.trim()
-              if (finalText) {
-                setLiveFinalLines((prev) => [
-                  ...prev,
-                  {
-                    id: `local-${Date.now()}-${i}`,
-                    text: finalText,
-                    createdAt: new Date(),
-                  },
-                ])
+        async function sendChunkForTranscription(blob: Blob) {
+          if (cancelled) return
+          if (blob.size === 0) return
+          transcribeSequence += 1
+          const seq = transcribeSequence
+          const form = new FormData()
+          form.append('audio', blob, `chunk-${seq}.webm`)
+          form.append('sequence', String(seq))
+          try {
+            const response = await fetch(
+              `${apiBaseUrl}/meetings/local-transcribe`,
+              {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${ingestToken}` },
+                body: form,
               }
-            } else {
-              interimAcc += text
+            )
+            if (!response.ok) {
+              const body = await response.text().catch(() => '')
+              console.warn('[local-meetings] transcribe non-2xx', {
+                status: response.status,
+                body: body.slice(0, 200),
+              })
+              if (response.status === 503) {
+                setLocalCaptureError(
+                  'Server-side transcription is not configured. Set STT_OPENAI_API_KEY in the API.'
+                )
+              }
+              return
             }
-            void sendIngest({
-              type: 'transcript',
-              transcript: {
-                text,
-                isPartial: !result.isFinal,
-                confidence,
-              },
-            })
-          }
-          if (resultCount > 0) {
-            console.info('[local-meetings] speech recognition: results', {
-              count: resultCount,
-            })
-            setLastSpeechAt(new Date())
-            setCapturePhase('transcribing')
-            if (finalCount > 0) {
-              setTranscriptCount((n) => n + finalCount)
+            const payload = (await response.json()) as {
+              ok: boolean
+              text?: string
             }
+            const text = payload.text?.trim() ?? ''
+            if (text) {
+              setLiveFinalLines((prev) => [
+                ...prev,
+                {
+                  id: `whisper-${Date.now()}-${seq}`,
+                  text,
+                  createdAt: new Date(),
+                },
+              ])
+              setTranscriptCount((n) => n + 1)
+              setLastSpeechAt(new Date())
+              setCapturePhase('transcribing')
+              setLiveInterimText('')
+            }
+          } catch (err) {
+            console.warn('[local-meetings] transcribe network error', err)
           }
-          setLiveInterimText(interimAcc.trim())
         }
-        recognition.onerror = (event: any) => {
-          const errorCode = event?.error
-          console.info('[local-meetings] speech recognition: error', errorCode)
-          // 'no-speech' fires on silence (normal); 'aborted' fires when we call stop() ourselves.
-          // Both are non-fatal — let onend restart the recognizer without alarming the user.
-          if (errorCode === 'no-speech' || errorCode === 'aborted') return
-          recognitionFailed = true
-          const message = errorCode
-            ? `Local transcription stopped: ${errorCode}`
-            : 'Local transcription stopped.'
-          setLocalCaptureError(message)
-          void sendIngest({
-            type: 'failure',
-            failureKind: 'transcription',
-            failureReason: message,
-          })
-        }
-        recognition.onend = () => {
-          console.info('[local-meetings] speech recognition: ended', {
-            willRestart: !cancelled && !recognitionFailed,
-          })
-          if (!cancelled && !recognitionFailed) {
+
+        function cycleRecorder() {
+          if (cancelled || !stream) return
+          const chunks: Blob[] = []
+          const recorder = new MediaRecorder(
+            stream,
+            mimeType ? { mimeType } : undefined
+          )
+          mediaRecorder = recorder
+          recorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) chunks.push(event.data)
+          }
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, {
+              type: mimeType || 'audio/webm',
+            })
+            void sendChunkForTranscription(blob)
+            if (!cancelled) cycleRecorder()
+          }
+          try {
+            recorder.start()
+          } catch (err) {
+            console.warn('[local-meetings] MediaRecorder failed to start', err)
+            return
+          }
+          // Set a placeholder interim so the user gets immediate feedback that
+          // a window is being captured. Whisper replaces it when the response
+          // returns.
+          setLiveInterimText('Listening…')
+          setCapturePhase((prev) =>
+            prev === 'initializing' ? 'listening' : prev
+          )
+          recorderTimer = window.setTimeout(() => {
             try {
-              recognition.start()
+              if (recorder.state === 'recording') recorder.stop()
             } catch {
-              // Browser may reject immediate restarts; heartbeat keeps session alive.
+              // ignore — onstop will not fire, but the next cycle is gated
+              // on the timer so we just let this window drop.
             }
-          }
+          }, WINDOW_MS)
         }
-        recognition.start()
+
+        cycleRecorder()
       } catch (err) {
         const message =
           err instanceof Error
@@ -824,8 +812,11 @@ export function useMeetingDetail() {
       setAudioLevel(0)
       if (heartbeat) window.clearInterval(heartbeat)
       if (levelFrame) window.cancelAnimationFrame(levelFrame)
+      if (recorderTimer) window.clearTimeout(recorderTimer)
       try {
-        recognition?.stop()
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          mediaRecorder.stop()
+        }
       } catch {}
       void audioContext?.close().catch(() => {})
       stream?.getTracks().forEach((track) => track.stop())
@@ -1407,3 +1398,21 @@ export function useMeetingDetail() {
     healthMetadata,
   }
 }
+
+function pickRecorderMime(): string | null {
+  if (typeof MediaRecorder === 'undefined') return null
+  // Prefer Opus in WebM (Chrome, Edge, Firefox) — Whisper decodes it directly.
+  // Fall back through other widely-supported types. Safari (when it supports
+  // MediaRecorder) tends to record MP4/AAC.
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ]
+  for (const candidate of candidates) {
+    if (MediaRecorder.isTypeSupported(candidate)) return candidate
+  }
+  return null
+}
+

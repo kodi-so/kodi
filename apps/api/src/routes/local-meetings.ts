@@ -12,6 +12,7 @@ import {
   browserSpeechRecognitionAdapter,
   type LocalTranscriptionResult,
 } from '../lib/meetings/local-transcription'
+import { isSttAvailable, transcribeAudio } from '../lib/providers/stt/client'
 
 type IngestMessage =
   | {
@@ -191,5 +192,128 @@ export function registerLocalMeetingRoutes(app: Hono) {
       .where(eq(localMeetingSessions.id, session.localSession.id))
 
     return c.json({ ok: true, lastSequence: message.sequence })
+  })
+
+  // Audio → text endpoint. Browser MediaRecorder produces ~4s webm/opus
+  // chunks, posts each chunk here as multipart, we call OpenAI Whisper and
+  // persist the result via the same event pipeline as any other transcript.
+  app.post('/meetings/local-transcribe', async (c) => {
+    const token = bearerToken(c.req.header('authorization') ?? null)
+    if (!token) {
+      return c.json({ error: 'Missing local ingest token.' }, 401)
+    }
+    const session = await getLocalMeetingForToken(token)
+    if (!session) {
+      return c.json({ error: 'Invalid or expired local ingest token.' }, 401)
+    }
+    if (session.meeting.status === 'completed' || session.meeting.endedAt) {
+      return c.json({ error: 'Local meeting has already ended.' }, 409)
+    }
+    if (!isSttAvailable()) {
+      return c.json(
+        { error: 'Server-side transcription is not configured (STT_OPENAI_API_KEY missing).' },
+        503
+      )
+    }
+
+    let form: FormData
+    try {
+      form = await c.req.formData()
+    } catch {
+      return c.json({ error: 'Request body must be multipart form-data.' }, 400)
+    }
+
+    // FormDataEntryValue is `string | Blob` (with File extending Blob), so a
+    // single Blob check covers both the browser-File and raw-Blob cases.
+    const file = form.get('audio')
+    if (!file || typeof file === 'string') {
+      return c.json({ error: 'Missing audio file in form data.' }, 400)
+    }
+    const audioBlob = file as Blob
+    if (audioBlob.size === 0) {
+      return c.json({ ok: true, text: '', skipped: 'empty-chunk' })
+    }
+    const sequenceRaw = form.get('sequence')
+    const sequence =
+      typeof sequenceRaw === 'string' ? Number(sequenceRaw) : NaN
+    if (!Number.isFinite(sequence)) {
+      return c.json({ error: 'Missing or invalid sequence number.' }, 400)
+    }
+    const language =
+      typeof form.get('language') === 'string'
+        ? (form.get('language') as string)
+        : undefined
+
+    const result = await transcribeAudio({
+      audio: audioBlob,
+      contentType: audioBlob.type || 'audio/webm',
+      language,
+    })
+    if (!result.ok) {
+      console.warn('[local-meetings] whisper transcribe failed', {
+        orgId: session.localSession.orgId,
+        meetingSessionId: session.meeting.id,
+        reason: result.reason,
+        error: result.error,
+      })
+      return c.json(
+        { ok: false, reason: result.reason, error: result.error ?? null },
+        502
+      )
+    }
+
+    const now = new Date()
+    const trimmedText = result.text.trim()
+    if (!trimmedText) {
+      // Empty transcription is a normal outcome for silence — still bump
+      // heartbeat/transcriptionState so the UI stays in 'transcribing'.
+      await db
+        .update(localMeetingSessions)
+        .set({
+          lastHeartbeatAt: now,
+          updatedAt: now,
+          transcriptionState: 'transcribing',
+        })
+        .where(eq(localMeetingSessions.id, session.localSession.id))
+      return c.json({ ok: true, text: '' })
+    }
+
+    const host = await resolveHostIdentity(session.meeting.id)
+    const event = browserSpeechRecognitionAdapter.normalizeResult({
+      meetingSessionId: session.meeting.id,
+      mode: session.localSession.mode,
+      hostParticipantId: host.providerParticipantId,
+      hostDisplayName: host.displayName,
+      result: {
+        text: trimmedText,
+        isPartial: false,
+        occurredAt: now,
+      },
+    })
+
+    if (event) {
+      await appendNormalizedMeetingEvent(
+        session.meeting.id,
+        event,
+        'kodi_ui',
+        `local-whisper:${session.meeting.id}:${sequence}`
+      )
+    }
+
+    await db
+      .update(localMeetingSessions)
+      .set({
+        lastHeartbeatAt: now,
+        lastTranscriptAt: now,
+        updatedAt: now,
+        transcriptionState: 'transcribing',
+      })
+      .where(eq(localMeetingSessions.id, session.localSession.id))
+
+    return c.json({
+      ok: true,
+      text: trimmedText,
+      transcriptEventId: event?.transcriptEventId ?? null,
+    })
   })
 }

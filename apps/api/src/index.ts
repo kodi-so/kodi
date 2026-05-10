@@ -39,6 +39,16 @@ app.use(
   })
 )
 app.use(
+  '/meetings/local-transcribe',
+  cors({
+    origin: browserCorsOrigins,
+    // Content-Type is set by the browser to multipart/form-data with a boundary.
+    allowHeaders: ['Authorization', 'Content-Type'],
+    allowMethods: ['POST', 'OPTIONS'],
+    credentials: true,
+  })
+)
+app.use(
   '/trpc/*',
   cors({
     origin: browserCorsOrigins,

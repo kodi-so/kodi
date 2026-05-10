@@ -1,14 +1,15 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState, useTransition } from 'react'
-import { Plus, RefreshCcw } from 'lucide-react'
+import { useMemo, useState, useTransition } from 'react'
+import { RefreshCcw } from 'lucide-react'
 import { deriveMeetingBotIdentity } from '@kodi/db/client'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Button } from '@kodi/ui/components/button'
 import { Skeleton } from '@kodi/ui/components/skeleton'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import { useAsyncResource } from '@/lib/use-async-resource'
 import { pageShellClass } from '@/lib/brand-styles'
 import { encodeMeetingId } from '@/lib/meeting-id'
 import type {
@@ -22,23 +23,54 @@ import { BotIdentityButton } from './_components/bot-identity-bar'
 import { EmptyState } from './_components/empty-state'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
+type MeetingsData = {
+  meetings: MeetingListItem
+  nextCursor: string | null
+  copilotConfig: MeetingCopilotConfig | null
+}
+
 export default function MeetingsPage() {
   const router = useRouter()
   const { activeOrg } = useOrg()
-  const [meetings, setMeetings] = useState<MeetingListItem>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [copilotConfig, setCopilotConfig] =
-    useState<MeetingCopilotConfig | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
   const [meetingUrl, setMeetingUrl] = useState('')
   const [title, setTitle] = useState('')
   const [isStarting, startStartTransition] = useTransition()
-  const [isRefreshing, startRefreshTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  const orgId = activeOrg?.orgId ?? null
+
+  const {
+    data,
+    error: fetchError,
+    isInitialLoading: loading,
+    isRefreshing,
+    refresh: refetchMeetings,
+    mutate,
+  } = useAsyncResource<MeetingsData>(
+    async () => {
+      const [listResult, nextCopilotConfig] = await Promise.all([
+        trpc.meeting.list.query({ orgId: orgId!, limit: 10 }),
+        trpc.meeting.getCopilotSettings.query({ orgId: orgId! }),
+      ])
+      return {
+        meetings: listResult.items,
+        nextCursor: listResult.nextCursor,
+        copilotConfig: nextCopilotConfig,
+      }
+    },
+    [orgId],
+    { enabled: orgId !== null }
+  )
+
+  const meetings = data?.meetings ?? ([] as MeetingListItem)
+  const nextCursor = data?.nextCursor ?? null
+  const copilotConfig = data?.copilotConfig ?? null
+  const error = mutationError ?? fetchError
+  const setError = setMutationError
 
   function handleDeleteClick(e: React.MouseEvent, meetingId: string) {
     e.preventDefault()
@@ -56,7 +88,11 @@ export default function MeetingsPage() {
         orgId: activeOrg.orgId,
         meetingSessionId: meetingId,
       })
-      setMeetings((prev) => prev.filter((m) => m.id !== meetingId))
+      mutate((current) =>
+        current
+          ? { ...current, meetings: current.meetings.filter((m) => m.id !== meetingId) }
+          : current
+      )
     } catch {
       // silently ignore — meeting may already be gone
     } finally {
@@ -64,64 +100,9 @@ export default function MeetingsPage() {
     }
   }
 
-  useEffect(() => {
-    if (!activeOrg) {
-      setMeetings([])
-      setLoading(false)
-      return
-    }
-
-    const orgId = activeOrg.orgId
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-
-    async function load() {
-      try {
-        const [listResult, nextCopilotConfig] = await Promise.all([
-          trpc.meeting.list.query({ orgId, limit: 10 }),
-          trpc.meeting.getCopilotSettings.query({ orgId }),
-        ])
-        if (cancelled) return
-        setMeetings(listResult.items)
-        setNextCursor(listResult.nextCursor)
-        setCopilotConfig(nextCopilotConfig)
-      } catch (err) {
-        if (cancelled) return
-        setError(
-          err instanceof Error ? err.message : 'Failed to load meetings.'
-        )
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [activeOrg?.orgId])
-
   async function refresh() {
-    if (!activeOrg) return
-
-    startRefreshTransition(() => {
-      void (async () => {
-        try {
-          const listResult = await trpc.meeting.list.query({
-            orgId: activeOrg.orgId,
-            limit: 20,
-          })
-          setMeetings(listResult.items)
-          setNextCursor(listResult.nextCursor)
-          setError(null)
-        } catch (err) {
-          setError(
-            err instanceof Error ? err.message : 'Failed to refresh meetings.'
-          )
-        }
-      })()
-    })
+    setError(null)
+    await refetchMeetings()
   }
 
   async function loadMore() {
@@ -133,8 +114,15 @@ export default function MeetingsPage() {
         limit: 20,
         cursor: nextCursor,
       })
-      setMeetings((prev) => [...prev, ...listResult.items])
-      setNextCursor(listResult.nextCursor)
+      mutate((current) =>
+        current
+          ? {
+              ...current,
+              meetings: [...current.meetings, ...listResult.items] as MeetingListItem,
+              nextCursor: listResult.nextCursor,
+            }
+          : current
+      )
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to load more meetings.'

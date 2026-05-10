@@ -13,6 +13,8 @@ import { Tabs, TabsContent } from '@kodi/ui/components/tabs'
 import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import { useAsyncResource } from '@/lib/use-async-resource'
+import { RefreshingIndicator } from '@/components/loading'
 import { EmptyState } from './empty-state'
 import { IntegrationDrawer } from './integration-drawer'
 import { IntegrationRow } from './integration-row'
@@ -58,10 +60,8 @@ export function IntegrationsPage({
   const { activeOrg } = useOrg()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [catalog, setCatalog] = useState<ToolAccessCatalog | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [connectingSlug, setConnectingSlug] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [detailReloadKey, setDetailReloadKey] = useState(0)
   const callbackHandledRef = useRef(false)
   const initialSeededRef = useRef(false)
@@ -75,37 +75,26 @@ export function IntegrationsPage({
   const [searchDraft, setSearchDraft] = useState(urlQuery)
   const debouncedQuery = useDebouncedValue(searchDraft, 200)
 
-  const loadCatalog = useCallback(
-    async (orgId: string) => {
-      setLoading(true)
-      setError(null)
-      try {
-        const result = await trpc.toolAccess.getCatalog.query({
-          orgId,
-          limit: 60,
-        })
-        setCatalog(result)
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : 'Failed to load integrations.'
-        )
-      } finally {
-        setLoading(false)
-      }
-    },
-    []
+  const orgId = activeOrg?.orgId ?? null
+
+  const {
+    data: catalog,
+    error,
+    isInitialLoading: loading,
+    isRefreshing,
+    refresh: refetchCatalog,
+  } = useAsyncResource<ToolAccessCatalog>(
+    () => trpc.toolAccess.getCatalog.query({ orgId: orgId!, limit: 60 }),
+    [orgId],
+    { enabled: orgId !== null }
   )
 
-  useEffect(() => {
-    if (!activeOrg) {
-      setCatalog(null)
-      setLoading(false)
-      return
-    }
-    void loadCatalog(activeOrg.orgId)
-  }, [activeOrg?.orgId, loadCatalog])
+  const loadCatalog = useCallback(
+    (_orgId: string) => {
+      void refetchCatalog()
+    },
+    [refetchCatalog]
+  )
 
   const items = catalog?.items ?? []
 
@@ -193,7 +182,7 @@ export function IntegrationsPage({
     async (slug: string) => {
       if (!activeOrg || connectingSlug) return
       setConnectingSlug(slug)
-      setError(null)
+      setActionError(null)
       try {
         const result = await trpc.toolAccess.createConnectLink.mutate({
           orgId: activeOrg.orgId,
@@ -205,7 +194,7 @@ export function IntegrationsPage({
         }
         window.location.assign(result.redirectUrl)
       } catch (nextError) {
-        setError(
+        setActionError(
           nextError instanceof Error
             ? nextError.message
             : 'Failed to start the connection flow.'
@@ -280,7 +269,9 @@ export function IntegrationsPage({
           onBrowse={() => setTab('browse')}
         />
 
-        <SetupAlerts catalog={catalog} actionError={error} />
+        <SetupAlerts catalog={catalog} actionError={error ?? actionError} />
+
+        <RefreshingIndicator active={isRefreshing} className="-mt-2" />
 
         {loading ? (
           <LoadingRows />

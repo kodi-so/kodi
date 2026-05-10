@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle,
   ArrowRight,
@@ -14,13 +14,11 @@ import {
   GitBranch,
   GripVertical,
   History,
-  Loader2,
   Plus,
   RefreshCw,
   Search,
   ShieldCheck,
   User,
-  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
@@ -42,11 +40,13 @@ import {
   SheetTitle,
 } from '@kodi/ui/components/sheet'
 import { Skeleton } from '@kodi/ui/components/skeleton'
+import { RefreshingIndicator, Spinner } from '@/components/loading'
 import { Switch } from '@kodi/ui/components/switch'
 import { Textarea } from '@kodi/ui/components/textarea'
 import { pageShellClass, quietTextClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import { useAsyncResource } from '@/lib/use-async-resource'
 
 type BoardResult = Awaited<ReturnType<typeof trpc.work.board.query>>
 type TaskCard = BoardResult['lanes'][number]['items'][number]
@@ -104,9 +104,6 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 
 export function TasksBoard() {
   const { activeOrg } = useOrg()
-  const [board, setBoard] = useState<BoardResult | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<BoardView>('assigned-to-kodi')
   const [searchDraft, setSearchDraft] = useState('')
   const debouncedSearch = useDebouncedValue(searchDraft, 200)
@@ -121,37 +118,26 @@ export function TasksBoard() {
 
   const orgId = activeOrg?.orgId ?? null
 
-  const loadBoard = useCallback(async () => {
-    if (!orgId) {
-      setBoard(null)
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await trpc.work.board.query({
-        orgId,
+  const {
+    data: board,
+    error,
+    isInitialLoading,
+    isRefreshing,
+    refresh: loadBoard,
+    mutate: setBoard,
+  } = useAsyncResource<BoardResult>(
+    () =>
+      trpc.work.board.query({
+        orgId: orgId!,
         view: activeView,
         search: debouncedSearch || null,
         linked: linkedFilter,
         sourceType: sourceFilter,
         limitPerLane: 50,
-      })
-      setBoard(result)
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error ? nextError.message : 'Failed to load tasks.'
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [activeView, debouncedSearch, linkedFilter, orgId, sourceFilter])
-
-  useEffect(() => {
-    void loadBoard()
-  }, [loadBoard])
+      }),
+    [orgId, activeView, debouncedSearch, linkedFilter, sourceFilter],
+    { enabled: orgId !== null }
+  )
 
   const lanes = board?.lanes ?? []
   const selectedTask = useMemo(() => {
@@ -195,7 +181,9 @@ export function TasksBoard() {
     setBoard((current) => optimisticMove(current, task.id, workflowStateId))
     try {
       await trpc.work.move.mutate({ orgId, workItemId: task.id, workflowStateId })
-      await loadBoard()
+      // Re-sync silently so authoritative counts/state replace the optimistic version.
+      // useAsyncResource keeps existing data on screen, so this never flashes.
+      void loadBoard()
     } catch (nextError) {
       setBoard(previousBoard)
       toast.error(
@@ -259,7 +247,7 @@ export function TasksBoard() {
               Linear
             </label>
             <Button type="submit" disabled={!quickTitle.trim() || creating} className="h-10">
-              {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              {creating ? <Spinner /> : <Plus className="size-4" />}
               Add
             </Button>
           </form>
@@ -319,8 +307,14 @@ export function TasksBoard() {
                 <SelectItem value="unlinked">Unlinked</SelectItem>
               </SelectContent>
             </Select>
-            <Button type="button" variant="outline" onClick={() => void loadBoard()}>
-              <RefreshCw className="size-4" />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void loadBoard()}
+              disabled={isRefreshing}
+              aria-label="Refresh tasks"
+            >
+              <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
           </div>
         </section>
@@ -332,7 +326,9 @@ export function TasksBoard() {
           </Alert>
         ) : null}
 
-        {loading ? (
+        <RefreshingIndicator active={isRefreshing} className="-mt-1" />
+
+        {isInitialLoading ? (
           <BoardSkeleton />
         ) : lanes.length === 0 || lanes.every((lane) => lane.items.length === 0) ? (
           <EmptyBoard />
@@ -386,7 +382,9 @@ export function TasksBoard() {
         onOpenChange={(open) => {
           if (!open) setSelectedTaskId(null)
         }}
-        onSaved={loadBoard}
+        onSaved={async () => {
+          await loadBoard()
+        }}
       />
     </div>
   )
@@ -723,7 +721,7 @@ function TaskDetailDrawer({
                   </div>
                 </div>
                 <Button type="button" onClick={() => void saveTask()} disabled={saving || !title.trim()}>
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                  {saving ? <Spinner /> : <CheckCircle2 className="size-4" />}
                   Save changes
                 </Button>
               </div>

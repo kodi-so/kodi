@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
-import { Skeleton } from '@kodi/ui/components/skeleton'
 import {
   Tabs,
   TabsContent,
@@ -13,6 +12,8 @@ import {
 import { pageShellClass } from '@/lib/brand-styles'
 import { useOrg } from '@/lib/org-context'
 import { trpc } from '@/lib/trpc'
+import { useAsyncResource } from '@/lib/use-async-resource'
+import { PageLoader, RefreshingIndicator } from '@/components/loading'
 import type { ApprovalItem } from './_components/utils'
 import { ApprovalsHeader } from './_components/approvals-header'
 import { ApprovalsLoading } from './_components/approvals-loading'
@@ -26,46 +27,24 @@ export default function ApprovalsPage() {
   const [actionKey, setActionKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [items, setItems] = useState<ApprovalItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'pending' | 'history'>('pending')
 
-  async function loadApprovals(orgId: string) {
-    const result = await trpc.approval.list.query({
-      orgId,
-      limit: 100,
-    })
-    setItems(result.items)
-    return result
-  }
+  const orgId = activeOrg?.orgId ?? null
 
-  useEffect(() => {
-    if (!activeOrg) {
-      setLoading(false)
-      return
-    }
+  const {
+    data,
+    error: fetchError,
+    isInitialLoading,
+    isRefreshing,
+    refresh: reloadApprovals,
+  } = useAsyncResource<{ items: ApprovalItem[] }>(
+    () => trpc.approval.list.query({ orgId: orgId!, limit: 100 }),
+    [orgId],
+    { enabled: orgId !== null }
+  )
 
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-
-    void loadApprovals(activeOrg.orgId)
-      .catch((nextError) => {
-        if (cancelled) return
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : 'Failed to load approval requests.'
-        )
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [activeOrg?.orgId])
+  const items = data?.items ?? []
+  const displayError = error ?? fetchError
 
   const pendingItems = useMemo(
     () => items.filter((item) => item.status === 'pending'),
@@ -97,7 +76,7 @@ export default function ApprovalsPage() {
         approvalRequestId,
         decision,
       })
-      await loadApprovals(activeOrg.orgId)
+      await reloadApprovals()
       setSuccessMessage(result.message)
     } catch (nextError) {
       setError(
@@ -111,11 +90,7 @@ export default function ApprovalsPage() {
   }
 
   if (!activeOrg) {
-    return (
-      <div className="flex min-h-full items-center justify-center p-6">
-        <Skeleton className="h-6 w-6 rounded-full bg-brand-muted" />
-      </div>
-    )
+    return <PageLoader />
   }
 
   return (
@@ -123,9 +98,9 @@ export default function ApprovalsPage() {
       <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 pb-8">
         <ApprovalsHeader />
 
-        {error && (
+        {displayError && (
           <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{displayError}</AlertDescription>
           </Alert>
         )}
 
@@ -135,7 +110,9 @@ export default function ApprovalsPage() {
           </Alert>
         )}
 
-        {loading ? (
+        <RefreshingIndicator active={isRefreshing} className="-mt-2" />
+
+        {isInitialLoading ? (
           <ApprovalsLoading />
         ) : (
           <Tabs

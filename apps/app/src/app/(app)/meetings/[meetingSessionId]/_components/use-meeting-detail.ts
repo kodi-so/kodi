@@ -58,6 +58,13 @@ export function useMeetingDetail() {
   const [controlsSaving, setControlsSaving] = useState(false)
   const [localCaptureError, setLocalCaptureError] = useState<string | null>(null)
   const [localCaptureActive, setLocalCaptureActive] = useState(false)
+  // Live transcript driven directly by the browser SpeechRecognition events,
+  // so the user sees text the instant they speak — no server roundtrip.
+  // The server persists the canonical version for history.
+  const [liveInterimText, setLiveInterimText] = useState<string>('')
+  const [liveFinalLines, setLiveFinalLines] = useState<
+    { id: string; text: string; createdAt: Date }[]
+  >([])
 
   // --- Ask Kodi ---
   const [askQuestion, setAskQuestion] = useState('')
@@ -559,7 +566,6 @@ export function useMeetingDetail() {
     let cancelled = false
     let recognitionFailed = false
     let sequence = localSession.lastSequence ?? 0
-    let mediaRecorder: MediaRecorder | null = null
     let stream: MediaStream | null = null
     let recognition: any = null
     let heartbeat: number | null = null
@@ -619,17 +625,18 @@ export function useMeetingDetail() {
         sendHeartbeat()
         heartbeat = window.setInterval(sendHeartbeat, 10_000)
 
-        if (typeof MediaRecorder !== 'undefined') {
-          mediaRecorder = new MediaRecorder(stream)
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              void sendIngest({
-                type: 'audio_chunk',
-                byteLength: event.data.size,
-              }).catch(() => {})
-            }
-          }
-          mediaRecorder.start(8_000)
+        // NOTE: We intentionally do NOT spin up a MediaRecorder here. The Web
+        // Speech API acquires its own internal mic stream in Chrome, and on
+        // some Chromium versions running a MediaRecorder against the same
+        // device causes SpeechRecognition to silently produce no results. We
+        // also weren't using the recorded audio for anything (we were only
+        // posting byteLength counts), so removing it is pure win.
+
+        if (!window.isSecureContext) {
+          setLocalCaptureError(
+            'Live browser transcription requires HTTPS. Open this page over HTTPS (or localhost) and try again.'
+          )
+          return
         }
 
         const SpeechRecognition =
@@ -646,26 +653,63 @@ export function useMeetingDetail() {
         recognition.continuous = true
         recognition.interimResults = true
         recognition.lang = 'en-US'
+        recognition.onstart = () => {
+          console.info('[local-meetings] speech recognition: started')
+        }
+        recognition.onaudiostart = () => {
+          console.info('[local-meetings] speech recognition: audio started')
+        }
+        recognition.onspeechstart = () => {
+          console.info('[local-meetings] speech recognition: speech detected')
+        }
         recognition.onresult = (event: any) => {
+          let interimAcc = ''
+          let resultCount = 0
           for (let i = event.resultIndex; i < event.results.length; i += 1) {
             const result = event.results[i]
-            const text = result?.[0]?.transcript
+            const text: string | undefined = result?.[0]?.transcript
             if (!text) continue
+            resultCount += 1
+            const confidence =
+              typeof result?.[0]?.confidence === 'number'
+                ? result[0].confidence
+                : null
+            if (result.isFinal) {
+              // Pin the final line into local state immediately so the user
+              // sees it without waiting for the server poll cycle.
+              const finalText = text.trim()
+              if (finalText) {
+                setLiveFinalLines((prev) => [
+                  ...prev,
+                  {
+                    id: `local-${Date.now()}-${i}`,
+                    text: finalText,
+                    createdAt: new Date(),
+                  },
+                ])
+              }
+            } else {
+              interimAcc += text
+            }
             void sendIngest({
               type: 'transcript',
               transcript: {
                 text,
                 isPartial: !result.isFinal,
-                confidence:
-                  typeof result?.[0]?.confidence === 'number'
-                    ? result[0].confidence
-                    : null,
+                confidence,
               },
-            }).catch(() => {})
+            })
           }
+          if (resultCount > 0) {
+            console.info('[local-meetings] speech recognition: results', {
+              count: resultCount,
+            })
+          }
+          setLiveInterimText(interimAcc.trim())
         }
         recognition.onerror = (event: any) => {
           const errorCode = event?.error
+          console.info('[local-meetings] speech recognition: error', errorCode)
           // 'no-speech' fires on silence (normal); 'aborted' fires when we call stop() ourselves.
           // Both are non-fatal — let onend restart the recognizer without alarming the user.
           if (errorCode === 'no-speech' || errorCode === 'aborted') return
@@ -678,9 +722,12 @@ export function useMeetingDetail() {
             type: 'failure',
             failureKind: 'transcription',
             failureReason: message,
-          }).catch(() => {})
+          })
         }
         recognition.onend = () => {
+          console.info('[local-meetings] speech recognition: ended', {
+            willRestart: !cancelled && !recognitionFailed,
+          })
           if (!cancelled && !recognitionFailed) {
             try {
               recognition.start()
@@ -709,11 +756,11 @@ export function useMeetingDetail() {
     return () => {
       cancelled = true
       setLocalCaptureActive(false)
+      setLiveInterimText('')
       if (heartbeat) window.clearInterval(heartbeat)
       try {
         recognition?.stop()
       } catch {}
-      if (mediaRecorder?.state === 'recording') mediaRecorder.stop()
       stream?.getTracks().forEach((track) => track.stop())
     }
   }, [
@@ -1276,6 +1323,8 @@ export function useMeetingDetail() {
     localSession,
     localCaptureActive,
     localCaptureError,
+    liveInterimText,
+    liveFinalLines,
     pauseLocalSession,
     resumeLocalSession,
     endLocalSession,

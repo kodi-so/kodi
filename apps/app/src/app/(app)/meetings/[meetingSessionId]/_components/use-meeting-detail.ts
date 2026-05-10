@@ -593,13 +593,16 @@ export function useMeetingDetail() {
 
         setLocalCaptureActive(true)
         setLocalCaptureError(null)
-        heartbeat = window.setInterval(() => {
+        const sendHeartbeat = () => {
           void sendIngest({
             type: 'heartbeat',
             captureState: 'capturing',
             transcriptionState: 'transcribing',
           }).catch(() => {})
-        }, 10_000)
+        }
+        // Fire immediately so transcriptionState flips off 'connecting' without a 10s wait.
+        sendHeartbeat()
+        heartbeat = window.setInterval(sendHeartbeat, 10_000)
 
         if (typeof MediaRecorder !== 'undefined') {
           mediaRecorder = new MediaRecorder(stream)
@@ -702,7 +705,10 @@ export function useMeetingDetail() {
     localIngestTokenKey,
     localSession?.captureState,
     localSession?.inputDeviceId,
-    localSession?.lastSequence,
+    // NOTE: lastSequence intentionally excluded — every successful ingest bumps
+    // it server-side, and including it tore down the whole capture stack on each
+    // poll, preventing the heartbeat from ever firing (transcriptionState was
+    // stuck on 'connecting' forever).
     meeting?.id,
     meeting?.provider,
   ])

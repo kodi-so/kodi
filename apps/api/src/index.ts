@@ -18,22 +18,40 @@ const app = new Hono()
 await ensureApiSchemaReadiness()
 
 app.use('*', logger())
+
+// CORS for browser-facing endpoints. Must be registered BEFORE the routes
+// themselves so preflight OPTIONS requests are answered correctly. The local
+// meetings ingest endpoint is hit directly from the browser with an
+// Authorization header + JSON body, which triggers a CORS preflight; without
+// this the entire local-meetings flow fails silently (no heartbeats, no
+// transcripts) because the browser blocks every POST.
+const browserCorsOrigins = [
+  process.env.WEB_URL ?? 'http://localhost:3000',
+  process.env.APP_URL ?? 'http://localhost:3001',
+]
+app.use(
+  '/meetings/local-ingest',
+  cors({
+    origin: browserCorsOrigins,
+    allowHeaders: ['Authorization', 'Content-Type'],
+    allowMethods: ['POST', 'OPTIONS'],
+    credentials: true,
+  })
+)
+app.use(
+  '/trpc/*',
+  cors({
+    origin: browserCorsOrigins,
+    credentials: true,
+  })
+)
+
 registerMeetingRoutes(app)
 registerLocalMeetingRoutes(app)
 registerVoiceAudioRoutes(app)
 registerRecallRoutes(app)
 registerComposioRoutes(app)
 registerOpenClawMemoryRoutes(app)
-app.use(
-  '/trpc/*',
-  cors({
-    origin: [
-      process.env.WEB_URL ?? 'http://localhost:3000',
-      process.env.APP_URL ?? 'http://localhost:3001',
-    ],
-    credentials: true,
-  })
-)
 
 app.use(
   '/trpc/*',

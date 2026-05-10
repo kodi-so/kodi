@@ -569,14 +569,29 @@ export function useMeetingDetail() {
 
     async function sendIngest(message: Record<string, unknown>) {
       sequence += 1
-      await fetch(`${apiBaseUrl}/meetings/local-ingest`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${ingestToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ sequence, ...message }),
-      })
+      try {
+        const response = await fetch(`${apiBaseUrl}/meetings/local-ingest`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${ingestToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sequence, ...message }),
+        })
+        if (!response.ok) {
+          // Surface non-2xx so a regression (auth, CORS, 5xx) is visible in
+          // devtools instead of silently nuking the whole session.
+          console.warn('[local-meetings] ingest non-2xx', {
+            status: response.status,
+            type: message.type,
+          })
+        }
+      } catch (err) {
+        console.warn('[local-meetings] ingest network error', {
+          type: message.type,
+          err,
+        })
+      }
     }
 
     async function startCapture() {

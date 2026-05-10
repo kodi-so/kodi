@@ -64,6 +64,9 @@ export function ChatInterface({
               orgId={orgId}
               orgName={orgName}
               embedded
+              initialPrompt={
+                initialDirectId === KODI_DM_ID ? initialPrompt : null
+              }
               initialThreadId={
                 initialDirectId === KODI_DM_ID ? initialThreadId : null
               }

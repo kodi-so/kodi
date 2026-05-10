@@ -9,6 +9,7 @@ import { routeMeetingChatEvent } from './chat-router'
 import { routeMeetingVoiceEvent } from './voice-router'
 import { scheduleMeetingTranscriptAnalysis } from './openclaw-background'
 import { generatePostMeetingArtifacts } from './post-meeting-service'
+import { emitMeetingMemoryUpdateEvent } from '../memory/meeting-events'
 import type {
   MeetingBotIdentity,
   MeetingProviderActorIdentity,
@@ -233,6 +234,23 @@ export class MeetingOrchestrationService {
         eventKind: input.event.kind,
         reason: forwardResult.reason,
         error: 'error' in forwardResult ? forwardResult.error ?? null : null,
+      })
+    }
+
+    try {
+      await emitMeetingMemoryUpdateEvent({
+        orgId: input.orgId,
+        meetingSession: input.meetingSession,
+        persistedEvent: input.persistedEvent,
+        event: input.event,
+      })
+    } catch (error) {
+      console.warn('[meetings] memory event dispatch failed', {
+        orgId: input.orgId,
+        meetingSessionId: input.meetingSession.id,
+        eventId: input.persistedEvent.id,
+        eventKind: input.event.kind,
+        error: error instanceof Error ? error.message : String(error),
       })
     }
 

@@ -2,12 +2,16 @@ import {
   and,
   db,
   eq,
-  memoryPaths,
   memoryVaults,
   sql,
   type OrgMember,
   type Organization,
 } from '@kodi/db'
+import {
+  applyMemoryPathSyncRecords,
+  collectMemoryPathSyncRecords,
+  type MemoryPathSyncExecutor,
+} from './paths'
 import type { MemoryStorage, MemoryStoragePathType } from './storage'
 
 type OrgVaultDirectorySeed = {
@@ -147,7 +151,9 @@ It stores durable org-wide context that multiple members should be able to rely 
 
 Kodi maintains this vault as a set of concise markdown files and directories.
 
-The initial structure is organized around shared projects, customers, processes, and current state.
+The initial structure is only a starter scaffold.
+
+Kodi may create, rename, move, merge, or replace directories and files as the organization's real memory structure becomes clearer over time.
 
 ## Important entry points
 
@@ -160,6 +166,7 @@ ${directoryGuide}
 ## Structural rules
 
 - Keep org-wide facts in this vault and keep private member-specific context out of it.
+- Treat the initial scaffold as a starting point rather than a fixed taxonomy.
 - Prefer updating an existing file over creating a near-duplicate.
 - Split files when they become crowded or start answering multiple unrelated questions.
 - Update affected index files when paths are added, renamed, moved, merged, or removed.
@@ -200,7 +207,11 @@ It stores durable member-scoped context that should not become shared org-wide t
 
 ## How this vault is organized
 
-Kodi maintains this vault as a set of concise markdown files and directories for personal preferences, responsibilities, current work, and relationship context within the organization.
+Kodi maintains this vault as a set of concise markdown files and directories for member-scoped context within the organization.
+
+The initial structure is only a starter scaffold.
+
+Kodi may create, rename, move, merge, or replace directories and files as this member's real memory structure becomes clearer over time.
 
 ## Important entry points
 
@@ -213,6 +224,7 @@ ${directoryGuide}
 ## Structural rules
 
 - Keep private member-specific context in this vault and keep org-wide shared facts out of it unless they are only relevant to this member.
+- Treat the initial scaffold as a starting point rather than a fixed taxonomy.
 - Prefer updating an existing file over creating a near-duplicate.
 - Split files when they become crowded or start answering multiple unrelated questions.
 - Update affected index files when paths are added, renamed, moved, merged, or removed.
@@ -239,6 +251,7 @@ ${directory.summary}
 
 - This directory starts with only this index file.
 - Kodi should add topic-specific files here as durable org memory is established.
+- Kodi may also replace this directory with a better-fitting structure if the starter scaffold stops matching the org.
 
 ## What each file is for
 
@@ -265,6 +278,7 @@ ${directory.summary}
 
 - This directory starts with only this index file.
 - Kodi should add member-scoped files here as durable private context is established.
+- Kodi may also replace this directory with a better-fitting structure if the starter scaffold stops matching the member's real working context.
 
 ## What each file is for
 
@@ -435,6 +449,11 @@ export async function ensureOrgMemoryVault(
     })
   }
 
+  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
+    rootPath: seedPlan.rootPath,
+    manifestPath: seedPlan.manifestPath,
+  })
+
   return database.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`memory-org-vault:${org.id}`}))`
@@ -465,16 +484,10 @@ export async function ensureOrgMemoryVault(
       throw new Error(`Failed to create org memory vault for org ${org.id}`)
     }
 
-    await tx.insert(memoryPaths).values(
-      seedPlan.pathRecords.map((record) => ({
-        vaultId: vault.id,
-        path: record.path,
-        pathType: record.pathType,
-        parentPath: record.parentPath,
-        title: record.title,
-        isManifest: record.isManifest,
-        isIndex: record.isIndex,
-      }))
+    await applyMemoryPathSyncRecords(
+      tx as MemoryPathSyncExecutor,
+      vault.id,
+      syncRecords
     )
 
     return vault
@@ -515,6 +528,11 @@ export async function ensureMemberMemoryVault(
     })
   }
 
+  const syncRecords = await collectMemoryPathSyncRecords(resolvedStorage, {
+    rootPath: seedPlan.rootPath,
+    manifestPath: seedPlan.manifestPath,
+  })
+
   return database.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`memory-member-vault:${identity.org.id}:${identity.orgMember.id}`}))`
@@ -549,16 +567,10 @@ export async function ensureMemberMemoryVault(
       )
     }
 
-    await tx.insert(memoryPaths).values(
-      seedPlan.pathRecords.map((record) => ({
-        vaultId: vault.id,
-        path: record.path,
-        pathType: record.pathType,
-        parentPath: record.parentPath,
-        title: record.title,
-        isManifest: record.isManifest,
-        isIndex: record.isIndex,
-      }))
+    await applyMemoryPathSyncRecords(
+      tx as MemoryPathSyncExecutor,
+      vault.id,
+      syncRecords
     )
 
     return vault

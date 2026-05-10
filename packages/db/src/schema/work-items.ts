@@ -1,6 +1,7 @@
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -12,7 +13,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import { user } from './auth'
 import { meetingSessions } from './meetings'
-import { organizations } from './orgs'
+import { orgMembers, organizations } from './orgs'
 
 export const workItemKindEnum = pgEnum('work_item_kind', [
   'goal',
@@ -105,6 +106,19 @@ export const taskActivityTypeEnum = pgEnum('task_activity_type', [
   'execution_failed',
 ])
 
+export const openClawAgentTypeEnum = pgEnum('openclaw_agent_type', [
+  'org',
+  'member',
+])
+
+export const openClawAgentStatusEnum = pgEnum('openclaw_agent_status', [
+  'provisioning',
+  'active',
+  'suspended',
+  'deprovisioned',
+  'failed',
+])
+
 export const openClawAgents = pgTable(
   'openclaw_agents',
   {
@@ -114,10 +128,16 @@ export const openClawAgents = pgTable(
     orgId: text('org_id')
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
+    orgMemberId: text('org_member_id').references(() => orgMembers.id, {
+      onDelete: 'cascade',
+    }),
+    agentType: openClawAgentTypeEnum('agent_type').notNull(),
+    openclawAgentId: text('openclaw_agent_id').notNull(),
     slug: text('slug').notNull(),
     displayName: text('display_name').notNull(),
     description: text('description'),
     isDefault: boolean('is_default').notNull().default(false),
+    status: openClawAgentStatusEnum('status').notNull().default('active'),
     metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at')
@@ -126,13 +146,34 @@ export const openClawAgents = pgTable(
       .notNull(),
   },
   (table) => ({
+    scopeMemberCheck: check(
+      'openclaw_agents_scope_member_check',
+      sql`(
+        (${table.agentType} = 'org' and ${table.orgMemberId} is null) or
+        (${table.agentType} = 'member' and ${table.orgMemberId} is not null)
+      )`
+    ),
     orgSlugUidx: uniqueIndex('openclaw_agents_org_slug_uidx').on(
       table.orgId,
       table.slug
     ),
+    orgOpenclawAgentUidx: uniqueIndex('openclaw_agents_org_openclaw_agent_uidx').on(
+      table.orgId,
+      table.openclawAgentId
+    ),
+    orgAgentUidx: uniqueIndex('openclaw_agents_org_agent_uidx')
+      .on(table.orgId)
+      .where(sql`${table.agentType} = 'org'`),
+    memberAgentUidx: uniqueIndex('openclaw_agents_member_agent_uidx')
+      .on(table.orgId, table.orgMemberId)
+      .where(sql`${table.agentType} = 'member'`),
     orgDefaultIdx: index('openclaw_agents_org_default_idx').on(
       table.orgId,
       table.isDefault
+    ),
+    orgMemberIdx: index('openclaw_agents_org_member_idx').on(
+      table.orgId,
+      table.orgMemberId
     ),
   })
 )
@@ -366,6 +407,10 @@ export const openClawAgentsRelations = relations(openClawAgents, ({ one }) => ({
   org: one(organizations, {
     fields: [openClawAgents.orgId],
     references: [organizations.id],
+  }),
+  orgMember: one(orgMembers, {
+    fields: [openClawAgents.orgMemberId],
+    references: [orgMembers.id],
   }),
 }))
 

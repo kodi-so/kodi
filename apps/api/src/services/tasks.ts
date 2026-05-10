@@ -84,10 +84,14 @@ export async function ensureTaskBoardFoundation(dbInstance: AnyDb, orgId: string
         .insert(openClawAgents)
         .values({
           orgId,
+          orgMemberId: null,
+          agentType: 'org',
+          openclawAgentId: `kodi-agent-${orgId}`,
           slug: 'kodi',
           displayName: 'Kodi',
           description: 'Default Kodi workspace agent for task assignment.',
           isDefault: true,
+          status: 'active',
           metadata: { source: 'task-board-foundation' },
         })
         .returning()

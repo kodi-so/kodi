@@ -65,6 +65,19 @@ export function useMeetingDetail() {
   const [liveFinalLines, setLiveFinalLines] = useState<
     { id: string; text: string; createdAt: Date }[]
   >([])
+  // Observability: explicit phase of the capture pipeline + live signals so
+  // the UI can prove to the user that audio is being received, even before
+  // the first transcript line.
+  type CapturePhase =
+    | 'idle'
+    | 'initializing'
+    | 'listening'
+    | 'hearing'
+    | 'transcribing'
+  const [capturePhase, setCapturePhase] = useState<CapturePhase>('idle')
+  const [audioLevel, setAudioLevel] = useState(0)
+  const [lastSpeechAt, setLastSpeechAt] = useState<Date | null>(null)
+  const [transcriptCount, setTranscriptCount] = useState(0)
 
   // --- Ask Kodi ---
   const [askQuestion, setAskQuestion] = useState('')
@@ -600,11 +613,15 @@ export function useMeetingDetail() {
       }
     }
 
+    let audioContext: AudioContext | null = null
+    let levelFrame = 0
+
     async function startCapture() {
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('This browser does not support microphone capture.')
         }
+        setCapturePhase('initializing')
         stream = await navigator.mediaDevices.getUserMedia({
           audio: activeLocalSession.inputDeviceId
             ? { deviceId: { exact: activeLocalSession.inputDeviceId } }
@@ -619,18 +636,50 @@ export function useMeetingDetail() {
             type: 'heartbeat',
             captureState: 'capturing',
             transcriptionState: 'transcribing',
-          }).catch(() => {})
+          })
         }
         // Fire immediately so transcriptionState flips off 'connecting' without a 10s wait.
         sendHeartbeat()
         heartbeat = window.setInterval(sendHeartbeat, 10_000)
 
+        // Live audio level meter from the capture stream. This is the user's
+        // proof that audio is reaching the page, independent of whether
+        // SpeechRecognition is producing results.
+        try {
+          const Ctx =
+            (window as unknown as { webkitAudioContext?: typeof AudioContext })
+              .webkitAudioContext ?? AudioContext
+          audioContext = new Ctx()
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume().catch(() => {})
+          }
+          const analyser = audioContext.createAnalyser()
+          analyser.fftSize = 2048
+          analyser.smoothingTimeConstant = 0.4
+          const source = audioContext.createMediaStreamSource(stream)
+          source.connect(analyser)
+          const sampleBuf = new Uint8Array(analyser.fftSize)
+          const tick = () => {
+            if (cancelled) return
+            analyser.getByteTimeDomainData(sampleBuf)
+            let peak = 0
+            for (let i = 0; i < sampleBuf.length; i += 1) {
+              const sample = sampleBuf[i] ?? 128
+              const deviation = Math.abs(sample - 128)
+              if (deviation > peak) peak = deviation
+            }
+            setAudioLevel(Math.min(100, Math.round((peak / 128) * 180)))
+            levelFrame = window.requestAnimationFrame(tick)
+          }
+          tick()
+        } catch (err) {
+          console.warn('[local-meetings] level meter failed to start', err)
+        }
+
         // NOTE: We intentionally do NOT spin up a MediaRecorder here. The Web
         // Speech API acquires its own internal mic stream in Chrome, and on
         // some Chromium versions running a MediaRecorder against the same
-        // device causes SpeechRecognition to silently produce no results. We
-        // also weren't using the recorded audio for anything (we were only
-        // posting byteLength counts), so removing it is pure win.
+        // device causes SpeechRecognition to silently produce no results.
 
         if (!window.isSecureContext) {
           setLocalCaptureError(
@@ -655,16 +704,26 @@ export function useMeetingDetail() {
         recognition.lang = 'en-US'
         recognition.onstart = () => {
           console.info('[local-meetings] speech recognition: started')
+          setCapturePhase('listening')
         }
         recognition.onaudiostart = () => {
           console.info('[local-meetings] speech recognition: audio started')
+          setCapturePhase((prev) => (prev === 'initializing' ? 'listening' : prev))
         }
         recognition.onspeechstart = () => {
           console.info('[local-meetings] speech recognition: speech detected')
+          setLastSpeechAt(new Date())
+          setCapturePhase((prev) =>
+            prev === 'transcribing' ? prev : 'hearing'
+          )
+        }
+        recognition.onspeechend = () => {
+          setLastSpeechAt(new Date())
         }
         recognition.onresult = (event: any) => {
           let interimAcc = ''
           let resultCount = 0
+          let finalCount = 0
           for (let i = event.resultIndex; i < event.results.length; i += 1) {
             const result = event.results[i]
             const text: string | undefined = result?.[0]?.transcript
@@ -675,8 +734,7 @@ export function useMeetingDetail() {
                 ? result[0].confidence
                 : null
             if (result.isFinal) {
-              // Pin the final line into local state immediately so the user
-              // sees it without waiting for the server poll cycle.
+              finalCount += 1
               const finalText = text.trim()
               if (finalText) {
                 setLiveFinalLines((prev) => [
@@ -704,6 +762,11 @@ export function useMeetingDetail() {
             console.info('[local-meetings] speech recognition: results', {
               count: resultCount,
             })
+            setLastSpeechAt(new Date())
+            setCapturePhase('transcribing')
+            if (finalCount > 0) {
+              setTranscriptCount((n) => n + finalCount)
+            }
           }
           setLiveInterimText(interimAcc.trim())
         }
@@ -757,10 +820,14 @@ export function useMeetingDetail() {
       cancelled = true
       setLocalCaptureActive(false)
       setLiveInterimText('')
+      setCapturePhase('idle')
+      setAudioLevel(0)
       if (heartbeat) window.clearInterval(heartbeat)
+      if (levelFrame) window.cancelAnimationFrame(levelFrame)
       try {
         recognition?.stop()
       } catch {}
+      void audioContext?.close().catch(() => {})
       stream?.getTracks().forEach((track) => track.stop())
     }
   }, [
@@ -1325,6 +1392,10 @@ export function useMeetingDetail() {
     localCaptureError,
     liveInterimText,
     liveFinalLines,
+    capturePhase,
+    audioLevel,
+    lastSpeechAt,
+    transcriptCount,
     pauseLocalSession,
     resumeLocalSession,
     endLocalSession,

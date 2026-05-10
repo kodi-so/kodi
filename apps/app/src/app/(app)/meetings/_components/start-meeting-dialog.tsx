@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getMeetingParticipationModeLabel } from '@kodi/db/client'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Badge } from '@kodi/ui/components/badge'
@@ -15,7 +15,6 @@ import {
 } from '@kodi/ui/components/dialog'
 import { Input } from '@kodi/ui/components/input'
 import { Label } from '@kodi/ui/components/label'
-import { Progress } from '@kodi/ui/components/progress'
 import {
   Select,
   SelectContent,
@@ -93,25 +92,83 @@ export function StartMeetingDialog({
     [devices, selectedMicId]
   )
 
-  // Effect 1: request permission once + enumerate devices. Runs only when the
-  // local tab opens, never when selectedMicId changes — that's the meter's job.
+  // Single effect: permission, device enumeration, and live meter all share the
+  // same MediaStream + AudioContext. Re-runs when the user picks a different
+  // device. Uses `audio: true` (system default) when no device is explicitly
+  // selected — handles the 'default' deviceId case cleanly across browsers.
   useEffect(() => {
     if (!open || tab !== 'local') return
     let cancelled = false
-    let permissionStream: MediaStream | null = null
-    async function loadDevices() {
+    let stream: MediaStream | null = null
+    let audioContext: AudioContext | null = null
+    let frame = 0
+
+    async function setup() {
       setCheckingMic(true)
       setDeviceError(null)
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('This browser does not support microphone capture.')
         }
-        permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+        // Use system default unless the user has explicitly picked a non-default
+        // device. Both '' and 'default' map to no constraint — most reliable.
+        const useSystemDefault =
+          !selectedMicId || selectedMicId === 'default'
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: useSystemDefault
+            ? true
+            : { deviceId: { exact: selectedMicId } },
+        })
+        if (cancelled) return
+
+        // Enumerate after getUserMedia so labels are populated.
         const nextDevices = (await navigator.mediaDevices.enumerateDevices())
           .filter((device) => device.kind === 'audioinput')
         if (cancelled) return
         setDevices(nextDevices)
-        setSelectedMicId((current) => current || nextDevices[0]?.deviceId || '')
+        // Prefer the explicit 'default' entry on Chromium; fall back to first.
+        if (!selectedMicId) {
+          const defaultId =
+            nextDevices.find((d) => d.deviceId === 'default')?.deviceId ??
+            nextDevices[0]?.deviceId ??
+            ''
+          if (defaultId) setSelectedMicId(defaultId)
+        }
+
+        const Ctx =
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext ?? AudioContext
+        audioContext = new Ctx()
+        // Required on Chromium/Safari — context comes up suspended if not
+        // created from inside a fresh user-gesture handler.
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume().catch(() => {})
+        }
+        if (cancelled) return
+
+        const analyser = audioContext.createAnalyser()
+        analyser.fftSize = 2048
+        analyser.smoothingTimeConstant = 0.4
+        const source = audioContext.createMediaStreamSource(stream)
+        source.connect(analyser)
+
+        // Peak (max absolute deviation from silence midpoint) is far more
+        // responsive than RMS for a "is the mic working?" indicator.
+        const data = new Uint8Array(analyser.fftSize)
+        const tick = () => {
+          if (cancelled) return
+          analyser.getByteTimeDomainData(data)
+          let peak = 0
+          for (let i = 0; i < data.length; i += 1) {
+            const deviation = Math.abs(data[i] - 128)
+            if (deviation > peak) peak = deviation
+          }
+          // peak is 0..128. Multiply for sensitivity; clamp to 100.
+          setMicLevel(Math.min(100, Math.round((peak / 128) * 180)))
+          frame = window.requestAnimationFrame(tick)
+        }
+        tick()
       } catch (err) {
         if (!cancelled) {
           setDeviceError(
@@ -122,69 +179,10 @@ export function StartMeetingDialog({
         }
       } finally {
         if (!cancelled) setCheckingMic(false)
-        // Release the permission probe stream — the meter effect will open its own.
-        permissionStream?.getTracks().forEach((track) => track.stop())
       }
     }
 
-    void loadDevices()
-    return () => {
-      cancelled = true
-      permissionStream?.getTracks().forEach((track) => track.stop())
-    }
-  }, [open, tab])
-
-  // Effect 2: live volume meter, scoped to the selected mic. Re-runs only when
-  // the user picks a different device.
-  useEffect(() => {
-    if (!open || tab !== 'local' || !selectedMicId) return
-    let cancelled = false
-    let stream: MediaStream | null = null
-    let audioContext: AudioContext | null = null
-    let frame = 0
-    async function startMeter() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { deviceId: { exact: selectedMicId } },
-        })
-        if (cancelled) return
-        const Ctx =
-          (window as unknown as { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext ?? AudioContext
-        audioContext = new Ctx()
-        // AudioContext often starts in 'suspended' state; explicitly resume so
-        // the analyser actually receives samples (otherwise data stays at 128
-        // and RMS reads 0 forever).
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume().catch(() => {})
-        }
-        const analyser = audioContext.createAnalyser()
-        analyser.fftSize = 1024
-        analyser.smoothingTimeConstant = 0.5
-        const source = audioContext.createMediaStreamSource(stream)
-        source.connect(analyser)
-        // Time-domain RMS gives a real volume reading; frequency-domain average
-        // skews quiet because most bins are near-silent for typical speech.
-        const data = new Uint8Array(analyser.fftSize)
-        const tick = () => {
-          if (cancelled) return
-          analyser.getByteTimeDomainData(data)
-          let sumSquares = 0
-          for (let i = 0; i < data.length; i += 1) {
-            const normalized = (data[i] - 128) / 128
-            sumSquares += normalized * normalized
-          }
-          const rms = Math.sqrt(sumSquares / data.length)
-          // RMS for normal speech sits around 0.05-0.2; scale so that range fills the bar.
-          setMicLevel(Math.min(100, Math.round(rms * 400)))
-          frame = window.requestAnimationFrame(tick)
-        }
-        tick()
-      } catch {
-        // Silent — device-specific failure shouldn't block starting the session.
-      }
-    }
-    void startMeter()
+    void setup()
     return () => {
       cancelled = true
       if (frame) window.cancelAnimationFrame(frame)
@@ -349,10 +347,15 @@ export function StartMeetingDialog({
                   <Mic
                     size={14}
                     className={
-                      micLevel > 4 ? 'text-primary' : 'text-muted-foreground'
+                      micLevel > 4 ? 'text-emerald-500' : 'text-muted-foreground'
                     }
                   />
-                  <Progress value={micLevel} className="h-2 bg-muted" />
+                  <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-[width] duration-75 ease-out"
+                      style={{ width: `${Math.max(2, micLevel)}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

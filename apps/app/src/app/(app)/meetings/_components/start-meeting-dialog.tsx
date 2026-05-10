@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getMeetingParticipationModeLabel } from '@kodi/db/client'
 import { Alert, AlertDescription } from '@kodi/ui/components/alert'
 import { Badge } from '@kodi/ui/components/badge'
@@ -93,12 +93,12 @@ export function StartMeetingDialog({
     [devices, selectedMicId]
   )
 
+  // Effect 1: request permission once + enumerate devices. Runs only when the
+  // local tab opens, never when selectedMicId changes — that's the meter's job.
   useEffect(() => {
     if (!open || tab !== 'local') return
     let cancelled = false
-    let stream: MediaStream | null = null
-    let audioContext: AudioContext | null = null
-    let frame = 0
+    let permissionStream: MediaStream | null = null
     async function loadDevices() {
       setCheckingMic(true)
       setDeviceError(null)
@@ -106,18 +106,58 @@ export function StartMeetingDialog({
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error('This browser does not support microphone capture.')
         }
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: selectedMicId
-            ? { deviceId: { exact: selectedMicId } }
-            : true,
-        })
+        permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true })
         const nextDevices = (await navigator.mediaDevices.enumerateDevices())
           .filter((device) => device.kind === 'audioinput')
         if (cancelled) return
         setDevices(nextDevices)
         setSelectedMicId((current) => current || nextDevices[0]?.deviceId || '')
+      } catch (err) {
+        if (!cancelled) {
+          setDeviceError(
+            err instanceof Error
+              ? err.message
+              : 'Kodi could not access the microphone.'
+          )
+        }
+      } finally {
+        if (!cancelled) setCheckingMic(false)
+        // Release the permission probe stream — the meter effect will open its own.
+        permissionStream?.getTracks().forEach((track) => track.stop())
+      }
+    }
 
-        audioContext = new AudioContext()
+    void loadDevices()
+    return () => {
+      cancelled = true
+      permissionStream?.getTracks().forEach((track) => track.stop())
+    }
+  }, [open, tab])
+
+  // Effect 2: live volume meter, scoped to the selected mic. Re-runs only when
+  // the user picks a different device.
+  useEffect(() => {
+    if (!open || tab !== 'local' || !selectedMicId) return
+    let cancelled = false
+    let stream: MediaStream | null = null
+    let audioContext: AudioContext | null = null
+    let frame = 0
+    async function startMeter() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: { exact: selectedMicId } },
+        })
+        if (cancelled) return
+        const Ctx =
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext ?? AudioContext
+        audioContext = new Ctx()
+        // AudioContext often starts in 'suspended' state; explicitly resume so
+        // the analyser actually receives samples (otherwise data stays at 128
+        // and RMS reads 0 forever).
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume().catch(() => {})
+        }
         const analyser = audioContext.createAnalyser()
         analyser.fftSize = 1024
         analyser.smoothingTimeConstant = 0.5
@@ -127,6 +167,7 @@ export function StartMeetingDialog({
         // skews quiet because most bins are near-silent for typical speech.
         const data = new Uint8Array(analyser.fftSize)
         const tick = () => {
+          if (cancelled) return
           analyser.getByteTimeDomainData(data)
           let sumSquares = 0
           for (let i = 0; i < data.length; i += 1) {
@@ -139,20 +180,11 @@ export function StartMeetingDialog({
           frame = window.requestAnimationFrame(tick)
         }
         tick()
-      } catch (err) {
-        if (!cancelled) {
-          setDeviceError(
-            err instanceof Error
-              ? err.message
-              : 'Kodi could not access the microphone.'
-          )
-        }
-      } finally {
-        if (!cancelled) setCheckingMic(false)
+      } catch {
+        // Silent — device-specific failure shouldn't block starting the session.
       }
     }
-
-    void loadDevices()
+    void startMeter()
     return () => {
       cancelled = true
       if (frame) window.cancelAnimationFrame(frame)
@@ -313,9 +345,14 @@ export function StartMeetingDialog({
               </div>
               <div className="space-y-2">
                 <Label>Mic check</Label>
-                <div className="flex h-10 items-center gap-2 rounded-xl border border-border bg-secondary px-3">
-                  <Mic size={14} className="text-muted-foreground" />
-                  <Progress value={micLevel} className="h-2" />
+                <div className="flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3">
+                  <Mic
+                    size={14}
+                    className={
+                      micLevel > 4 ? 'text-primary' : 'text-muted-foreground'
+                    }
+                  />
+                  <Progress value={micLevel} className="h-2 bg-muted" />
                 </div>
               </div>
             </div>

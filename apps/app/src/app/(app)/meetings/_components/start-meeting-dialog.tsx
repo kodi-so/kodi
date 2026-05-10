@@ -161,7 +161,8 @@ export function StartMeetingDialog({
           analyser.getByteTimeDomainData(data)
           let peak = 0
           for (let i = 0; i < data.length; i += 1) {
-            const deviation = Math.abs(data[i] - 128)
+            const sample = data[i] ?? 128
+            const deviation = Math.abs(sample - 128)
             if (deviation > peak) peak = deviation
           }
           // peak is 0..128. Multiply for sensitivity; clamp to 100.

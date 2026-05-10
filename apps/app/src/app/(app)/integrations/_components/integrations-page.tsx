@@ -274,7 +274,7 @@ export function IntegrationsPage({
 
   return (
     <div className={pageShellClass}>
-      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 pb-8">
         <Header
           activeCount={catalog?.summary.activeCount ?? 0}
           onBrowse={() => setTab('browse')}
@@ -416,7 +416,7 @@ function Header({
   onBrowse: () => void
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-3 border-b border-border bg-background px-4 pb-4 pt-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Integrations

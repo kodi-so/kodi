@@ -17,34 +17,36 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Settings
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Manage your profile and workspace configuration.
-      </p>
+    <div className="mx-auto w-full max-w-4xl px-6 pb-8">
+      <div className="sticky top-0 z-10 -mx-6 bg-background px-6 pt-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Settings
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your profile and workspace configuration.
+        </p>
 
-      <nav className="mt-6 flex gap-1 border-b border-border">
-        {settingsSections.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
-                active
-                  ? 'border-foreground text-foreground'
-                  : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
-              )}
-            >
-              <Icon size={15} />
-              {label}
-            </Link>
-          )
-        })}
-      </nav>
+        <nav className="mt-6 flex gap-1 border-b border-border">
+          {settingsSections.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href || pathname.startsWith(href + '/')
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+                  active
+                    ? 'border-foreground text-foreground'
+                    : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
+                )}
+              >
+                <Icon size={15} />
+                {label}
+              </Link>
+            )
+          })}
+        </nav>
+      </div>
 
       <div className="mt-6">{children}</div>
     </div>

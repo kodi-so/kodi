@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Mic, MicOff } from 'lucide-react'
 
 export type CapturePhase =
@@ -10,110 +9,82 @@ export type CapturePhase =
   | 'hearing'
   | 'transcribing'
 
-const PHASE_COPY: Record<CapturePhase, { label: string; tone: 'neutral' | 'active' | 'live' }> = {
-  idle: { label: 'Not capturing', tone: 'neutral' },
-  initializing: { label: 'Initializing microphone…', tone: 'neutral' },
-  listening: { label: 'Listening for speech…', tone: 'active' },
-  hearing: { label: 'Hearing you…', tone: 'live' },
-  transcribing: { label: 'Transcribing in real time', tone: 'live' },
+const PHASE_LABEL: Record<CapturePhase, string> = {
+  idle: 'Not capturing',
+  initializing: 'Connecting',
+  listening: 'Listening',
+  hearing: 'Listening',
+  transcribing: 'Transcribing',
 }
 
-const NUM_BARS = 24
+const NUM_BARS = 12
 
+/**
+ * Compact single-row status indicator for an active local capture session.
+ * Renders inside the transcript card header so it doesn't compete with the
+ * transcript for attention. Three pieces of information:
+ *
+ *   • Phase label    — what the system is doing right now
+ *   • Audio meter    — proof the mic is reaching the page
+ *   • Phrase count   — how much has been captured so far
+ *
+ * Plus an error state that takes over the row when capture fails.
+ */
 export function LiveCaptureBanner({
   phase,
   audioLevel,
-  lastSpeechAt,
   transcriptCount,
-  interimText,
   errorMessage,
 }: {
   phase: CapturePhase
   audioLevel: number
-  lastSpeechAt: Date | null
   transcriptCount: number
-  interimText: string
   errorMessage: string | null
 }) {
-  const copy = PHASE_COPY[phase]
   const isErrored = !!errorMessage
-  const isLive = !isErrored && (copy.tone === 'live' || copy.tone === 'active')
+  const isActive = !isErrored && phase !== 'idle'
 
-  const now = useNow(isLive ? 1000 : null)
-  const lastSpeechAgo = lastSpeechAt
-    ? formatRelativeSeconds(Math.round((now - lastSpeechAt.getTime()) / 1000))
-    : null
+  if (isErrored) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300">
+        <MicOff size={14} aria-hidden />
+        <span className="min-w-0 flex-1 truncate">{errorMessage}</span>
+      </div>
+    )
+  }
 
   return (
-    <div
-      className={
-        'mb-4 rounded-xl border px-4 py-3 transition-colors ' +
-        (isErrored
-          ? 'border-rose-200 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30'
-          : isLive
-            ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30'
-            : 'border-border bg-card')
-      }
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <div
-          className={
-            'flex h-9 w-9 items-center justify-center rounded-full ' +
-            (isErrored
-              ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300'
-              : isLive
-                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300'
-                : 'bg-muted text-muted-foreground')
-          }
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Mic
+          size={14}
+          className={isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
           aria-hidden
-        >
-          {isErrored ? <MicOff size={16} /> : <Mic size={16} />}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {isLive && (
-              <span className="relative flex h-2 w-2" aria-hidden>
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-            )}
-            <span
-              className={
-                'text-sm font-medium ' +
-                (isErrored
-                  ? 'text-rose-700 dark:text-rose-300'
-                  : isLive
-                    ? 'text-emerald-800 dark:text-emerald-200'
-                    : 'text-foreground')
-              }
-            >
-              {isErrored ? errorMessage : copy.label}
-            </span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span>{transcriptCount} phrase{transcriptCount === 1 ? '' : 's'} captured</span>
-            {lastSpeechAgo && <span aria-hidden>·</span>}
-            {lastSpeechAgo && <span>Last speech {lastSpeechAgo}</span>}
-          </div>
-        </div>
-
-        <LevelMeter level={audioLevel} disabled={isErrored} />
+        />
+        {isActive && (
+          <span className="relative flex h-1.5 w-1.5" aria-hidden>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          </span>
+        )}
+        <span className="text-sm font-medium text-foreground">
+          {PHASE_LABEL[phase]}
+        </span>
       </div>
 
-      {interimText && !isErrored && (
-        <p className="mt-3 text-sm italic leading-6 text-muted-foreground">
-          “{interimText}”
-        </p>
-      )}
+      <LevelMeter level={audioLevel} active={isActive} />
+
+      <span className="ml-auto whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+        {transcriptCount} {transcriptCount === 1 ? 'phrase' : 'phrases'}
+      </span>
     </div>
   )
 }
 
-function LevelMeter({ level, disabled }: { level: number; disabled: boolean }) {
+function LevelMeter({ level, active }: { level: number; active: boolean }) {
   return (
     <div
-      className="flex h-8 items-end gap-[2px]"
+      className="flex h-4 flex-1 items-end gap-[2px]"
       role="meter"
       aria-label="Microphone input level"
       aria-valuemin={0}
@@ -122,42 +93,20 @@ function LevelMeter({ level, disabled }: { level: number; disabled: boolean }) {
     >
       {Array.from({ length: NUM_BARS }).map((_, i) => {
         const threshold = ((i + 1) / NUM_BARS) * 100
-        const active = !disabled && level >= threshold
+        const lit = active && level >= threshold
         return (
           <span
             key={i}
             className={
-              'w-[3px] rounded-sm transition-[height,background-color] duration-75 ease-out ' +
-              (active
-                ? i > NUM_BARS * 0.8
-                  ? 'bg-rose-500'
-                  : i > NUM_BARS * 0.55
-                    ? 'bg-amber-500'
-                    : 'bg-emerald-500'
+              'flex-1 rounded-sm transition-[height,background-color] duration-75 ease-out ' +
+              (lit
+                ? 'bg-emerald-500'
                 : 'bg-zinc-200 dark:bg-zinc-700')
             }
-            style={{ height: `${20 + ((i + 1) / NUM_BARS) * 80}%` }}
+            style={{ height: `${30 + ((i + 1) / NUM_BARS) * 70}%` }}
           />
         )
       })}
     </div>
   )
-}
-
-function useNow(intervalMs: number | null) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!intervalMs) return
-    const id = window.setInterval(() => setNow(Date.now()), intervalMs)
-    return () => window.clearInterval(id)
-  }, [intervalMs])
-  return now
-}
-
-function formatRelativeSeconds(seconds: number): string {
-  if (seconds < 2) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}m ago`
-  return `${Math.floor(mins / 60)}h ago`
 }

@@ -1,14 +1,16 @@
 'use client'
 
-import type { RefObject } from 'react'
+import { useMemo, type RefObject } from 'react'
 import { ChevronDown, ChevronRight, Mic2 } from 'lucide-react'
 import { Button } from '@kodi/ui/components/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@kodi/ui/components/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@kodi/ui/components/card'
 import { TabsContent } from '@kodi/ui/components/tabs'
 import { SectionIcon } from '@/components/section-icon'
 import { dashedPanelClass, quietTextClass, subtleTextClass } from '@/lib/brand-styles'
 import { formatTime } from './utils'
 import { getSpeakerInitials, SPEAKER_COLORS, type TranscriptSpeakerGroup } from './transcript-utils'
+
+type LocalLine = { id: string; text: string; createdAt: Date }
 
 export function TranscriptTab({
   speakerGroups,
@@ -19,7 +21,6 @@ export function TranscriptTab({
   atBottom,
   onScroll,
   speakerColorMap,
-  isEmpty,
   liveFinalLines,
   captureBanner,
 }: {
@@ -31,46 +32,40 @@ export function TranscriptTab({
   atBottom: boolean
   onScroll: () => void
   speakerColorMap: RefObject<Map<string, string>>
-  isEmpty: boolean
-  liveFinalLines?: { id: string; text: string; createdAt: Date }[]
+  liveFinalLines?: LocalLine[]
   captureBanner?: React.ReactNode
 }) {
-  const hasLocalLines = !!(liveFinalLines && liveFinalLines.length > 0)
+  // The /local-transcribe endpoint persists every line server-side, so once
+  // the next poll cycle returns it appears in `speakerGroups`. Until then,
+  // we want the line visible immediately — but never double-rendered.
+  // Match on normalized text so timestamp/id drift doesn't cause duplicates.
+  const pendingLocalLines = useMemo(() => {
+    if (!liveFinalLines?.length) return []
+    const persistedTexts = new Set<string>()
+    for (const group of speakerGroups) {
+      for (const turn of group.turns) {
+        persistedTexts.add(normalizeForMatch(turn.content))
+      }
+    }
+    return liveFinalLines.filter(
+      (line) => !persistedTexts.has(normalizeForMatch(line.text))
+    )
+  }, [liveFinalLines, speakerGroups])
+
+  const showTranscriptList = speakerGroups.length > 0 || pendingLocalLines.length > 0
+
   return (
     <TabsContent value="transcript" className="mt-6">
       <Card className="border-border shadow-sm">
-        <CardHeader>
+        <CardHeader className="space-y-3">
           <div className="flex items-center gap-3">
             <SectionIcon icon={Mic2} />
-            <div>
-              <CardTitle className="text-lg text-foreground">
-                Transcript
-              </CardTitle>
-              <CardDescription>
-                Raw meeting language, grouped into readable speaker turns.
-              </CardDescription>
-            </div>
+            <CardTitle className="text-lg text-foreground">Transcript</CardTitle>
           </div>
+          {captureBanner}
         </CardHeader>
         <CardContent>
-          {captureBanner}
-          {hasLocalLines && (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                This session
-              </div>
-              <div className="space-y-1 text-sm leading-6 text-foreground">
-                {liveFinalLines?.map((line) => (
-                  <p key={line.id}>{line.text}</p>
-                ))}
-              </div>
-            </div>
-          )}
-          {isEmpty ? (
-            <div className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}>
-              Transcript lines will appear here once Kodi starts hearing the call.
-            </div>
-          ) : speakerGroups.length === 0 ? null : (
+          {showTranscriptList ? (
             <div className="relative">
               <div
                 ref={scrollRef}
@@ -81,7 +76,10 @@ export function TranscriptTab({
                   const color = speakerColorMap.current?.get(group.speaker) ?? SPEAKER_COLORS[0]!
                   const initials = getSpeakerInitials(group.speaker)
                   const isCollapsed = collapsedSpeakers.has(group.groupId)
-                  const wordCount = group.turns.reduce((n, t) => n + t.content.split(/\s+/).length, 0)
+                  const wordCount = group.turns.reduce(
+                    (n, t) => n + t.content.split(/\s+/).length,
+                    0
+                  )
 
                   return (
                     <div
@@ -138,6 +136,24 @@ export function TranscriptTab({
                     </div>
                   )
                 })}
+                {pendingLocalLines.length > 0 && (
+                  <div
+                    className={
+                      speakerGroups.length > 0
+                        ? 'space-y-2 border-t border-border bg-emerald-50/50 px-4 py-3 dark:bg-emerald-950/20'
+                        : 'space-y-2 px-4 py-3'
+                    }
+                  >
+                    {pendingLocalLines.map((line) => (
+                      <p
+                        key={line.id}
+                        className="whitespace-pre-wrap text-sm leading-6 text-foreground"
+                      >
+                        {line.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 <div ref={bottomRef} />
               </div>
 
@@ -158,9 +174,19 @@ export function TranscriptTab({
                 </div>
               )}
             </div>
+          ) : (
+            <div className={`${dashedPanelClass} rounded-xl p-5 text-sm ${quietTextClass}`}>
+              {captureBanner
+                ? 'Speak — transcript lines will appear here as you talk.'
+                : 'No transcript yet.'}
+            </div>
           )}
         </CardContent>
       </Card>
     </TabsContent>
   )
+}
+
+function normalizeForMatch(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, ' ')
 }

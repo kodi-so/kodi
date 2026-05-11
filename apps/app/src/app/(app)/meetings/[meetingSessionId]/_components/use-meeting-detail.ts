@@ -583,6 +583,12 @@ export function useMeetingDetail() {
     let mediaRecorder: MediaRecorder | null = null
     let recorderTimer: number | null = null
     let heartbeat: number | null = null
+    // Tracks the peak audio level (0–100, same scale as `audioLevel`) seen
+    // during the *current* recording window. Used as a client-side voice
+    // activity detector — if a window never crosses the threshold, we skip
+    // shipping it to Whisper, which otherwise hallucinates phrases like
+    // "ご視聴ありがとうございました" on silence.
+    let windowPeak = 0
 
     const apiBaseUrl =
       process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002'
@@ -669,7 +675,9 @@ export function useMeetingDetail() {
               const deviation = Math.abs(sample - 128)
               if (deviation > peak) peak = deviation
             }
-            setAudioLevel(Math.min(100, Math.round((peak / 128) * 180)))
+            const level = Math.min(100, Math.round((peak / 128) * 180))
+            setAudioLevel(level)
+            if (level > windowPeak) windowPeak = level
             levelFrame = window.requestAnimationFrame(tick)
           }
           tick()
@@ -692,14 +700,25 @@ export function useMeetingDetail() {
         const mimeType = pickRecorderMime()
         setCapturePhase('listening')
 
-        async function sendChunkForTranscription(blob: Blob) {
+        async function sendChunkForTranscription(blob: Blob, peakLevel: number) {
           if (cancelled) return
           if (blob.size === 0) return
+          // VAD: Whisper hallucinates training-data phrases (most notoriously
+          // "ご視聴ありがとうございました" — a YouTube-outro standby) when
+          // fed silence. Drop windows that never crossed the speech threshold.
+          // Threshold 8 is well above mic noise floor but well below normal
+          // speech (typically 25–60).
+          if (peakLevel < 8) return
           transcribeSequence += 1
           const seq = transcribeSequence
           const form = new FormData()
           form.append('audio', blob, `chunk-${seq}.webm`)
           form.append('sequence', String(seq))
+          form.append('language', 'en')
+          form.append(
+            'prompt',
+            'Casual meeting conversation, planning, action items, decisions, and follow-ups.'
+          )
           try {
             const response = await fetch(
               `${apiBaseUrl}/meetings/local-transcribe`,
@@ -754,6 +773,9 @@ export function useMeetingDetail() {
             mimeType ? { mimeType } : undefined
           )
           mediaRecorder = recorder
+          // Reset the VAD peak at the start of each window so it reflects only
+          // the audio captured in *this* recording window.
+          windowPeak = 0
           recorder.ondataavailable = (event) => {
             if (event.data && event.data.size > 0) chunks.push(event.data)
           }
@@ -761,7 +783,8 @@ export function useMeetingDetail() {
             const blob = new Blob(chunks, {
               type: mimeType || 'audio/webm',
             })
-            void sendChunkForTranscription(blob)
+            const peakForThisWindow = windowPeak
+            void sendChunkForTranscription(blob, peakForThisWindow)
             if (!cancelled) cycleRecorder()
           }
           try {
@@ -770,10 +793,6 @@ export function useMeetingDetail() {
             console.warn('[local-meetings] MediaRecorder failed to start', err)
             return
           }
-          // Set a placeholder interim so the user gets immediate feedback that
-          // a window is being captured. Whisper replaces it when the response
-          // returns.
-          setLiveInterimText('Listening…')
           setCapturePhase((prev) =>
             prev === 'initializing' ? 'listening' : prev
           )

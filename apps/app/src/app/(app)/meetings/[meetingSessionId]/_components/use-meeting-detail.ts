@@ -703,12 +703,13 @@ export function useMeetingDetail() {
         async function sendChunkForTranscription(blob: Blob, peakLevel: number) {
           if (cancelled) return
           if (blob.size === 0) return
-          // VAD: Whisper hallucinates training-data phrases (most notoriously
-          // "ご視聴ありがとうございました" — a YouTube-outro standby) when
-          // fed silence. Drop windows that never crossed the speech threshold.
-          // Threshold 8 is well above mic noise floor but well below normal
-          // speech (typically 25–60).
-          if (peakLevel < 8) return
+          // VAD: drop windows that never crossed a speech threshold. Whisper
+          // hallucinates training-data phrases ("ご視聴ありがとうございました",
+          // song lyrics, etc.) on silence and on low-energy ambient audio
+          // like background music below conversational level. Threshold 14
+          // sits clearly above mic noise floor and typical room ambience but
+          // below normal speech (which hits 25–60+ at close-mic distances).
+          if (peakLevel < 14) return
           transcribeSequence += 1
           const seq = transcribeSequence
           const form = new FormData()
@@ -717,7 +718,7 @@ export function useMeetingDetail() {
           form.append('language', 'en')
           form.append(
             'prompt',
-            'Casual meeting conversation, planning, action items, decisions, and follow-ups.'
+            'A meeting conversation in English. Speakers discuss plans, decisions, and follow-ups. Ignore background music and ambient sound — transcribe only spoken dialogue.'
           )
           try {
             const response = await fetch(

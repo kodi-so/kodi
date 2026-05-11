@@ -390,19 +390,13 @@ export default function MeetingDetailsPage() {
             atBottom={m.transcriptAtBottom}
             onScroll={m.handleTranscriptScroll}
             speakerColorMap={m.speakerColorMap}
-            isEmpty={
-              m.transcriptSpeakerGroups.length === 0 &&
-              m.liveFinalLines.length === 0
-            }
             liveFinalLines={m.liveFinalLines}
             captureBanner={
               m.localCaptureActive || m.localCaptureError ? (
                 <LiveCaptureBanner
                   phase={m.capturePhase}
                   audioLevel={m.audioLevel}
-                  lastSpeechAt={m.lastSpeechAt}
                   transcriptCount={m.transcriptCount}
-                  interimText={m.liveInterimText}
                   errorMessage={m.localCaptureError}
                 />
               ) : null

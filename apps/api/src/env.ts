@@ -149,6 +149,12 @@ const envSchema = z.object({
     .enum(['whisper-1', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe'])
     .default('whisper-1'),
 
+  // OpenAI chat completions, used as a fallback when OpenClaw isn't
+  // provisioned for an org (post-meeting summaries, decisions, action items).
+  // Falls back through STT → TTS keys when unset.
+  LLM_OPENAI_API_KEY: z.string().optional(),
+  LLM_OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+
   // Public base URL of the API server (used to build Recall-accessible voice audio URLs)
   // e.g. https://api.kodi.so — must be reachable by Recall.ai in production
   API_BASE_URL: z.string().url().optional(),

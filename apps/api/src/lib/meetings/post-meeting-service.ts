@@ -7,7 +7,7 @@ import {
 } from '@kodi/db'
 import type { MeetingSession } from '@kodi/db'
 import { z } from 'zod'
-import { openClawChatCompletion } from '../openclaw/client'
+import { chatCompletionWithFallback } from '../providers/llm/chat-completion'
 import {
   buildMeetingPromptContext,
   loadMeetingAnalysisContext,
@@ -105,7 +105,7 @@ async function generateFinalSummary(input: {
   | { ok: true; data: FinalSummary }
   | { ok: false; reason: string; error?: string }
 > {
-  const response = await openClawChatCompletion({
+  const response = await chatCompletionWithFallback({
     orgId: input.orgId,
     visibility: 'shared',
     sessionKey: `meeting:${input.meetingSession.id}:final-summary`,
@@ -167,7 +167,7 @@ async function generateDecisionLog(input: {
   | { ok: true; data: DecisionLog }
   | { ok: false; reason: string; error?: string }
 > {
-  const response = await openClawChatCompletion({
+  const response = await chatCompletionWithFallback({
     orgId: input.orgId,
     visibility: 'shared',
     sessionKey: `meeting:${input.meetingSession.id}:decision-log`,
@@ -229,7 +229,7 @@ async function generateActionItems(input: {
   | { ok: true; data: ActionItems }
   | { ok: false; reason: string; error?: string }
 > {
-  const response = await openClawChatCompletion({
+  const response = await chatCompletionWithFallback({
     orgId: input.orgId,
     visibility: 'shared',
     sessionKey: `meeting:${input.meetingSession.id}:action-items`,

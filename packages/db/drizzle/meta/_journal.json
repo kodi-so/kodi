@@ -246,6 +246,34 @@
       "when": 1777428000000,
       "tag": "0035_openclaw_agent_registry_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1778083200000,
+      "tag": "0036_kod_353_plugin_instance_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1778083260000,
+      "tag": "0037_kod_354_openclaw_agents_composio_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1778083320000,
+      "tag": "0038_kod_355_agent_autonomy_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1778083380000,
+      "tag": "0039_kod_356_plugin_events_and_versions",
+      "breakpoints": true
     }
   ]
 }

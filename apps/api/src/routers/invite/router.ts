@@ -10,6 +10,7 @@ import {
 } from '../../trpc'
 import { env } from '../../env'
 import { logActivity } from '../../lib/activity'
+import { triggerAgentProvision } from '../../lib/agent-lifecycle'
 
 // ── JWT helpers (no external dep — use Web Crypto) ────────────────────────
 
@@ -286,6 +287,15 @@ export const inviteRouter = router({
           displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Member',
           metadata: { source: 'invite-accept-backfill', role: existingMember.role },
         })
+        // KOD-384: idempotent re-provision so the plugin sees the agent
+        // even if a previous trigger ran while the instance was missing.
+        await triggerAgentProvision({
+          dbInstance: ctx.db,
+          org_id: invite.orgId,
+          user_id: userId,
+          org_member_id: existingMember.id,
+          display_name: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Member',
+        })
 
         // Already a member — mark invite used if not already and return success
         if (invite.usedAt === null) {
@@ -313,6 +323,14 @@ export const inviteRouter = router({
           orgMemberId: member.id,
           displayName: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Member',
           metadata: { source: 'invite-accept', role: 'member' },
+        })
+        // KOD-384: provision the OpenClaw agent for the new member.
+        await triggerAgentProvision({
+          dbInstance: ctx.db,
+          org_id: invite.orgId,
+          user_id: userId,
+          org_member_id: member.id,
+          display_name: ctx.session?.user.name ?? ctx.session?.user.email ?? 'Kodi Member',
         })
       }
 

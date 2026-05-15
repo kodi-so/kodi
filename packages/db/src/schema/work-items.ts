@@ -139,6 +139,9 @@ export const openClawAgents = pgTable(
     isDefault: boolean('is_default').notNull().default(false),
     status: openClawAgentStatusEnum('status').notNull().default('active'),
     metadata: jsonb('metadata').$type<Record<string, unknown> | null>(),
+    composioUserId: text('composio_user_id'),
+    composioSessionEnc: jsonb('composio_session_enc'),
+    composioStatus: text('composio_status').notNull().default('pending'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at')
       .defaultNow()

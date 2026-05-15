@@ -75,6 +75,20 @@ const envSchema = z.object({
   COMPOSIO_AUTH_CONFIG_LINEAR: z.string().optional(),
   COMPOSIO_AUTH_CONFIG_NOTION: z.string().optional(),
 
+  /**
+   * KOD-388 default toolkit allowlist.
+   *
+   * Comma-separated list of Composio toolkit slugs (e.g.
+   * "gmail,slack,googlecalendar"). Used by the agent-loadout builder
+   * (composio-sessions.ts) when the org has no `toolkit_policies` rows
+   * yet — the user gets these toolkits enabled by default rather than
+   * starting with an empty agent. Once the admin saves a policy, the
+   * org-level policy table takes over and this default is ignored.
+   *
+   * Empty / unset → preserve the current "all enabled" fallback.
+   */
+  COMPOSIO_SESSION_DEFAULT_TOOLKITS: z.string().optional(),
+
   // Optional provider credentials for Kodi-owned OAuth apps used via
   // Composio custom auth configs. These remain optional until the
   // corresponding toolkit is enabled in a given environment.
@@ -184,6 +198,17 @@ const envSchema = z.object({
 
   // Internal service-to-service auth (webhook → API provisioning trigger)
   INTERNAL_PROVISION_SECRET: z.string().min(32).optional(),
+
+  // ── kodi-bridge plugin bundle system (KOD-360) ────────────────────────────
+  //
+  // The kodi-bridge OpenClaw plugin is built by CI, uploaded to a private S3
+  // bucket, and served to instances via signed URLs minted by the API.
+  // These vars are required in production; in dev they're optional so local
+  // development without bundle infra still boots.
+  PLUGIN_BUNDLE_S3_BUCKET: z.string().optional(),
+  PLUGIN_BUNDLE_S3_REGION: z.string().optional(),
+  PLUGIN_BUNDLE_URL_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  PLUGIN_PUBLISH_ADMIN_TOKEN: z.string().optional(),
 })
 
 const _env = envSchema.safeParse(process.env)

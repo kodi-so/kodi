@@ -1,4 +1,5 @@
 import { db, eq, toolActionRuns, toolSessionRuns } from '@kodi/db'
+import { classifyToolCall } from '@kodi/shared/action-class'
 import { env } from '../env'
 import type { OpenClawConversationVisibility } from './openclaw/client'
 import {
@@ -34,85 +35,10 @@ const MAX_TOOL_STRING_CHARS = 1_200
 const MAX_TOOL_OBJECT_KEYS = 20
 const MAX_TOOL_ARRAY_ITEMS = 8
 
-const READ_VERBS = new Set([
-  'GET',
-  'LIST',
-  'FIND',
-  'SEARCH',
-  'FETCH',
-  'READ',
-  'RETRIEVE',
-  'QUERY',
-  'LOOKUP',
-  'DESCRIBE',
-  'VIEW',
-  'CHECK',
-  'COUNT',
-  'INSPECT',
-])
-
-const DRAFT_VERBS = new Set([
-  'DRAFT',
-  'PREVIEW',
-  'PREPARE',
-  'SUGGEST',
-  'PLAN',
-  'OUTLINE',
-  'SUMMARIZE',
-])
-
-const WRITE_VERBS = new Set([
-  'CREATE',
-  'UPDATE',
-  'UPSERT',
-  'DELETE',
-  'SEND',
-  'POST',
-  'WRITE',
-  'EDIT',
-  'REMOVE',
-  'ADD',
-  'REPLY',
-  'COMMENT',
-  'MERGE',
-  'APPROVE',
-  'REJECT',
-  'ASSIGN',
-  'MOVE',
-  'ARCHIVE',
-  'UNARCHIVE',
-  'CLOSE',
-  'OPEN',
-  'COMPLETE',
-  'CANCEL',
-  'PUBLISH',
-  'SHARE',
-  'TAG',
-  'UNTAG',
-  'STAR',
-  'UNSTAR',
-  'SYNC',
-  'RUN',
-  'EXECUTE',
-  'TRIGGER',
-  'UPLOAD',
-  'IMPORT',
-  'EXPORT',
-])
-
-const ADMIN_KEYWORDS = [
-  'ADMIN',
-  'SCIM',
-  'PERMISSION',
-  'ROLE',
-  'INSTALL',
-  'UNINSTALL',
-  'WEBHOOK',
-  'TOKEN',
-  'SECRET',
-  'AUTH_CONFIG',
-  'INTEGRATION',
-]
+// Verb sets + name-only classifier moved to `@kodi/shared/action-class`
+// (KOD-394). The plugin-side autonomy interceptor (KOD-390) and Kodi's
+// `getToolCategory` below both consume the shared classifier; Kodi adds
+// description- and tag-aware refinements on top.
 
 export type ToolRuntimeSourceType = 'chat' | 'meeting'
 
@@ -1380,49 +1306,34 @@ function normalizeToolParameters(schema: Record<string, unknown>) {
 
 function getToolCategory(tool: SessionTool): ToolActionCategory {
   const tagSet = new Set(tool.tags.map((tag) => tag.toLowerCase()))
-  const slugTokens = tool.slug
-    .toUpperCase()
-    .split(/[^A-Z0-9]+/)
-    .filter(Boolean)
   const toolSignature = [tool.slug, tool.name].join(' ').toUpperCase()
   const description = tool.description.toUpperCase()
 
+  // Shared name-based classification first. Returns admin/draft/read/write
+  // based on the signature; Kodi-only refinements (description-driven
+  // admin escalation, tag hints) are layered after to preserve the
+  // pre-KOD-394 behavior byte-for-byte.
+  const nameClass = classifyToolCall(toolSignature)
+  if (nameClass === 'admin') return 'admin'
+
   if (
-    ADMIN_KEYWORDS.some((keyword) => toolSignature.includes(keyword)) ||
-    toolSignature.includes('DELETE_USER') ||
-    toolSignature.includes('MANAGE_') ||
-    (description.includes('ADMIN') &&
-      (description.includes('PERMISSION') ||
-        description.includes('ROLE') ||
-        description.includes('WEBHOOK') ||
-        description.includes('TOKEN') ||
-        description.includes('SECRET') ||
-        description.includes('AUTH CONFIG')))
+    description.includes('ADMIN') &&
+    (description.includes('PERMISSION') ||
+      description.includes('ROLE') ||
+      description.includes('WEBHOOK') ||
+      description.includes('TOKEN') ||
+      description.includes('SECRET') ||
+      description.includes('AUTH CONFIG'))
   ) {
     return 'admin'
   }
 
-  if (
-    toolSignature.includes('DRAFT') ||
-    slugTokens.some((token) => DRAFT_VERBS.has(token))
-  ) {
-    return 'draft'
-  }
+  if (nameClass === 'draft') return 'draft'
 
-  if (tagSet.has('readonlyhint')) {
-    return 'read'
-  }
+  if (tagSet.has('readonlyhint')) return 'read'
+  if (nameClass === 'read') return 'read'
 
-  if (slugTokens.some((token) => READ_VERBS.has(token))) {
-    return 'read'
-  }
-
-  if (
-    tagSet.has('destructivehint') ||
-    slugTokens.some((token) => WRITE_VERBS.has(token))
-  ) {
-    return 'write'
-  }
+  if (tagSet.has('destructivehint') || nameClass === 'write') return 'write'
 
   return 'read'
 }

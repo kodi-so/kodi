@@ -24,6 +24,10 @@ import {
   upsertToolkitAccountPreference,
 } from '../../lib/composio'
 import { logActivity } from '../../lib/activity'
+import {
+  reconcileAgentsForOrg,
+  triggerAgentRotation,
+} from '../../lib/agent-lifecycle'
 
 const attentionStatuses = new Set(['FAILED', 'EXPIRED'])
 
@@ -733,6 +737,24 @@ export const toolAccessRouter = router({
         ctx.session.user.id
       )
 
+      // KOD-386: a policy edit is org-wide — every member's loadout
+      // needs to re-evaluate against the new allowlist. `reconcile` is
+      // the right hammer: serial, idempotent, already used by instance
+      // health-check. Fire-and-forget so the policy mutation stays snappy.
+      void reconcileAgentsForOrg({
+        dbInstance: ctx.db,
+        org_id: ctx.org.id,
+      }).catch((err) => {
+        console.error(
+          JSON.stringify({
+            msg: 'agent.rotation.policy_edit.failed',
+            org_id: ctx.org.id,
+            toolkit_slug: input.toolkitSlug,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        )
+      })
+
       return getEffectiveToolkitPolicy(saved ?? null, input.toolkitSlug)
     }),
 
@@ -800,6 +822,17 @@ export const toolAccessRouter = router({
         },
         ctx.session.user.id
       )
+
+      // KOD-386: rotate the agent's tool loadout so the disconnected
+      // toolkit's actions are dropped from the agent on the plugin side.
+      // Fire-and-forget: the disconnect itself shouldn't be blocked on
+      // the rotation round-trip.
+      await triggerAgentRotation({
+        dbInstance: ctx.db,
+        org_id: ctx.org.id,
+        user_id: ctx.session.user.id,
+        source: 'ui-disconnect',
+      })
 
       return { success: true }
     }),

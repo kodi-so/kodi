@@ -9,6 +9,11 @@ import { registerLocalMeetingRoutes } from './routes/local-meetings'
 import { registerVoiceAudioRoutes } from './routes/voice-audio'
 import { registerRecallRoutes } from './routes/recall'
 import { registerComposioRoutes } from './routes/composio'
+import { registerPluginVersionsRoutes } from './routes/plugin-versions'
+import { registerPluginBundleRoutes } from './routes/plugin-bundle'
+import { registerOpenClawEventsRoutes } from './routes/openclaw-events'
+import { registerOpenClawSubscriptionsRoutes } from './routes/openclaw-subscriptions'
+import { registerOpenClawAgentsRoutes } from './routes/openclaw-agents'
 import { registerOpenClawMemoryRoutes } from './routes/openclaw-memory'
 import { ensureApiSchemaReadiness } from './lib/startup/schema-readiness'
 import { db, instances, eq } from '@kodi/db'
@@ -61,6 +66,11 @@ registerLocalMeetingRoutes(app)
 registerVoiceAudioRoutes(app)
 registerRecallRoutes(app)
 registerComposioRoutes(app)
+registerPluginVersionsRoutes(app)
+registerPluginBundleRoutes(app)
+registerOpenClawEventsRoutes(app)
+registerOpenClawSubscriptionsRoutes(app)
+registerOpenClawAgentsRoutes(app)
 registerOpenClawMemoryRoutes(app)
 
 app.use(

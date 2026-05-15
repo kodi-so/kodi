@@ -4,6 +4,11 @@ import {
   decideToolApprovalRequest,
   listToolApprovalRequests,
 } from '../../lib/tool-access-approvals'
+import {
+  decidePluginToolApproval,
+  isPluginToolCallApproval,
+  PluginToolApprovalError,
+} from '../../lib/plugin-tool-approvals'
 import { retryWorkItemSync } from '../../lib/meetings/work-item-sync'
 import { router, memberProcedure } from '../../trpc'
 
@@ -39,9 +44,60 @@ export const approvalRouter = router({
       z.object({
         approvalRequestId: z.string().min(1),
         decision: z.enum(['approved', 'rejected']),
+        /** Optional reason — surfaced to the agent in the deny message
+         * (plugin-originated approvals only). */
+        reason: z.string().max(500).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Look up the row first so we can route to the right resolver.
+      // Plugin-originated approvals (KOD-391) need the plugin to run
+      // the deferred tool; existing tool-access approvals run the tool
+      // from Kodi. Discriminator: `subjectType: 'plugin_tool_call'`.
+      const row = await ctx.db.query.approvalRequests.findFirst({
+        where: (fields, ops) =>
+          ops.and(
+            ops.eq(fields.id, input.approvalRequestId),
+            ops.eq(fields.orgId, ctx.org.id),
+          ),
+        columns: { id: true, approvalType: true, subjectType: true },
+      })
+      if (!row) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Approval not found.' })
+      }
+
+      if (isPluginToolCallApproval(row)) {
+        try {
+          return await decidePluginToolApproval({
+            approvalRequestId: input.approvalRequestId,
+            db: ctx.db,
+            decision: input.decision,
+            reason: input.reason,
+            orgId: ctx.org.id,
+            decidedByUserId: ctx.session.user.id,
+          })
+        } catch (error) {
+          if (error instanceof PluginToolApprovalError) {
+            throw new TRPCError({
+              code:
+                error.httpStatus === 404
+                  ? 'NOT_FOUND'
+                  : error.httpStatus === 401
+                    ? 'UNAUTHORIZED'
+                    : 'PRECONDITION_FAILED',
+              message: error.message,
+            })
+          }
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'Failed to decide the plugin approval.',
+          })
+        }
+      }
+
       try {
         return await decideToolApprovalRequest({
           approvalRequestId: input.approvalRequestId,

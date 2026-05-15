@@ -1,0 +1,48 @@
+{
+  "id": "kodi-bridge",
+  "name": "Kodi Bridge",
+  "description": "Always-on Composio access, dual communication with Kodi, autonomy enforcement, plugin self-update, and the Org Memory module — all in one plugin loaded into every Kodi-managed OpenClaw instance.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["instance_id", "org_id", "kodi_api_base_url", "hmac_secret"],
+    "properties": {
+      "instance_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "UUID of this OpenClaw instance row in Kodi's database."
+      },
+      "org_id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "UUID of the Kodi organization that owns this instance."
+      },
+      "kodi_api_base_url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Base URL of the Kodi API (e.g. https://api.kodi.so) the plugin calls for events, memory, approvals, and bundle updates."
+      },
+      "hmac_secret": {
+        "type": "string",
+        "minLength": 32,
+        "description": "Shared HMAC secret used to sign requests in both directions. Provisioned in cloud-init via SecretRef."
+      },
+      "heartbeat_interval_seconds": {
+        "type": "integer",
+        "minimum": 5,
+        "default": 60,
+        "description": "How often the plugin emits a heartbeat event to Kodi."
+      },
+      "bundle_check_interval_seconds": {
+        "type": "integer",
+        "minimum": 60,
+        "default": 3600,
+        "description": "How often the updater module polls Kodi for a new plugin version."
+      },
+      "outbox_path": {
+        "type": "string",
+        "description": "Directory for the disk-backed outbox of failed-to-send events. Defaults to <state>/kodi-bridge/outbox."
+      }
+    }
+  }
+}

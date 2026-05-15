@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@kodi/typescript-config": "*",
+    "@types/node": "^20.0.0",
     "drizzle-kit": "^0.31.0",
     "typescript": "^5.4.5"
   }
